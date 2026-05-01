@@ -1,13 +1,13 @@
 # tool domain — 详细设计文档 v2
 
 **所属 Phase**：Phase 3
-**状态**：🔄 设计已定，代码未开始
+**状态**：✅ 已实现（2026-04-26）
 **职责**：管理用户锻造的 Python 工具全生命周期——CRUD、版本历史、pending 变更确认、测试用例、沙箱执行、导入导出；并向 ReAct Agent 提供 5 个 System Tool（search / get / create / edit / run）
 
 **依赖**：
-- `infra/db`（GORM + SQLite）
-- `infra/sandbox`（Python 沙箱）
-- `infra/llm`（create_tool / edit_tool 内部 LLM 调用，替代原 infra/eino）
+- `infra/db`（GORM + modernc.org/sqlite）
+- `infra/sandbox`（Python subprocess 沙箱）
+- `infra/llm`（create_tool / edit_tool 内部 LLM 调用 + GenerateTestCases）
 - `pkg/reqctx`（userID 读取）
 - `domain/events`（SSE 事件推送）
 
@@ -542,7 +542,7 @@ func ForgeTools(
     attachRepo  chatdomain.Repository,
     modelPicker modeldomain.ModelPicker,
     keyProvider apikeydomain.KeyProvider,
-    llmFactory  *llminfra.Factory,        // 替代原 einoinfra.ChatModelFactory
+    llmFactory  *llminfra.Factory,        // 自有 LLM 流式客户端工厂
     bridge      eventsdomain.Bridge,
 ) []agentapp.Tool
 // 返回 5 个 System Tool：search / get / create / edit / run（实现 agentapp.Tool 接口）

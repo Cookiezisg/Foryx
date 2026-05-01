@@ -108,7 +108,7 @@ func ListScenarios() []string {
 
 ## 5. 领域模型
 
-### ModelConfig struct（设计代码，未实现）
+### ModelConfig struct（`internal/domain/model/model.go`）
 
 ```go
 // internal/domain/model/model.go
@@ -258,7 +258,7 @@ type Repository interface {
 
 **注意**：无 `Delete` / `Get(id)` 方法 —— Phase 2 用不上，按需增加。
 
-### Store 实现细节（`infra/store/model/store.go`，未实现）
+### Store 实现细节（`infra/store/model/model.go`）
 
 - 每个方法前 `reqctx.GetUserID(ctx)` 取 uid，缺失返 wrapped 错误
 - `GetByScenario`: `WHERE user_id=? AND scenario=? AND deleted_at IS NULL`
@@ -417,7 +417,7 @@ func newID() string {
 
 **注意**：无 201（upsert 语义，既可创建也可覆盖，统一 200）。
 
-### Handler 设计（`handlers/model.go`，未实现）
+### Handler 设计（`transport/httpapi/handlers/model.go`）
 
 ```go
 type ModelConfigHandler struct {
@@ -490,27 +490,32 @@ modeldomain.ErrModelIDRequired:  {http.StatusBadRequest, "MODEL_ID_REQUIRED"},
 
 ## 14. 消费方如何用（跨 domain 示例）
 
-### chat.Service 调 LLM 时（Phase 2 将写）
+### chat.Service 调 LLM 时
 
 ```go
-type ChatService struct {
-    models  modeldomain.ModelPicker          // 只见接口
-    apikey  apikeydomain.KeyProvider         // 只见接口
-    eino    einoapp.ChatClient
-    log     *zap.Logger
+// internal/app/chat/chat.go（精简版）
+type Service struct {
+    modelPicker modeldomain.ModelPicker          // 只见接口
+    keyProvider apikeydomain.KeyProvider         // 只见接口
+    llmFactory  *llminfra.Factory                // 自有 LLM 流式客户端工厂
+    // ...
 }
 
-func (s *ChatService) Send(ctx context.Context, in SendInput) error {
+func (s *Service) processTask(ctx context.Context, ...) {
     // 1. model domain 决定 (provider, modelID)
-    provider, modelID, err := s.models.PickForChat(ctx)
-    if err != nil { return err }   // → 422 MODEL_NOT_CONFIGURED
+    provider, modelID, err := s.modelPicker.PickForChat(ctx)
+    if err != nil { /* 422 MODEL_NOT_CONFIGURED → SSE chat.error */ }
 
     // 2. apikey domain 拿凭证
-    creds, err := s.apikey.ResolveCredentials(ctx, provider)
-    if err != nil { return err }   // → 404 API_KEY_PROVIDER_NOT_FOUND
+    creds, err := s.keyProvider.ResolveCredentials(ctx, provider)
+    if err != nil { /* 404 API_KEY_PROVIDER_NOT_FOUND → SSE chat.error */ }
 
-    // 3. 调 LLM
-    return s.eino.Stream(ctx, creds.Key, creds.BaseURL, modelID, messages)
+    // 3. 构造 LLM Client + 消费流
+    client, _, err := s.llmFactory.Build(llminfra.Config{
+        Provider: provider, ModelID: modelID,
+        Key: creds.Key, BaseURL: creds.BaseURL,
+    })
+    // ... ReAct loop 消费 client.Stream(ctx, req) → iter.Seq[StreamEvent]
 }
 ```
 

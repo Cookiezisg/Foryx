@@ -14,7 +14,8 @@
 
 ### 数据库
 - **SQLite**（本地）+ GORM
-- WAL、FK、PrepareStmt、UTC 全开（见 `infra/db/db.go`）
+- 驱动：`modernc.org/sqlite`（纯 Go，无 CGO，2026-05-01 从 `mattn/go-sqlite3` 迁移）→ 经 `github.com/glebarez/sqlite` 接入 GORM
+- WAL、FK、PrepareStmt、UTC 全开（见 `infra/db/db.go`）；DSN PRAGMA 用 modernc 语法 `_pragma=journal_mode(WAL)` 等
 
 ### 类型策略
 - **一份到底**：domain 类型直接带 GORM tag，不分两套
@@ -35,10 +36,10 @@ DeletedAt gorm.DeletedAt // 软删（写入 deleted_at 列）
 - **会随 Phase 扩张的白名单**（如 `scenario`）在 app 层校验，DB 不 CHECK
 
 ### 高级 schema（`infra/db/schema_extras.go`）
-GORM tag 表达不了的都在这里：
-- 部分 UNIQUE 索引（`WHERE deleted_at IS NULL`）
-- FTS5 虚拟表
+GORM tag 表达不了的 SQL 都在这里：
+- 部分 UNIQUE 索引（`WHERE deleted_at IS NULL`，例如 tools `UNIQUE(user_id, name)`）
 - 触发器
+- FTS5 虚拟表（**当前未使用**——chat 重构 2026-04-27 时移除了原基于 messages.content 的 FTS5；modernc 驱动内置 FTS5，未来按 message_blocks.data 重建时无需编译标志）
 
 ---
 

@@ -17,7 +17,7 @@ import (
 	"os"
 	"time"
 
-	"gorm.io/driver/sqlite"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 	gormlogger "gorm.io/gorm/logger"
 )
@@ -87,10 +87,10 @@ func Close(db *gorm.DB) error {
 }
 
 func buildDSN(dataDir string) (string, error) {
-	params := "_journal_mode=WAL" +
-		"&_busy_timeout=5000" +
-		"&_foreign_keys=on" +
-		"&_synchronous=NORMAL"
+	params := "_pragma=journal_mode(WAL)" +
+		"&_pragma=busy_timeout(5000)" +
+		"&_pragma=foreign_keys(on)" +
+		"&_pragma=synchronous(NORMAL)"
 
 	if dataDir == "" {
 		return ":memory:?" + params, nil
@@ -98,7 +98,7 @@ func buildDSN(dataDir string) (string, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return "", fmt.Errorf("mkdir %s: %w", dataDir, err)
 	}
-	return fmt.Sprintf("%s/forgify.db?%s", dataDir, params), nil
+	return fmt.Sprintf("file:%s/forgify.db?%s", dataDir, params), nil
 }
 
 // verifyPragmas double-checks critical PRAGMAs took effect. Belt-and-suspenders

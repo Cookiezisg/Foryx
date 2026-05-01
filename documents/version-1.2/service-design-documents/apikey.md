@@ -6,7 +6,7 @@
 **依赖**：
 - `domain/crypto`（加密接口）+ `infra/crypto.AESGCMEncryptor`（AES-GCM 实现，`v1:` 前缀密文）
 - `infra/db`（GORM 底层）+ `pkg/reqctx`（userID ctx 读取）
-- `net/http`（tester 发探测请求；**不依赖 Eino**，见 §9 设计说明）
+- `net/http`（tester 发探测请求；hand-rolled HTTP，理由见 §9 设计说明）
 
 **被依赖**：`chat` / `model` / 工作流 LLM 节点 / 知识库 embedding 等所有需要调 LLM 的地方，**全部通过 `apikeydomain.KeyProvider` 接口**，不直接接触 Service struct 或 Repository。
 
@@ -40,7 +40,7 @@
 | Provider 列表 | **硬编码白名单** | 11 个；新 provider 需要代码改动（适配 base_url / 测试逻辑） |
 | base_url 校验 | **app 层（Service）** | 不在 DB 层 CHECK（scenario 白名单同理，保灵活性）|
 | Key 失效反馈 | **`test_status=error` 标记**（Phase 2）+ 未来可加事件 | 现阶段足够；chat 时流式响应可推 `chat.error` |
-| Tester 要不要用 Eino | **不用**（hand-rolled HTTP）| Eino 是 LLM 调用框架，不擅长"便宜探测"；Anthropic 独立 1-token ping 语义更明确；Ollama/Google 认证方式特殊 |
+| Tester 实现方式 | **hand-rolled HTTP**（`net/http`）| 探测要最便宜（不付 LLM token 费用）；要区分 401/网络/5xx 等错误；Anthropic 1-token ping / Google query-string key / Ollama 无 auth 各有特殊性，单一抽象会丢信息 |
 | 加密算法 | **AES-GCM + 机器指纹派生密钥**；密文 `v1:` 前缀 | 未来换 KMS 信封加密时可共存 |
 
 ---
@@ -494,12 +494,15 @@ Tester 在分派前：`effective = strings.TrimRight(baseURL, "/")`；空则用 
 
 JSON 畸形时 `parseXxx` 返 `nil`，**连通性仍报告成功**（只是不返模型列表）——因为 200 = provider 接受了 key，body 格式问题不影响"可用"判断。
 
-### 为什么 Tester 不用 Eino
+### 为什么 Tester 不复用通用 LLM 客户端
 
-前面讨论过：
-- Eino `ChatModel.Generate` 会真调 LLM 产生费用 —— 连通性测试要最便宜
-- Eino 把上游错误抽象成统一 error —— 我们要区分网络/401/5xx
-- Tester 依赖 `net/http` 零耦合；Eino 未来实现换框架时 Tester 零改
+`infra/llm` 是给 chat 调真实推理用的 LLM 流式客户端，会真发推理请求产生 token 费用。Tester 的目的是**最便宜**地验证"key 能用"：
+- OpenAI 兼容：打 `GET /models`，0 token 成本
+- Anthropic：1-token `messages` ping（不能避免，但成本最小）
+- Google / Ollama：用各自的列表端点，认证语义都不同
+- 错误分类：401（key 错）/ 网络错 / 5xx（provider 故障）/ 4xx（请求格式）必须区分清楚，给出有信息量的诊断；通用 LLM 客户端的错误抽象会丢这些差别
+
+所以 Tester 走 `net/http` hand-rolled，与 `infra/llm` 是平行能力，互不依赖。
 
 ---
 
@@ -674,41 +677,42 @@ CREATE INDEX idx_api_keys_deleted_at    ON api_keys(deleted_at);
 
 ## 14. 消费方如何用（跨 domain 示例）
 
-### chat domain 调 LLM 时（Phase 2 将写）
+### chat domain 调 LLM 时
 
 ```go
-// internal/app/chat/service.go（伪代码，chat domain 尚未实现）
+// internal/app/chat/chat.go
 type Service struct {
     modelPicker modeldomain.ModelPicker          // 只见接口
-    apikey      apikeydomain.KeyProvider         // 只见接口
-    eino        einoapp.ChatClient
-    log         *zap.Logger
+    keyProvider apikeydomain.KeyProvider         // 只见接口
+    llmFactory  *llminfra.Factory                // 自有 LLM 流式客户端工厂
+    // ...
 }
 
-func (s *Service) Send(ctx context.Context, in SendInput) error {
+func (s *Service) processTask(...) {
     // 1. model 决定 (provider, modelID)
     provider, modelID, err := s.modelPicker.PickForChat(ctx)
-    if err != nil { return err }                 // MODEL_NOT_CONFIGURED
+    if err != nil { /* MODEL_NOT_CONFIGURED → SSE chat.error */ }
 
     // 2. apikey 拿凭证
-    creds, err := s.apikey.ResolveCredentials(ctx, provider)
-    if err != nil { return err }                 // API_KEY_PROVIDER_NOT_FOUND
+    creds, err := s.keyProvider.ResolveCredentials(ctx, provider)
+    if err != nil { /* API_KEY_PROVIDER_NOT_FOUND → SSE chat.error */ }
 
-    // 3. 调 LLM
-    streamErr := s.eino.Stream(ctx, creds.Key, creds.BaseURL, modelID, messages)
+    // 3. 构造 Client + 调 LLM 流
+    client, _, err := s.llmFactory.Build(llminfra.Config{
+        Provider: provider, ModelID: modelID,
+        Key: creds.Key, BaseURL: creds.BaseURL,
+    })
+    // ... ReAct loop 消费 client.Stream(ctx, req)
 
     // 4. 401 → 回报失效
     if isAuthError(streamErr) {
-        if mErr := s.apikey.MarkInvalid(ctx, provider, streamErr.Error()); mErr != nil {
-            s.log.Warn("mark invalid failed", zap.Error(mErr))
-        }
-        return fmt.Errorf("chat: %w", chat.ErrProviderUnavailable)
+        _ = s.keyProvider.MarkInvalid(ctx, provider, streamErr.Error())
+        // → SSE chat.error LLM_PROVIDER_ERROR
     }
-    return streamErr
 }
 ```
 
-**注意**：chat 只 import `apikeydomain`（**domain 层接口**），**不** import `apikeyapp`。main.go 把 `*apikeyapp.Service` 作为接口传进 chat 的构造函数。
+**关键约定**：chat 只 import `apikeydomain`（**domain 层接口**），**不** import `apikeyapp`。main.go 把 `*apikeyapp.Service` 作为 `apikeydomain.KeyProvider` 接口传进 chat 的构造函数。chat 看不到 Service struct 也看不到 Repository。
 
 ---
 
@@ -764,24 +768,26 @@ func (s *Service) Send(ctx context.Context, in SendInput) error {
           false → response.Error(422, "API_KEY_TEST_FAILED", message, {latencyMs})
 ```
 
-### 15.3 其他 domain 调 apikey（chat 的 Send 路径预览）
+### 15.3 其他 domain 调 apikey（chat 的真实路径）
 
 ```
-chat.Service.Send
-  → model.PickForChat(ctx)                   → (provider, modelID)
-  → apikey.ResolveCredentials(ctx, provider) 【本 domain 的对外入口】
+chat.Service.processTask
+  → modelPicker.PickForChat(ctx)             → (provider, modelID)
+  → keyProvider.ResolveCredentials(ctx, provider) 【本 domain 的对外入口】
       → repo.GetByProvider(ctx, provider)
           排序：test_status=ok 优先 → last_tested_at DESC → created_at DESC
-          无 → ErrNotFoundForProvider → 404 API_KEY_PROVIDER_NOT_FOUND
+          无 → ErrNotFoundForProvider → SSE chat.error API_KEY_PROVIDER_NOT_FOUND
       → encryptor.Decrypt(KeyEncrypted)
       → 合并 baseURL（用户填的 | meta.DefaultBaseURL）
       → 返回 Credentials{Key, BaseURL}
-  → eino.Stream(creds.Key, creds.BaseURL, modelID, ...)
+  → llmFactory.Build(llminfra.Config{...})  → llminfra.Client
+  → client.Stream(ctx, req) 消费 iter.Seq[StreamEvent]
   → 401 分支：
-      → apikey.MarkInvalid(ctx, provider, reason)
+      → keyProvider.MarkInvalid(ctx, provider, reason)
           → repo.GetByProvider(ctx, provider)
-          → repo.UpdateTestResult(k.ID, TestStatusError, reason)
+          → repo.UpdateTestResult(k.ID, TestStatusError, reason, nil)
           → log.Warn("apikey marked invalid")
+      → SSE chat.error LLM_PROVIDER_ERROR
 ```
 
 ---

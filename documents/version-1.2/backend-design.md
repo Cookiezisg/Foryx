@@ -21,12 +21,12 @@
 
 ---
 
-## Strategy — 契约优先 + Green-field 重写 + 原子切换
+## Strategy — 契约优先 + Green-field 重写 + 原子切换（已完成）
 
-1. 本轮（`backend-iteration` 分支）：新建 `backend-new/` 与旧 `backend/` 并存 → 按新架构 + 新契约 + 新 schema 全新写代码 + 配完整测试 → 验证通过后**原子切换**（删 `backend/`，改名 `backend-new/` → `backend/`）
-2. 下轮（独立 iteration）：前端按本文档列出的"前端变更清单"统一跟进
+1. **第一阶段**（`backend-iteration` 分支，2026-04-22 ~ 2026-04-25）：在 `backend-new/` 全新写代码 + 配完整测试 → 与旧 `backend/` 并存 → 验证通过后**原子切换**（删 `backend/`，改名 `backend-new/` → `backend/`）。**已完成**——目录现在就是单份的 `backend/`，旧实现归档于 `legacy/`。
+2. **第二阶段**（待启动）：前端按本文档列出的"前端变更清单"统一跟进。
 
-**前端在本轮保持不动**。
+**前端在 V1.2 后端阶段保持不动。** Phase 4-5 工作流/智能化能力按计划继续在后端落地，前端按"V1.2 完成后整体迁移"节奏走。
 
 ---
 
@@ -76,19 +76,21 @@ Eino 框架已完全移除（`infra/eino/` 目录删除，go.mod 中 Eino 依赖
 
 **当前状态 / 任务细化** → [`progress-record.md`](./progress-record.md)
 
-| Phase | 主题 | 工时 | 完成后产品形态 |
-|---|---|---|---|
-| 0-1 | 地基 | 10h | 基础设施全就位 |
-| 2 | 基础对话 | 11h | ChatGPT 客户端 |
-| 3 | 工具锻造 | 12h | Forgify V1.0 体验 |
-| 4 | 工作流 | 20h | 桌面版 Coze |
-| 5 | 智能 + 知识库 + MCP | 15h | 完整 Agent 平台 |
-| 6 | 切换 | 2h | 老后端下线 |
-| **合计** | | **~70h** | 完整愿景 |
+| Phase | 主题 | 工时 | 完成后产品形态 | 状态 |
+|---|---|---|---|---|
+| 0-1 | 地基 | 10h | 基础设施全就位 | ✅ 2026-04-23 |
+| 2 | 基础对话 | 11h | ChatGPT 客户端 | ✅ 2026-04-25 |
+| 3 | 工具锻造 | 12h | Forgify V1.0 体验 | ✅ 2026-04-26 |
+| — | Phase 3 后基础设施优化轮 | — | chat 重构 + 调研 + 驱动迁移 + 桌面端方向 | 🔄 2026-04-27 起 |
+| 4 | 工作流 | 20h | 桌面版 Coze | ⬜ |
+| 5 | 智能 + 知识库 + MCP | 15h | 完整 Agent 平台 | ⬜ |
+| **合计** | | **~70h** | 完整愿景 | |
 
-### Phase 2 — 基础对话能力
+> Phase 6 原子切换（`backend-new/` → `backend/`）已在 Phase 2 收尾时内嵌完成（2026-04-25），不再单列。
 
-4 个 domain：`apikey`（凭证）+ `model`（场景 → provider/model 策略）+ `conversation`（对话 CRUD）+ `chat` 极简版（流式，不带 tool calling）。
+### Phase 2 — 基础对话能力（已完成）
+
+4 个 domain：`apikey`（凭证）+ `model`（场景 → provider/model 策略）+ `conversation`（对话 CRUD）+ `chat`（流式对话；Phase 2 时 `tools=nil`，Phase 3 起注入 system tools）。
 
 **关键调用链**：
 ```
@@ -101,10 +103,10 @@ handler.SendMessage
       → runReactLoop → client.Stream(Request)   → iter.Seq[StreamEvent] → SSE
 ```
 
-### Phase 3 — 工具锻造能力
-`forge`（纯 AST）+ `attachment`（上传/解析）+ `tool`（最大 domain：版本/标签/测试/pending/沙箱执行/导入导出）+ `chat` 升级加 tool calling 循环。
+### Phase 3 — 工具锻造能力（已完成）
+`tool` 主 domain（版本 / pending / 测试用例 / 沙箱执行 / 导入导出，22 端点）+ `app/agent/forge.go`（5 个工具锻造 system tool：search / get / create / edit / run）+ `app/agent/system.go` + `app/agent/web.go`（共 8 个通用 system tool：datetime / read_file / write_file / list_dir / run_shell / run_python / web_search / fetch_url）+ chat 升级支持 ReAct 多步循环。Python 沙箱 `infra/sandbox/python.go`（subprocess + 30s 超时 + AST 函数提取）。
 
-**焦点实体**：每条 message 打上 `entity_type / entity_id` 标记；Agent 调 system tool 成功后由 callback 写入。`tool.code_streaming` SSE 事件支持右侧面板实时展示代码生成过程。
+**Phase 3 后基础设施优化轮（2026-04-27 起，进行中）**：chat 基础设施重构（移除 Eino + Block 模型）/ chat pipeline.go → runner.go 二次重构 / Brewfile + Makefile setup / Claude Code 内部机制调研（9 份报告）/ SQLite 驱动迁移（mattn → modernc，纯 Go） / 桌面端 Wails 分发方向定型。详见 [`progress-record.md`](./progress-record.md) §2。
 
 ### Phase 4 — 工作流能力（最大的一块）
 `workflow`（DAG + 状态机）+ `flowrun`（执行实例）+ 5 类节点（LLM / Tool / Trigger / Approval / Variable）+ `scheduler` + `trigger`（cron / fsnotify / HTTP webhook）+ `chat` 再升级支持"对话创建工作流"。执行引擎自实现（不依赖 Eino compose，Eino 已全面移除）。
@@ -115,9 +117,6 @@ handler.SendMessage
 `knowledge` + `document`（本地 sqlite-vec）+ `intent`（自实现 ReAct Agent，基于 `infra/llm`）+ `mcpserver`（`mark3labs/mcp-go`）+ `skill`（V1 浅版：打标签的工具）+ `chat` 终极版（意图识别 → 工作流推荐 → 自动建草稿）。
 
 **焦点实体延伸**：knowledge / mcp / skill 同理，消息打标后右侧面板跟随切换。
-
-### Phase 6 — 原子切换
-Electron 切路径 → 烟测 30 min → 删 `backend/` → 改名 `backend-new/` → commit。
 
 ### 跨 domain 协作图
 
@@ -486,76 +485,63 @@ import (
 > 以 apikey 为参照样板。其他 domain 按同样套路开。
 
 ```
-backend-new/
+backend/
 ├── cmd/server/main.go              ← 入口，DI 组装
 ├── go.mod / go.sum
 └── internal/
     ├── domain/                     ← 纯业务（仅 import 标准库 + GORM tag）
-    │   ├── apikey/                 ← 平铺，按概念拆文件（S12）
-    │   │   ├── apikey.go           ← entity + 常量 + errors + Credentials +
-    │   │   │                          ListFilter + Repository + KeyProvider 接口
-    │   │   ├── providers.go        ← 11 provider 白名单
-    │   │   └── providers_test.go
-    │   ├── model/                  ← Phase 2
-    │   ├── conversation/           ← Phase 2
-    │   ├── chat/                   ← Phase 2
-    │   ├── tool/                   ← Phase 3
-    │   ├── forge/                  ← Phase 3
-    │   ├── attachment/             ← Phase 3
-    │   ├── workflow/               ← Phase 4
-    │   ├── flowrun/                ← Phase 4
-    │   ├── scheduler/              ← Phase 4
-    │   ├── trigger/                ← Phase 4
-    │   ├── knowledge/              ← Phase 5
-    │   ├── document/               ← Phase 5
-    │   ├── intent/                 ← Phase 5
-    │   ├── mcpserver/              ← Phase 5
-    │   ├── skill/                  ← Phase 5
-    │   ├── crypto/                 ← 接口（已）
-    │   ├── events/                 ← 接口（已）
-    │   └── errors/                 ← 跨 domain 通用 sentinel（已）
+    │   ├── apikey/                 ← ✅ apikey.go + providers_test.go（providers.go 在 app 层）
+    │   ├── model/                  ← ✅
+    │   ├── conversation/           ← ✅
+    │   ├── chat/                   ← ✅ Message + Block + Attachment（Block 模型，2026-04-27 重构）
+    │   ├── tool/                   ← ✅ Tool + ToolVersion + TestCase + RunHistory + TestHistory
+    │   ├── crypto/                 ← ✅ 接口
+    │   ├── events/                 ← ✅ 接口 + types.go（强类型事件）
+    │   ├── errors/                 ← ✅ 跨 domain 通用 sentinel
+    │   ├── workflow/               ← ⬜ Phase 4
+    │   ├── flowrun/                ← ⬜ Phase 4
+    │   ├── scheduler/              ← ⬜ Phase 4
+    │   ├── trigger/                ← ⬜ Phase 4
+    │   ├── knowledge/ document/    ← ⬜ Phase 5
+    │   ├── intent/ mcpserver/      ← ⬜ Phase 5
+    │   └── skill/                  ← ⬜ Phase 5
     │
     ├── app/                        ← service 层（协调 domain + infra）
-    │   ├── apikey/                 ← 包名 apikey，调用方别名 apikeyapp（S13）
-    │   │   ├── service.go          ← Service（CRUD + Test 编排）
-    │   │   ├── keyprovider.go      ← 实现 apikeydomain.KeyProvider
-    │   │   ├── tester.go           ← ConnectivityTester + HTTPTester
-    │   │   ├── mask.go             ← MaskKey
-    │   │   └── *_test.go
-    │   └── <其他 domain>/          ← 按 Phase 2-5 逐个落
+    │   ├── apikey/                 ← ✅ apikey.go（Service + KeyProvider + MaskKey 全合并）+ providers.go + tester.go
+    │   ├── model/                  ← ✅ model.go（Service + ModelPicker 合并）
+    │   ├── conversation/           ← ✅ conversation.go
+    │   ├── chat/                   ← ✅ 6 文件：chat.go / runner.go / stream.go / tools.go / history.go / util.go
+    │   ├── tool/                   ← ✅ tool.go（30 方法 Service）+ ast.go（Python AST 解析）
+    │   ├── agent/                  ← ✅ tool.go（Tool 接口 + summary 注入）+ system.go + web.go + forge.go
+    │   └── <Phase 4-5>/
     │
     ├── infra/                      ← 技术实现
-    │   ├── db/                     ← 通用 DB 底层（domain 无关）
-    │   │   ├── db.go               ← GORM 初始化（WAL / FK / PrepareStmt / UTC）
-    │   │   ├── migrate.go          ← AutoMigrate + schema_extras 入口
-    │   │   └── schema_extras.go    ← 部分索引等 GORM tag 表达不了的 SQL
-    │   ├── store/                  ← domain-aware 的 Repository 实现
-    │   │   └── apikey/             ← 包名 apikey，调用方别名 apikeystore（S13）
-    │   ├── llm/                    ← 自有 LLM 流式客户端（替代 Eino）
-    │   │   ├── llm.go              ← StreamEvent / LLMMessage / Client 接口 / Generate
-    │   │   ├── openai.go           ← OpenAI-compat SSE（DeepSeek/Qwen/Ollama 等）
+    │   ├── db/                     ← ✅ db.go（modernc.org/sqlite）+ migrate.go + schema_extras.go
+    │   ├── store/                  ← ✅ apikey / model / conversation / chat / tool 各一份
+    │   ├── llm/                    ← ✅ 自有 LLM 流式客户端（替代 Eino，2026-04-27）
+    │   │   ├── llm.go              ← StreamEvent / LLMMessage / Client 接口 / Generate helper
+    │   │   ├── openai.go           ← OpenAI-compat SSE（DeepSeek/Qwen/Moonshot/Ollama 等）
     │   │   ├── anthropic.go        ← Anthropic 原生 /v1/messages 客户端
     │   │   └── factory.go          ← Factory.Build(Config) provider dispatch
-    │   ├── chat/                   ← 附件内容提取（extractor.go）
-    │   ├── sandbox/                ← Python subprocess 执行（Phase 3）
-    │   ├── events/                 ← in-memory event bridge（已）
-    │   ├── crypto/                 ← AES-256-GCM 加解密（已）
-    │   └── logger/                 ← Zap 配置（已）
+    │   ├── chat/                   ← ✅ extractor.go（附件内容提取，7 种格式 + Vision 路径）
+    │   ├── sandbox/                ← ✅ python.go（Python subprocess + 30s 超时）
+    │   ├── events/memory/          ← ✅ in-memory pub-sub Bridge
+    │   ├── crypto/                 ← ✅ aesgcm.go + fingerprint.go
+    │   └── logger/                 ← ✅ zap.go + broadcast.go（dev-only LogBroadcaster）
     │
     ├── pkg/                        ← 跨层共享纯工具（无业务、无 infra 依赖）
-    │   └── reqctx/                 ← user_id / locale 注入与读取（已）
+    │   └── reqctx/                 ← ✅ userid.go + locale.go
     │
     └── transport/
         └── httpapi/                ← 包名避开 net/http 冲突
-            ├── router/             ← 路由注册 + Deps DI
-            ├── response/           ← 📦 envelope + errmap（框架级通用能力）
-            ├── middleware/         ← 📦 recover / logger / cors / locale / userid / notfound
-            ├── pagination/         ← 📦 cursor 分页解析与编码
-            └── handlers/           ← 📦 业务 handler（每 domain 一个文件）
-                ├── health.go       ← 已
-                ├── apikey.go       ← 已（Phase 2 #5）
-                └── <其他>.go       ← 各 Phase 逐个落
+            ├── router/             ← ✅ router.go + deps.go（DI struct，nil-tolerant）
+            ├── response/           ← ✅ envelope.go + errmap.go
+            ├── middleware/         ← ✅ recover / logger / cors / locale / auth(InjectUserID) / notfound
+            ├── pagination/         ← ✅ cursor.go
+            └── handlers/           ← ✅ health / apikey / model / conversation / chat / tool / dev
 ```
+
+`legacy/` 存放 V1.0/V1.1 的旧实现（Electron + Eino）作为参考。`testend/` 是开发期调试控制台（详见 [`testend-design.md`](./testend-design.md)）。
 
 **依赖方向**：`transport → app → (domain ∪ infra/store)`、`infra/store → domain`（实现接口）、`infra/db → 标准库`、`domain` 不依赖任何人。
 
@@ -595,7 +581,7 @@ backend-new/
 ## Verification
 
 ### 单元测试
-- `go test -count=1 -race ./...` 零失败
+- `cd backend && go test -count=1 -race ./...` 零失败（CGO 已不需要——modernc.org/sqlite 纯 Go）
 - domain/ 层覆盖率 > 80%（纯逻辑好测）
 - app/ 层核心 service 必测
 
@@ -606,25 +592,30 @@ backend-new/
 - 错误码符合约定
 - 分页参数生效
 
-### 端到端场景（Phase 3 可测起）
-1. 新建对话 → AI 回复 → 创建工具 → 分屏 → 测试工具 → 失败 → 让 AI 修复 → 成功
-2. 归档对话 → 查看归档列表 → 恢复
-3. 导出工具 → 删除 → 重新导入
+### 端到端场景（Phase 3 起，集成测试 13 组覆盖）
+A. Conversation CRUD / B. API Key & Model Config / C. 分页 cursor / D-E. 系统工具组 / F. 并行 tool call / G. 多步 ReAct（write→read→python）/ H. Attachment 内联 / I. 错误处理 / J. Auto-title / K. 含 tool_call blocks 的多轮历史重建 / L. SSE messageId 一致性 / M. Forge 工具创建。详见 [`progress-record.md`](./progress-record.md) 的 chat 重构段。
 
 ### 性能基准
 - 流式对话 token latency < 旧版 110%
 - 工具列表加载 < 500ms
-- 搜索响应 < 300ms（FTS5 加持）
+- 工具搜索通过 LLM 排序，响应取决于上游 LLM（Phase 5 重新加 FTS5 时再加本地搜索基准）
 
 ### Schema 完整性
 - `PRAGMA foreign_key_check` 零返回
 - `PRAGMA integrity_check` 返回 `ok`
 
+### 跨平台编译（modernc.org/sqlite 迁移后）
+- `GOOS=darwin GOARCH=arm64 go build ./cmd/server`
+- `GOOS=linux GOARCH=amd64 go build ./cmd/server`
+- `GOOS=windows GOARCH=amd64 go build ./cmd/server`
+
+三平台单条命令出二进制，约 24-25MB，无 CGO / 无 C 工具链需求。
+
 ---
 
 ## 非目标（本轮不做）
 
-- ❌ 多租户真实 user_id 来源 —— 先硬编码 `local-user`；未来 SaaS 时加 auth middleware
-- ❌ Docker 沙箱 —— 保持 subprocess
+- ❌ 多租户真实 user_id 来源 —— 先硬编码 `local-user`（`reqctx.DefaultLocalUserID`）；产品定位为本地单用户桌面 app（详见 [`desktop-packaging-notes.md`](./desktop-packaging-notes.md)），不计划做 SaaS 多租户
+- ❌ Docker 沙箱 —— 保持 Python subprocess（`infra/sandbox/python.go`，30s 超时）。本地单用户场景下 Docker 是过度工程
 - ❌ 前端类型生成工具链 —— 下轮前端 iteration 再接
-- ❌ 前端代码改动 —— 下轮独立做
+- ❌ 前端代码改动 —— V1.2 后端阶段不动前端，统一在后端完成后整体迁移

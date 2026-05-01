@@ -23,12 +23,13 @@ type extraGroup struct {
 // by the table they depend on. Add a new extraGroup here whenever a domain
 // needs partial indexes, triggers, FTS5 virtual tables, or CHECK constraints.
 //
-// Build requirement: go-sqlite3 with FTS5:
-//
-//	CGO_CFLAGS="-DSQLITE_ENABLE_FTS5" go build ./...
+// Driver: pure Go via modernc.org/sqlite (FTS5 included by default,
+// no build flags required).
 //
 // schemaExtraGroups 按依赖表分组列出 AutoMigrate 表达不了的 SQL。
 // 每当某 domain 需要部分索引、触发器、FTS5 虚拟表或 CHECK 约束时，在此追加一个 extraGroup。
+// 驱动：modernc.org/sqlite 纯 Go 实现，FTS5 内置，无需编译标志。
+//
 // NOTE: FTS5 full-text search on messages was removed during the chat infra
 // refactor (2026-04-27). The old index was built on messages.content which no
 // longer exists. FTS5 will be re-added later targeting message_blocks.data.

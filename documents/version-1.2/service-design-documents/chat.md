@@ -1,7 +1,7 @@
 # chat domain — 详细设计文档
 
 **所属 Phase**：Phase 2 起（每个 Phase 都会升级）
-**状态**：🔄 设计已定，Phase 2 代码待实现
+**状态**：✅ 已实现到 Phase 3（含 chat 基础设施重构 2026-04-27 + pipeline → runner 二次重构）；Phase 4-5 时再升级
 **地位**：**全系统最核心的 domain**——用户的每一次对话都从这里进入，一切能力都通过这里编排。
 
 **关联文档**：
@@ -230,7 +230,7 @@ runOneTool(ctx, tc)
 ### 4.3 Context Helpers
 
 ```go
-// 6 个 context helpers，供 pipeline 注入、forge tools 读取
+// 6 个 context helpers，供 runner.go 注入、forge.go 中的 tools 读取
 func WithConversationID(ctx, id) context.Context
 func GetConversationID(ctx) (string, bool)
 
@@ -265,52 +265,61 @@ func GetToolCallID(ctx) (string, bool)
 
 ## 5. Pipeline 架构（`app/chat/`）
 
-### 5.1 文件结构
+### 5.1 文件结构（6 文件）
 
 ```
 app/chat/
-  chat.go     ← 公开 API（Send / Cancel / ListMessages / UploadAttachment）+ 队列管理
-  pipeline.go ← processTask / runReactLoop / runStep / persistMsg / finalPersist
-  stream.go   ← consumeStream（iter.Seq 驱动）+ assembleAssistantBlocks
-  tools.go    ← executeToolCalls（并行）+ runOneTool + executeTool
-  history.go  ← buildLLMHistory + blocksToAssistantLLM + buildUserLLMMessage
-  util.go     ← ID 生成器 + readAndEncode + truncate
+  chat.go     ← 公开 API（Send / Cancel / ListMessages / UploadAttachment）+ Service struct + queue 管理常量
+  runner.go   ← getOrCreateQueue / runQueue / processTask / agentRun（ReAct loop）/ writeDB / stampBlocks
+  stream.go   ← streamLLM（iter.Seq 驱动）+ assembleBlocks + extractToolCalls + parseToolArgs
+  tools.go    ← runTools（并行）+ runOneTool + executeTool
+  history.go  ← buildHistory + extendHistory + blocksToLLM + blocksToAssistantLLM + buildUserLLMMessage + attachmentToPart
+  util.go     ← ID 生成器（newMsgID / newBlockID / newAttachmentID）+ readAndEncode + truncate
 ```
 
-### 5.2 ReAct Loop（`runReactLoop`）
+> 2026-04-27 重构后从 `app/chat/chat.go` 单文件拆为 5 文件；2026-04-27 后又把原 `pipeline.go` 替换为 `runner.go`（concept compaction 预留）。函数名也随之精简：`runReactLoop` → `agentRun`，`persistMsg` + `finalPersist` 合并为带 `fatal bool` 的 `writeDB`。
+
+### 5.2 ReAct Loop（`agentRun`，runner.go）
 
 ```
 Send(userMsg) → 保存 user message → 入队 queuedTask{userMsgID}
   ↓ worker goroutine
 processTask
-  → buildLLMHistory(ctx, convID, userMsgID)   // 加载历史，userMsgID 末尾追加
-  → for step < maxSteps:
-      runStep(ctx, client, req, convID, assistantMsgID)
-        → consumeStream(stream)                 // iter.Seq 驱动
-            → 遇到 EventToolStart → Publish(ChatToolCallStart)
-            → 遇到 EventText → Publish(ChatToken)
-            → 遇到 EventReasoning → Publish(ChatReasoningToken)
-            → 遇到 EventFinish → 记录 usage
-            → 遇到 EventError → return error
-        → assembleAssistantBlocks()             // 组装当前步 blocks
-        → executeToolCalls(toolCalls)           // 并行执行所有 tool
-            → foreach tool: Publish(ChatToolCall) → Execute → Publish(ChatToolResult)
-        → 返回 stepBlocks（含 tool_result）
+  → modelPicker.PickForChat → keyProvider.ResolveCredentials → llmFactory.Build
+  → 组装 baseReq（System / Tools 注入）
+  → agentRun(ctx, uid, conv, userMsgID, client, baseReq)
+      → buildHistory(ctx, convID, userMsgID)     // 加载历史，userMsgID 末尾追加
+      → for step < maxSteps (=20):
+          aBlocks, toolCalls, stopReason, iT, oT = streamLLM(ctx, client, req, convID, msgID)
+          allBlocks = append(allBlocks, aBlocks...)
+          totalInput += iT; totalOutput += oT
 
-      allBlocks = append(allBlocks, stepBlocks)
-      if no tool calls → finalPersist(completed) → break
-      else → persistMsg(streaming)              // 中间态，buildLLMHistory 会跳过
+          if stopReason == cancelled / error:
+              writeDB(allBlocks, status=cancelled|error, fatal=true) → break
 
-  if maxSteps reached → finalPersist(max_tokens)
-  → Publish(ChatDone)
-  → auto-title goroutine（conv.Title 为空时）
+          if len(toolCalls) == 0:
+              writeDB(allBlocks, status=completed, stopReason, fatal=true) → break  // 最终答案
+
+          rBlocks = runTools(ctx, toolCalls, convID, msgID)   // 并行
+          allBlocks = append(allBlocks, rBlocks...)
+          writeDB(allBlocks, status=streaming, fatal=false)   // checkpoint，buildHistory 会跳过
+          history = extendHistory(history, aBlocks, rBlocks)  // 把本步的 assistant + tool result 拼回历史
+          // TODO: context compaction 钩子点
+
+      if !finalWritten:                                       // 步骤上限
+          writeDB(allBlocks, status=completed, stopReason=max_tokens, fatal=true)
+
+      Publish(ChatDone)
+      if conv.Title == "" && !conv.AutoTitled:
+          go autoTitle(...)
 ```
 
 **关键设计**：
 - **allBlocks 累积**：所有步骤的 blocks 全部累积进一个 slice，最终一次性写入同一条 assistant 消息。一次用户发言对应一条完整的 DB 记录，工具调用链不丢失。
-- **中间步 streaming**：中间步写 `status=streaming`，`buildLLMHistory` 自动跳过 streaming/pending 状态的消息，避免把未完成的步骤放进历史重建。
+- **中间步 streaming checkpoint**：中间步用 `writeDB(fatal=false)` 写 `status=streaming`，`buildHistory` 跳过 streaming/pending 状态的消息，避免把未完成的步骤放进历史重建。失败只 warn，最终写会覆盖。
+- **`fatal=true` 走 detached context**：终态写用 `reqctxpkg.SetUserID(context.Background(), uid)` 创建全新 context，不受取消影响，保证终态必然落库。
 
-### 5.3 consumeStream（`stream.go`）
+### 5.3 streamLLM（`stream.go`）
 
 ```go
 // iter.Seq 拉式迭代：只要 for range 不 break，就一直消费
@@ -328,19 +337,20 @@ for event := range client.Stream(ctx, req) {
         reasonBuf.WriteString(event.ReasoningDelta)
         bridge.Publish(ChatReasoningToken{Delta: event.ReasoningDelta})
     case EventFinish:
-        usage = {event.InputTokens, event.OutputTokens}
+        totalInput, totalOutput = event.InputTokens, event.OutputTokens
     case EventError:
-        return nil, event.Err
+        return nil, nil, StopReasonError, ...
     }
 }
+return assembleBlocks(textBuf, reasonBuf, accum), extractToolCalls(blocks), stopReason, totalInput, totalOutput
 ```
 
-`assembleAssistantBlocks` 把 buffers 组装为 blocks：顺序为 reasoning block → tool_call blocks（按 index 排） → text block。
+`assembleBlocks` 把 buffers 组装为 blocks：顺序为 reasoning block → tool_call blocks（按 index 排） → text block。`extractToolCalls` 从 blocks 抽出 tool_call 列表交给 runTools。`parseToolArgs` 拆分 LLM 输出的 arguments JSON 为 `{summary, args}`。
 
 ### 5.4 并行 Tool Call（`tools.go`）
 
 ```go
-func (s *Service) executeToolCalls(ctx, calls, convID, msgID) []chatdomain.Block {
+func (s *Service) runTools(ctx, calls, convID, msgID) []chatdomain.Block {
     ch := make(chan result, len(calls))
     var wg sync.WaitGroup
     for i, call := range calls {
@@ -350,30 +360,36 @@ func (s *Service) executeToolCalls(ctx, calls, convID, msgID) []chatdomain.Block
             ch <- result{idx, s.runOneTool(ctx, tc, convID, msgID, idx)}
         }(i, call)
     }
-    wg.Wait()
-    close(ch)
-    // 还原原始 index 顺序，保证 block seq 确定
+    wg.Wait(); close(ch)
     blocks := make([]Block, len(calls))
-    for r := range ch { blocks[r.idx] = r.block }
+    for r := range ch { blocks[r.idx] = r.block }   // 还原 index 顺序，保证 block seq 确定
     return blocks
 }
 ```
 
-`runOneTool` 在调用 `executeTool` 前注入 `WithMessageID` / `WithToolCallID` 到 ctx，供 forge.go 中的工具读取并填充 SSE 事件字段。
+`runOneTool` 调用 `executeTool` 前注入 `WithMessageID` / `WithToolCallID` 到 ctx，供 forge.go 中的工具读取并填充 SSE 事件字段。`executeTool` 是真正调 `tool.Execute(ctx, argsJSON)` 的最内层。
 
-### 5.5 finalPersist 与取消安全
+### 5.5 writeDB 与取消安全
 
 ```go
-func (s *Service) finalPersist(ctx, msgID, convID, uid, blocks, status, ...) {
-    // 关键：取消时 ctx 已 cancelled，用全新 context 确保终态 DB 写入不失败
-    saveCtx := reqctx.SetUserID(context.Background(), uid)
-    if err := s.persistMsg(saveCtx, ...); err != nil {
-        // 写失败：推 chat.error，记 CRITICAL log
+func (s *Service) writeDB(ctx, msgID, convID, uid, blocks, status, stopReason, ..., fatal bool) {
+    saveCtx := ctx
+    if fatal {
+        // Fresh context: 已取消的流不能阻止终态写入
+        saveCtx = reqctxpkg.SetUserID(context.Background(), uid)
+    }
+    if err := s.repo.Save(saveCtx, msg); err != nil {
+        if fatal {
+            log.Error("CRITICAL: final assistant message persist failed")
+            bridge.Publish(ChatError{Code: "INTERNAL_ERROR"})
+        } else {
+            log.Warn("streaming checkpoint persist failed, continuing")
+        }
     }
 }
 ```
 
-取消流程：Cancel() → context cancelled → consumeStream break → runStep 返回已有 blocks → finalPersist(status=cancelled)。终态必然落库。
+取消流程：Cancel() → context cancelled → streamLLM break → agentRun 返回已有 blocks → writeDB(status=cancelled, fatal=true)。终态必然落库。
 
 ---
 
@@ -460,17 +476,25 @@ type Attachment struct {
 
 ### 6.5 历史重建（`history.go`）
 
-#### buildLLMHistory
+#### buildHistory
 
 ```go
-func (s *Service) buildLLMHistory(ctx, conversationID, currentUserMsgID string) ([]LLMMessage, error)
+func (s *Service) buildHistory(ctx, convID, currentUserMsgID string) ([]llminfra.LLMMessage, error)
 ```
 
 扫描所有非 streaming/pending 消息，跳过 `currentUserMsgID`，末尾显式追加当前用户消息。
 
 **为什么要追加末尾**：同一对话快速连发两条消息时，第二条 user 消息的 `created_at` 可能早于第一条 assistant 回复（队列中并发写入），导致历史排序错乱，LLM 看到 `[user1, user2(current), assistant1]` 末尾是 assistant、无法确定回复对象。
 
-#### blocksToAssistantLLM
+#### extendHistory
+
+```go
+func extendHistory(history, aBlocks, rBlocks) ([]llminfra.LLMMessage, error)
+```
+
+ReAct 循环每步结束后被 `agentRun` 调一次，把本步的 assistant blocks（含 tool_call）+ tool_result blocks 转为 LLM wire 格式追加到 history，供下一步 LLM 读取。**这是 ReAct 多步对话的核心机制**——LLM 看到自己上一步调了什么、得到什么结果，才能决定下一步。
+
+#### blocksToAssistantLLM / blocksToLLM
 
 把一条 assistant 消息的 blocks 转为 OpenAI wire 格式：
 
@@ -478,7 +502,7 @@ func (s *Service) buildLLMHistory(ctx, conversationID, currentUserMsgID string) 
 [assistant{content, toolCalls, reasoningContent}] + [N × role=tool messages]
 ```
 
-tool_call blocks → `assistant.ToolCalls[]`；tool_result blocks → 独立的 `role="tool"` 消息（OpenAI 协议要求）。
+tool_call blocks → `assistant.ToolCalls[]`；tool_result blocks → 独立的 `role="tool"` 消息（OpenAI 协议要求）。`buildHistory` 加载历史时调用，`extendHistory` 中间步插历史时也调用——同一份转换逻辑统一在 `blocksToAssistantLLM`，避免重复实现漂移。
 
 ---
 
@@ -625,8 +649,8 @@ type Service struct {
     convRepo    convdomain.Repository    // 对话 CRUD
     modelPicker modeldomain.ModelPicker  // 拿 (provider, modelID)
     keyProvider apikeydomain.KeyProvider // 拿 (key, baseURL)
-    llmFactory  *llminfra.Factory        // 构建 Client（替代原 Eino ModelFactory）
-    tools       []agentapp.Tool          // System Tools（实现 Tool 接口）
+    llmFactory  *llminfra.Factory        // 自有 LLM 流式客户端工厂
+    tools       []agentapp.Tool          // System Tools（实现 Tool 接口；SetTools 注入）
     bridge      eventsdomain.Bridge      // 推 SSE 事件
     dataDir     string                   // 附件存储根目录
     log         *zap.Logger
@@ -637,42 +661,41 @@ type Service struct {
 ### 10.2 Send 流程
 
 ```
-1. convRepo.Get(conversationID) → 验证对话存在
-2. buildUserBlocks(ctx, in) → 从 DB 查附件完整元数据构建 blocks
-3. repo.Save(userMsg with blocks) → DB
-4. getOrCreateQueue(conversationID) → 入队 queuedTask{userMsgID}
-5. 立刻返回 202 { messageId }
+HTTP 入口（同步部分）:
+  1. convRepo.Get(conversationID)            → 验证对话存在
+  2. buildUserBlocks(ctx, in)                → 从 DB 查附件完整元数据构建 user blocks
+  3. repo.Save(userMsg with blocks)          → DB（user message）
+  4. getOrCreateQueue(conversationID)        → 入队 queuedTask{userMsgID}
+  5. 立刻返回 202 { messageId: userMsgID }
 
---- worker goroutine ---
-6. model.PickForChat(ctx) → (provider, modelID)
-7. apikey.ResolveCredentials(ctx, provider) → (key, baseURL)
-8. llmFactory.Build(Config{...}) → Client
-9. buildLLMHistory(ctx, convID, userMsgID) → []LLMMessage（末尾是当前 user 消息）
-10. runReactLoop(ctx, client, history, convID, assistantMsgID, uid)
-11. Publish(ChatDone) → auto-title goroutine（conv.Title 为空时）
-      - 工具事件走 Callbacks
-      - EOF → 保存 assistant message → events.Publish(ChatDoneEvent)
-   h. 出错 → events.Publish(ChatErrorEvent)
-5. 返回 202 {messageId}
+worker goroutine（runner.go::processTask）:
+  6. modelPicker.PickForChat(ctx)            → (provider, modelID)；失败推 SSE chat.error MODEL_NOT_CONFIGURED
+  7. keyProvider.ResolveCredentials(ctx, p)  → (key, baseURL)；失败推 SSE chat.error API_KEY_PROVIDER_NOT_FOUND
+  8. llmFactory.Build(Config{...})           → Client；失败推 SSE chat.error LLM_PROVIDER_ERROR
+  9. agentRun(ctx, uid, conv, userMsgID, client, baseReq)
+       buildHistory → for-step ReAct → writeDB checkpoints → ChatDone
+
+  10. 触发 auto-title goroutine（conv.Title 为空且 !AutoTitled）
 ```
 
-### 8.3 并发控制与取消
+### 10.3 并发控制与取消
 
-每个 conversationID 最多一个 Agent 在跑。用 `sync.Map` 存运行中的 conversationID → cancel func。
+每个 conversationID 拥有一个 `convQueue`（buffered channel cap=5 + 单 worker goroutine），保证同对话消息按序逐条执行；不同对话间并行。worker 在 5 分钟空闲后自行退出，下次 Send 时按需重建。
 
 ```go
-type Service struct {
-    ...
-    running sync.Map // conversationID → context.CancelFunc
+type convQueue struct {
+    ch     chan queuedTask
+    mu     sync.Mutex
+    cancel context.CancelFunc  // nil when idle
 }
 ```
 
-- Send：已有 → 409；没有 → 注册 cancel → 跑完 → 清除
-- Cancel：`running.Load(id)` → 调 cancelFunc → Assistant message status 写 `cancelled` → 推 `chat.done`
+- **Send**：队列满 → 409 `STREAM_IN_PROGRESS`；否则入队后立即 202 返回
+- **Cancel**：`q.cancel()` → ctx cancelled → streamLLM break → agentRun 写 `status=cancelled` → 推 ChatDone
 
-### 8.4 System Prompt 组装
+### 10.4 System Prompt 组装
 
-每次调用 Agent 前，MessageModifier 按以下优先级组装 System Prompt：
+每次调用 Agent 前，`buildSystemPrompt(ctx, conv)` 按以下优先级组装：
 
 ```
 [基础系统提示词（代码写死）]
@@ -682,9 +705,9 @@ type Service struct {
 [locale 指令（从 reqctx 读）]
 ```
 
-`conversation.system_prompt` 字段存在 `conversations` 表（由 conversation domain 管理），chat.Service 通过 `conversationRepo.Get(id)` 读取。
+`conversation.system_prompt` 字段存在 `conversations` 表（由 conversation domain 管理），chat.Service 通过 `convRepo.Get(id)` 读取。
 
-### 8.5 自动命名（Auto-Titling）
+### 10.5 自动命名（Auto-Titling）
 
 第一轮对话完成后（assistant 消息 status=completed），异步起一个 goroutine 调轻量模型生成标题：
 
@@ -701,112 +724,79 @@ type Service struct {
 
 ---
 
-## 9. 各 Phase 的演化
+## 11. 完整调用链（Phase 3 当前形态）
 
-### Phase 2（当前要做的）
-
-**实现（已完成）**：
-- domain/chat：Message（Block 模型）+ Block 实体 + sentinels + Repository
-- infra/llm：openAIClient + anthropicClient + Factory（替代原 infra/eino）
-- infra/store/chat：messages + message_blocks 表 CRUD（ON CONFLICT upsert）
-- app/chat：Service 5 文件（chat/pipeline/stream/tools/history）
-- handlers/chat：5 端点
-
-**Agent 行为**：tools = nil 时 LLM 只直接回复文字，流式推 chat.token。Phase 3+ 注入 System Tools 后激活 ReAct 循环。
-
-### Phase 3（工具锻造完成后）
-
-**新增 System Tools**：
-```go
-tools = []tool.BaseTool{
-    NewCreateToolTool(forgeSvc, toolSvc),
-    NewEditToolTool(toolSvc),
-    NewRunToolTool(toolSvc),
-    NewSearchToolsTool(toolSvc),
-}
-```
-
-`main.go` 把这些 tool 注入 chat.Service 即可，Service 本身代码零改动。
-
-**chat domain 新增**：历史消息里会出现 role=tool 的消息，存储和展示需支持。
-
-### Phase 4（工作流完成后）
-
-**新增 System Tools**：
-```go
-tools = append(tools,
-    NewCreateWorkflowTool(workflowSvc),
-    NewEditWorkflowTool(workflowSvc),
-    NewRunWorkflowTool(flowrunSvc),
-)
-```
-
-**Agent 能力**：现在可以"对话中创建工作流"——LLM 先设计节点结构，再调 create_workflow，用户实时看到。
-
-### Phase 5（智能化完成后）
-
-**新增 System Tools**：
-```go
-tools = append(tools,
-    NewSearchKnowledgeTool(knowledgeSvc),
-    NewMCPCallTool(mcpSvc),
-)
-```
-
-**新增 MessageModifier 升级**：System Prompt 加入意图引导（"你可以创建工具/工作流/搜知识库，根据用户需求自主决策"）。
-
-**新增 MessageRewriter**：对话超长时自动压缩 context，保留关键消息。
-
----
-
-## 10. 完整调用链（Phase 2）
-
-### 10.1 用户发消息
+### 11.1 用户发消息
 
 ```
 POST /api/v1/conversations/cv_xxx/messages  body={content, attachmentIds}
   → middleware 链
   → ChatHandler.Send
-      → convRepo.Get(conversationID) → 验证对话存在
-      → buildUserBlocks(ctx, in) → 查附件完整元数据 → []Block
-      → repo.Save(userMsg with blocks) → DB
-      → getOrCreateQueue(conversationID) → queuedTask{userMsgID}
-      → response 202 {messageId}
+      → convRepo.Get(conversationID)              → 验证对话存在
+      → buildUserBlocks(ctx, in)                  → 查附件完整元数据 → []Block
+      → repo.Save(userMsg with blocks)            → DB
+      → getOrCreateQueue(conversationID).ch <- queuedTask{userMsgID}
+      → response 202 {messageId: userMsgID}
 
---- worker goroutine（processTask）---
-  → model.PickForChat(ctx) → ("deepseek", "deepseek-chat")
-  → apikey.ResolveCredentials(ctx, "deepseek") → (key, baseURL)
-  → llmFactory.Build(Config{...}) → Client
-  → buildLLMHistory(ctx, convID, userMsgID) → []LLMMessage（末尾追加当前 user 消息）
-  → runReactLoop:
+--- worker goroutine（runner.go::processTask）---
+  → modelPicker.PickForChat(ctx)                  → ("deepseek", "deepseek-chat")
+  → keyProvider.ResolveCredentials(ctx, "deepseek") → (key, baseURL)
+  → llmFactory.Build(Config{...})                 → Client
+  → 构造 baseReq（System / Tools 注入）
+  → agentRun(ctx, uid, conv, userMsgID, client, baseReq):
+      buildHistory(ctx, convID, userMsgID)        → []LLMMessage（末尾追加当前 user）
       for step < maxSteps:
-          consumeStream → EventToolStart → Publish(ChatToolCallStart)
-                       → EventText → Publish(ChatToken)
-                       → EventFinish → usage
-          assembleAssistantBlocks → stepBlocks
-          executeToolCalls（并行）→ toolResultBlocks
-          allBlocks = append(allBlocks, stepBlocks + toolResultBlocks)
-          if no tool calls → finalPersist(completed) → break
-          else persistMsg(streaming)
+          aBlocks, toolCalls, sr, iT, oT = streamLLM(ctx, client, req, convID, msgID)
+              EventToolStart → Publish(ChatToolCallStart)
+              EventText      → Publish(ChatToken)
+              EventReasoning → Publish(ChatReasoningToken)
+              EventFinish    → 累计 token usage
+          allBlocks += aBlocks; totalInput += iT; totalOutput += oT
+          if cancelled/error → writeDB(fatal=true) → break
+          if len(toolCalls)==0 → writeDB(completed, fatal=true) → break
+          rBlocks = runTools(ctx, toolCalls, convID, msgID)   // 并行 sync.WaitGroup
+          allBlocks += rBlocks
+          writeDB(streaming, fatal=false)
+          history = extendHistory(history, aBlocks, rBlocks)
+      if !finalWritten → writeDB(max_tokens, fatal=true)
   → Publish(ChatDone)
-  → auto-title goroutine（conv.Title 为空时）
+  → if conv.Title=="" && !AutoTitled: go autoTitle(...)
 ```
 
-### 10.2 前端收事件
+### 11.2 前端收事件
 
 ```
 GET /api/v1/events?conversationId=cv_xxx
-  → SSEHandler
+  → ChatHandler.EventsSSE
       → Bridge.Subscribe(filter={conversationId: cv_xxx})
+      → 每 15s 推 ": keep-alive\n\n" 防代理断连
       → 持续 write SSE:
-          event: chat.token  data: {...}
-          event: chat.token  data: {...}
-          event: chat.done   data: {...}
+          event: chat.tool_call_start  data: {...}
+          event: chat.token            data: {...}
+          event: chat.tool_call        data: {...}
+          event: chat.tool_result      data: {...}
+          event: chat.done             data: {...}
 ```
 
 ---
 
-## 11. 错误码
+## 12. Phase 4-5 扩展点
+
+chat domain 在 Phase 4-5 主要通过 **追加 system tools** + **升级 system prompt** 来扩展，Service 本身代码改动很小：
+
+### Phase 4（workflow 完成后）
+- 追加 `create_workflow` / `edit_workflow` / `run_workflow` system tool
+- Agent 获得"对话中创建/运行工作流"能力
+- chat.Service 代码零改动，main.go 多注入 3 个 tool
+
+### Phase 5（智能化完成后）
+- 追加 `search_knowledge`（RAG）+ `mcp_call`（MCP 服务器）system tool
+- System Prompt 升级为意图引导版（"可创建工具/工作流/搜知识库，自主决策"）
+- 长对话 context compaction（runner.go::agentRun 已预留 TODO 钩子点）：超长时压缩历史，保留关键消息——这是 Claude Code 调研 [`claude-code-research-documents/03-context.md`](../claude-code-research-documents/03-context.md) 的吸收
+
+---
+
+## 13. 错误码
 
 | Code | HTTP | Sentinel | 场景 |
 |---|---|---|---|
@@ -822,69 +812,63 @@ GET /api/v1/events?conversationId=cv_xxx
 
 ---
 
-## 12. 为什么这样设计（关键决策总结）
+## 14. 为什么这样设计（关键决策总结）
 
 | 决策 | 选择 | 理由 |
 |---|---|---|
 | 用 ReAct Agent 还是固定 Graph | **ReAct Agent** | 任务序列是运行时 LLM 决定的，不能提前写死；Phase 2-5 的工具列表动态增长 |
-| tools 全部注入 vs Tool RAG | **System Tools 注入 + Tool RAG** | System Tools 数量固定（~8个）可全注入；用户工具无上限，靠 search_tools 动态检索 |
+| tools 全部注入 vs Tool RAG | **System Tools 注入 + Tool RAG** | System Tools 数量固定（~8 个）可全注入；用户工具无上限，靠 search_tools 动态检索 |
 | 202 + SSE vs 直接 stream response | **202 + 独立 SSE** | Agent 跑多步需要持久连接；POST 语义是"接受请求"不是"等待结果"；events Bridge 已就绪 |
-| messages 在哪存 | **chat domain 自己管** | 消息历史是 chat 专有数据，不应跨 domain 共享；conversation domain 只管线程元数据 |
-| Claude StreamToolCallChecker | **各 provider 自定义** | Claude 在 stream 末尾才发 tool call，Eino 默认只检查第一个 chunk，不自定义直接失效 |
-| System Prompt 的 locale | **MessageModifier 注入** | 每次 ChatModel 调用前动态注入，locale 从 reqctx 读，Agent 不需要知道 locale 逻辑 |
+| messages 存哪 | **chat domain 自己管** | 消息历史是 chat 专有数据，不应跨 domain 共享；conversation domain 只管线程元数据 |
+| LLM 客户端用现成框架 vs 自实现 | **自实现 `infra/llm`** | 流式 SSE 解析 / tool call 累积 / 错误分类需要完全可见可控；framework 抽象会丢信息（实测 framework callback 对流式 ChatModel 不触发，导致 DB content 空）|
+| 不同 provider 协议适配 | **各自独立 client** | OpenAI 兼容 / Anthropic 原生 / Ollama 等都有协议差异（消息格式、tool result 包装、stream 边界），强行统一会失真 |
+| System Prompt 的 locale | **buildSystemPrompt 动态注入** | 每次调用前动态拼接，locale 从 reqctx 读，Agent 不需要知道 locale 逻辑 |
 | Message status | **message 级别字段** | 流式过程中消息状态需持久化；失败/取消场景前端需要准确知道每条消息的最终态 |
-| SSE 可靠性 | **keep-alive ping + Last-Event-ID + 短暂缓冲** | 网络抖动断连不丢事件；桌面应用场景常见 |
+| SSE 可靠性 | **keep-alive ping + 内存 Bridge fan-out** | 网络抖动断连不丢事件；桌面应用场景常见 |
 | Auto-titling | **异步 goroutine，失败静默** | 标题生成不是核心流程；用轻量模型节省费用；失败不影响用户体验 |
-| Prompt Caching | **Anthropic 专属，anthropic.go 实现** | 节省最多 90% system prompt token 费用；其他 provider 暂无此能力 |
+| 中间步 DB checkpoint | **streaming 状态 + buildHistory 跳过** | 多步 ReAct 中间态需持久化（崩溃恢复 / SQL Tab 调试可见），但不能进 LLM 历史避免循环 |
+| 终态写 detached context | **`writeDB(fatal=true)` 用 `context.Background()`** | 用户取消时 ctx 已 cancelled，但终态消息必须落库——否则下次打开对话看不到这次回复 |
 
 ---
 
-## 13. 实现清单 ✅（截止 2026-04-27 全部完成）
+## 15. 实现清单 ✅
 
-### infra/llm 层（替代 infra/eino）
+### infra/llm 层（自有 LLM 流式客户端）
 - [x] `infra/llm/llm.go` — StreamEvent / LLMMessage / ToolDef / Client 接口 / Generate helper
 - [x] `infra/llm/openai.go` — OpenAI-compat SSE 客户端（iter.Seq），覆盖 OpenAI/DeepSeek/Qwen/Moonshot/Ollama 等
-- [x] `infra/llm/anthropic.go` — Anthropic 原生 /v1/messages 客户端（content_block_start/delta/stop）
+- [x] `infra/llm/anthropic.go` — Anthropic 原生 `/v1/messages` 客户端（content_block_start/delta/stop）
 - [x] `infra/llm/factory.go` — Factory.Build(Config) provider dispatch + resolveBaseURL
-- ❌ `infra/eino/` — **已删除**（4 文件，Eino 依赖全部从 go.mod 消除）
 
 ### app/agent 层
 - [x] `app/agent/tool.go` — Tool 4 方法接口 + injectSummaryField + StripSummary + ToLLMDef/ToLLMDefs + 6 个 context helpers（WithConversationID/MessageID/ToolCallID + 对应 Get）
-- [x] `app/agent/system.go` — 6 个 system tool（datetime/read_file/write_file/list_dir/run_shell/run_python）实现新 Tool 接口，Eino import 消除
+- [x] `app/agent/system.go` — 6 个 system tool（datetime/read_file/write_file/list_dir/run_shell/run_python）
 - [x] `app/agent/web.go` — web_search（DDG lite POST 表单）+ fetch_url（Jina Reader）
-- [x] `app/agent/forge.go` — 5 个 forge tool（search/get/create/edit/run）+ 6 context helpers
-- [x] `app/agent/tool_test.go` — 20 单测（injectSummaryField / StripSummary / ToLLMDef / context）
-- [x] `app/agent/system_test.go` — 15 单测（6 tool Execute + 接口合规）
+- [x] `app/agent/forge.go` — 5 个 forge tool（search/get/create/edit/run）
 
 ### domain/chat 层
 - [x] `domain/chat/chat.go` — Message（精简纯元数据）+ Block 实体 + 5 种 BlockType + data 结构体 + Attachment + sentinels + Repository
 - [x] `domain/events/types.go` — ChatToolCallStart + ChatReasoningToken；ChatDone 改为 inputTokens/outputTokens int；ToolCodeStreaming/ToolCreated/ToolPendingCreated 加 MessageID+ToolCallID
 
 ### infra/db 层
-- [x] `infra/db/schema_extras.go` — 新增 message_blocks 索引；移除 messages_fts FTS5（原基于已删除 content 列）
+- [x] `infra/db/schema_extras.go` — 按 table 分组的 extraGroup 结构；message_blocks 索引；tools partial UNIQUE（FTS5 当前未使用）
+- [x] `infra/db/db.go` — modernc.org/sqlite 驱动；DSN 走 `_pragma=...` 语法
 
 ### infra/store/chat 层
 - [x] `infra/store/chat/chat.go` — Save（ON CONFLICT upsert 保护 created_at，事务写 blocks）；ListByConversation（批量取 blocks 避 N+1）；GetAttachment；SaveAttachment
-- [x] 集成测试更新（适配 Block 模型，新增 3 个 block 相关测试）
 
 ### infra/chat 层
 - [x] `infra/chat/extractor.go` — Extract(storagePath, mimeType)：text/pdf/docx/xlsx/pptx/html 提取；IsImage 分派 Vision 路径
 
-### app/chat 层
-- [x] `app/chat/chat.go` — Service struct（llmFactory 替代 modelFactory；[]agentapp.Tool）+ Send / Cancel / ListMessages / UploadAttachment + 队列管理（convQueue + sync.Map）
-- [x] `app/chat/pipeline.go` — processTask + runReactLoop（allBlocks 累积）+ runStep + persistMsg + finalPersist（detached context）+ autoTitle
-- [x] `app/chat/stream.go` — consumeStream（iter.Seq）+ assembleAssistantBlocks
-- [x] `app/chat/tools.go` — executeToolCalls（sync.WaitGroup 并行）+ runOneTool（注入 msgID/toolCallID）+ executeTool
-- [x] `app/chat/history.go` — buildLLMHistory(currentUserMsgID) + blocksToAssistantLLM + buildUserLLMMessage + attachmentToPart
+### app/chat 层（6 文件）
+- [x] `app/chat/chat.go` — Service struct + Send / Cancel / ListMessages / UploadAttachment + queueCapacity + convQueue / queuedTask 类型
+- [x] `app/chat/runner.go` — getOrCreateQueue / runQueue / processTask / agentRun（ReAct loop，含 context compaction 钩子点）/ writeDB（fatal 模式分支）/ stampBlocks / autoTitle
+- [x] `app/chat/stream.go` — streamLLM（iter.Seq）+ assembleBlocks + extractToolCalls + parseToolArgs
+- [x] `app/chat/tools.go` — runTools（sync.WaitGroup 并行）+ runOneTool（注入 msgID/toolCallID）+ executeTool
+- [x] `app/chat/history.go` — buildHistory(currentUserMsgID) + extendHistory + blocksToLLM + blocksToAssistantLLM + buildUserLLMMessage + attachmentToPart
 - [x] `app/chat/util.go` — newMsgID / newBlockID / newAttachmentID / readAndEncode / truncate
-- [x] `app/chat/stream_test.go` — 10 单测（assembleAssistantBlocks 各场景）
-- [x] `app/chat/history_test.go` — 8 单测（blocksToAssistantLLM 含 tool call 和多轮）
 
 ### transport 层
 - [x] `handlers/chat.go` — 5 端点：POST attachments / POST messages / DELETE stream / GET messages / GET events SSE（keep-alive ping）
-
-### app/tool 层（bug 修复）
-- [x] `app/tool/tool.go` — GenerateTestCases：Input/ExpectedOutput 改 json.RawMessage + extractJSONFromLLM 预处理；extractTextContent 返回最后一个 text block
 
 ### 配套
 - [x] `errmap.go` — chat sentinel 映射全部覆盖
