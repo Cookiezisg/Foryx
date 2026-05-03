@@ -17,6 +17,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -27,6 +28,7 @@ import (
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	eventsdomain "github.com/sunweilin/forgify/backend/internal/domain/events"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
+	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
@@ -93,33 +95,33 @@ func (s *Service) processTask(conversationID string, q *convQueue, task queuedTa
 	// （entity-state SSE 要求每个 chat.message 都承载真实 Message）。
 	msgID := newMsgID()
 
-	provider, modelID, err := s.modelPicker.PickForChat(agentCtx)
+	bc, err := llmclientpkg.Resolve(agentCtx, s.modelPicker, s.keyProvider, s.llmFactory)
 	if err != nil {
-		s.emitFatalError(agentCtx, task.conv, task.uid, msgID, "MODEL_NOT_CONFIGURED", err.Error())
-		return
-	}
-	creds, err := s.keyProvider.ResolveCredentials(agentCtx, provider)
-	if err != nil {
-		s.emitFatalError(agentCtx, task.conv, task.uid, msgID, "API_KEY_PROVIDER_NOT_FOUND", err.Error())
-		return
-	}
-	client, baseURL, err := s.llmFactory.Build(llminfra.Config{
-		Provider: provider, ModelID: modelID,
-		Key: creds.Key, BaseURL: creds.BaseURL,
-	})
-	if err != nil {
-		s.emitFatalError(agentCtx, task.conv, task.uid, msgID, "LLM_PROVIDER_ERROR", err.Error())
+		// Map per-step failure to its user-facing error code so the UI can
+		// distinguish "no model configured" from "no API key" from a generic
+		// upstream provider error.
+		//
+		// 把分步失败映射到对外错误码，让 UI 能区分"未配模型"/"无 API key"/
+		// 通用上游错误。
+		code := "LLM_PROVIDER_ERROR"
+		switch {
+		case errors.Is(err, llmclientpkg.ErrPickModel):
+			code = "MODEL_NOT_CONFIGURED"
+		case errors.Is(err, llmclientpkg.ErrResolveCreds):
+			code = "API_KEY_PROVIDER_NOT_FOUND"
+		}
+		s.emitFatalError(agentCtx, task.conv, task.uid, msgID, code, err.Error())
 		return
 	}
 
 	baseReq := llminfra.Request{
-		ModelID: modelID,
-		Key:     creds.Key,
-		BaseURL: baseURL,
+		ModelID: bc.ModelID,
+		Key:     bc.Key,
+		BaseURL: bc.BaseURL,
 		System:  s.buildSystemPrompt(agentCtx, task.conv),
 		Tools:   toolapp.ToLLMDefs(s.tools),
 	}
-	s.agentRun(agentCtx, task.uid, task.conv, task.userMsgID, msgID, client, baseReq)
+	s.agentRun(agentCtx, task.uid, task.conv, task.userMsgID, msgID, bc.Client, baseReq)
 }
 
 // ── agentRun ──────────────────────────────────────────────────────────────────
@@ -396,17 +398,7 @@ func (s *Service) buildSystemPrompt(ctx context.Context, conv *convdomain.Conver
 // best-effort：任何失败静默退出。
 func (s *Service) autoTitle(ctx context.Context, conv *convdomain.Conversation, uid, assistantContent string) {
 	titleCtx := reqctxpkg.SetUserID(ctx, uid)
-	provider, modelID, err := s.modelPicker.PickForChat(titleCtx)
-	if err != nil {
-		return
-	}
-	creds, err := s.keyProvider.ResolveCredentials(titleCtx, provider)
-	if err != nil {
-		return
-	}
-	client, baseURL, err := s.llmFactory.Build(llminfra.Config{
-		Provider: provider, ModelID: modelID, Key: creds.Key, BaseURL: creds.BaseURL,
-	})
+	bc, err := llmclientpkg.Resolve(titleCtx, s.modelPicker, s.keyProvider, s.llmFactory)
 	if err != nil {
 		return
 	}
@@ -415,13 +407,13 @@ func (s *Service) autoTitle(ctx context.Context, conv *convdomain.Conversation, 
 	defer cancel()
 
 	req := llminfra.Request{
-		ModelID: modelID, Key: creds.Key, BaseURL: baseURL,
+		ModelID: bc.ModelID, Key: bc.Key, BaseURL: bc.BaseURL,
 		System: "Generate a short conversation title (5 words or fewer). Reply with ONLY the title, no punctuation.\n只返回标题本身，不超过 10 个字，不加标点。",
 		Messages: []llminfra.LLMMessage{
 			{Role: llminfra.RoleUser, Content: "Assistant said: " + truncate(assistantContent, 300)},
 		},
 	}
-	title, err := llminfra.Generate(tCtx, client, req)
+	title, err := llminfra.Generate(tCtx, bc.Client, req)
 	if err != nil || title == "" {
 		return
 	}

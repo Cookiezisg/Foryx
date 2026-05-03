@@ -224,10 +224,18 @@ func injectStandardFields(params json.RawMessage) json.RawMessage {
 
 	// Prepend "summary" to required so most LLMs output it first.
 	// "destructive" stays optional (default false handles it).
-	// "summary" 排在 required 首位引导 LLM 优先输出；"destructive" 不必填，缺省 false。
+	// Silent-parse of an existing malformed `required` would drop the tool
+	// author's required field list and let the LLM skip required args —
+	// match the surrounding panic-on-bad-schema policy at line 191/196/200.
+	//
+	// "summary" 排在 required 首位引导 LLM 优先输出；"destructive" 不必填，
+	// 缺省 false。静默解析坏掉的现有 `required` 会丢失工具作者的必填字段表，
+	// 让 LLM 跳过必填项——与 191/196/200 行的 panic-on-bad-schema 策略保持一致。
 	var required []string
 	if raw, ok := schema["required"]; ok {
-		_ = json.Unmarshal(raw, &required)
+		if err := json.Unmarshal(raw, &required); err != nil {
+			panic(fmt.Sprintf("tool: parameters.required is not a valid JSON array of strings: %v", err))
+		}
 	}
 	required = append([]string{"summary"}, required...)
 	reqRaw, err := json.Marshal(required)
@@ -258,6 +266,14 @@ func StripStandardFields(argsJSON string) (summary string, destructive bool, str
 	if err := json.Unmarshal([]byte(argsJSON), &m); err != nil {
 		return "", false, argsJSON
 	}
+	// LLM-produced args: if the LLM emits the wrong type (e.g. summary as
+	// an int) the field stays zero. We deliberately don't return / log
+	// here — the tool's ValidateInput will reject the malformed call with
+	// a retry signal that propagates back to the LLM, which IS the surface.
+	//
+	// LLM 产出的 args：类型不对（如 summary 给成 int）字段保持零值。
+	// 此处刻意不返错 / 不打日志——下游 tool 的 ValidateInput 会拒绝并以
+	// 重试信号回到 LLM，那才是真正的暴露面。
 	if raw, ok := m["summary"]; ok {
 		_ = json.Unmarshal(raw, &summary)
 		delete(m, "summary")

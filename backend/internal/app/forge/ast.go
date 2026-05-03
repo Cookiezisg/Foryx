@@ -133,14 +133,24 @@ print(json.dumps({
 `
 
 // parseForgeCode launches a Python subprocess to parse the function structure
-// of code. Requires Python 3.8+ (ast.unparse added in 3.9; falls back
-// gracefully for older versions).
-// Description fields are empty when the code lacks a Google-style docstring
-// — this is not an error.
+// of code. pythonPath is the absolute path to a Python interpreter (typically
+// the bundled python-build-standalone via Sandbox.PythonPath()); empty falls
+// back to the PATH-resolved "python3" for tests / dev that haven't bootstrapped.
 //
-// parseForgeCode 启动 Python subprocess 解析 code 的函数结构。需要 Python 3.8+。
-// 代码缺少 Google-style docstring 时 Description 字段为空字符串，不报错。
-func parseForgeCode(code string) (*ParsedCode, error) {
+// Requires Python 3.9+ for ast.unparse. Description fields are empty when the
+// code lacks a Google-style docstring — this is not an error.
+//
+// parseForgeCode 启动 Python subprocess 解析 code 的函数结构。pythonPath 是
+// Python 解释器绝对路径（通常 Sandbox.PythonPath() 给出的捆绑
+// python-build-standalone）；空时回退到 PATH 上的 "python3"（测试 / 未
+// bootstrap 的 dev 环境）。
+//
+// 需要 Python 3.9+（ast.unparse）。代码缺 Google-style docstring 时
+// Description 字段为空字符串，不报错。
+func parseForgeCode(pythonPath, code string) (*ParsedCode, error) {
+	if pythonPath == "" {
+		pythonPath = "python3"
+	}
 	tmp, err := os.CreateTemp("", "forgify-ast-*.py")
 	if err != nil {
 		return nil, fmt.Errorf("parseForgeCode: create temp: %w", err)
@@ -152,7 +162,7 @@ func parseForgeCode(code string) (*ParsedCode, error) {
 	}
 	tmp.Close()
 
-	cmd := exec.Command("python3", tmp.Name())
+	cmd := exec.Command(pythonPath, tmp.Name())
 	cmd.Stdin = strings.NewReader(code)
 	out, err := cmd.Output()
 	if err != nil {

@@ -156,6 +156,8 @@ type Error = {
 
 > Phase 5 整合（2026-05-02）：原 `forge_run_history` + `forge_test_history` 两表合并为 `forge_executions`（kind 字段区分），HTTP 端点对应合并为单 `:executions`。响应是分页 envelope（`{data, nextCursor, hasMore}`），与其他列表端点一致。
 
+> **沙箱迭代 1（2026-05-03）**——`POST /forges` body 加 **`dependencies` (PEP 508 string array, optional)** + **`pythonVersion` (PEP 440 spec, optional)**；service 同步等 venv sync 完成才返，响应的 forge 对象计算字段含 `envStatus` / `envError` / `envSyncedAt` / `envSyncStage` / `envSyncDetail` / `activeVersionId`（由 `attachActiveEnv` 填充）。`PATCH /forges/{id}` 不接 deps 改动——deps 改走 `edit_forge` LLM tool / pending → accept 流程。`POST /forges/{id}/pending:accept` 守卫 pending 的 `envStatus`：仅 `ready` 才放行；`failed` 返 422 `FORGE_ENV_FAILED`，其他态返 422 `FORGE_ENV_NOT_READY`。`POST /forges/{id}:revert` 自动检测目标版本 `envStatus="evicted"` 并触发同步 sync 重建。LLM tool args（`create_forge` / `edit_forge`）schema 同样含 `dependencies` 与 `python_version` 字段，并在 `tool_result` 返回 `env_status` / `env_error` 让 LLM 据此决定下一步（详 forge.md §10）。
+
 #### chat（Phase 3 升级）✅
 Forge System Tools 注入（search/get/create/edit/run，5 个）。SSE 见 events-design.md。无新 HTTP 端点，见 Phase 2 chat 端点。
 

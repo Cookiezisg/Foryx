@@ -11,6 +11,7 @@ package handlers
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -23,6 +24,7 @@ import (
 
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	loggerinfra "github.com/sunweilin/forgify/backend/internal/infra/logger"
+	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
 // DevHandler serves all /dev/* endpoints.
@@ -108,52 +110,28 @@ func (h *DevHandler) ServeIndex(w http.ResponseWriter, r *http.Request) {
 // ── GET /dev/logs ─────────────────────────────────────────────────────────────
 
 // StreamLogs streams backend log entries as SSE. On connection it replays
-// the ring buffer, then subscribes to new entries. Keep-alive every 15s.
+// the ring buffer, then subscribes to new entries. SSE plumbing (headers,
+// keep-alive, ctx-driven shutdown) is delegated to responsehttpapi.StreamSSE.
 //
 // StreamLogs 把后端日志条目以 SSE 形式推送。连接时先回放环形缓冲区，
-// 然后订阅新条目。每 15 秒发 keep-alive。
+// 然后订阅新条目。SSE 管线（header、keep-alive、ctx 驱动退出）委托给
+// responsehttpapi.StreamSSE。
 func (h *DevHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		http.Error(w, "streaming not supported", http.StatusInternalServerError)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-	flusher.Flush()
-
-	// Replay ring buffer history.
-	// 回放环形缓冲区历史。
-	for _, entry := range h.broadcaster.Ring() {
-		fmt.Fprintf(w, "event: log\ndata: %s\n\n", entry)
-	}
-	flusher.Flush()
-
 	ch, unsub := h.broadcaster.Subscribe()
 	defer unsub()
 
-	ticker := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case data, ok := <-ch:
-			if !ok {
-				return
+	responsehttpapi.StreamSSE(w, r,
+		func(out io.Writer) {
+			for _, entry := range h.broadcaster.Ring() {
+				fmt.Fprintf(out, "event: log\ndata: %s\n\n", entry)
 			}
-			fmt.Fprintf(w, "event: log\ndata: %s\n\n", data)
-			flusher.Flush()
-		case <-ticker.C:
-			fmt.Fprint(w, ": keep-alive\n\n")
-			flusher.Flush()
-		case <-r.Context().Done():
-			return
-		}
-	}
+		},
+		ch,
+		func(out io.Writer, data []byte) error {
+			_, err := fmt.Fprintf(out, "event: log\ndata: %s\n\n", data)
+			return err
+		},
+	)
 }
 
 // ── POST /dev/sql ─────────────────────────────────────────────────────────────

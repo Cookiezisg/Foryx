@@ -115,6 +115,7 @@
 - **T2 数据库测试用 in-memory SQLite**：`dbinfra.Open(dbinfra.Config{DataDir: ""})` 建内存 DB，每个 test 独立，无需清理。避免依赖文件系统 / 外部进程
 - **T3 外部依赖测试用环境变量门控**：调真实 LLM API / 网络等的集成测试，必须用 `os.Getenv("DEEPSEEK_API_KEY")` 等检查 + `t.Skip` 跳过，**不允许默认跑**——否则离线 / CI 必红
 - **T4 删导出符号必搜测试引用**：`deadcode` 工具默认不扫测试代码，所以"看起来死的"导出函数可能正被契约测试用。删之前 grep 一遍 `_test.go` 确认。**反之**，如果导出符号确实只用于测试，加注释说明"生产不调用，仅测试契约用"避免再被误判（例：`ListProviders` / `ListScenarios`）
+- **T5 大功能模块完工必加 pipeline 测试 + 必须幂等**：每个**大功能模块**——一个 domain 的 CRUD 闭环 / 一个跨域流程 / 一个 SSE 事件家族 / 一个新 system tool 家族——完工时必须在 `backend/test/<domain>_pipeline_test.go` 追加端到端测试，用 `harness.New(t)` 真起 in-process backend（真 Bridge / 真 LLM / 真 sandbox / 真 SQLite），HTTP 驱动 + SSE 观测对真实 wire 行为做断言。运行入口 `make test-pipeline`（自动 source `.env` + `-tags=pipeline`），单测套件不进。**幂等是硬要求**——同一个 test 任意次数重跑结果必须一致：(a) 默认 `harness.New(t)` 每次拿全新内存 SQLite，天然隔离；(b) 若 test 故意复用 harness 跑多步骤，每步开头自己用 `h.DB.Exec("DELETE FROM ... WHERE ...")` 显式清理；(c) 涉及外部状态（文件系统 / 长生效的 LLM 上下文 / 外部 API 副作用）的，test 末尾或 `t.Cleanup` 兜底回滚；(d) **任何 test 不得依赖前一次运行残留**——这条破了 CI 红一片你都查不到原因。**触发场景**：完成 Phase X / 大重构 / 新 endpoint family 后，"端到端跑通一遍"是 acceptance criteria 的一部分，不是 nice-to-have
 
 ---
 
@@ -521,4 +522,4 @@ func (t *SearchForge) Execute(ctx context.Context, args string) (string, error) 
 - **桌面端集成方式**：Wails 当窗口外壳 + 复用 httpapi（**不走** Wails native binding，详见 `desktop-packaging-notes.md`）
 - **chat 已用 Block 模型**（messages 表是元数据，内容在 message_blocks）
 - **测试基线**：~170 单测全绿；5 个 LLM 集成测试因 `DEEPSEEK_API_KEY` 环境失效，与基线一致，不算回归
-- **`infra/sandbox` 用 subprocess 跑 Python**，不是 Docker（本地单用户，过度工程）
+- **`infra/sandbox` 捆绑 uv + python-build-standalone**，每个不同 deps 集合一个独立 venv（按 EnvID hash 命名共享），不是 Docker（本地单用户，过度工程）。dev 期资源走 `$FORGIFY_DEV_RESOURCES`（默认 `~/.forgify-dev-resources`），prod 走 `cmd/desktop` embed.FS。`make dev` / `test-console` / `test-pipeline` 都 `ensure-resources` 前置（缺则自动 `download-resources`）；裸跑 `go run ./cmd/server` 时记得自己 `export FORGIFY_DEV_RESOURCES=...`，否则 AST parser 落到不存在的捆绑 python 路径会让 forge 代码生成误报 "AST parse failed"

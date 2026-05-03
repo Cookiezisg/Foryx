@@ -215,4 +215,3 @@ func (s *Store) UpdateTestResult(ctx context.Context, id, status, errMsg string,
 	}
 	return nil
 }
-

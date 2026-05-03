@@ -1,854 +1,713 @@
-# 沙箱迭代 1：uv + 捆绑 Python + 每 Forge 独立 venv
+# 沙箱迭代 1：uv + 捆绑 Python + 每 EnvID 一个独立 venv
 
 **日期**：2026-05-02
 **状态**：🔄 设计中（未开工）
 **阶段定位**：Phase 3 后优化轮的一项；非 Phase 4 阻塞前置
 **关联**：
-- 现状：[`backend/internal/infra/sandbox/python.go`](../../../../backend/internal/infra/sandbox/python.go)
-- 上层消费：[`backend/internal/app/forge/forge.go`](../../../../backend/internal/app/forge/forge.go) `Service.RunForge`
+- 现状代码：[`backend/internal/infra/sandbox/python.go`](../../../../backend/internal/infra/sandbox/python.go)
+- 现状代码：[`backend/internal/app/forge/ast.go`](../../../../backend/internal/app/forge/ast.go)
 - 桌面打包大方向：[`../desktop-packaging-notes.md`](../desktop-packaging-notes.md) §五
 - forge domain 详设：[`../../service-design-documents/forge.md`](../../service-design-documents/forge.md)
 
 ---
 
-## 0. 一句话定位
+## 0. 用户动线（设计基准）
 
-把 `infra/sandbox` 从"调用系统 python3 跑一段函数代码"升级为
-**捆绑 Python 解释器 + uv 管 venv + 每个 forge 一个独立环境 + 创建期一次性 sync、运行期热路径**。
+整个迭代要支持的 LLM-用户协作流程：
 
-非目标：安全隔离（沙箱权限、网络隔离、资源限制）——本地单用户场景下仍按设计原则 #6 不投入。
+```
+[1] 用户："帮我做个处理本地 CSV 的工具"
+       LLM 调 search_forges → 没找到合适的
+
+[2] LLM 调 create_forge：
+       前端流式看到框框框打字：
+         name:        csv_parser
+         description: Parse local CSV files
+         dependencies: [pandas>=2.0]
+         code:        def parse_csv(path): ...
+
+       代码定型 → 进入装环境阶段
+       前端看到环境进度框框框：
+         ⏳ Resolving dependencies...
+         ⏳ Downloading numpy...
+         ❌ Failed: numpy>=2.0 incompatible with python 3.12
+
+[3] LLM 看到错误，调 edit_forge 改 deps：
+       前端流式看到 deps 在变：[pandas>=2.0, numpy>=1.24]
+       重新装环境：
+         ⏳ Resolving...
+         ✅ Ready
+
+[4] 用户审核：[Accept] [Reject]
+       点 Accept → forge 激活 v1
+       表里：forges.active_version_id 指向这个版本，sandbox 知道用哪个 venv
+
+[5] 之后 LLM 调 run_forge → ~50ms 启动 → 跑 pandas 代码
+```
+
+整个沙箱迭代的设计就是为这条动线服务。所有不在这条线上的复杂度（异步队列、安全隔离、超时限制、Forge 静态属性等）一律不进。
 
 ---
 
-## 1. 当前现状（精确盘点）
+## 1. 核心实现概览
 
-读完 `infra/sandbox/python.go`（147 行）+ `app/forge/ast.go`（211 行）+ 上下游调用，盘出当前 sandbox 实际形态：
+### 1.1 EnvID：venv 的 identity = deps，不是 version
 
-### 1.1 调用链
+不同 ForgeVersion 如果依赖集 + Python 版本完全相同，物理上**共用同一个 venv**。EnvID 是这个共享键：
 
-```
-LLM tool_call run_forge
-  → forgetool.RunForge.Execute               app/tool/forge/run.go:75
-    → resolveAttachments                     att_xxx → 真实 path
-    → forgeapp.Service.RunForge              app/forge/forge.go:511
-      → repo.GetForge → code 字符串
-      → forgeapp.Sandbox.Run                 接口在 app/forge/forge.go:36
-        → sandboxinfra.PythonSandbox.Run     infra/sandbox/python.go:66
-          → os.CreateTemp + 写代码 + 追加 driver
-          → exec.CommandContext("python3", tmp.Name())
-          → cmd.Stdin = JSON(input)
-          → cmd.Output() → JSON
-          → ExecutionResult{ok, output, errorMsg, elapsedMs}
-      → SaveRunHistory（无论成败）
+```go
+func ComputeEnvID(deps []string, pythonVersion string) string {
+    normalized := make([]string, len(deps))
+    for i, d := range deps {
+        // 去首尾空格 + 包名小写（保留版本约束符号和数字）
+        normalized[i] = normalizeSpecifier(d)
+    }
+    sort.Strings(normalized)
+    payload := strings.Join(normalized, "\n") + "\n" + pythonVersion
+    h := sha256.Sum256([]byte(payload))
+    return "env_" + hex.EncodeToString(h[:6])  // 12 hex chars
+}
 ```
 
-### 1.2 关键观察
+效果：
 
-| 项 | 现状 |
+| Deps | EnvID |
 |---|---|
-| Python 来源 | 系统 `python3`（hardcoded）—— `New("python3")` |
-| 依赖 | 仅 stdlib —— `import requests` 直接 ImportError |
-| 隔离 | 单纯 subprocess + 上游 ctx 控制；`SandboxTimeout = 30*time.Second` 常量在 forge.md 文档里写了但**代码里根本没接**（`exec.CommandContext` 用的是上游 ctx）。本迭代决策：**彻底删 timeout**，只靠 ctx-cancel——见 §5 |
-| 上游基线 | **2026-05-02 Phase 5+6 重构后**：5 张 forge 表合并为 4 张（`forge_run_history` + `forge_test_history` 合并为 `forge_executions`，含 chat 触发上下文 4 字段）；SSE 12 个细粒度事件简化为 3 个 entity-state 事件（`chat.message` / `forge` / `conversation`，载荷 = 完整 entity 快照与 REST GET 同形）；`Forge` entity 加 `Pending *ForgeVersion` 计算字段。**本迭代必须吃这个基线**，不引入新 SSE 事件类、复用现有 `forge` entity-state 通道——详 §13 |
-| 临时文件 | `os.CreateTemp("", "forgify-tool-*.py")` + `defer os.Remove`，每次调用都重新创建 |
-| 启动开销 | 每次 ~50-150ms（python 解释器启动 + import json/sys）|
-| Driver 注入 | 字符串模板替换：`{FUNC_NAME}` → `extractFuncName(code)` 提取的第一个 `def` 名 |
-| Stderr | 失败时整个 stderr 灌进 `ErrorMsg`，不结构化 |
-| 取消语义 | 上游 ctx 取消 → `cmd.Process.Kill()` 由 stdlib 处理 |
-| 第二处 Python | `app/forge/ast.go::parseForgeCode` 也用 `python3` 子进程跑 AST 脚本——和 sandbox 重复用法 |
+| `[pandas]` | env_aaa |
+| `[pandas>=2.0]` | env_bbb（specifier 字符串不同 = 不同 hash） |
+| `[pandas>=2.0, numpy]` | env_ccc |
+| `[numpy, pandas>=2.0]` | env_ccc（标准化排序后相同） |
+| `[Pandas>=2.0, numpy]` | env_ccc（包名小写后相同） |
+| `[pandas==2.1.3]` | env_ddd（精确版本是另一个 specifier） |
 
-### 1.3 测试覆盖
+**关键性质**：同 specifier 必然得同 EnvID；EnvID hit 时**复用现有 venv**，跳过 uv sync——同 specifier 的多个版本零代价共享环境。venv 内的 uv.lock 锁住的精确版本是第一次装时 uv 解析出来的，后续命中的版本继承这套锁——可重现性自动保证。
 
-`infra/sandbox/python_test.go` 8 个测试：basic 执行 / 字符串/字典输出 / Python 异常 / ctx 取消 / 默认参数 / `extractFuncName` 解析。**全部假设系统有 python3**——CI 上能跑因为 GitHub runner 自带；用户机器上也大概率有，但是**不是契约**。
+如果用户/LLM 要"升级到最新 pandas"，唯一方式是**改 specifier**（比如 `pandas>=2.5`）→ EnvID 变 → 装新 venv → 新 lock。这逼显式表达"我要新版本"。
 
----
-
-## 2. 痛点（为什么要改）
-
-按"最痛 → 较痛"列：
-
-1. **依赖管理空白**。Forge 想用 `requests`、`pandas`、`pillow` 等等任何非 stdlib 包，**没有路径**。LLM 在 `create_forge` / `edit_forge` 时只能写纯 stdlib 代码，工具能力被严重限缩。
-
-2. **Python 依赖不在打包契约里**。桌面 app 打出来给用户，对方机器没装 python3 就直接挂。`desktop-packaging-notes.md` 第五节已经把这事写进风险——但没解决方案。
-
-3. **运行成本固定为冷启动**。每次 `run_forge` 都开一个新 Python 进程从零 import。即使简单 forge 也有 50-150ms 解释器启动开销。如果 forge 有重 import（pandas 这种），冷启动可达 1-2s。
-
-4. **隐式系统耦合**。Forge 行为取决于用户系统装的 Python 版本和 site-packages 里碰巧有什么——同一个 forge 在两台机器上行为可能不同，且不可重现。
-
-5. **`infra/sandbox` 和 `app/forge/ast.go` 重复 Python 调用**。两处都 hardcode `python3` + 临时文件 + stdin → stdout 模式。打包时要解决两次。
-
-6. **30s timeout 实际未落地**。`forge.md §4` 写了 `SandboxTimeout = 30 * time.Second`，但 `python.go::Run` 没接这个常量——上游 ctx 啥就是啥。本迭代决策：**不修这个 bug，反向删掉文档里的 30s 限制**——工具可能正常需跑很久，死循环是 LLM/用户问题，sandbox 不该越权拦。
-
----
-
-## 3. 已讨论过的方案与去向
-
-| 方案 | 思路 | 决策 |
-|---|---|---|
-| A. 系统 Python | README 写要求 | ❌ 桌面用户体验差；2、5 痛点完全没解 |
-| B. uv 全管 | 捆 uv 二进制，`uv python install` 联网下 Python | ⚠️ 首次启动联网 30MB，体验有抖动 |
-| **C. 捆绑 standalone Python + uv 管 venv** | python-build-standalone 进 Wails resources，uv 二进制也进 resources，仅依赖装包时联网 | ✅ **本迭代落点** |
-| D. WASM (Pyodide) | 浏览器侧 WASM 跑 Python | ❌ 本地 Wails app 用 WASM 是过度工程；很多包在 Pyodide 没有 |
-
-**最终方案（C）**：把 Python 解释器和 uv 都打进 .app/.exe 资源；每个 forge 在 `<dataDir>/forges/<id>/` 下有自己的 `pyproject.toml + uv.lock + .venv/`；forge 创建 / 依赖修改时跑 `uv sync` 物化 venv（异步、推 SSE 进度）；运行时 `uv run --no-sync` 直接执行。
-
-**网络假设**：用户接受首次安装依赖时联网。仅 `uv sync` 阶段需要网；`uv run` 完全离线。
-
----
-
-## 4. 落定架构总览
-
-### 4.1 全局视图
+### 1.2 文件磁盘布局
 
 ```
-┌─ Wails .app / .exe ─────────────────────────────────┐
-│                                                      │
-│  cmd/desktop/main.go    ← Phase 4 之后才写            │
-│  cmd/server/main.go     ← 当前的 backend 入口         │
-│                                                      │
-│  embed.FS resources/                                 │
-│  ├── bin/uv-darwin-arm64                             │
-│  ├── bin/uv-darwin-amd64                             │
-│  ├── bin/uv-linux-amd64                              │
-│  ├── bin/uv-linux-arm64                              │
-│  ├── bin/uv-windows-amd64.exe                        │
-│  └── python/                                         │
-│      ├── darwin-arm64.tar.gz                         │
-│      ├── darwin-amd64.tar.gz                         │
-│      ├── linux-amd64.tar.gz                          │
-│      ├── linux-arm64.tar.gz                          │
-│      └── windows-amd64.zip                           │
-│                                                      │
-└──────────────────────────────────────────────────────┘
-                    │
-                    ▼
-┌─ <dataDir>/ ────────────────────────────────────────┐
-│                                                      │
-│  bin/                                                │
-│  ├── uv             ← 启动期从 embed.FS 提取并 chmod  │
-│  └── python/        ← 启动期从 embed.FS 解压          │
-│      ├── bin/python3   (mac/linux)                   │
-│      └── python.exe    (win)                         │
-│                                                      │
-│  uv-cache/          ← UV_CACHE_DIR；wheel cache、     │
-│                       Python install dir 的源；       │
-│                       多 forge 共享 wheel 硬链接      │
-│                                                      │
-│  forges/                                             │
-│  └── <forge_id>/                                     │
-│      ├── pyproject.toml    ← 由 sandbox 生成          │
-│      ├── uv.lock           ← uv sync 后产物          │
-│      ├── main.py           ← 用户 forge 代码         │
-│      └── .venv/            ← uv venv（含硬链接到      │
-│                              uv-cache 的 wheel）      │
-│                                                      │
-│  forgify.db          ← 既有 SQLite                   │
-│  attachments/        ← 既有附件                       │
-│                                                      │
-└──────────────────────────────────────────────────────┘
+<dataDir>/forges/<forge_id>/
+├── envs/
+│   ├── env_aaa/                    ← venv 按 EnvID 命名（多版本可共用）
+│   │   ├── pyproject.toml
+│   │   ├── uv.lock                 ← 锁定精确版本（uv sync 产物）
+│   │   └── .venv/
+│   ├── env_bbb/
+│   └── env_ccc/
+└── versions/
+    ├── fv_<v1-id>/main.py          ← 代码跟 ForgeVersion 一一对应
+    ├── fv_<v2-id>/main.py
+    └── fv_<pending-id>/main.py
 ```
 
-### 4.2 与既有 backend 的关系
+跑代码：
 
-- 不影响 transport / app / domain 层架构，仅扩 forge domain 加几个字段、扩 forgeapp.Sandbox 接口
-- `infra/sandbox` 内部从单文件涨到 5-6 文件（按 §S12 拆概念）
-- 主入口 `cmd/server` 装配多两步（preflight + 把 dataDir 传 sandbox），不含 Wails
-- 桌面端 `cmd/desktop` 之后写时新增"启动卡顿引导页"对接 sandbox 启动事件
+```go
+// sandbox.Run 接 (forgeID, versionID, envID) 元组
+envDir := <dataDir>/forges/<forgeID>/envs/<envID>/
+codeFile := <dataDir>/forges/<forgeID>/versions/<versionID>/main.py
+exec.Command(uv, "run", "--no-sync", "--project", envDir,
+             "python", codeFile)
+```
 
----
+`--no-sync` 是关键 flag——告诉 uv "别检查 lock 是否最新、别动包，直接跑"，把 sync 时机完全交给 service 层。
 
-## 5. 核心决策表
+### 1.3 N=3 EnvID 缓冲
 
-| 决策 | 选择 | 理由 |
-|---|---|---|
-| Python 来源 | **捆绑 python-build-standalone** | 用户接受网下依赖，但不应该依赖系统 python3 存在 |
-| Python 版本 | **3.12.x**，跟最新 stable | 类型语法、性能、ast.unparse 等都到位；后续可平滑升 3.13 |
-| uv 来源 | **捆绑 uv 二进制** | uv 是单 Rust 静态二进制 ~30MB，捆进 .app 心智成本最低 |
-| Python 是否对用户系统暴露 | **完全沙箱化在 dataDir 内** | 不污染用户 `~/`；用户系统的 python3 完全不参与 |
-| 每 forge 一个 venv | **是** | 依赖隔离 + uv 全局 wheel cache + 硬链接 = 物理上自动去重；逻辑上独立可调试 |
-| Sync 时机 | **forge 创建 / 依赖变更时**（非运行时）| 创建是用户"我在配置工具"的明确动作；运行时永远是热路径 |
-| Sync 是否阻塞 HTTP | **异步 + entity-state 推快照** | uv sync 第一次可能 5-15s，HTTP 应立即返；状态走 forge entity 字段 + 现有 `forge` SSE 事件（详见下两条） |
-| **Sync 进度推送方式** | **细粒度（B 方案）**：每行 uv stderr 解析后更新 forge entity 的 `EnvSyncStage`/`EnvSyncDetail` 字段，触发 forge 快照推送 | 跟 chat token 流推 ChatMessage 快照心智一致——所有"过程进度"都走 entity-state；装大包（torch、playwright 等）时用户能看到"正在下载 numpy → pandas → ..."；失败时进度链可追溯。粗粒度 A 方案否决——徽章只切 syncing/ready 两态对装重包场景体验差 |
-| **不引入新 SSE 事件类** | sandbox sync 全程复用现有 `forge` entity-state 事件 | Phase 6 entity-state 模型规约：每个 user-facing domain 一个事件；不允许加 `sandbox.*` 命名空间；订阅方按 forge ID 替换本地拷贝即可渲染 sync 状态 |
-| run 时是否检查 lock 一致性 | **不检查**（`--no-sync`）| sync 时机由 service 层完全控制，run 不重做 |
-| `app/forge/ast.go` 的 Python | **共用捆绑 Python**（非 venv，纯 stdlib 调用）| 不需要额外 venv（ast 模块在 stdlib 里）；保持一处 Python 的概念干净 |
-| 沙箱接口位置 | **保留 `forgeapp.Sandbox` interface**，扩成 Sync + Run + Destroy 三方法 | 沿用现有"接口在消费方"的 Go 习惯 |
-| 错误模型 | **新增 5 个 forge sentinel**：sync 状态相关 | env 准备失败、依赖解析失败、超时、env 未就绪都需要清晰区分 |
-| 旧 forge 数据迁移 | **不预先 sync，懒加载**：Run 时若 .venv 不存在，先同步再跑 | AutoMigrate 加列默认 EnvStatus="pending"，第一次跑触发首次 sync；之后路径热 |
-| 资源限制 / 安全隔离 | **本迭代不做** | 设计原则 #6——本地单用户单作者；Forge 本身就是用户自己生成的代码 |
-| 离线时的行为 | **Run 行得通**（venv 已 sync）；**Sync 失败转 EnvStatus="failed"** | 用户离线写 forge → 报"无法装依赖"；联网后用户能手动重 sync |
-| Sync 并发同 forge | **per-forge mutex**（in-memory）| 简单可靠；不上 job queue |
-| **Run 超时** | **不设 timeout**——只靠上游 ctx-cancel | 工具可能正常需跑很久（数据处理 / 大型计算）；死循环是 LLM/用户的问题，不是 sandbox 的问题；上游 ctx-cancel（用户取消 / 对话关闭）能正确停 |
+每个 forge 的 envs/ 下最多保留 3 个不同 EnvID 的 venv（按最近使用时间）。超过时删最旧那个目录。
+
+老 ForgeVersion 行不删——它们的 EnvStatus 转 `"evicted"`，revert 到那时触发即时 sync 重建。
 
 ---
 
-## 6. 数据模型扩展
+## 2. 数据模型（3 个 entity 的字段分布）
 
-### 6.1 `forgedomain.Forge` 加字段
+### 2.1 `Forge` entity
 
 ```go
 type Forge struct {
-    // ── 既有字段（不变）──
-    ID, UserID, Name, Description, Code, Parameters, ReturnSchema, Tags string
-    VersionCount int
-    CreatedAt, UpdatedAt time.Time
-    DeletedAt gorm.DeletedAt
-
-    // ── 本迭代新增 ──
-
-    // Dependencies 是 PEP 508 specifier 列表，例 ["pandas>=2.0", "requests"]。
-    // 空数组 = 仅 stdlib。LLM 在 create_forge / edit_forge 时根据 import 申报。
+    // 既有：id / userId / name / description / code / parameters /
+    //       returnSchema / tags / versionCount / createdAt / updatedAt /
+    //       deletedAt
+    
+    // ── 本迭代新增：DB 列 ──
+    
+    // ActiveVersionID 指向当前活跃版本的 ForgeVersion.ID。
+    // 草稿期为空（forge 已建但还没 accept 任何版本）；
+    // accept 后指向 accepted 版本。sandbox.Run 据此选 venv。
     //
-    // Dependencies 是 PEP 508 specifier 列表，例 ["pandas>=2.0", "requests"]。
-    // 空数组 = 仅 stdlib。LLM 在 create_forge / edit_forge 时根据 import 申报。
-    Dependencies string `gorm:"type:text;default:'[]'" json:"dependencies"` // JSON array of strings
-
-    // PythonVersion 形如 ">=3.12"；空 = 用 sandbox 默认。
-    //
-    // PythonVersion 形如 ">=3.12"；空 = 用 sandbox 默认。
-    PythonVersion string `gorm:"type:text;default:''" json:"pythonVersion"`
-
-    // EnvStatus 是 venv 物化状态："pending" | "syncing" | "ready" | "failed"。
-    // 由 sandbox sync worker 推进；service 层只读。
-    //
-    // EnvStatus 是 venv 物化状态。由 sandbox sync worker 推进；service 层只读。
-    EnvStatus string `gorm:"type:text;default:'pending'" json:"envStatus"`
-
-    // EnvError 是最近一次 sync 失败的错误信息（多行，如 uv 解析失败的输出）；
-    // EnvStatus="failed" 时填。
-    //
-    // EnvError 是最近一次 sync 失败的错误信息；EnvStatus="failed" 时填。
-    EnvError string `gorm:"type:text;default:''" json:"envError"`
-
-    // EnvSyncedAt 是最近一次 sync 成功时间。EnvStatus="ready" 时非零。
-    //
-    // EnvSyncedAt 是最近一次 sync 成功时间。
-    EnvSyncedAt *time.Time `json:"envSyncedAt"`
-
-    // EnvSyncStage 是 sync 期间的当前阶段标签："resolving" | "downloading" |
-    // "installing" | "" (非 syncing 时清空)。EnvStatus="syncing" 时由解析
-    // uv stderr 的 progress.go 持续更新，每变化一次写库 + 推 forge 快照——
-    // 跟 chat token 流推 ChatMessage 快照同心智。EnvStatus 转 ready/failed
-    // 时清空。
-    //
-    // EnvSyncStage 是 sync 期间的当前阶段标签。EnvStatus="syncing" 时由
-    // progress.go 解析 uv stderr 持续更新；其他状态时清空。
-    EnvSyncStage string `gorm:"type:text;default:''" json:"envSyncStage"`
-
-    // EnvSyncDetail 是 sync 期间的当前一行详情（uv stderr 当前行 trim 后），
-    // 例如 "Downloaded numpy (15 MB) in 2.1s"。仅 EnvStatus="syncing" 时填；
-    // 失败时 EnvError 承载完整失败信息，不复用此字段。
-    //
-    // EnvSyncDetail 是 sync 期间的当前一行详情。仅 EnvStatus="syncing" 时填。
-    EnvSyncDetail string `gorm:"type:text;default:''" json:"envSyncDetail"`
+    // ActiveVersionID 指向当前活跃版本的 ForgeVersion.ID。草稿期为空。
+    ActiveVersionID string `gorm:"type:text;default:''" json:"activeVersionId"`
+    
+    // ── 既有计算字段（gorm:"-"）──
+    Pending *ForgeVersion `gorm:"-" json:"pending,omitempty"`  // attachPending 填
+    
+    // ── 本迭代新增计算字段（gorm:"-"，attachActiveEnv 填）──
+    // 从 ActiveVersion 拷过来，让 GET /forges/{id} 直接含当前活跃环境状态。
+    EnvStatus     string     `gorm:"-" json:"envStatus"`
+    EnvError      string     `gorm:"-" json:"envError"`
+    EnvSyncedAt   *time.Time `gorm:"-" json:"envSyncedAt"`
+    EnvSyncStage  string     `gorm:"-" json:"envSyncStage"`
+    EnvSyncDetail string     `gorm:"-" json:"envSyncDetail"`
 }
 ```
 
-> **不加** `Destructive` / `IsReadOnly` / `IsConcurrencySafe` 静态字段——destructive 走 §S18 既有的 **per-call AI 自报** 模式（`destructive` standard field 由 framework 注入 args、LLM 每次调用现场判断、StripStandardFields 剥进 `chatdomain.ToolCallData.Destructive` + `events.ChatToolCall.Destructive`）。理由：同 tool 不同 args 的 destructive 性可能不同（`run_forge(safe_calculator)` vs `run_forge(bulk_file_deleter)`），LLM 现场判精准胜于 entity 静态值。`IsReadOnly` / `IsConcurrencySafe` 同理——若未来要并发分批 forge，按 §S18 模板让 `RunForge.IsConcurrencySafe(args)` 自己决策（可读 args 现场判断），不在 entity 落地。
+`attachActiveEnv` 在 Get / List 后调用（同 `attachPending` 模式），把 `ActiveVersion` 的 env 字段值拷到 forge 上。`forge.Pending` 子对象自带它自己的 env 状态（pending 的 sync 进度）。
 
-> **EnvSync* 字段进 entity 而非临时内存态**：因为 `forge` SSE 事件载荷规约 = REST GET 形状（Phase 6 entity-state 模型）——前端 reload 后调 GET 拿到的 entity 必须能反映出当前 syncing 进度。所以这些进度字段必须持久化到 forges 表里。每帧推送伴随一次 DB 写——uv 5-8 秒输出 5-8 行，sync 期间约 5-20 次 DB 写，跟 chat token 流写 message_blocks 同量级。
-
-### 6.2 `forgedomain.ForgeVersion` 也加 Dependencies
-
-按 §3.2 的"完整快照"原则，version 也要带依赖快照。这样 RevertToVersion 能恢复历史依赖集。
+### 2.2 `ForgeVersion` entity
 
 ```go
 type ForgeVersion struct {
-    // ... 既有
-    Dependencies  string  `gorm:"type:text;default:'[]'"`
-    PythonVersion string  `gorm:"type:text;default:''"`
+    // 既有：id / forgeId / userId / version / status / name / description /
+    //       code / parameters / returnSchema / tags / changeReason /
+    //       createdAt / updatedAt
+    
+    // ── 本迭代新增：依赖配置（随版本快照）──
+    
+    // Dependencies 是 PEP 508 specifier 列表，例 ["pandas>=2.0", "requests"]。
+    // LLM 在 create_forge / edit_forge 时根据代码 import 申报；空数组 = 仅 stdlib。
+    //
+    // Dependencies 是 PEP 508 specifier 列表，由 LLM 申报。
+    Dependencies string `gorm:"type:text;default:'[]'" json:"dependencies"`
+    
+    // PythonVersion 形如 ">=3.12"，为空时用 sandbox 默认。
+    //
+    // PythonVersion 形如 ">=3.12"。
+    PythonVersion string `gorm:"type:text;default:''" json:"pythonVersion"`
+    
+    // EnvID 是该版本对应的 venv 物理目录名，由 ComputeEnvID(deps, python) 算出。
+    // 多个 ForgeVersion 如果 EnvID 相同，共用 envs/<EnvID>/.venv/。
+    //
+    // EnvID 是该版本对应的 venv 目录名。同 EnvID 的版本共用 venv。
+    EnvID string `gorm:"type:text;index" json:"envId"`
+    
+    // ── 本迭代新增：环境运行时态（每版本独立）──
+    
+    // EnvStatus："pending" | "syncing" | "ready" | "failed" | "evicted"
+    EnvStatus     string     `gorm:"type:text;default:'pending'" json:"envStatus"`
+    EnvError      string     `gorm:"type:text;default:''" json:"envError"`
+    EnvSyncedAt   *time.Time `json:"envSyncedAt"`
+    EnvSyncStage  string     `gorm:"type:text;default:''" json:"envSyncStage"`
+    EnvSyncDetail string     `gorm:"type:text;default:''" json:"envSyncDetail"`
 }
 ```
 
-不需要在 ForgeVersion 上存 EnvStatus——env 是当前活跃代码的运行时状态，不是版本历史的属性。
+### 2.3 `ForgeExecution`
 
-### 6.3 EnvStatus 状态机
+Phase 5 已落地，本迭代不动。run_forge / 测试用例都写一行 forge_executions（含 chat 触发上下文）。
 
-```
-        Create / 改 deps
-              │
-              ▼
-         ┌─────────┐
-         │ pending │   ← AutoMigrate 老数据默认值；新建 forge 初始值
-         └────┬────┘
-              │ sync worker 拿到任务
-              ▼
-         ┌─────────┐
-         │ syncing │   ← 唯一可观测的"忙"状态；推 SSE 进度
-         └────┬────┘
-              │
-       ┌──────┴──────┐
-       ▼             ▼
-   ┌───────┐    ┌────────┐
-   │ ready │    │ failed │   ← EnvError 含 uv 输出
-   └───┬───┘    └────┬───┘
-       │             │
-       │ 改 deps     │ 用户手动 retry / 改 deps
-       │             │
-       └──────┬──────┘
-              ▼
-         (回 pending)
-```
-
-**白名单**：稳定四值，按 §D3 走 DB CHECK 约束。
+### 2.4 表里"哪个 forge 用哪个 uv 环境"
 
 ```sql
-CHECK (env_status IN ('pending','syncing','ready','failed'))
-```
+SELECT 
+    f.id          AS forge_id,
+    fv.id         AS active_version_id,
+    fv.env_id     AS env_id,
+    fv.dependencies,
+    fv.env_status,
+    fv.env_synced_at
+FROM forges f
+JOIN forge_versions fv ON fv.id = f.active_version_id
+WHERE f.id = 'f_xxx';
 
-加进 `infra/db/schema_extras.go` 的 forges group。
-
-### 6.4 数据库变更总览
-
-| 表 | 新增列 |
-|---|---|
-| `forges` | `dependencies TEXT DEFAULT '[]'`, `python_version TEXT DEFAULT ''`, `env_status TEXT DEFAULT 'pending'`, `env_error TEXT DEFAULT ''`, `env_synced_at DATETIME`, `env_sync_stage TEXT DEFAULT ''`, `env_sync_detail TEXT DEFAULT ''` |
-| `forge_versions` | `dependencies TEXT DEFAULT '[]'`, `python_version TEXT DEFAULT ''`（**不加** EnvSync* 字段——版本快照只存"配置态"不存"运行时态"）|
-| `schema_extras` | forges 组追加 `CHECK(env_status IN ...)` 约束 |
-
-**索引**：env_status 不上索引——单用户级别 forge 数 < 1000，全表扫够。
-
-**迁移**：AutoMigrate 自动加列；老数据 `env_status='pending'` 默认值——第一次 Run 时懒加载触发 sync。
-
----
-
-## 7. Sandbox 模块文件结构（§S12 平铺）
-
-`internal/infra/sandbox/` 从 1 文件涨到 ~6 文件。按概念拆，不按种类拆。
-
-```
-internal/infra/sandbox/
-├── sandbox.go        ← Package doc + Sandbox struct + Run() + 主入口
-├── sync.go           ← Sync()：跑 uv sync，逐行调 OnProgress callback
-├── preflight.go      ← Bootstrap()：启动期校验/解压 uv + Python
-├── paths.go          ← 路径解析：uv binary、bundled Python、forge dirs、UV_CACHE_DIR
-├── pyproject.go      ← 渲染 pyproject.toml（小文件，独立概念）
-├── progress.go       ← 解析 uv stderr 行 → 结构化 ProgressUpdate(stage, detail)
-└── sandbox_test.go   ← 测试集中
-```
-
-`PythonSandbox` 类型名留还是改？建议改成 `Sandbox`——本类已不只跑 Python（还管 uv venv），名字保留 Python 反而误导。
-
-包别名按 §S13 仍 `sandboxinfra`。
-
-> **关键**：`progress.go` 不直接发 SSE——它只把 uv stderr 行解析成 `(stage, detail)` 结构，调用 `SyncRequest.OnProgress` callback。callback 在 forgeapp 层实现（写 forge 字段 + 触发 forge entity-state 推快照）。沙箱不知道也不关心 SSE 的存在——这跟 Phase 6 立的"chat 层是唯一发布事实源"规矩同源（每个 entity 的 publish 都收口在它自己的 service 层）。
-
-### 7.1 主类型骨架
-
-```go
-// internal/infra/sandbox/sandbox.go
-
-type Config struct {
-    DataDir       string         // <dataDir>，所有运行时数据落地点
-    UVPath        string         // 已就绪的 uv 二进制路径（preflight 之后填）
-    PythonPath    string         // 捆绑 Python 解释器路径（preflight 之后填）
-    DefaultPython string         // 默认 PythonVersion specifier，形如 ">=3.12"
-    Logger        *zap.Logger
-}
-
-type Sandbox struct {
-    cfg     Config
-    log     *zap.Logger
-    syncMu  *forgeMutexMap  // per-forge sync 互斥
-}
-
-func New(cfg Config) *Sandbox
-
-// 接口契约（实现 forgeapp.Sandbox 扩展后版本）：
-func (s *Sandbox) Sync(ctx context.Context, req SyncRequest) error
-func (s *Sandbox) Run(ctx context.Context, req RunRequest) (*forgedomain.ExecutionResult, error)
-func (s *Sandbox) Destroy(ctx context.Context, forgeID string) error
+-- venv 在磁盘：<dataDir>/forges/<forge_id>/envs/<env_id>/.venv/
 ```
 
 ---
 
-## 8. 接口扩展
+## 3. 端到端调用链
 
-### 8.1 `forgeapp.Sandbox` 接口
-
-```go
-// app/forge/forge.go
-
-type Sandbox interface {
-    // Sync 物化 forgeID 对应的 .venv：
-    //   - 写 pyproject.toml
-    //   - 跑 `uv sync`（联网装 wheel）
-    //   - 推 SSE 进度事件（如 bridge 注入）
-    // 返回时 venv 已 ready 或返 error；调用方据此更新 EnvStatus。
-    //
-    // Sync 物化 forgeID 对应的 .venv。返回时 venv 已 ready 或返 error。
-    Sync(ctx context.Context, req SyncRequest) error
-
-    // Run 在已 ready 的 .venv 中执行 forge 代码。
-    // 调用前应确保 EnvStatus="ready"；否则应先调 Sync。
-    //
-    // Run 在已 ready 的 .venv 中执行 forge 代码。
-    Run(ctx context.Context, req RunRequest) (*forgedomain.ExecutionResult, error)
-
-    // Destroy 删除 forgeID 对应的目录（含 .venv）。软删 forge 时调用。
-    //
-    // Destroy 删除 forgeID 对应目录。
-    Destroy(ctx context.Context, forgeID string) error
-}
-
-type SyncRequest struct {
-    ForgeID       string
-    Dependencies  []string  // PEP 508 specifiers
-    PythonVersion string    // ">=3.12" 等；空 = 用 sandbox 默认
-}
-
-type RunRequest struct {
-    ForgeID       string
-    Code          string             // 完整函数源
-    EntryFunction string             // 默认 ""，为空时仍走老 extractFuncName 兜底
-    Input         map[string]any
-}
-```
-
-注意：**Sync 和 Run 都接 ctx，没有 timeout 字段**——sandbox 完全不强加运行时长限制，工具想跑 1 小时也行。停止只来自上游 ctx 取消（用户在 chat 里点取消 / 对话关闭 / 进程退出）。
-
-### 8.2 `forgeapp.Service` 新增方法
-
-```go
-// 触发 forge env 异步重同步。在 Create / UpdateDependencies 内部自动调；
-// 也作为 HTTP 端点 POST /api/v1/forges/{id}:resync 的 service 入口
-// 用于"sync 失败后用户手动重试"或"venv 损坏后修复"。
-//
-// 触发 forge env 异步重同步。
-func (s *Service) ResyncEnv(ctx context.Context, forgeID string) error
-
-// 内部：转 EnvStatus；外部不直接暴露。
-func (s *Service) markEnvSyncing(ctx, forgeID) error
-func (s *Service) markEnvReady(ctx, forgeID, syncedAt time.Time) error
-func (s *Service) markEnvFailed(ctx, forgeID, errMsg string) error
-```
-
-`Create` / `Update`（带 deps）/ `AcceptPending`（pending 的 deps 跟现有不同时）/ `RevertToVersion`（依赖变化时）——都自动 enqueue 一次 ResyncEnv。
-
-### 8.3 异步 sync worker
-
-```go
-// app/forge/sync_worker.go (新文件，平铺在 app/forge/)
-
-type SyncWorker struct {
-    svc    *Service
-    sb     Sandbox
-    log    *zap.Logger
-    queue  chan string  // forge ID
-    wg     sync.WaitGroup
-}
-
-func NewSyncWorker(svc *Service, sb Sandbox, log *zap.Logger) *SyncWorker
-
-func (w *SyncWorker) Start(ctx context.Context)
-func (w *SyncWorker) Enqueue(forgeID string)
-func (w *SyncWorker) Stop()  // graceful: 当前任务跑完，不接新任务
-```
-
-实现：channel + N 个 worker goroutine（N=2 起步——uv 内部已用全局锁，太多并发收益有限）。
-
-**关键**：worker 写 DB 用 detached context（§S9）——上游 HTTP 请求可能早就返回了，但 sync 必须把状态写进 DB。
-
-```go
-func (w *SyncWorker) handleOne(forgeID string) {
-    // 取 forge 信息
-    bgCtx := reqctxpkg.SetUserID(context.Background(), forge.UserID)
-    bgCtx, cancel := context.WithTimeout(bgCtx, 10*time.Minute)  // sync 上限 10 分钟
-    defer cancel()
-    // ... markEnvSyncing → sandbox.Sync → markEnvReady/Failed
-}
-```
-
----
-
-## 9. 启动期 Preflight
-
-### 9.1 调用点
-
-`cmd/server/main.go` 在 DB Migrate 后、HTTP 起前：
-
-```go
-sb := sandboxinfra.New(sandboxinfra.Config{
-    DataDir:       *dataDir,
-    DefaultPython: ">=3.12",
-    Bridge:        eventsBridge,
-    Logger:        log,
-})
-
-if err := sb.Bootstrap(ctx); err != nil {
-    // 不阻断 backend 启动——sandbox 不可用时其它功能仍能用
-    // 把状态记进 sandbox，让 forge 操作返 422
-    log.Error("sandbox bootstrap failed", zap.Error(err))
-}
-
-forgeService := forgeapp.NewService(forgestore.New(gdb), sb, forgeLLM, log)
-syncWorker := forgeapp.NewSyncWorker(forgeService, sb, log)
-syncWorker.Start(ctx)
-defer syncWorker.Stop()
-```
-
-### 9.2 Bootstrap 步骤
-
-```go
-func (s *Sandbox) Bootstrap(ctx context.Context) error {
-    // 1. 确保 dataDir / bin / forges / uv-cache 子目录存在
-    // 2. 从 embed.FS 提取 uv 二进制到 <dataDir>/bin/uv（chmod +x）
-    //    若文件已存在且 hash 一致，跳过
-    // 3. 从 embed.FS 解压 Python 到 <dataDir>/bin/python/
-    //    若已存在且 version 文件标记一致，跳过
-    // 4. 跑 `uv --version` 校验 uv 能用
-    // 5. 跑 `<bundled-python> -c "import sys; print(sys.version)"` 校验 Python 能用
-    // 6. macOS：尝试 xattr -dr com.apple.quarantine <python dir>，失败仅 warn
-    // 7. 把 cfg.UVPath / cfg.PythonPath 填好
-    return nil
-}
-```
-
-**embed.FS 资源位置**：`cmd/server/main.go` 不 embed 这些大文件——这些是桌面端 `cmd/desktop` 的事。`cmd/server` 期望这些资源已经在 `<dataDir>/bin/` 下了；找不到就在 dev 模式下从 `$FORGIFY_DEV_RESOURCES` 环境变量指定的目录拷一份。
-
-这样：
-- **dev**：开发者本机一次手动下 uv + python-build-standalone 到 `~/.forgify-dev-resources/`，设环境变量。`cmd/server` 启动自动拷过去。
-- **prod (cmd/desktop)**：embed.FS 进 .app；启动期解到 dataDir。
-
-### 9.3 失败降级
-
-Bootstrap 失败时不挂掉整个 backend，但要让 forge 相关操作明确报错：
-
-- `Sandbox.unavailable bool` + `Sandbox.unavailableReason string` 字段
-- 任何 `Sandbox.Sync/Run/Destroy` 入口先检查这两字段，true 时返 `ErrSandboxUnavailable`
-- 错误码登记：`SANDBOX_UNAVAILABLE` → 503
-
----
-
-## 10. 端到端调用链（设计原则 #5）
-
-### 链 1：LLM 创建带依赖的 forge
+### 链 1：create_forge（流式生成 + 同步装环境）
 
 ```
-用户："写一个用 pandas 解析 CSV 的工具"
+LLM tool_call create_forge {name, description, instruction, dependencies}
 
-  → LLM tool_call create_forge {
-      name: "csv_parser",
-      description: "Parse CSV with pandas",
-      instruction: "...",
-      summary: "Creating CSV parser",
-      destructive: false,
-    }
-
-  → forgetool.CreateForge.Execute               app/tool/forge/create.go
-    → streamCode → LLM 流出 Python 代码（带 import pandas）
-    → forgeapp.Service.ParseCode(code)         AST dry-run；同时提取 imports
-    → derive dependencies（见 §11.1）
-    → forgeapp.Service.Create(ctx, CreateInput{
-        Name:..., Code:..., Dependencies: ["pandas>=2.0"]
-      })
-        → repo.SaveForge with EnvStatus="pending"
-        → repo.SaveVersion(v1, accepted, dependencies=["pandas>=2.0"])
-        → syncWorker.Enqueue(forgeID)              ← 异步！
-    → bridge.Publish forge.created
-    → return tool_result {forge_id, name, parameters, env_status:"pending"}
-
-  ── 异步分支：sync worker pick up ────────────────────────────
-  → SyncWorker.handleOne(forgeID)
-    → markEnvSyncing → 推 sandbox.sync_started SSE
-    → sandbox.Sync(ctx, SyncRequest{
-        ForgeID: forgeID, Dependencies: [...], PythonVersion: ">=3.12"
-      })
-        → 创建 <dataDir>/forges/<id>/
-        → 写 pyproject.toml
-        → exec.Command(uv, "sync", "--project", forgeDir, "--python", bundledPython)
-        → 解析 stderr → 推 sandbox.sync_progress SSE
-        → 等返
-    → markEnvReady（成功）or markEnvFailed（失败）
-    → 推 sandbox.sync_ready / sandbox.sync_failed SSE
+forgetool.CreateForge.Execute
+  → svc.Create(ctx, CreateInput{...})
+      → repo.SaveForge → forges 表落库（ActiveVersionID="" 草稿期）
+      → repo.SaveVersion → forge_versions 表落库
+            status="pending", version=nil,
+            EnvID=ComputeEnvID(deps, pythonVersion),
+            EnvStatus="pending"
+      → publishForgeSnapshot（前端看到 forge.pending 出现）
+  
+  → streamCode(...) → LLM 逐 token 流出代码
+        每个 token：repo.UpdateVersionCode(versionID, partialCode)
+                   + publishForgeSnapshot（前端看 forge.pending.code 在长）
+  
+  → svc.ParseCode(code) AST dry-run
+        失败 → 返 LLM tool error 让其重试，不进 sync
+  
+  → svc.SyncEnvForVersion(ctx, versionID)        ← 同步等
+      → repo.UpdateVersionEnvStatus(versionID, "syncing")
+      → publishForgeSnapshot（pending.envStatus=syncing）
+      → sandbox.Sync(ctx, SyncRequest{
+            ForgeID, VersionID, EnvID, Dependencies, PythonVersion,
+            OnProgress: func(stage, detail) {
+                repo.UpdateVersionEnvProgress(versionID, stage, detail)
+                publishForgeSnapshot
+            },
+        })
+      → 成功 → repo.UpdateVersionEnvStatus(versionID, "ready", syncedAt=now)
+      → 失败 → repo.UpdateVersionEnvStatus(versionID, "failed", error=stderr)
+      → publishForgeSnapshot（终态）
+  
+  → 返 tool_result {forge_id, version_id, env_status: "ready" | "failed"}
 ```
 
-### 链 2：LLM 执行已就绪的 forge
+### 链 2：edit_forge（草稿期 / 激活期统一入口）
 
 ```
-用户："用刚才的工具处理 report.csv"
+LLM tool_call edit_forge {forge_id, instruction?, dependencies?, name?, description?}
 
-  → LLM tool_call run_forge {
-      forge_id: "f_abc123",
-      input: { csv_path: "att_xyz" },
-      summary: "Running csv_parser on report.csv",
-    }
-
-  → forgetool.RunForge.Execute
-    → resolveAttachments → att_xyz → /data/.../original.csv
-    → forgeapp.Service.RunForge(ctx, forgeID, input)
-      → repo.GetForge → 检查 EnvStatus
-        - "ready"   → 继续
-        - "syncing" → 返 ErrEnvNotReady（LLM 看到错误，自决重试）
-        - "pending" → 触发同步 sync 阻塞 5s 内能完成就跑，否则返
-        - "failed"  → 返 ErrEnvFailed + EnvError 内容
-      → sandbox.Run(ctx, RunRequest{ForgeID, Code, Input})
-        → 写 main.py 到 <dataDir>/forges/<id>/main.py
-        → exec.Command(uv, "run", "--no-sync", "--project", forgeDir,
-                       "python", "main.py")
-        → cmd.Stdin = JSON(input)
-        → cmd.Output() → JSON
-        → 无 timeout；只随上游 ctx-cancel 终止子进程
-        → 返 ExecutionResult
-      → SaveRunHistory（不变）
-    → 50KB 截断（不变）
-    → return tool_result {ok, output, ...}
+forgetool.EditForge.Execute
+  → forge := svc.Get(forge_id)
+  
+  → if forge.Pending != nil:
+        // 草稿期 / 已有 pending → 修同一个 ForgeVersion
+        target = forge.Pending
+    else:
+        // 激活后改进 → 基于 active 复制出新 pending
+        target = svc.CreatePendingFromActive(forge_id)
+  
+  → if instruction != "":
+        streamCode(target.Code, instruction) → publishForgeSnapshot 流帧
+        ParseCode dry-run
+  
+  → newEnvID = ComputeEnvID(newDeps, newPython)
+  
+  → if newEnvID != target.EnvID:
+        // deps / python 改了：新 EnvID
+        repo.UpdateVersionEnvID(target.ID, newEnvID)
+        repo.UpdateVersionEnvStatus(target.ID, "pending")
+        svc.SyncEnvForVersion(ctx, target.ID)        ← 同步装新 venv
+                                                       （命中已有 EnvID 则跳过）
+    else:
+        // deps 没变：venv 复用，只改 main.py
+        sandbox.WriteCodeFile(forgeID, target.ID, code)
+        repo.UpdateVersionEnvStatus(target.ID, "ready")
+  
+  → 返 tool_result {pending_id, env_status}
 ```
 
-### 链 3：用户改依赖（edit_forge with new import）
+### 链 3：用户 Accept
 
 ```
-用户："给 csv_parser 加一个用 numpy 计算列均值的功能"
+POST /api/v1/forges/{id}/pending:accept
 
-  → LLM tool_call edit_forge {forge_id, instruction: "..."}
-    → streamCode → 新代码含 import numpy
-    → forgeapp.Service.ParseCode + derive deps → ["pandas>=2.0", "numpy>=1.24"]
-    → forgeapp.Service.CreatePending(snap with new deps)
-      → repo.SaveVersion(status="pending", dependencies=...)
-    → 推 forge.pending_created（含新 deps，前端可显示"will install: numpy"）
-    → return {pending_id, forge_id}
-
-用户点 accept：
-
-  → POST /api/v1/forges/{id}/pending:accept
-    → forgeapp.Service.AcceptPending
-      → 更新 forges 表（含新 dependencies + EnvStatus="pending"）
-      → SaveVersion(status="accepted")
-      → syncWorker.Enqueue(forgeID)         ← 重 sync
-      → 返 200 {... envStatus:"pending" ...}
-    → 异步 sync 推 SSE
+handler → svc.AcceptPending(ctx, forgeID)
+  → pending := repo.GetActivePending(forgeID)
+  → 校验 pending.EnvStatus == "ready"（环境没装好不能 accept）
+  → repo.UpdateVersionStatus(pending.ID, "accepted", version=N+1)
+  → repo.UpdateForge(forgeID, ActiveVersionID=pending.ID,
+                     Code/Parameters/.../=同步 pending 字段)
+  → svc.trimEnvBuffer(forgeID)    ← 超 N=3 EnvID 删最旧
+  → publishForgeSnapshot（pending 字段消失，active 切换）
+  → 200
 ```
 
-### 链 4：手动 resync（venv 损坏修复）
+### 链 4：run_forge（热路径）
 
 ```
-POST /api/v1/forges/{id}:resync
+LLM tool_call run_forge {forge_id, input}
 
-  → handler → forgeapp.Service.ResyncEnv(ctx, forgeID)
-    → markEnvPending
-    → syncWorker.Enqueue
-  → 200 envelope { envStatus: "pending" }
-  → 异步推 sandbox.sync_started → progress → ready/failed
+forgetool.RunForge.Execute
+  → resolveAttachments
+  → svc.RunForge(ctx, forgeID, input)
+      → forge := repo.GetForge → forge.ActiveVersionID
+      → activeVer := repo.GetVersion(forge.ActiveVersionID)
+      → 检查 activeVer.EnvStatus
+            "ready"   → 走第 4 步
+            "evicted" → 同步触发懒重建 sync → 5-15s → 走第 4 步
+            其他      → 返 ErrEnvNotReady
+      → sandbox.Run(ctx, RunRequest{
+            ForgeID:   forgeID,
+            VersionID: activeVer.ID,
+            EnvID:     activeVer.EnvID,
+            Code:      activeVer.Code,
+            Input:     input,
+        })
+      → repo.SaveExecution（既有 forge_executions 表）
+  → 返 tool_result {ok, output, ...}
 ```
 
-### 链 5：删除 forge
+### 链 5：revert + 删除
 
 ```
+POST /api/v1/forges/{id}:revert {version: 1}
+  → v1 := repo.GetVersion(forgeID, 1)
+  → if v1.EnvStatus == "evicted":
+        repo.UpdateVersionEnvStatus(v1.ID, "pending")
+        svc.SyncEnvForVersion(ctx, v1.ID)    ← 同步重建
+  → repo.UpdateForge(forgeID, ActiveVersionID=v1.ID, Code/.../=v1 快照)
+  → publishForgeSnapshot
+  → 200
+
 DELETE /api/v1/forges/{id}
-
-  → forgeapp.Service.Delete
-    → repo.DeleteForge（软删，沿用既有逻辑）
-    → sandbox.Destroy(ctx, forgeID)        ← 新增：物理删 forge dir
-                                              即使 sync 在跑，也强制取消并删
-                                              （per-forge mutex 等当前 sync 退出再删）
+  → repo.DeleteForge（软删，沿用既有逻辑）
+  → sandbox.Destroy(forgeID)（rm -rf forges/<id>/）
   → 204
 ```
 
-软删保留 forge 元数据用于 audit / undelete；但 venv 物理目录删掉——venv 平均 50-200MB，没必要保留。
+---
+
+## 4. Sandbox 模块（infra 层）
+
+### 4.1 文件结构（§S12 平铺）
+
+```
+internal/infra/sandbox/
+├── sandbox.go        ← Package doc + Sandbox struct + Bootstrap + Run + Destroy
+├── sync.go           ← Sync()：跑 uv sync + 调 OnProgress
+├── progress.go       ← 解析 uv stderr 行 → (stage, detail)
+├── paths.go          ← 路径解析 + ComputeEnvID + normalizeSpecifier
+├── pyproject.go      ← 渲染 pyproject.toml
+└── sandbox_test.go
+```
+
+类型名 `PythonSandbox` → `Sandbox`（不只跑 Python，还管 uv venv）。包别名按 §S13 仍 `sandboxinfra`。
+
+### 4.2 接口
+
+```go
+type Config struct {
+    DataDir       string  // <dataDir>
+    UVPath        string  // 已就绪的 uv 二进制路径（Bootstrap 之后填）
+    PythonPath    string  // 捆绑 Python 解释器路径（Bootstrap 之后填）
+    DefaultPython string  // ">=3.12"
+    Logger        *zap.Logger
+}
+
+type Sandbox struct { ... }
+
+func New(cfg Config) *Sandbox
+
+// Bootstrap 启动期解压 uv + python 到 dataDir，幂等。
+func (s *Sandbox) Bootstrap(ctx context.Context) error
+
+// Sync 物化某 ForgeVersion 对应的 venv 目录（按 EnvID 命名）。
+// EnvID 已存在则跳过；不存在则跑 uv sync。OnProgress 在每行 stderr 解析后调用。
+func (s *Sandbox) Sync(ctx context.Context, req SyncRequest) error
+
+// Run 在 ready 的 venv 中执行代码。无 timeout——只随上游 ctx 取消终止。
+func (s *Sandbox) Run(ctx context.Context, req RunRequest) (*forgedomain.ExecutionResult, error)
+
+// WriteCodeFile 只更新 main.py 不动 venv（用于 deps 没变只改代码）。
+func (s *Sandbox) WriteCodeFile(forgeID, versionID, code string) error
+
+// Destroy 删整个 forge 目录（forge 软删时调）。
+func (s *Sandbox) Destroy(ctx context.Context, forgeID string) error
+
+// DestroyEnv 删某 EnvID 的 venv 目录（N=3 缓冲超出时调）。
+func (s *Sandbox) DestroyEnv(ctx context.Context, forgeID, envID string) error
+
+type SyncRequest struct {
+    ForgeID       string
+    VersionID     string
+    EnvID         string
+    Dependencies  []string
+    PythonVersion string
+    OnProgress    func(stage, detail string)  // 每行 stderr 解析后调，可为 nil
+}
+
+type RunRequest struct {
+    ForgeID   string
+    VersionID string
+    EnvID     string
+    Code      string
+    Input     map[string]any
+}
+```
+
+**沙箱不知道 forge 概念**——只接 `(forgeID, versionID, envID)` 元组操作目录。也不直接调 `bridge.Publish`——通过 `OnProgress` callback 把进度数据流给 forgeapp，由 forgeapp 写库 + 推 forge 快照。这跟 Phase 6 chat.runner 是 chat.message 唯一发布事实源同模式。
+
+### 4.3 Bootstrap
+
+```
+1. 确保 <dataDir>/{bin,forges} 目录
+2. 从 cmd/desktop 的 embed.FS 提取 uv → <dataDir>/bin/uv（chmod +x）
+   dev 模式：从 $FORGIFY_DEV_RESOURCES/bin/ 拷
+   hash 一致跳过
+3. 同样方式解压 python-build-standalone → <dataDir>/bin/python/
+4. mac 早期阶段（未公证）：
+   xattr -dr com.apple.provenance <python dir>
+   walk <python dir> 对所有可执行文件（mode & 0111 != 0）跑 codesign --force --sign -
+   失败 fail loud（Bootstrap 失败 → sandbox unavailable）
+   ── 这是 issue uv#16726 的 fix 模式：python-build-standalone 二进制带
+   com.apple.provenance xattr + 仅 ad-hoc 签，会被内核 SIGKILL（无日志）。
+   uv 自己的 install 路径里也跑这套 codesign，我们走 embed.FS 解压不经过
+   uv install，得自己跑。
+5. mac v1.0+（已公证）：上面这步可省——公证 ticket 已经覆盖 .app 内所有
+   嵌入二进制（含 uv + python）。但 .app entitlements 必须含
+   `com.apple.security.cs.disable-library-validation`，否则 forge 装新依赖
+   后 dlopen wheel 里的 .so 会被 Hardened Runtime 拦。详见
+   desktop-packaging-notes.md 第六节。
+6. 跑 `uv --version` 校验
+7. 跑 `<bundled-python> -c "import sys"` 校验
+8. 设 UV_PYTHON 环境变量 = <bundled-python-path>，所有 sandbox 子进程默认
+   用我们捆绑的 Python（见 §4.4 withUVEnv 实现）
+9. 填 cfg.UVPath / cfg.PythonPath
+```
+
+`cmd/server` 启动时调 Bootstrap；失败不阻断 backend 启动，但 sandbox 状态记 `unavailable`，后续 forge 操作返 `ErrSandboxUnavailable`。
+
+**关于 mac 公证的两阶段路线**（按 desktop-packaging-notes.md 第六节）：
+
+| 阶段 | 状态 | Bootstrap 步 4 |
+|---|---|---|
+| 早期 / v0.x | 没掏 $99 Apple Developer 账号 | 跑 codesign ad-hoc 重签 + 剥 com.apple.provenance（上面步 4）|
+| **v1.0+** | 已公证 | 跳过步 4——公证覆盖所有嵌入二进制；但 `.app` 必须配 `disable-library-validation` entitlement 让运行时下载的 wheel `.so` 也能 dlopen |
+
+### 4.4 Sync 内部
+
+```go
+func (s *Sandbox) Sync(ctx context.Context, req SyncRequest) error {
+    unlock := s.syncMu.Lock(req.ForgeID)  // per-forge 串行
+    defer unlock()
+    
+    envDir := filepath.Join(s.cfg.DataDir, "forges", req.ForgeID, "envs", req.EnvID)
+    
+    // 已存在 → 跳过（简单 stat 判断；半成品 venv 让 uv run 时自然报错给 LLM 自救）
+    if _, err := os.Stat(envDir + "/.venv"); err == nil {
+        return nil
+    }
+    
+    os.MkdirAll(envDir, 0700)
+    
+    // 写 pyproject.toml（atomic rename 防半成品）
+    writeAtomic(envDir+"/pyproject.toml", renderPyproject(req))
+    
+    cmd := exec.CommandContext(ctx, s.cfg.UVPath,
+        "sync",
+        "--project", envDir,
+        "--python", s.cfg.PythonPath,
+        "--no-progress",
+    )
+    cmd.Env = withUVEnv(s.cfg.DataDir, s.cfg.PythonPath)
+    
+    // stderr 双路：进度行调 OnProgress；无法识别的行（错误链 / 警告 / 散文）
+    // 收集进 errBuf。成功时 errBuf 丢弃；失败时连同 cmd error 一并返回，
+    // 让上层 forgeapp 把内容塞进 forge_versions.env_error 字段——LLM 能看到
+    // 真实失败原因（如"numpy>=2.0 conflicts with python<3.12"），调 edit_forge
+    // 改 deps 自救。
+    //
+    // stderr 双路：进度行 → OnProgress；非进度行 → errBuf。失败时 errBuf 透传
+    // 到 EnvError，让 LLM 看到具体错误自救。
+    stderrPipe, _ := cmd.StderrPipe()
+    var errBuf bytes.Buffer
+    go scanProgress(stderrPipe, req.OnProgress, &errBuf)
+    
+    if err := cmd.Run(); err != nil {
+        return &SyncError{Cause: err, Stderr: errBuf.String()}
+    }
+    return nil
+}
+
+// SyncError 包装 uv sync 失败 + 完整 stderr 文本。
+// forgeapp.SyncEnvForVersion 收到后写入 ForgeVersion.EnvError。
+type SyncError struct {
+    Cause  error
+    Stderr string
+}
+
+func (e *SyncError) Error() string { return e.Stderr }  // 整段 stderr 当 message
+func (e *SyncError) Unwrap() error { return e.Cause }
+```
+
+### 4.5 Progress 解析
+
+`progress.go::parseUVLine` 把 uv stderr 行识别成 `(stage, detail)`，**uv 真实输出三大阶段总结行**（按上游 `uv sync` 行为）：
+
+```
+"Resolved 12 packages in 1.5s"     → ("resolving",  "Resolved 12 packages in 1.5s")
+"Prepared 12 packages in 800ms"    → ("preparing",  "Prepared 12 packages in 800ms")
+"Installed 12 packages in 200ms"   → ("installing", "Installed 12 packages in 200ms")
+```
+
+下载发生在 `Prepared` 阶段内部——大型包可能有 sub-progress 行（"Downloading numpy"），但总结行就这三个。
+
+```go
+func scanProgress(r io.Reader, onProgress func(stage, detail string), errBuf *bytes.Buffer) {
+    scanner := bufio.NewScanner(r)
+    for scanner.Scan() {
+        line := scanner.Text()
+        if u := parseUVLine(line); u != nil && onProgress != nil {
+            onProgress(u.Stage, u.Detail)
+            continue
+        }
+        // 无法识别 → 不调 OnProgress，但收集到 errBuf。
+        // 成功路径：errBuf 内容 sync 完丢弃。
+        // 失败路径：errBuf 内容塞进 EnvError 给 LLM 看错误自救。
+        errBuf.WriteString(line)
+        errBuf.WriteByte('\n')
+    }
+}
+```
+
+### 4.6 Run 内部
+
+```go
+func (s *Sandbox) Run(ctx context.Context, req RunRequest) (*forgedomain.ExecutionResult, error) {
+    envDir := filepath.Join(s.cfg.DataDir, "forges", req.ForgeID, "envs", req.EnvID)
+    versionDir := filepath.Join(s.cfg.DataDir, "forges", req.ForgeID, "versions", req.VersionID)
+    
+    os.MkdirAll(versionDir, 0700)
+    fullCode := req.Code + buildDriver(extractFuncName(req.Code))
+    writeAtomic(versionDir+"/main.py", fullCode)
+    
+    cmd := exec.CommandContext(ctx, s.cfg.UVPath,
+        "run",
+        "--project", envDir,
+        "--no-sync",  // 关键：跳过 lock 检查
+        "python", versionDir+"/main.py",
+    )
+    cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}  // 进程组便于 kill
+    
+    inputJSON, _ := json.Marshal(req.Input)
+    cmd.Stdin = strings.NewReader(string(inputJSON))
+    
+    start := time.Now()
+    var stderr bytes.Buffer
+    cmd.Stderr = &stderr
+    stdout, runErr := cmd.Output()
+    elapsed := time.Since(start).Milliseconds()
+    
+    // 失败时 stderr 透传到 ExecutionResult.ErrorMsg → tool_result。
+    // 涵盖：venv 不存在（被 N=3 缓冲清掉了）/ Python 抛异常 / ctx 取消 等。
+    // **不在 sandbox 层做"venv 不存在 → 转 evicted → 触发 sync"自愈**——uv 自然
+    // 报错给 LLM，LLM 看到 "No virtual environment found" 这种错误，自决调
+    // edit_forge / :resync 自救。MVP 哲学：punt 给 AI，不在 backend 写恢复
+    // 逻辑（详 §11）。
+    return parseExecutionResult(stdout, stderr.String(), runErr, elapsed), nil
+}
+```
+
+**无 timeout**——只靠 ctx-cancel 终止子进程；windows 用 Job Object（详 §12 风险表）。
 
 ---
 
-## 11. 关键细节
+## 5. SSE 推送（Phase 6 entity-state 模型）
 
-### 11.1 LLM 提交的 dependencies 哪里来
+### 5.1 不引入新事件类
 
-两条路：
+所有 sync 进度通过现有 `forge` 事件推送：
 
-**路径 A**：LLM 在 `create_forge` / `edit_forge` 的 args 里显式带 `dependencies` 字段。
-**路径 B**：从代码里自动提取 import 推断。
+```
+事件名：forge
+载荷：完整 Forge entity（含 .Pending 子对象 + 计算字段 EnvStatus / EnvSyncStage / ...）
+形状：跟 GET /api/v1/forges/{id} 一致
+```
 
-**选择 A + B 结合**：
+### 5.2 触发点表（既有 + 本迭代新增）
 
-- LLM args 里加 `dependencies` 字段（可选）
-- backend 在 `ParseCode` 时同时跑一个简单的 import 提取（top-level + typed import 都数）
-- LLM 显式给 = 用 LLM 的；LLM 没给 = 用提取的
-- 写 `extractImports(code) → []string` 在 `app/forge/ast.go` 里加（既然已经在 Python 里 ast 了，复用同一个 subprocess 多输出一个字段）
+| # | 触发动作 | 来源 |
+|---|---|---|
+| 1 | CRUD（Create / PATCH / Delete / `:revert`） | Phase 6 已有 |
+| 2 | Pending 生命周期（创建 / accept / reject） | Phase 6 已有 |
+| 3 | create_forge 流：预 stub + 逐 token + 末尾定型 | Phase 6 已有 |
+| 4 | edit_forge 代码流：预 draft + 逐 token + 末尾定型 | Phase 6 已有 |
+| 5 | edit_forge 仅元数据：单帧最终快照 | Phase 6 已有 |
+| 6 | **EnvStatus 状态转换**：pending→syncing→ready/failed/evicted | **本迭代新增** |
+| 7 | **每行 uv stderr 解析**：EnvSyncStage / EnvSyncDetail 变化 | **本迭代新增** |
 
-LLM 显式给的优势：版本约束（`pandas>=2.0`），用户分发场景。
-自动提取的优势：用户写代码忘了写 deps 时不挂。
+### 5.3 唯一发布事实源
 
-### 11.2 stdlib vs 第三方包识别
-
-需要避免把 `import json` 加进 dependencies。维护一个 stdlib whitelist（Python 3.12 stdlib 大概 200 个模块；硬编码即可）。在 `ast.go` 里：
+forgeapp.Service 内部一个 helper（按 chat.runner.publishMessageSnapshot 同模式）：
 
 ```go
-var pythonStdlibModules = map[string]bool{
-    "json": true, "sys": true, "os": true, "ast": true, "io": true,
-    "csv": true, "datetime": true, "re": true, "math": true,
-    "collections": true, "itertools": true, "functools": true,
-    // ... 完整列表
-}
-
-func filterStdlib(imports []string) []string {
-    // 取 import 第一段（"a.b.c" → "a"），不在 whitelist 里的留下
+// app/forge/forge.go
+func (s *Service) publishForgeSnapshot(ctx context.Context, forgeID string) {
+    f, err := s.repo.GetForge(ctx, forgeID)
+    if err != nil { return }
+    s.attachPending(f)
+    s.attachActiveEnv(f)
+    s.bridge.Publish(ctx, "", events.Forge{Forge: f})
 }
 ```
 
-### 11.3 pyproject.toml 渲染
+sandbox.OnProgress callback 由 forgeapp 实现，调用 `publishForgeSnapshot`——sandbox 自己不直接调 bridge。
 
-最小可工作形态：
+### 5.4 装包过程的实际推送
 
-```toml
-[project]
-name = "forge-{{forgeID}}"
-version = "0.1.0"
-requires-python = "{{pythonVersion}}"
-dependencies = [
-    "pandas>=2.0",
-    "requests",
-]
-
-[tool.uv]
-managed = true
-```
-
-`pyproject.go::renderPyproject(req SyncRequest) string` 用 `text/template` 或裸字符串拼接（依赖列表注意 quote escape——用 `strconv.Quote`）。
-
-### 11.4 main.py driver 注入
-
-继承现有 `python.go::driver` 的 `__main__` block 模式，但优化：
-
-```python
-# 用户代码（直接写入）
-def parse_csv(...): ...
-
-# Driver（每次 run 时 sandbox 注入）
-if __name__ == "__main__":
-    import json as _json, sys as _sys
-    try:
-        _input = _json.load(_sys.stdin)
-        _result = parse_csv(**_input)
-        print(_json.dumps(_result, default=str))
-    except SystemExit:
-        raise
-    except BaseException as _e:
-        # 把异常作为 stderr 输出，但 exit 0——让 Go 侧把 exit code 当 sandbox
-        # 错误（subprocess fail），Python 异常进 ErrorMsg
-        import traceback as _tb
-        print(_tb.format_exc(), file=_sys.stderr)
-        _sys.exit(1)
-```
-
-或者更简单：直接让 Python 异常 exit code != 0，Go 侧捕 ExitError 把 stderr 灌进 ErrorMsg（这就是当前行为，保留）。
-
-`extractFuncName` 现在的实现（找第一个 `def`）有点脆——可以复用 `parseForgeCode` 里已经准确解析出的 `FuncName` 字段。这次顺手把 sandbox 改成接收 `EntryFunction string`，由 service 层从 ParsedCode 拿来传。
-
-### 11.5 进度事件解析
-
-uv `sync` 的 stderr 输出形如：
+装 pandas+numpy 大约 6 帧 forge 完整快照：
 
 ```
- Resolved 12 packages in 1.5s
-Downloaded 12 packages in 800ms
-Installed 12 packages in 200ms
+t=0    forge { pending: {envStatus:"syncing", envSyncStage:""} }
+t=1.5s forge { pending: {envSyncStage:"resolving",  envSyncDetail:"Resolved 12 packages in 1.5s"} }
+t=5.4s forge { pending: {envSyncStage:"preparing",  envSyncDetail:"Prepared 12 packages in 800ms"} }
+t=5.6s forge { pending: {envSyncStage:"installing", envSyncDetail:"Installed 12 packages in 200ms"} }
+t=8s   forge { pending: {envStatus:"ready", envSyncedAt:"...", envSyncStage:"", envSyncDetail:""} }
 ```
 
-各种阶段 line-by-line 推过来。`progress.go` 用 line scanner 解析：
-
-```go
-func parseUVLine(line string) *eventsdomain.SandboxSyncProgress {
-    switch {
-    case strings.HasPrefix(line, "Resolved"):
-        return &eventsdomain.SandboxSyncProgress{Stage: "resolved", Detail: line}
-    case strings.HasPrefix(line, "Downloaded"):
-        return &eventsdomain.SandboxSyncProgress{Stage: "downloaded", Detail: line}
-    // ...
-    }
-    return nil  // 无法解析的 line 忽略，不推
-}
-```
-
-不需要太精细——能让 UI 显示"正在装包..."就够。
-
-### 11.6 ast.go 也走捆绑 Python
-
-现在 `ast.go::parseForgeCode` 写死 `python3`。改成接收 `pythonPath`：
-
-```go
-// app/forge/ast.go
-
-type ASTParser struct {
-    pythonPath string
-}
-
-func NewASTParser(pythonPath string) *ASTParser
-func (p *ASTParser) Parse(code string) (*ParsedCode, error)
-```
-
-`Service.parse()` 持有一个 `*ASTParser`，注入路径来自 sandbox 的 PythonPath。
-
-ast.go 不需要 venv（ast 模块在 stdlib），直接 `<bundledPython> ast_script.py < code`。
-
-### 11.7 Cancel 语义
-
-`run_forge` 是 ReAct loop 里的一步。用户在 chat 里点取消 → ctx 取消传到 Run → `exec.CommandContext` 自动 kill。**注意** Python 进程可能 fork 子进程，要 kill 整个 process group：
-
-```go
-cmd := exec.CommandContext(ctx, ...)
-cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-// 单独写 kill 函数：syscall.Kill(-cmd.Process.Pid, SIGKILL)
-// Cmd.Cancel = func() error { ... }（Go 1.20+）
-```
-
-Windows 用 `taskkill /T /F /PID`。
-
-### 11.8 per-forge sync mutex
-
-```go
-// internal/infra/sandbox/sandbox.go
-
-type forgeMutexMap struct {
-    mu sync.Mutex
-    m  map[string]*sync.Mutex
-}
-
-func (m *forgeMutexMap) Lock(forgeID string) func() {
-    m.mu.Lock()
-    fm, ok := m.m[forgeID]
-    if !ok {
-        fm = &sync.Mutex{}
-        m.m[forgeID] = fm
-    }
-    m.mu.Unlock()
-    fm.Lock()
-    return fm.Unlock
-}
-```
-
-简单可靠。Sync 和 Destroy 都过它；Run 不过（一个 forge 多个 Run 并发是允许的）。
-
-清理：很少删 forge，map 增长不大；可以 forge delete 时连带从 map 里删。
+每帧都是 Forge 完整快照——前端按 forge.id 替换本地拷贝即可，不用追 delta。
 
 ---
 
-## 12. 错误模型
+## 6. EnvStatus 状态机
 
-新增 sentinels 和 errmap 行（按 §S17 错误码必须登记）：
+```
+                     [forge create / dep change]
+                              │
+                              ▼
+                       ┌─────────┐
+                       │ pending │
+                       └────┬────┘
+                            │
+                            ▼
+                       ┌─────────┐
+                       │ syncing │ ←─────────────────┐
+                       └────┬────┘                   │
+                            │                        │
+                  ┌─────────┴─────────┐              │
+                  ▼                   ▼              │
+              ┌───────┐           ┌────────┐         │
+              │ ready │           │ failed │         │
+              └───┬───┘           └────┬───┘         │
+                  │                    │             │
+            [N=3 缓冲超出]      [edit 改 deps 重试]   │
+                  │                    │             │
+                  ▼                    └─────────────┘
+            ┌─────────┐
+            │ evicted │ ──[revert / run 触发懒重建]──► syncing
+            └─────────┘
+```
+
+DB CHECK 约束（按 §D3 走 schema_extras）：
+
+```sql
+CHECK (env_status IN ('pending','syncing','ready','failed','evicted'))
+```
+
+---
+
+## 7. 跟现行架构对接
+
+| 现行约束 | 本迭代如何遵守 |
+|---|---|
+| Phase 6 entity-state 模型（3 个事件，载荷 = REST GET 形状） | 不引入新事件，沿用 `forge` 事件；扩 entity 字段自然扩载荷 |
+| Phase 6 chat.runner 是 chat.message 唯一发布事实源 | 同模式：forgeapp.publishForgeSnapshot 是 forge 事件唯一发布事实源；sandbox 不直接调 bridge |
+| Phase 5 ForgeExecution 合并 run/test history | 不变；run_forge 仍写 forge_executions（含 chat 上下文） |
+| 现状 create_forge 直接落 accepted v1 | **本迭代改**：create_forge 进 pending → user accept 才 v1（跟 edit_forge 走统一审核入口） |
+| §S18 Tool 接口 destructive per-call AI 自报 | 不在 forge entity 加静态字段；保留既有机制 |
+| §S9 detached context 终态写模式 | 不需要——sync 是同步链路，ctx 来自 LLM tool call |
+| 30s SandboxTimeout 常量 | 删除；run / sync 都不设硬限，只靠 ctx-cancel |
+
+---
+
+## 8. 错误模型
 
 ```go
-// domain/forge/forge.go
-
+// domain/forge/forge.go 新增 sentinel：
 var (
-    // 既有错误...
-
-    // ErrEnvNotReady：forge 的 venv 还在 syncing / pending，run 不能执行
-    ErrEnvNotReady = errors.New("forge: env not ready")
-
-    // ErrEnvFailed：forge 的 venv sync 失败，处于 EnvStatus="failed"
-    // 详细错误信息在 forge.EnvError 字段
-    ErrEnvFailed = errors.New("forge: env failed")
-
-    // ErrSandboxUnavailable：sandbox bootstrap 失败，整个沙箱不可用
-    ErrSandboxUnavailable = errors.New("forge: sandbox unavailable")
-
-    // ErrDependencyResolution：uv 无法解析依赖（包名拼错 / 版本约束冲突）
+    ErrEnvNotReady          = errors.New("forge: env not ready")
+    ErrEnvFailed            = errors.New("forge: env failed")
+    ErrSandboxUnavailable   = errors.New("forge: sandbox unavailable")
     ErrDependencyResolution = errors.New("forge: dependency resolution failed")
 )
 ```
 
-> 不引入 `ErrSandboxTimeout`——本迭代决策无 run 超时，唯一停止信号是 ctx-cancel。Ctx 取消时上游已有错误（context.Canceled / DeadlineExceeded）走通用错误路径返回，不需要 forge 特异 sentinel。
-
-errmap 新增行：
+errmap 新增 4 行（按 §S17）：
 
 | Code | HTTP | Sentinel |
 |---|---|---|
@@ -857,394 +716,166 @@ errmap 新增行：
 | `FORGE_SANDBOX_UNAVAILABLE` | 503 | `ErrSandboxUnavailable` |
 | `FORGE_DEPENDENCY_RESOLUTION` | 422 | `ErrDependencyResolution` |
 
-注意 `TOOL_*` 前缀的旧错误码（来自 Phase 3）已经在 Phase 1 大重命名时改成 `FORGE_*` 了——见 progress-record.md 2026-05-02 条目。新增按 `FORGE_*` 走。
+Run 时 ctx-cancel → 走通用 `context.Canceled`，不需要 forge 专门 sentinel。
 
 ---
 
-## 13. SSE 事件
-
-新增 4 个事件（按 §E1 强类型 + §E2 snake_case 分层 + 必带过滤 key）：
-
-```go
-// domain/events/types.go 追加
-
-// SandboxSyncStarted 在某 forge 开始 sync 时推。
-// 过滤 key：global（不属于某对话；前端按 forgeId 过滤）。
-//
-// SandboxSyncStarted 在某 forge 开始 sync 时推。
-type SandboxSyncStarted struct {
-    ForgeID      string   `json:"forgeId"`
-    Dependencies []string `json:"dependencies"`
-}
-func (SandboxSyncStarted) EventName() string { return "sandbox.sync_started" }
-
-// SandboxSyncProgress 在 uv sync 过程中推。
-//
-// SandboxSyncProgress 在 uv sync 过程中推。
-type SandboxSyncProgress struct {
-    ForgeID string `json:"forgeId"`
-    Stage   string `json:"stage"`  // "resolved" | "downloaded" | "installed" 等
-    Detail  string `json:"detail"` // uv stderr 一行
-}
-func (SandboxSyncProgress) EventName() string { return "sandbox.sync_progress" }
-
-// SandboxSyncReady 在 forge env 同步成功时推。
-//
-// SandboxSyncReady 在 forge env 同步成功时推。
-type SandboxSyncReady struct {
-    ForgeID  string `json:"forgeId"`
-    Duration int64  `json:"durationMs"`
-}
-func (SandboxSyncReady) EventName() string { return "sandbox.sync_ready" }
-
-// SandboxSyncFailed 在 forge env 同步失败时推。
-//
-// SandboxSyncFailed 在 forge env 同步失败时推。
-type SandboxSyncFailed struct {
-    ForgeID string `json:"forgeId"`
-    Error   string `json:"error"`
-}
-func (SandboxSyncFailed) EventName() string { return "sandbox.sync_failed" }
-```
-
-**过滤上下文**：sandbox 事件不绑定 conversation——用户可能在 forge 详情页看自己手动建的 forge 同步进度，没有 chat。Bridge 已有"无 conversationId 走 global broadcast"的能力（既有 SSE 订阅端点 `?conversationId=` 可空），前端按 `forgeId` 过滤。
-
-**Bridge 调用**：sandbox 的 `Sync` 方法接 `eventsdomain.Bridge` 注入，直接 `bridge.Publish(ctx, "", SandboxSyncProgress{...})`（空 conversationId）。
-
----
-
-## 14. 跨平台细节
-
-| 平台 | uv 二进制 | Python 路径 | 注意 |
-|---|---|---|---|
-| mac arm64 | `bin/uv` | `bin/python/bin/python3` | 公证：uv 是 Astral 签的，应继承 .app 公证；Python 子进程加载的 .dylib 可能触发 quarantine——`xattr -dr` 处理 |
-| mac amd64 | 同上 | 同上 | 同上 |
-| linux amd64/arm64 | `bin/uv` | `bin/python/bin/python3` | 无 Gatekeeper 麻烦；AppImage 内嵌资源解压到 `~/.local/share/forgify/bin/` |
-| windows amd64 | `bin/uv.exe` | `bin/python/python.exe`（**直接在根目录**）| SmartScreen：uv 应有 Authenticode 签名；Python 自身签了 |
-
-**process group kill**：mac/linux 用 `Setpgid + Kill(-pid)`；windows 用 `os/exec` 1.20+ 的 `Cmd.CancelExec` 或 `taskkill /T /F /PID`。封装成 `paths.go::killProcessGroup(cmd)`。
-
-**路径分隔符**：用 `filepath.Join` 全程。
-
-**uv 运行 Python**：
-
-```go
-// mac/linux
-exec.Command(uvPath, "run", "--project", forgeDir,
-    "--python", "<dataDir>/bin/python/bin/python3",
-    "python", "main.py")
-
-// win
-exec.Command(uvPath, "run", "--project", forgeDir,
-    "--python", "<dataDir>\\bin\\python\\python.exe",
-    "python", "main.py")
-```
-
----
-
-## 15. 与既有 forge 系统的对接
-
-### 15.1 老 forge 数据迁移
-
-现状：DB 里已经有 forge 记录（即使最少也有测试创建的）。AutoMigrate 加新列时：
-
-- `dependencies = '[]'`
-- `python_version = ''`
-- `env_status = 'pending'` ← 关键
-- `env_error = ''`
-- `env_synced_at = NULL`
-
-**第一次 Run 触发懒同步**：`Service.RunForge` 判断 `EnvStatus != "ready"` → 同步阻塞调 `sandbox.Sync`（5s 超时，超时给 LLM 返 ErrEnvNotReady） → 成功后继续 Run。
-
-懒同步路径只走"无依赖 forge"——纯 stdlib 代码，sync 几乎瞬间（uv venv 创建 + 无依赖装）。带依赖的 forge 老数据不存在（依赖字段是新增）。
-
-也可以提供启动期 batch sync：`cmd/server` 启动后 enqueue 所有 EnvStatus="pending" 的 forge。但这会让启动看起来很忙。**选懒加载**——简单 + 用户视角符合直觉（"我点 run 才看到准备过程"）。
-
-### 15.2 dependencies 字段 LLM 接口
-
-`create_forge` / `edit_forge` 的 schema 加：
-
-```json
-{
-  "dependencies": {
-    "type": "array",
-    "items": {"type": "string"},
-    "description": "PEP 508 specifiers like ['pandas>=2.0','requests']. Required for non-stdlib imports. Empty if forge uses only Python stdlib."
-  }
-}
-```
-
-LLM 看到代码 `import pandas` 时应该填进去。Description 文本里点明这是契约。
-
-### 15.3 prompt 改动
-
-`buildCreatePrompt` / `buildEditPrompt` 在 Requirements 段加一条：
-
-> - When the function uses non-stdlib packages, declare them as PEP 508 specifiers in the dependencies argument (e.g. `["pandas>=2.0"]`). The system will install them automatically.
-
-LLM 自己判断哪些是 stdlib（基本能判对）。后端再用 `extractImports + filterStdlib` 兜底。
-
-### 15.4 testend 工具面板
-
-`testend` 的 forge 详情页要加：
-- env_status 徽章（pending / syncing / ready / failed）
-- 失败时显示 env_error
-- "Resync" 按钮 → POST `/api/v1/forges/{id}:resync`
-- SSE 订阅 sandbox.* 事件渲染进度
-
-这是 testend-design.md 的事，跟主线代码改动并行做。
-
----
-
-## 16. 测试策略（T1-T4）
-
-### 16.1 单元测试（不依赖外部）
-
-`paths.go` / `pyproject.go` / `progress.go` 这些纯计算的函数：
-
-- `TestRenderPyproject_BasicDeps` 渲染对
-- `TestRenderPyproject_EmptyDeps` 渲染对
-- `TestParseUVProgress_ResolvedLine` 识别阶段
-- `TestForgeMutexMap_PerForgeIsolation` 不同 forge 不互锁
-
-无 Python / uv 依赖，always run。
-
-### 16.2 集成测试（依赖 uv + Python）
-
-按 T3 用环境变量门控：
-
-```go
-func TestSandboxSync_BasicForge(t *testing.T) {
-    uvPath := os.Getenv("FORGIFY_TEST_UV")
-    pythonPath := os.Getenv("FORGIFY_TEST_PYTHON")
-    if uvPath == "" || pythonPath == "" {
-        t.Skip("FORGIFY_TEST_UV / FORGIFY_TEST_PYTHON not set")
-    }
-    sb := sandboxinfra.New(sandboxinfra.Config{
-        DataDir: t.TempDir(), UVPath: uvPath, PythonPath: pythonPath,
-    })
-    err := sb.Sync(context.Background(), SyncRequest{
-        ForgeID: "f_test",
-        Dependencies: []string{"requests"},
-    })
-    // ... 验证 .venv 存在、能 import requests 等
-}
-```
-
-### 16.3 端到端（带 LLM）
-
-`forge_dependency_e2e_test.go`（按现有 chat 集成测试模式）：
-1. CreateForge with `import pandas` → 后台 sync → Run → ok
-2. EditForge 改 dep → 新 pending → Accept → re-sync → Run → ok
-3. EditForge dep 拼错 → Accept → sync 失败 → 错误信息含 uv 输出
-
-需要 DEEPSEEK_API_KEY。沿用现有 LLM 集成测试基线（5 个，不算回归）。
-
-### 16.4 现有 sandbox 测试如何改
-
-`infra/sandbox/python_test.go` 8 个老测试：
-
-- 改成构造 `sandboxinfra.New(Config{...})`，从环境变量取 uv + python
-- ENV 缺则全部 t.Skip
-- 命名按 §T1：`Test<Method>_<Scenario>` —— `TestSandboxRun_BasicExecution` 等
-
----
-
-## 17. 桌面端打包对接
-
-`cmd/desktop` 还没写（属于未来工作）。但本迭代要为它**留好接口**：
-
-1. **`cmd/server` 不 embed 大资源**：靠环境变量找 uv + Python（dev）或 dataDir 已就绪（prod 由 `cmd/desktop` 在启动 `cmd/server` 前先解压）
-
-2. **Sandbox config 来自外部**：`UVPath` / `PythonPath` 都通过 Config 传入，sandbox 自己不去找
-
-3. **sandbox.Bootstrap 是幂等的**：启动期反复跑没问题（hash check + skip），方便 `cmd/desktop` 在每次启动重做一次保险
-
-4. **Progress 可流到前端**：`Bridge` 接口已经能跨进程传给前端 SSE，桌面端 UI 可以监听
-
-**未来 cmd/desktop 的事**（不在本迭代）：
-
-- Wails 启动序列：解压资源 → 起 backend → 监听 backend `BACKEND_PORT=...` 输出 → 打开窗口
-- 资源版本管理：升级 app 时新版 uv / Python 替换旧的（hash 不同就重新解压）
-- 卸载：dataDir 留（用户数据），bin/ 删（大文件）
-
----
-
-## 18. 安全 / 隔离 / 资源限制
-
-明确划界：**本迭代什么都不做**。
-
-- 文件系统隔离：❌ forge 跑在用户进程权限下
-- 网络隔离：❌ forge 想访问任意 URL 都行
-- 内存 / CPU 限制：❌ 完全不限——run 时长无 timeout（决策见 §5）；内存/CPU 让 OS 自己调度
-- 包供应链：❌ 任意 PyPI 包都能装
-
-**本地单用户单作者**——用户自己的 LLM 帮自己写代码自己用，跟用户在 terminal 里 `python -c '...'` 没本质区别。这条契合 desktop-packaging-notes.md §五的"本地单用户场景属过度工程"判断。
-
-未来若做"分享 forge"（导出/导入他人的 forge），那时再补：
-- `--require-hashes` + lockfile 验签
-- 依赖白名单
-- macOS sandbox-exec / linux bubblewrap / windows AppContainer 文件系统隔离
-
-是 v2+ 的事，本迭代写进文档作为已知未做项即可。
-
----
-
-## 19. 风险 / 未决事项
-
-| 风险 | 影响 | 缓解 |
-|---|---|---|
-| python-build-standalone 在某平台 quirky | 中-高 | 选官方 release 锁版本；mac 测 quarantine；CI 跑跨平台 build |
-| uv 版本跨升级行为变 | 中 | 锁 minor 版本；升级走集成回归 |
-| 用户 dataDir 在 iCloud 同步盘上（mac），符号链接污染 | 低 | preflight 检测 dataDir 是否在 iCloud 路径，警告 |
-| sync worker goroutine 泄漏 | 低 | Stop() graceful 退出 + ctx 串联 |
-| Run 时 cmd 取消未杀干净子孙进程 | 中 | process group + 测试覆盖 |
-| 同 forge 多 Run 并发竞争 main.py 文件 | 低 | 写文件用 atomic rename：`main.py.tmp` → `main.py`；或每次 run 用一个唯一 `main_<runID>.py`（脏一些但绝对无竞争） |
-| 大型依赖（torch、tensorflow）几 GB | 中 | uv-cache 全局共享去重；dataDir 大用户自承担；UI 显示磁盘占用 |
-| 用户禁用网络 → 无法装包 | 中 | 明确 EnvStatus="failed" + 文案"network unavailable, please connect and resync" |
-
-未决（要在写代码前确认）：
-
-- [ ] uv 实际跨平台行为：mac 上 uv-managed Python + bundled Python 互不打架？
-- [ ] python-build-standalone 在 Wails resources 里解压的 .dylib quarantine 实际行为
-- [ ] `cmd.SysProcAttr.Setpgid` 与 `Cmd.Cancel` 在 Go 1.22 是否冲突
-- [ ] 所有现有 forge 集成测试在新 sandbox 下能不能跑（应能，但 ast.go 改动可能踩）
-
----
-
-## 20. Phase 划分（建议）
-
-不阻塞 Phase 4。可作为"Phase 3 后优化轮"的一项独立交付。
+## 9. Phase 划分（~4 天独立交付，不阻塞 Phase 4）
 
 ### Phase A：sandbox 内部（~1.5 天）
 
-- [ ] `infra/sandbox/` 新增 6 个文件骨架（按 §7）
-- [ ] `Sandbox.Bootstrap` 实现 + 单测（不依赖外部资源的部分）
-- [ ] `Sandbox.Sync` 实现（拼 pyproject.toml + 跑 uv sync + 解析 stderr）
-- [ ] `Sandbox.Run` 实现（uv run --no-sync）
-- [ ] `Sandbox.Destroy` 实现
-- [ ] per-forge mutex
-- [ ] 集成测试（FORGIFY_TEST_UV + FORGIFY_TEST_PYTHON 环境门控）
+- [ ] 6 个文件骨架（按 §4.1）
+- [ ] Bootstrap：embed.FS / dev resources 双路径解压 + 跨平台路径处理
+- [ ] Sync / Run / WriteCodeFile / Destroy / DestroyEnv 实现
+- [ ] progress.go uv stderr 行解析 + 单测
+- [ ] paths.go ComputeEnvID + normalizeSpecifier + 单测
+- [ ] 集成测试（FORGIFY_TEST_UV + FORGIFY_TEST_PYTHON 环境门控，按 §T3）
 
 ### Phase B：domain + service 扩展（~1 天）
 
-- [ ] `domain/forge` 加 5 个字段 + 5 个 sentinel + EnvStatus 常量
-- [ ] `infra/store/forge` 适配新字段
-- [ ] `infra/db/schema_extras` 加 forges CHECK 约束
-- [ ] `app/forge` Sandbox 接口扩展
-- [ ] `app/forge` SyncWorker 实现 + 测试
-- [ ] `app/forge` Service.Create / Update / AcceptPending / RevertToVersion / Delete 接 sync 触发
-- [ ] `app/forge/ast.go` 改成接收 pythonPath + 加 extractImports
+- [ ] `domain/forge`：
+  - `Forge` 加 `ActiveVersionID` 列 + 4 个计算字段
+  - `ForgeVersion` 加 `Dependencies / PythonVersion / EnvID + 5 env 字段`
+  - 4 个新 sentinel + EnvStatus 5 值常量
+- [ ] `infra/db/schema_extras` forge_versions 加 `CHECK(env_status IN ...)`
+- [ ] `infra/store/forge` 适配新字段；加 `(forge_id, env_id)` 复合索引
+- [ ] `app/forge`：
+  - `Sandbox` 接口（5 方法）
+  - `SyncEnvForVersion(ctx, versionID)` — 同步包装
+  - `attachActiveEnv(forge)` — 计算字段填充
+  - `publishForgeSnapshot(ctx, forgeID)` — 唯一发布点
+  - `Create / Update / AcceptPending / RevertToVersion / Delete` 接 sync 触发 + EnvID 计算
+  - `trimEnvBuffer` — N=3 EnvID 缓冲清理
+- [ ] `app/forge/ast.go` 改成 `ASTParser` 类型接收 pythonPath（用捆绑 Python 替代系统 python3）
 
 ### Phase C：tool 层 + HTTP（~半天）
 
-- [ ] `app/tool/forge/create.go` schema 加 dependencies 字段；prompt 改
-- [ ] `app/tool/forge/edit.go` 同上
-- [ ] `app/tool/forge/run.go` envStatus 检查 + 错误 mapping
-- [ ] `transport/httpapi/handlers/forge.go` 加 `:resync` 端点
-- [ ] errmap 加 5 行
-- [ ] 5 个 SSE 事件 struct + 注册
+- [ ] `app/tool/forge/create.go`：流程改成进 pending（不直接 accepted v1）
+- [ ] `app/tool/forge/edit.go`：草稿期 / 激活期统一入口（找 pending 或基于 active 复制）
+- [ ] LLM-facing schema 加 `dependencies` 字段（PEP 508 string array，optional）
+- [ ] prompt 加"声明 non-stdlib import 进 dependencies"指引
+- [ ] 错误码 + errmap 4 行
+- [ ] `forgehandler` `:revert` 端点接 evicted 重建路径
+- [ ] AcceptPending 校验 EnvStatus="ready" 才允许 accept
 
 ### Phase D：装配（~半小时）
 
-- [ ] `cmd/server/main.go` preflight + sb 注入 + syncWorker 启动
-- [ ] dev 模式从 FORGIFY_DEV_RESOURCES 拷资源
-- [ ] make 加 `make download-resources` 一次性下 uv + python-build-standalone
+- [ ] `cmd/server/main.go` Bootstrap + Sandbox 注入
+- [ ] dev 模式从 `FORGIFY_DEV_RESOURCES` 拷资源
+- [ ] Makefile 加 `make download-resources` 一次性下 uv + python-build-standalone
 
 ### Phase E：文档同步（~1 天，按 §S14）
 
-见 §22。
+见 §10。
 
 ### Phase F：testend UI（~半天，并行）
 
-- [ ] forge 详情页 envStatus 徽章
-- [ ] resync 按钮
-- [ ] sandbox.* SSE 进度条
-
-总计：~4-5 天工作量。可以独立交付，不阻塞 Phase 4。
+- [ ] forge 详情页 envStatus 徽章 + 进度区（按 forge.envSyncStage / Detail 渲染）
+- [ ] resync 按钮（清 evicted / 修复损坏）
+- [ ] forge entity-state 事件接进现有 sse 视图
 
 ---
 
-## 21. 不做的事（明确划界）
-
-- ❌ 安全隔离（filesystem/network/cgroups）—— 本地单用户
-- ❌ Pyodide / WASM 路线 —— 过度工程
-- ❌ 多 Python 版本并存 —— 仅锁一个 3.12.x
-- ❌ 自动垃圾回收 venv —— forge delete 时连带删；不做"30 天没用过的 forge env 清理"这种花活
-- ❌ Sync 任务持久化队列（Redis/SQLite job）—— in-memory channel + 重启丢失，下次 Run 触发懒同步
-- ❌ 依赖图可视化 / 冲突检测 UI —— uv 错误消息直接展示
-- ❌ Pre-warmed Python 子进程池（避免每次 run 启动开销）—— 第二次起 Python 已经在内核 page cache，启动 ~50ms 可接受；池化是过早优化
-
----
-
-## 22. 文档同步清单（§S14）
-
-按本迭代落实时同步以下文档（每完成一个子任务勾一行）：
+## 10. 文档同步清单（§S14）
 
 ### 必改
 
 - [ ] `service-design-documents/forge.md`
-  - §1 决策表加 4 行：dependencies 字段 / per-forge venv / 异步 sync / sandbox 启动期 preflight
-  - §3.1 Forge entity 加 5 字段
-  - §3.2 ForgeVersion 加 2 字段
-  - §4 常量加 EnvStatus 4 值
-  - §5 sentinel 加 5 个
-  - §6 Repository 接口加 markEnvSyncing / markEnvReady / markEnvFailed
-  - §8 Service 加 ResyncEnv 方法
-  - §10 各 system tool 流程（create/edit 加 dependencies 字段，run 加 EnvStatus 检查）
-  - §11 HTTP API 表加 `:resync` 端点
-  - §12 错误码加 5 行
-  - §13 SSE 事件加 4 个
-  - §14 调用链改写：链 1 改成异步 sync 模式；新增链 4（resync）链 5（delete with destroy）
-  - §15 数据库表说明更新 forges 列
-  - §16 sandbox 章节大改：原 PythonSandbox → 新 Sandbox 形态
-  - §17 实现清单加本迭代项
+  - §3.1 `Forge` 加 `ActiveVersionID` + 4 计算字段
+  - §3.2 `ForgeVersion` 加 `Dependencies / PythonVersion / EnvID` + 5 env 字段
+  - §3.4 ForgeExecution 不变
+  - §4 常量加 EnvStatus 5 值 + N=3 缓冲常量 + DefaultPythonVersion
+  - §5 sentinel 加 4 个
+  - §6 Repository 接口加 `UpdateVersionEnvStatus / UpdateVersionEnvProgress / UpdateVersionEnvID / ListEnvIDsForForge` 等方法
+  - §8 Service 加 `SyncEnvForVersion / publishForgeSnapshot / attachActiveEnv / trimEnvBuffer`
+  - §10 system tool：create_forge 改进 pending；edit_forge 草稿/激活统一
+  - §11 HTTP API 加 `:revert` 路径
+  - §12 错误码加 4 行
+  - §13 SSE 触发点表加 #6 / #7
+  - §14 调用链全量改写（按本文档 §3 五条链）
+  - §16 sandbox 章节大改（PythonSandbox → Sandbox + 接口 5 方法）
+
 - [ ] `service-contract-documents/database-design.md`
-  - forges 表条目加 5 字段说明 + EnvStatus CHECK
-  - forge_versions 表加 2 字段
+  - forges 表加 active_version_id
+  - forge_versions 表加 8 字段（deps / python_version / env_id / 5 env 字段）+ env_status CHECK + (forge_id, env_id) 复合索引
+
 - [ ] `service-contract-documents/error-codes.md`
-  - 加 5 行 FORGE_ENV_* / FORGE_SANDBOX_*
+  - 加 4 行 FORGE_ENV_* / FORGE_SANDBOX_*
+
 - [ ] `service-contract-documents/events-design.md`
-  - 加 sandbox.sync_started / progress / ready / failed 4 行
+  - `forge` 事件触发点表加 #6 / #7 两行（不改事件名，不加事件类型）
+
 - [ ] `service-contract-documents/api-design.md`
-  - 加 `:resync` 端点
+  - create_forge / edit_forge args 加 `dependencies` 字段说明
+
 - [ ] `progress-record.md`
-  - dev log 加本迭代条目（按 [refactor]/[infra] 分类）
-  - 当前快照"测试规模"更新
+  - dev log 加本迭代条目
+
 - [ ] `desktop-packaging-notes.md` §五
-  - 把方案 A/C 表更新：本迭代落定 C+B 混合（标"实现中"）；删 D（Pyodide）
-- [ ] `CLAUDE.md`
-  - "项目特殊性"段：`infra/sandbox 用 subprocess 跑 Python` 改为 `infra/sandbox 捆绑 uv + Python，每 forge 独立 venv`
-  - §S15 ID 前缀清单不变（forge_id 没改）
-  - 不需要新增规范条目（uv 运维只是一个 infra 实现细节）
+  - 方案表：本迭代落定 C+B 混合（uv 管 venv，捆绑 python-build-standalone）
 
-### 参考更新（可后再补）
-
-- [ ] `backend-design.md` Architecture tree：`infra/sandbox/` 子树文件名展开
-- [ ] testend-design.md：forge 面板 envStatus 区域
+- [ ] `CLAUDE.md` 项目特殊性段
+  - "infra/sandbox 用 subprocess 跑 Python" → "infra/sandbox 捆绑 uv + Python，每 EnvID 独立 venv"
 
 ---
 
-## 23. 一句话总结
+## 11. 不做的事（明确划界）
 
-把 sandbox 从"调系统 python3 跑临时文件"升级为**自带 Python + uv 管 venv + 每 forge 独立环境**：依赖装在创建时（异步、SSE 推进度），运行时永远是热路径（uv run --no-sync）。资源捆进 .app（Phase D 装配，cmd/desktop 时落 embed.FS）。对桌面端打包零阻塞，对 forge LLM 接口仅加一个 `dependencies` 字段。本迭代不动安全隔离——本地单用户单作者场景下没必要。
+### 11.1 MVP 哲学：punt 给 AI 自救
 
-工作量 ~4-5 天，独立交付，不阻塞 Phase 4。
+LLM agent 系统跟传统 backend 不一样的核心红利：**很多边界 case 可以让 AI 看错自救**。传统 backend 想方设法防的事，在 agent loop 里报错回去就行——LLM 调 edit_forge / `:resync` 就能自愈。
+
+所以**砍掉一票"自动恢复"机制**，前提条件是错误信息能可靠传到 LLM（详 §4.4 Sync 的 errBuf 收集 + §4.6 Run 的 stderr 透传）：
+
+| 砍掉的"自动修复"机制 | 自然怎么处理 |
+|---|---|
+| 启动期 reconcile `EnvStatus="syncing"` 残留 | LLM `get_forge` 看到状态卡住，调 `:resync` 端点；前端 UI 也给个"重新装"按钮 |
+| venv 完整性严密校验 | `stat .venv` 简单判断够 99%；半成品让 uv run 自然报错→LLM 看错误自救 |
+| Run 时 evicted 自检 + eager 状态同步 | uv run 找不到 venv 直接报错→透传到 tool_result→LLM 调 `:resync` |
+| 孤儿 venv 目录定期 GC | 不做；磁盘多占点而已，后续 feature |
+| 进程退出前清半成品文件 | 不做；下次 sync uv 会自己处理已存在文件 |
+
+**只保留两个真必须的兜底**：
+- mac codesign（不修就内核 SIGKILL 无日志，LLM 也救不了）
+- 错误信息收集到 EnvError（不收集 LLM 看不到错就没法救自己）
+
+这与设计原则 #6 "反校验剧场" 一脉相承——不预先防 LLM/用户能自然修复的事。
+
+### 11.2 不做的具体清单
+
+- ❌ **异步 sync worker**：同步等更简单，create/edit 等 sync 完是合理 LLM tool call 时长
+- ❌ **Run timeout**：工具可能合理跑很久，死循环是 LLM/用户问题
+- ❌ **安全隔离**（filesystem / network / cgroups）：本地单用户单作者
+- ❌ **Forge 静态 Destructive / IsReadOnly / IsConcurrencySafe 字段**：destructive 走 §S18 既有 per-call AI 自报模式
+- ❌ **多 Python 版本并存**：仅锁一个 3.12.x
+- ❌ **Pyodide / WASM 路线**
+- ❌ **Pre-warmed Python 进程池**：启动 ~50ms 可接受
+- ❌ **自动 venv 过期重新解析**：要新版本就改 specifier，显式表达意图
+- ❌ **新 SSE 事件类**：复用现有 forge entity-state 事件
+- ❌ **PEP 440 等价 specifier 语义合并**（如 `pandas>=2.0` vs `pandas>=2.0.0`）：不强求；多一份 venv 几 MB metadata 可接受
+- ❌ **重启状态 reconcile / venv 完整性校验 / evicted 自愈 / 孤儿 GC**（见 §11.1）：punt 给 AI 自救
 
 ---
 
-## 附录 A：与之前讨论版本的差异
+## 12. 风险 / 未决项
 
-之前几轮对话里我反复在两种模型间摇摆：
+| 风险 | 影响 | 缓解 |
+|---|---|---|
+| python-build-standalone 在 mac quarantine 触发 Gatekeeper | 中-高 | preflight 跑 xattr -dr；做 mac 公证流水线时实测 |
+| uv 跨 minor 版本破坏行为 | 中 | 锁 minor 版本，升级走集成回归 |
+| Run 时 ctx-cancel 未杀干净子孙进程 | 中 | process group + 跨平台测试覆盖（mac/linux Setpgid + Kill -pgid；win taskkill /T /F） |
+| 同 forge 并发 Run 写同一 main.py 文件 | 低 | atomic rename `main.py.tmp` → `main.py` |
+| 大型依赖（torch、playwright + browsers）单次 sync 1+ 分钟 | 中 | EnvSyncStage / EnvSyncDetail 进度推送让用户看到在装啥 |
+| 同 EnvID 共用 venv 但用户期待"新装"获取最新版本 | 中 | 文档明确：要新版本就改 specifier；提供"删 EnvID 强制重建"端点（v2，本迭代不做） |
 
-1. **PEP 723 inline metadata 模型**：每次 run 时 uv 临时建 venv（按 deps hash 缓存）—— 简洁但延迟在 run 时
-2. **每 forge 持久 venv 模型**：sync 在创建时，run 时直接跑 —— 你提出来的方向
+未决（写代码前要确认）：
 
-定稿是 **方向 2**。理由：
+- [ ] mac 上 uv 装的 python-build-standalone 解释器实际 quarantine 行为
+- [ ] uv 0.5.x 在 windows 子进程信号处理（taskkill /T /F vs Cmd.Cancel）
+- [ ] python-build-standalone 跨平台目录结构差异（mac/linux 有 `bin/`，win 直接根目录 `python.exe`）
 
-- 用户视角："我配工具时 = 配置时间；我用工具时 = 期待瞬时"——和 vscode 装扩展一个心智
-- 实现视角：venv 物理位置 = `forges/<id>/.venv` 一一对应，所有权清晰；删 forge 顺手删 venv
-- 磁盘视角：uv 的全局 wheel cache + 硬链接让"100 个 forge 都用 pandas" → pandas 只存一份
-- 调试视角：venv 文件可见可检查，uv.lock 可读，比缓存目录里按 hash 命名的环境直观
+---
 
-PEP 723 inline 模型完全没用上——那是给 ad-hoc 一次性脚本设计的，forge 是持久工具，不匹配。
+## 一句话总结
+
+把 sandbox 从"调系统 python3 跑临时文件"升级为**自带 Python + uv 管 venv + 每 EnvID 独立环境**：venv 按依赖集 hash 命名（不是按 version），同 deps 的多版本零代价共享；create/edit 同步等 sync 完成；ForgeVersion 持有依赖配置 + 环境状态；forge.ActiveVersionID 指当前活跃版本；sync 进度通过现有 `forge` entity-state 事件推送。不引入新事件类、不引入异步 worker、不设 timeout。

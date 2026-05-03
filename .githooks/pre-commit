@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# pre-commit — refuse to commit when basic backend checks fail.
+# Activated via `git config core.hooksPath .githooks` (one-time per clone).
+# Bypass in genuine emergencies with `git commit --no-verify`.
+#
+# Lives at .githooks/pre-commit (tracked by git) — distinct from .git/hooks/
+# (per-clone, not tracked). Future you / future machines pick this up
+# automatically once `core.hooksPath` is set.
+#
+# pre-commit — backend 基础检查不过就拒绝 commit。
+# 一次性激活：`git config core.hooksPath .githooks`。
+# 真有急事：`git commit --no-verify` 跳过。
+
+set -e
+
+# Only run if backend Go files changed — chat-only commits or doc-only
+# commits don't need the full check pipeline.
+# 仅当有 backend Go 文件变更时才跑——纯改文档 / 改 testend 时不必走。
+if ! git diff --cached --name-only | grep -qE '^backend/.*\.go$'; then
+  exit 0
+fi
+
+cd "$(git rev-parse --show-toplevel)/backend"
+
+echo "→ pre-commit: backend Go files changed, running checks"
+
+echo "  · go build"
+go build ./...
+
+echo "  · go vet"
+go vet ./...
+
+echo "  · gofmt"
+unformatted=$(gofmt -l .)
+if [ -n "$unformatted" ]; then
+  echo "    files need gofmt:"
+  echo "$unformatted" | sed 's/^/      /'
+  echo "    run: cd backend && gofmt -w ."
+  exit 1
+fi
+
+echo "  · staticcheck"
+"$(go env GOPATH)/bin/staticcheck" ./...
+
+echo "✓ pre-commit ok"

@@ -15,7 +15,6 @@ package forge
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -23,9 +22,9 @@ import (
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
-	eventsdomain "github.com/sunweilin/forgify/backend/internal/domain/events"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
+	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 )
 
 // ── ForgeTools factory ────────────────────────────────────────────────────────
@@ -33,79 +32,26 @@ import (
 // ForgeTools constructs the 5 forge system tools wired with their dependencies.
 // Returns []toolapp.Tool because the chat ReAct loop consumes the abstract
 // Tool interface; the concrete struct types (SearchForge, GetForge, etc.) are
-// implementation details.
+// implementation details. Forge entity-state SSE events are published through
+// svc.PublishSnapshot — bridge wiring lives on the Service, not each tool.
 //
 // ForgeTools 构造装配好依赖的 5 个 forge system tool。
 // 返回 []toolapp.Tool——chat ReAct 循环消费的是抽象 Tool 接口；具体类型
-// （SearchForge / GetForge 等）是实现细节。
+// （SearchForge / GetForge 等）是实现细节。Forge entity-state SSE 事件
+// 通过 svc.PublishSnapshot 发布——bridge 装在 Service 上，不再传给每个工具。
 func ForgeTools(
 	svc *forgeapp.Service,
 	attachRepo chatdomain.Repository,
 	picker modeldomain.ModelPicker,
 	keys apikeydomain.KeyProvider,
 	factory *llminfra.Factory,
-	bridge eventsdomain.Bridge,
 ) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchForge{svc: svc, picker: picker, keys: keys, factory: factory},
 		&GetForge{svc: svc},
-		&CreateForge{svc: svc, picker: picker, keys: keys, factory: factory, bridge: bridge},
-		&EditForge{svc: svc, picker: picker, keys: keys, factory: factory, bridge: bridge},
+		&CreateForge{svc: svc, picker: picker, keys: keys, factory: factory},
+		&EditForge{svc: svc, picker: picker, keys: keys, factory: factory},
 		&RunForge{svc: svc, attachRepo: attachRepo},
-	}
-}
-
-// ── Shared LLM client builder ─────────────────────────────────────────────────
-
-// builtClient is the shared LLM client + identity bundle returned by buildClient.
-//
-// builtClient 是 buildClient 返回的 LLM 客户端 + 身份打包。
-type builtClient struct {
-	client  llminfra.Client
-	modelID string
-	key     string
-	baseURL string
-}
-
-// buildClient resolves the chat scenario's provider/model, fetches API key,
-// and constructs an LLM client. Used by SearchForge (LLM ranking),
-// CreateForge (code gen), EditForge (code gen).
-//
-// buildClient 解析 chat 场景的 provider/model、取 API key、构造 LLM 客户端。
-// 供 SearchForge（LLM 排序）/ CreateForge（代码生成）/ EditForge（代码生成）使用。
-func buildClient(
-	ctx context.Context,
-	picker modeldomain.ModelPicker,
-	keys apikeydomain.KeyProvider,
-	factory *llminfra.Factory,
-) (*builtClient, error) {
-	provider, modelID, err := picker.PickForChat(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("forge: pick model: %w", err)
-	}
-	creds, err := keys.ResolveCredentials(ctx, provider)
-	if err != nil {
-		return nil, fmt.Errorf("forge: resolve credentials: %w", err)
-	}
-	client, baseURL, err := factory.Build(llminfra.Config{
-		Provider: provider, ModelID: modelID,
-		Key: creds.Key, BaseURL: creds.BaseURL,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("forge: build client: %w", err)
-	}
-	return &builtClient{client: client, modelID: modelID, key: creds.Key, baseURL: baseURL}, nil
-}
-
-func (b *builtClient) newRequest(system, prompt string) llminfra.Request {
-	return llminfra.Request{
-		ModelID: b.modelID,
-		Key:     b.key,
-		BaseURL: b.baseURL,
-		System:  system,
-		Messages: []llminfra.LLMMessage{
-			{Role: llminfra.RoleUser, Content: prompt},
-		},
 	}
 }
 
@@ -164,13 +110,20 @@ func streamCode(
 	factory *llminfra.Factory,
 	onChunk func(accumulated string),
 ) (string, error) {
-	bc, err := buildClient(ctx, picker, keys, factory)
+	bc, err := llmclientpkg.Resolve(ctx, picker, keys, factory)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("streamCode: %w", err)
+	}
+
+	req := llminfra.Request{
+		ModelID:  bc.ModelID,
+		Key:      bc.Key,
+		BaseURL:  bc.BaseURL,
+		Messages: []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: prompt}},
 	}
 
 	var buf strings.Builder
-	for event := range bc.client.Stream(ctx, bc.newRequest("", prompt)) {
+	for event := range bc.Client.Stream(ctx, req) {
 		switch event.Type {
 		case llminfra.EventText:
 			buf.WriteString(event.Delta)
@@ -240,65 +193,4 @@ func extractCode(raw string) string {
 		}
 	}
 	return raw
-}
-
-// extractJSON pulls a JSON value out of an LLM response, handling several
-// common shapes the LLM may use:
-//
-//  1. Plain JSON ("[...]" or "{...}") — returned as-is.
-//  2. Markdown code fence with json language hint (```json ... ``` or ``` ... ```).
-//  3. Surrounding prose ("Here's the answer: [...]") — fallback to outer
-//     bracket matching, less reliable.
-//
-// Returns the JSON substring and true when found; "", false when nothing
-// matched. Markdown fences are tried first because they're unambiguous.
-//
-// extractJSON 从 LLM 响应中提取 JSON 值，处理几种常见情况：
-//
-//  1. 纯 JSON（"[...]" 或 "{...}"）原样返回
-//  2. Markdown 代码 fence（```json ... ``` 或 ``` ... ```）
-//  3. 周围有散文（"Here's the answer: [...]"）—— 兜底用外层括号匹配，不太可靠
-//
-// 找到时返回 JSON 子串和 true；都没匹配返回 "", false。优先试 markdown fence
-// 因为它最明确。
-func extractJSON(s string) (string, bool) {
-	s = strings.TrimSpace(s)
-
-	// Try markdown fences first (unambiguous).
-	// 先试 markdown fence（无歧义）。
-	for _, fence := range []string{"```json\n", "```json", "```\n", "```"} {
-		if idx := strings.Index(s, fence); idx >= 0 {
-			start := idx + len(fence)
-			rest := s[start:]
-			if end := strings.Index(rest, "```"); end >= 0 {
-				candidate := strings.TrimSpace(rest[:end])
-				if isLikelyJSON(candidate) {
-					return candidate, true
-				}
-			}
-		}
-	}
-
-	// Fallback: bracket matching on outer-most pair.
-	// 兜底：外层括号匹配。
-	for _, pair := range [][2]byte{{'[', ']'}, {'{', '}'}} {
-		start := strings.IndexByte(s, pair[0])
-		end := strings.LastIndexByte(s, pair[1])
-		if start >= 0 && end > start {
-			candidate := s[start : end+1]
-			if isLikelyJSON(candidate) {
-				return candidate, true
-			}
-		}
-	}
-	return "", false
-}
-
-// isLikelyJSON cheaply checks if s parses as valid JSON. Used by extractJSON
-// to disambiguate between candidate substrings.
-//
-// isLikelyJSON 廉价检查 s 是否合法 JSON。供 extractJSON 在多个候选间挑选。
-func isLikelyJSON(s string) bool {
-	var v any
-	return json.Unmarshal([]byte(s), &v) == nil
 }

@@ -15,6 +15,8 @@ import (
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
+	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
+	llmparsepkg "github.com/sunweilin/forgify/backend/internal/pkg/llmparse"
 )
 
 // SearchForge implements the search_forges system tool.
@@ -98,11 +100,16 @@ func (t *SearchForge) Execute(ctx context.Context, argsJSON string) (string, err
 		`[{"id":"f_xxx","score":0.95},...]`+
 		"\nRespond with valid JSON only.", args.Limit)
 
-	bc, err := buildClient(ctx, t.picker, t.keys, t.factory)
+	bc, err := llmclientpkg.Resolve(ctx, t.picker, t.keys, t.factory)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("search_forges: %w", err)
 	}
-	resp, err := llminfra.Generate(ctx, bc.client, bc.newRequest("", sb.String()))
+	resp, err := llminfra.Generate(ctx, bc.Client, llminfra.Request{
+		ModelID:  bc.ModelID,
+		Key:      bc.Key,
+		BaseURL:  bc.BaseURL,
+		Messages: []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: sb.String()}},
+	})
 	if err != nil {
 		return "", fmt.Errorf("search_forges: llm: %w", err)
 	}
@@ -111,7 +118,7 @@ func (t *SearchForge) Execute(ctx context.Context, argsJSON string) (string, err
 		ID    string  `json:"id"`
 		Score float32 `json:"score"`
 	}
-	jsonStr, ok := extractJSON(resp)
+	jsonStr, ok := llmparsepkg.ExtractJSON(resp)
 	if !ok {
 		return "", fmt.Errorf("search_forges: LLM response contained no JSON: %q", resp)
 	}
@@ -151,8 +158,8 @@ func (t *SearchForge) Execute(ctx context.Context, argsJSON string) (string, err
 		// keep the forge in the result with nil schemas rather than aborting search.
 		// DB 数据损坏时保留 forge 但 schema 为 nil，不中止整个搜索。
 		var params, ret any
-		json.Unmarshal([]byte(f.Parameters), &params)  //nolint:errcheck
-		json.Unmarshal([]byte(f.ReturnSchema), &ret)   //nolint:errcheck
+		json.Unmarshal([]byte(f.Parameters), &params) //nolint:errcheck
+		json.Unmarshal([]byte(f.ReturnSchema), &ret)  //nolint:errcheck
 		out = append(out, result{
 			ID: f.ID, Name: f.Name, Description: f.Description,
 			Parameters: params, ReturnSchema: ret, Score: scoreMap[f.ID],

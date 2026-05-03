@@ -137,6 +137,12 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 | `TOOL_AST_PARSE_FAILED` | 422 | `tool.ErrASTParseError` | 代码无法被 Python AST 解析 | ✅ |
 | `TOOL_IMPORT_INVALID` | 400 | `tool.ErrImportInvalid` | 导入 JSON 格式错误 | ✅ |
 | `TOOL_IMPORT_CONFLICT` | 409 | `tool.ErrImportConflict` | 导入名字冲突需用户决策 | ⬜ |
+| `FORGE_ENV_NOT_READY` | 422 | `forge.ErrEnvNotReady` | Run 时 ActiveVersion 的 EnvStatus≠ready / Accept 时 pending 还在 syncing 或 evicted | ✅ |
+| `FORGE_ENV_FAILED` | 422 | `forge.ErrEnvFailed` | Sync 失败（含 deps 解析失败 / Python 包冲突）；EnvError 含 uv stderr 全文 | ✅ |
+| `FORGE_SANDBOX_UNAVAILABLE` | 503 | `forge.ErrSandboxUnavailable` | 启动期 Bootstrap 失败（uv / python-build-standalone 资源缺失） | ✅ |
+| `FORGE_DEPENDENCY_RESOLUTION` | 422 | `forge.ErrDependencyResolution` | uv 无法解析依赖（包名拼错 / 版本约束冲突 / 网络错误）；EnvError 含 uv 完整 stderr | ✅ |
+
+> 现有 `TOOL_*` wire codes 是 Phase 1 大重命名时为客户端兼容保留——sentinel 自身已是 `forgedomain.Err*`。新增的沙箱迭代 sentinel 用 `FORGE_*` 前缀；客户端兼容性清理留到未来独立任务。
 
 ---
 

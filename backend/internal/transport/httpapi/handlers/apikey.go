@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
 	"go.uber.org/zap"
 
@@ -156,8 +155,7 @@ func (h *APIKeyHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // postOnID 分派落在 `/{id}` 段上的 POST 请求——当前只支持 `:test`。
 // 未知 action → 404。
 func (h *APIKeyHandler) postOnID(w http.ResponseWriter, r *http.Request) {
-	idAction := r.PathValue("idAction")
-	id, action, found := strings.Cut(idAction, ":")
+	id, action, found := idAndAction(r, "idAction")
 	if !found {
 		// POST on bare /{id} has no semantics — spec reserves the `:action` form.
 		// 裸 /{id} 上的 POST 无语义——规范保留 `:action` 形式。

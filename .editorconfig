@@ -1,0 +1,45 @@
+# EditorConfig — read by VS Code (with EditorConfig extension), Goland,
+# Sublime, Vim (with vim-editorconfig), Notepad++, etc. Tells the editor
+# how to format files when you save: charset, line endings, indent style,
+# trailing whitespace, final newline.
+#
+# Companion to .gitattributes — this controls EDITOR behavior; that controls
+# GIT behavior. Both needed for full coverage.
+#
+# EditorConfig — VS Code（装 EditorConfig 扩展）/ Goland / Sublime / Vim
+# （装 vim-editorconfig）/ Notepad++ 等都识别。在你保存文件时按这套规则
+# 自动整理：字符集、行尾、缩进、行尾空格、末尾换行。
+#
+# 与 .gitattributes 互补——本文件管编辑器行为，那个管 git 行为。两个都装才完整。
+
+root = true
+
+# ── 默认 fallback：所有文件 ──────────────────────────────────────────────────
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# ── Go：tab 缩进（Go 官方约定，gofmt 强制）─────────────────────────────────
+[*.go]
+indent_style = tab
+
+# ── Makefile：必须 tab（make 语法硬要求，空格会报"missing separator"）───
+[Makefile]
+indent_style = tab
+
+# ── go.mod / go.sum：Go 工具链生成，跟 .go 一样 tab ─────────────────────────
+[{go.mod,go.sum}]
+indent_style = tab
+
+# ── 二进制 / 生成文件：不动 ─────────────────────────────────────────────────
+[*.{png,jpg,jpeg,gif,ico,icns,pdf,zip,tar,gz,sqlite,db}]
+charset = unset
+end_of_line = unset
+insert_final_newline = unset
+trim_trailing_whitespace = unset
+indent_style = unset
+indent_size = unset

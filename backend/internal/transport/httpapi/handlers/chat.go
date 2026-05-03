@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -151,13 +150,15 @@ func (h *ChatHandler) ListMessages(w http.ResponseWriter, r *http.Request) {
 // ── GET /api/v1/events ───────────────────────────────────────────────────────
 
 // EventsSSE: GET /api/v1/events?conversationId=xxx → SSE stream.
-// Sends keep-alive pings every 15 s. Each event carries a per-connection
-// sequence ID for debugging; server-side replay is not supported (in-memory
-// bridge has no history buffer).
+// Each event carries a per-connection sequence ID for debugging; server-side
+// replay is not supported (in-memory bridge has no history buffer). Standard
+// SSE setup (headers, keep-alive, ctx-driven shutdown) is delegated to
+// responsehttpapi.StreamSSE.
 //
 // EventsSSE：GET /api/v1/events?conversationId=xxx → SSE 流。
-// 每 15 秒发一次 keep-alive ping。每个事件带连接内自增 ID（供调试）；
-// 不支持服务端 replay（内存 bridge 无历史缓冲）。
+// 每个事件带连接内自增 ID（供调试）；不支持服务端 replay（内存 bridge 无历史
+// 缓冲）。SSE 标准设置（header、keep-alive、ctx 驱动退出）委托给
+// responsehttpapi.StreamSSE。
 func (h *ChatHandler) EventsSSE(w http.ResponseWriter, r *http.Request) {
 	conversationID := r.URL.Query().Get("conversationId")
 	if conversationID == "" {
@@ -165,49 +166,20 @@ func (h *ChatHandler) EventsSSE(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		responsehttpapi.Error(w, http.StatusInternalServerError, "INTERNAL_ERROR", "streaming not supported", nil)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/event-stream")
-	w.Header().Set("Cache-Control", "no-cache")
-	w.Header().Set("Connection", "keep-alive")
-	// Disable Nginx / proxy buffering so tokens reach the client immediately.
-	// 禁用 Nginx / 代理缓冲，确保 token 立刻到达客户端。
-	w.Header().Set("X-Accel-Buffering", "no")
-	w.WriteHeader(http.StatusOK)
-	flusher.Flush()
-
 	ch, unsub := h.bridge.Subscribe(r.Context(), conversationID)
 	defer unsub()
 
-	ticker := time.NewTicker(15 * time.Second)
-	defer ticker.Stop()
-
 	var eventID int
-	for {
-		select {
-		case event, ok := <-ch:
-			if !ok {
-				return
-			}
+	responsehttpapi.StreamSSE(w, r, nil, ch,
+		func(out io.Writer, event eventsdomain.Event) error {
 			eventID++
 			data, err := json.Marshal(event)
 			if err != nil {
 				h.log.Warn("SSE marshal failed", zap.Error(err))
-				continue
+				return err
 			}
-			fmt.Fprintf(w, "id: %d\nevent: %s\ndata: %s\n\n", eventID, event.EventName(), data)
-			flusher.Flush()
-
-		case <-ticker.C:
-			fmt.Fprintf(w, ": keep-alive\n\n")
-			flusher.Flush()
-
-		case <-r.Context().Done():
-			return
-		}
-	}
+			_, err = fmt.Fprintf(out, "id: %d\nevent: %s\ndata: %s\n\n", eventID, event.EventName(), data)
+			return err
+		},
+	)
 }

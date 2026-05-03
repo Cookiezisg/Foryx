@@ -692,12 +692,26 @@
               <!-- action bar -->
               <div class="tool-action-bar">
                 <div class="tool-action-name" x-text="userSelected.name"></div>
+                <span x-show="userSelected.envStatus"
+                      class="forge-env-badge"
+                      :data-env-status="userSelected.envStatus"
+                      x-text="userSelected.envStatus + (userSelected.envSyncStage ? (': ' + userSelected.envSyncStage) : '')"></span>
                 <div class="tool-action-desc" x-text="userSelected.description"></div>
                 <div class="tool-action-btns">
                   <button class="btn btn-ghost btn-sm" @click="openEdit()">Edit</button>
                   <button class="btn btn-danger btn-sm" @click="deleteTool()">Del</button>
                   <button class="btn btn-ghost btn-sm" @click="exportTool()">⇩</button>
                 </div>
+              </div>
+
+              <!-- env status / sync progress / error strip -->
+              <div x-show="userSelected.envStatus === 'syncing' && userSelected.envSyncDetail"
+                   class="forge-env-progress"
+                   x-text="userSelected.envSyncDetail"></div>
+              <div x-show="userSelected.envStatus === 'failed' && userSelected.envError"
+                   class="forge-env-error">
+                <div class="forge-env-error-label">Sandbox sync failed — adjust dependencies and edit again:</div>
+                <pre class="forge-env-error-body" x-text="userSelected.envError"></pre>
               </div>
 
               <!-- edit form -->

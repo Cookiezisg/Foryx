@@ -130,8 +130,8 @@ func TestRequestLogger_DoubleWriteHeaderRecordsFirst(t *testing.T) {
 	// 忽略后续。
 	log, obs := newObservedLogger(t)
 	handler := RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusAccepted)    // 202
-		w.WriteHeader(http.StatusBadRequest)  // 400 (ignored)
+		w.WriteHeader(http.StatusAccepted)   // 202
+		w.WriteHeader(http.StatusBadRequest) // 400 (ignored)
 	}))
 
 	rec := httptest.NewRecorder()

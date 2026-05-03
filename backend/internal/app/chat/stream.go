@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 )
@@ -195,31 +196,25 @@ func extractToolCalls(blocks []chatdomain.Block) []chatdomain.ToolCallData {
 	return calls
 }
 
-// parseToolArgs extracts summary / destructive from raw JSON args, returning
-// the user-facing args map alongside. On malformed JSON the raw text is
-// surfaced as args["raw"] so the LLM can still see what it sent — the tool's
-// ValidateInput typically rejects this and the LLM gets a retry signal.
+// parseToolArgs extracts summary / destructive from raw JSON args and returns
+// the remaining args as a map for assembly into ToolCallData. Delegates to the
+// canonical toolapp.StripStandardFields and only adds the chat-side fallback
+// of surfacing malformed JSON as args["raw"] — that way the LLM still sees
+// what it sent and the tool's ValidateInput can reject with a retry signal.
 //
-// parseToolArgs 从原始 JSON args 中提取 summary / destructive，并返回供工具实际
-// 使用的 args map。JSON 损坏时把原文塞进 args["raw"]——LLM 至少能看到自己发了
-// 什么，工具的 ValidateInput 通常会据此报错让 LLM 重试。
+// parseToolArgs 从原始 JSON args 中提取 summary / destructive，把剩余字段
+// 装回 map 供 ToolCallData 使用。直接复用 toolapp.StripStandardFields，
+// 仅追加 chat 侧的兜底：JSON 损坏时塞 args["raw"]——让 LLM 至少能看到自己发了
+// 什么，工具 ValidateInput 据此报错让 LLM 重试。
 func parseToolArgs(raw string) (summary string, destructive bool, args map[string]any) {
 	if raw == "" {
 		return "", false, map[string]any{}
 	}
-	var m map[string]any
-	if err := json.Unmarshal([]byte(raw), &m); err != nil {
-		return "", false, map[string]any{"raw": raw}
+	summary, destructive, stripped := toolapp.StripStandardFields(raw)
+	if err := json.Unmarshal([]byte(stripped), &args); err != nil || args == nil {
+		return summary, destructive, map[string]any{"raw": raw}
 	}
-	if v, ok := m["summary"].(string); ok {
-		summary = v
-		delete(m, "summary")
-	}
-	if v, ok := m["destructive"].(bool); ok {
-		destructive = v
-		delete(m, "destructive")
-	}
-	return summary, destructive, m
+	return summary, destructive, args
 }
 
 // sortInts is a tiny in-place ascending int sort (stdlib's sort.Ints adds

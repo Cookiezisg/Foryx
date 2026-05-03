@@ -54,12 +54,15 @@ import (
 
 // Forge is the main entity representing a user-forged Python tool.
 // Code holds the currently active version; VersionCount is the highest
-// accepted version number (0 before first save). Pending is a computed field
-// (not a DB column) populated by the handler/service layer when present.
+// accepted version number (0 before first save). ActiveVersionID points at
+// the ForgeVersion row that owns the venv currently in use. Pending and
+// the Env* fields are computed (not DB columns) — populated by service
+// layer attach helpers before serialization.
 //
 // Forge 是用户锻造的 Python 工具主实体。
 // Code 存当前活跃代码；VersionCount 是最大已接受版本号（首次保存前为 0）。
-// Pending 是计算字段（非 DB 列），存在时由 handler/service 层填充。
+// ActiveVersionID 指向当前在用 venv 所属的 ForgeVersion。Pending 和 Env*
+// 字段是计算字段（非 DB 列）——序列化前由 service 层 attach helper 填充。
 type Forge struct {
 	ID           string         `gorm:"primaryKey;type:text"           json:"id"`
 	UserID       string         `gorm:"not null;index;type:text"       json:"-"`
@@ -74,13 +77,37 @@ type Forge struct {
 	UpdatedAt    time.Time      `json:"updatedAt"`
 	DeletedAt    gorm.DeletedAt `gorm:"index"                          json:"-"`
 
-	// Pending is the active pending change (if any). Computed field —
-	// populated by handler/service before serialization, NOT a DB column.
-	// nil means no pending change.
+	// ActiveVersionID points at the current active ForgeVersion.ID. Empty
+	// during draft (forge created but no version yet accepted). sandbox.Run
+	// uses this field (via service layer) to pick the right venv directory.
 	//
-	// Pending 是当前活跃的 pending 变更（如有）。计算字段——
-	// 序列化前由 handler/service 填充，不是 DB 列。nil 表示无 pending。
+	// ActiveVersionID 指向当前活跃的 ForgeVersion.ID。草稿期为空（forge
+	// 已建但还没 accept 任何版本）。sandbox.Run 通过 service 层用此字段
+	// 选 venv 目录。
+	ActiveVersionID string `gorm:"type:text;default:''" json:"activeVersionId"`
+
+	// ── Computed fields (gorm:"-", filled by service attach helpers) ──
+
+	// Pending is the active pending ForgeVersion (if any). Filled by
+	// attachPending after Get / List. nil means no pending change.
+	//
+	// Pending 是当前活跃的 pending ForgeVersion（如有）。Get / List 后由
+	// attachPending 填充。nil 表示无 pending。
 	Pending *ForgeVersion `gorm:"-" json:"pending,omitempty"`
+
+	// Env* mirror the active version's environment runtime state so that
+	// GET /forges/{id} surfaces the current venv status directly. Filled
+	// by attachActiveEnv after the forge row is loaded; empty during draft
+	// when ActiveVersionID == "".
+	//
+	// Env* 镜像活跃版本的环境运行时态，让 GET /forges/{id} 直接含当前 venv
+	// 状态。forge 行加载后由 attachActiveEnv 填充；草稿期 ActiveVersionID==""
+	// 时为空。
+	EnvStatus     string     `gorm:"-" json:"envStatus"`
+	EnvError      string     `gorm:"-" json:"envError"`
+	EnvSyncedAt   *time.Time `gorm:"-" json:"envSyncedAt"`
+	EnvSyncStage  string     `gorm:"-" json:"envSyncStage"`
+	EnvSyncDetail string     `gorm:"-" json:"envSyncDetail"`
 }
 
 // TableName locks the DB table to "forges".
@@ -95,9 +122,19 @@ func (Forge) TableName() string { return "forges" }
 // status='pending' is an unconfirmed LLM proposal waiting for user review.
 // Version is nil for pending/rejected rows; assigned on acceptance.
 //
+// ForgeVersion also owns the dependency configuration and environment
+// runtime state for its venv. Multiple ForgeVersion rows that hash to the
+// same EnvID share a single venv directory on disk (see infra/sandbox
+// ComputeEnvID); the Env* runtime fields are still per-row because each
+// version's history of sync attempts / failures is its own.
+//
 // ForgeVersion 是工具在某一时刻的完整快照。双重职责：
 // status='accepted' 记录已提交历史；status='pending' 是待用户审核的 LLM 提案。
 // Version 在 pending/rejected 时为 nil；接受时分配版本号。
+//
+// ForgeVersion 同时持有 venv 的依赖配置和环境运行时态。EnvID 相同的多个
+// ForgeVersion 行共享磁盘上同一个 venv 目录（见 infra/sandbox ComputeEnvID）；
+// 但 Env* 运行时字段仍 per-row——每版本各有自己的 sync 历史 / 失败记录。
 type ForgeVersion struct {
 	ID      string `gorm:"primaryKey;type:text"           json:"id"`
 	ForgeID string `gorm:"not null;index;type:text"       json:"forgeId"`
@@ -119,9 +156,51 @@ type ForgeVersion struct {
 	//
 	// ChangeReason 记录此版本的变更意图：LLM 指令、"manual edit"、
 	// "reverted to v{N}" 或 "initial"。
-	ChangeReason string    `gorm:"type:text;default:''" json:"changeReason"`
-	CreatedAt    time.Time `json:"createdAt"`
-	UpdatedAt    time.Time `json:"updatedAt"`
+	ChangeReason string `gorm:"type:text;default:''" json:"changeReason"`
+
+	// ── Dependency configuration (snapshotted with the version) ──
+
+	// Dependencies is a JSON array of PEP 508 specifiers, e.g.
+	// `["pandas>=2.0","requests"]`. Empty array means stdlib only.
+	// Declared by the LLM at create_forge / edit_forge time based on what
+	// the code imports.
+	//
+	// Dependencies 是 PEP 508 specifier 的 JSON 数组，例
+	// `["pandas>=2.0","requests"]`。空数组 = 仅 stdlib。LLM 在
+	// create_forge / edit_forge 时根据代码 import 申报。
+	Dependencies string `gorm:"type:text;default:'[]'" json:"dependencies"`
+
+	// PythonVersion is a PEP 440 specifier such as ">=3.12". Empty falls
+	// back to the sandbox-level default (Sandbox.cfg.DefaultPython).
+	//
+	// PythonVersion 是 PEP 440 specifier 如 ">=3.12"。空时回退到沙箱级
+	// 默认（Sandbox.cfg.DefaultPython）。
+	PythonVersion string `gorm:"type:text;default:''" json:"pythonVersion"`
+
+	// EnvID is the venv directory key for this version, computed by
+	// infra/sandbox.ComputeEnvID(deps, pythonVersion). Indexed for fast
+	// "list distinct EnvIDs in use" queries (used by trimEnvBuffer).
+	//
+	// EnvID 是此版本对应的 venv 目录键，由
+	// infra/sandbox.ComputeEnvID(deps, pythonVersion) 算。加索引供
+	// "枚举在用 EnvID" 查询（trimEnvBuffer 用）。
+	EnvID string `gorm:"type:text;default:'';index" json:"envId"`
+
+	// ── Environment runtime state (per version) ──
+	// White-listed values only — see EnvStatus* constants. Whitelist
+	// validation lives at app/forge.Service write sites (matches how
+	// Status field is enforced; no DB-layer CHECK on either).
+	//
+	// 仅白名单值——见 EnvStatus* 常量。白名单校验放 app/forge.Service 写入点
+	// （和 Status 字段一致；两者都不做 DB 层 CHECK）。
+	EnvStatus     string     `gorm:"type:text;default:'pending'" json:"envStatus"`
+	EnvError      string     `gorm:"type:text;default:''" json:"envError"`
+	EnvSyncedAt   *time.Time `json:"envSyncedAt"`
+	EnvSyncStage  string     `gorm:"type:text;default:''" json:"envSyncStage"`
+	EnvSyncDetail string     `gorm:"type:text;default:''" json:"envSyncDetail"`
+
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // TableName locks the DB table to "forge_versions".
@@ -173,8 +252,8 @@ type ForgeExecution struct {
 	ForgeVersion int    `gorm:"not null"                                                        json:"forgeVersion"`
 
 	// Discriminator + result.
-	Kind      string `gorm:"not null;type:text"     json:"kind"`     // "run" | "test"
-	Input     string `gorm:"type:text;default:'{}'" json:"input"`    // JSON
+	Kind      string `gorm:"not null;type:text"     json:"kind"`  // "run" | "test"
+	Input     string `gorm:"type:text;default:'{}'" json:"input"` // JSON
 	Output    string `gorm:"type:text;default:''"   json:"output"`
 	OK        bool   `gorm:"not null"               json:"ok"`
 	ErrorMsg  string `gorm:"type:text;default:''"   json:"errorMsg"`
@@ -188,7 +267,7 @@ type ForgeExecution struct {
 
 	// Trigger context.
 	// 触发上下文。
-	TriggeredBy    string `gorm:"not null;type:text;default:'http'"             json:"triggeredBy"`     // "chat" | "http"
+	TriggeredBy    string `gorm:"not null;type:text;default:'http'"             json:"triggeredBy"` // "chat" | "http"
 	ConversationID string `gorm:"type:text;default:'';index:idx_fe_msg"         json:"conversationId,omitempty"`
 	MessageID      string `gorm:"type:text;default:'';index:idx_fe_msg"         json:"messageId,omitempty"`
 	ToolCallID     string `gorm:"type:text;default:''"                          json:"toolCallId,omitempty"`
@@ -243,12 +322,51 @@ const (
 	TriggeredByHTTP = "http" // invoked directly via HTTP API (e.g., user UI) / 用户直接调 HTTP
 )
 
-// Retention limits. Enforced at write time by app/forge.Service.
+// EnvStatus values for ForgeVersion.EnvStatus. State machine:
 //
-// 保留上限。由 app/forge.Service 在写入时强制执行。
+//	pending → syncing → ready ⤴
+//	                  ↘ failed → (edit deps & retry) → syncing
+//	ready → evicted (when N=3 buffer drops it) → syncing (on next Run / revert)
+//
+// ForgeVersion.EnvStatus 的取值。状态机：
+//
+//	pending → syncing → ready ⤴
+//	                  ↘ failed → (改 deps 重试) → syncing
+//	ready → evicted（N=3 缓冲驱逐）→ syncing（下次 Run / revert 时）
+const (
+	EnvStatusPending = "pending" // freshly created or deps changed; waiting for sync to start / 新建或改了 deps，等 sync 启动
+	EnvStatusSyncing = "syncing" // uv sync in progress; EnvSyncStage / EnvSyncDetail track the live stage / uv sync 进行中；EnvSyncStage / EnvSyncDetail 跟踪实时阶段
+	EnvStatusReady   = "ready"   // venv materialized and runnable / venv 已物化可跑
+	EnvStatusFailed  = "failed"  // sync failed; EnvError holds uv stderr for the LLM to fix via edit_forge / sync 失败；EnvError 含 uv stderr，LLM 通过 edit_forge 修
+	EnvStatusEvicted = "evicted" // venv directory removed by N=3 buffer; will rebuild on next Run / revert / venv 目录被 N=3 缓冲删；下次 Run / revert 时重建
+)
+
+// Sandbox-level defaults and limits. Enforced at write time by app/forge.Service.
+//
+// 沙箱级默认与上限。由 app/forge.Service 在写入时强制执行。
 const (
 	MaxAcceptedVersions   = 50  // per forge / 每 forge
 	MaxExecutionsPerForge = 300 // per forge (combined run+test history) / 每 forge（run+test 合并历史）
+
+	// MaxEnvIDsPerForge: how many distinct EnvID venv directories to keep
+	// warm per forge. When a new EnvID would push the count past this
+	// cap, app/forge.Service.trimEnvBuffer evicts the least-recently-used
+	// EnvID's venv directory and marks every ForgeVersion that referenced
+	// it as EnvStatusEvicted.
+	//
+	// MaxEnvIDsPerForge：每个 forge 保留多少个 EnvID venv 目录。新 EnvID
+	// 创建超过上限时，app/forge.Service.trimEnvBuffer 驱逐 LRU EnvID 的
+	// venv 目录，并把所有引用它的 ForgeVersion 标记为 EnvStatusEvicted。
+	MaxEnvIDsPerForge = 3
+
+	// DefaultPythonVersion is used when ForgeVersion.PythonVersion is
+	// empty. Stays in sync with whatever python-build-standalone we
+	// bundle (see desktop-packaging-notes §六).
+	//
+	// DefaultPythonVersion 在 ForgeVersion.PythonVersion 为空时使用，
+	// 跟我们捆绑的 python-build-standalone 版本一致（见
+	// desktop-packaging-notes §六）。
+	DefaultPythonVersion = ">=3.12"
 )
 
 // ── Sentinel errors ───────────────────────────────────────────────────────────
@@ -293,6 +411,43 @@ var (
 	// ErrImportInvalid: import payload is malformed or missing required fields.
 	// ErrImportInvalid：导入数据格式错误或缺少必填字段。
 	ErrImportInvalid = errors.New("forge: import data invalid")
+
+	// ErrEnvNotReady: ForgeVersion's env is not in EnvStatusReady (e.g.
+	// still syncing, in pending state, or in evicted state) and Run was
+	// attempted. The LLM should wait for the entity-state event stream to
+	// flip to ready, or trigger :resync to rebuild an evicted env.
+	//
+	// ErrEnvNotReady：ForgeVersion 的 env 不处于 EnvStatusReady（仍在
+	// syncing / pending / evicted）但调了 Run。LLM 应等 entity-state 事件
+	// 流转 ready，或触发 :resync 重建被驱逐的 env。
+	ErrEnvNotReady = errors.New("forge: env not ready")
+
+	// ErrEnvFailed: ForgeVersion's env is in EnvStatusFailed with EnvError
+	// populated. Caller (LLM) should call edit_forge to fix dependencies
+	// based on the captured uv stderr.
+	//
+	// ErrEnvFailed：ForgeVersion 的 env 处于 EnvStatusFailed，EnvError 已填。
+	// 调用方（LLM）应根据捕获的 uv stderr 调 edit_forge 修依赖。
+	ErrEnvFailed = errors.New("forge: env failed")
+
+	// ErrSandboxUnavailable: sandbox.Bootstrap hasn't succeeded — entire
+	// sandbox subsystem unusable. Backend logs the bootstrap failure at
+	// startup; user-facing surface should explain Python / uv resources
+	// are missing.
+	//
+	// ErrSandboxUnavailable：sandbox.Bootstrap 未成功——整个沙箱子系统
+	// 不可用。Backend 启动时记录 bootstrap 失败；用户可见提示应说明
+	// Python / uv 资源缺失。
+	ErrSandboxUnavailable = errors.New("forge: sandbox unavailable")
+
+	// ErrDependencyResolution: uv could not resolve the requested
+	// dependencies (typo, version conflict, package not on PyPI, network
+	// error). EnvError contains uv's full stderr trace for the LLM to
+	// reason about.
+	//
+	// ErrDependencyResolution：uv 无法解析请求的依赖（拼写错、版本冲突、
+	// 包不在 PyPI、网络错误）。EnvError 含 uv 完整 stderr 供 LLM 推理。
+	ErrDependencyResolution = errors.New("forge: dependency resolution failed")
 )
 
 // ── Repository ────────────────────────────────────────────────────────────────
@@ -396,6 +551,60 @@ type Repository interface {
 	//
 	// DeleteOldestAcceptedVersion 硬删除指定 forge 版本号最小的已接受版本。
 	DeleteOldestAcceptedVersion(ctx context.Context, forgeID string) error
+
+	// GetVersionByID fetches a ForgeVersion by primary key (works for
+	// pending / accepted / rejected; doesn't require a version number).
+	// Used by sandbox sync flow which only carries the version's UUID.
+	// Returns ErrVersionNotFound if no record matches.
+	//
+	// GetVersionByID 按主键查 ForgeVersion（pending / accepted / rejected
+	// 都可；不需要版本号）。供沙箱 sync 流使用——只持有版本 UUID。
+	// 未命中返 ErrVersionNotFound。
+	GetVersionByID(ctx context.Context, versionID string) (*ForgeVersion, error)
+
+	// UpdateVersionEnvStatus updates EnvStatus + EnvError + EnvSyncedAt
+	// atomically. errMsg should be "" except when status == EnvStatusFailed;
+	// syncedAt is set automatically when status transitions to EnvStatusReady.
+	//
+	// UpdateVersionEnvStatus 原子更新 EnvStatus + EnvError + EnvSyncedAt。
+	// errMsg 仅在 status == EnvStatusFailed 时填；状态转 EnvStatusReady
+	// 时自动设 syncedAt。
+	UpdateVersionEnvStatus(ctx context.Context, versionID, status, errMsg string) error
+
+	// UpdateVersionEnvProgress writes EnvSyncStage + EnvSyncDetail during
+	// active sync. Called by the OnProgress callback in app/forge.Service.
+	//
+	// UpdateVersionEnvProgress 在 sync 期间写 EnvSyncStage + EnvSyncDetail。
+	// 由 app/forge.Service 的 OnProgress callback 调。
+	UpdateVersionEnvProgress(ctx context.Context, versionID, stage, detail string) error
+
+	// UpdateVersionEnvID changes a pending ForgeVersion's EnvID. Used when
+	// edit_forge mid-flight swaps deps before the user accepts (forces a
+	// new venv build under a new EnvID). Refuses if the row's status is
+	// "accepted" — accepted history is immutable.
+	//
+	// UpdateVersionEnvID 改 pending ForgeVersion 的 EnvID。edit_forge 在
+	// 用户 accept 前换 deps 时用（强制在新 EnvID 下重建 venv）。
+	// status="accepted" 的行拒绝改——已接受历史不可变。
+	UpdateVersionEnvID(ctx context.Context, versionID, envID string) error
+
+	// UpdateForgeActiveVersion sets forge.ActiveVersionID. Called by
+	// AcceptPending after promoting a pending version to accepted, and by
+	// RevertToVersion after switching back to an older version.
+	//
+	// UpdateForgeActiveVersion 设 forge.ActiveVersionID。AcceptPending 把
+	// pending 提升 accepted 后调；RevertToVersion 切回旧版本后调。
+	UpdateForgeActiveVersion(ctx context.Context, forgeID, versionID string) error
+
+	// ListEnvIDsForForge returns the distinct non-empty EnvIDs in use
+	// across all of this forge's ForgeVersion rows, ordered by the most-
+	// recent referencing row first. Used by trimEnvBuffer to identify
+	// which EnvID directory to evict when count exceeds MaxEnvIDsPerForge.
+	//
+	// ListEnvIDsForForge 返回某 forge 全部 ForgeVersion 行用到的不重复
+	// 非空 EnvID，按最近引用排序。供 trimEnvBuffer 在数量超过
+	// MaxEnvIDsPerForge 时找出要驱逐的 EnvID 目录。
+	ListEnvIDsForForge(ctx context.Context, forgeID string) ([]string, error)
 
 	// ── Test cases ────────────────────────────────────────────────────────
 

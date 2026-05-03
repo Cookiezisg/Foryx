@@ -16,6 +16,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"gorm.io/gorm"
 
@@ -174,6 +175,29 @@ func (s *Store) DeleteForge(ctx context.Context, id string) error {
 	return nil
 }
 
+// UpdateForgeActiveVersion sets forge.ActiveVersionID for the current
+// user's forge. Used by AcceptPending after promoting a pending version
+// to accepted, and by RevertToVersion after switching back to an older
+// version. No-op (no error) if the forge id doesn't match — service
+// layer is responsible for validating the forge exists first.
+//
+// UpdateForgeActiveVersion 设当前用户某 forge 的 ActiveVersionID。
+// AcceptPending 把 pending 提升 accepted 后调；RevertToVersion 切回旧版本
+// 后调。forge id 不匹配时静默 no-op——service 层负责前置校验 forge 存在。
+func (s *Store) UpdateForgeActiveVersion(ctx context.Context, forgeID, versionID string) error {
+	userID, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return err
+	}
+	if err = s.db.WithContext(ctx).
+		Model(&forgedomain.Forge{}).
+		Where("id = ? AND user_id = ?", forgeID, userID).
+		Update("active_version_id", versionID).Error; err != nil {
+		return fmt.Errorf("forgestore.UpdateForgeActiveVersion: %w", err)
+	}
+	return nil
+}
+
 // ── Versions (including pending) ──────────────────────────────────────────────
 
 // SaveVersion inserts a ForgeVersion record.
@@ -299,6 +323,130 @@ func (s *Store) DeleteOldestAcceptedVersion(ctx context.Context, forgeID string)
 		return fmt.Errorf("forgestore.DeleteOldestAcceptedVersion: delete: %w", err)
 	}
 	return nil
+}
+
+// GetVersionByID fetches a ForgeVersion by primary key for the current
+// user — works for pending / accepted / rejected without needing the
+// version number. Used by sandbox sync flow which only carries the
+// version's UUID.
+//
+// GetVersionByID 按主键查 ForgeVersion（按当前用户过滤）——pending /
+// accepted / rejected 都可，不需版本号。供沙箱 sync 流使用。
+func (s *Store) GetVersionByID(ctx context.Context, versionID string) (*forgedomain.ForgeVersion, error) {
+	userID, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var v forgedomain.ForgeVersion
+	err = s.db.WithContext(ctx).
+		Where("id = ? AND user_id = ?", versionID, userID).
+		First(&v).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, forgedomain.ErrVersionNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("forgestore.GetVersionByID: %w", err)
+	}
+	return &v, nil
+}
+
+// UpdateVersionEnvStatus updates EnvStatus + EnvError + EnvSyncedAt
+// atomically. errMsg should be "" except when status == EnvStatusFailed;
+// EnvSyncedAt is set to time.Now().UTC() when status transitions to
+// EnvStatusReady, and cleared otherwise (so a re-sync from "ready" → "syncing"
+// resets the prior success timestamp).
+//
+// UpdateVersionEnvStatus 原子更新 EnvStatus + EnvError + EnvSyncedAt。
+// errMsg 仅在 status == EnvStatusFailed 时填；状态转 EnvStatusReady 时
+// EnvSyncedAt 设为 time.Now().UTC()，其他状态清空（"ready" → "syncing"
+// 重 sync 时重置前次成功时间戳）。
+func (s *Store) UpdateVersionEnvStatus(ctx context.Context, versionID, status, errMsg string) error {
+	updates := map[string]any{
+		"env_status": status,
+		"env_error":  errMsg,
+	}
+	if status == forgedomain.EnvStatusReady {
+		updates["env_synced_at"] = time.Now().UTC()
+	} else {
+		updates["env_synced_at"] = nil
+	}
+	if err := s.db.WithContext(ctx).
+		Model(&forgedomain.ForgeVersion{}).
+		Where("id = ?", versionID).
+		Updates(updates).Error; err != nil {
+		return fmt.Errorf("forgestore.UpdateVersionEnvStatus: %w", err)
+	}
+	return nil
+}
+
+// UpdateVersionEnvProgress writes EnvSyncStage + EnvSyncDetail during
+// active sync. Called from app/forge.Service's OnProgress callback fed
+// to sandbox.Sync.
+//
+// UpdateVersionEnvProgress 在 sync 期间写 EnvSyncStage + EnvSyncDetail。
+// 由 app/forge.Service 喂给 sandbox.Sync 的 OnProgress callback 调。
+func (s *Store) UpdateVersionEnvProgress(ctx context.Context, versionID, stage, detail string) error {
+	if err := s.db.WithContext(ctx).
+		Model(&forgedomain.ForgeVersion{}).
+		Where("id = ?", versionID).
+		Updates(map[string]any{
+			"env_sync_stage":  stage,
+			"env_sync_detail": detail,
+		}).Error; err != nil {
+		return fmt.Errorf("forgestore.UpdateVersionEnvProgress: %w", err)
+	}
+	return nil
+}
+
+// UpdateVersionEnvID changes a non-accepted ForgeVersion's EnvID. The
+// query refuses to mutate accepted rows — accepted history is immutable.
+// Service layer should call GetVersionByID first to check status before
+// invoking this; the WHERE clause is the safety net.
+//
+// UpdateVersionEnvID 改非 accepted ForgeVersion 的 EnvID。查询拒绝改
+// accepted 行——已接受历史不可变。service 层应先 GetVersionByID 查 status
+// 再调；WHERE 子句是兜底保险。
+func (s *Store) UpdateVersionEnvID(ctx context.Context, versionID, envID string) error {
+	if err := s.db.WithContext(ctx).
+		Model(&forgedomain.ForgeVersion{}).
+		Where("id = ? AND status != ?", versionID, forgedomain.VersionStatusAccepted).
+		Update("env_id", envID).Error; err != nil {
+		return fmt.Errorf("forgestore.UpdateVersionEnvID: %w", err)
+	}
+	return nil
+}
+
+// ListEnvIDsForForge returns the distinct non-empty EnvIDs in use across
+// the forge's ForgeVersion rows, ordered most-recently-referenced first.
+// The recency key is MAX(updated_at) per EnvID, so an old EnvID reused
+// by a fresh pending counts as recent. trimEnvBuffer drops the tail
+// past MaxEnvIDsPerForge.
+//
+// ListEnvIDsForForge 返回某 forge 全部 ForgeVersion 行用到的不重复非空
+// EnvID，按最近引用排序。recency key 是 per-EnvID 的 MAX(updated_at)——
+// 老 EnvID 被新 pending 复用也算最近。trimEnvBuffer 砍掉
+// MaxEnvIDsPerForge 之外的尾部。
+func (s *Store) ListEnvIDsForForge(ctx context.Context, forgeID string) ([]string, error) {
+	userID, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	// Pluck only the env_id column — the MAX(updated_at) is used purely for
+	// ORDER BY and never returned to Go. Avoids modernc.org/sqlite's habit
+	// of giving aggregate columns string types that can't scan into time.Time.
+	//
+	// 只 Pluck env_id 列——MAX(updated_at) 仅用于 ORDER BY，不返 Go。
+	// 避开 modernc.org/sqlite 把聚合列给成 string 类型而无法 scan 进 time.Time 的坑。
+	var out []string
+	if err = s.db.WithContext(ctx).
+		Model(&forgedomain.ForgeVersion{}).
+		Where("forge_id = ? AND user_id = ? AND env_id != ''", forgeID, userID).
+		Group("env_id").
+		Order("MAX(updated_at) DESC").
+		Pluck("env_id", &out).Error; err != nil {
+		return nil, fmt.Errorf("forgestore.ListEnvIDsForForge: %w", err)
+	}
+	return out, nil
 }
 
 // ── Test cases ────────────────────────────────────────────────────────────────

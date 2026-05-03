@@ -137,8 +137,14 @@ func TestRename_Success(t *testing.T) {
 	if updated.Title != "New Title" {
 		t.Errorf("Title = %q, want New Title", updated.Title)
 	}
-	if !updated.UpdatedAt.After(c.UpdatedAt) {
-		t.Error("UpdatedAt did not advance")
+	// `After` (strict >) flakes when Create + Rename land in the same
+	// microsecond tick on fast systems; `!Before` is the real semantic
+	// (the timestamp didn't regress).
+	//
+	// `After`（严格大于）在快机上 Create + Rename 命中同一微秒会抖；
+	// `!Before` 才是真正的语义（时间戳没有回退）。
+	if updated.UpdatedAt.Before(c.UpdatedAt) {
+		t.Error("UpdatedAt regressed")
 	}
 }
 

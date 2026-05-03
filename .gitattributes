@@ -1,0 +1,56 @@
+# .gitattributes — tells git how to handle line endings + binary files.
+# Lives at project root, applies to every git clone / checkout / commit
+# regardless of who's on what OS. Without this, Windows users' git can
+# silently rewrite \n → \r\n, breaking shell scripts and confusing diffs.
+#
+# Companion to .editorconfig — this controls GIT behavior; that controls
+# EDITOR behavior. Both needed for full coverage.
+#
+# .gitattributes — 告诉 git 怎么处理行尾换行符 + 二进制文件标记。
+# 项目根的这个文件对每次 clone / checkout / commit 生效，无论谁在什么 OS。
+# 不装的话 Windows 用户的 git 会悄悄把 \n 改成 \r\n，搞坏 shell 脚本 / 让
+# diff 一片红。
+#
+# 与 .editorconfig 互补——本文件管 git 行为，那个管编辑器行为。
+
+# ── 默认：所有文件视作文本 + 行尾统一 LF ──────────────────────────────────
+* text=auto eol=lf
+
+# ── 强制 LF（这些在 Windows 上必须 LF，否则跑不起来）─────────────────────
+*.go        text eol=lf
+*.sh        text eol=lf
+*.py        text eol=lf
+Makefile    text eol=lf
+*.toml      text eol=lf
+*.yaml      text eol=lf
+*.yml       text eol=lf
+*.md        text eol=lf
+
+# ── Windows 专属脚本：必须 CRLF ───────────────────────────────────────────
+*.bat       text eol=crlf
+*.cmd       text eol=crlf
+*.ps1       text eol=crlf
+
+# ── 二进制文件：git 不要尝试 diff / 转换 ──────────────────────────────────
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.ico       binary
+*.icns      binary
+*.pdf       binary
+*.zip       binary
+*.tar.gz    binary
+*.tgz       binary
+*.sqlite    binary
+*.sqlite3   binary
+*.db        binary
+*.dll       binary
+*.dylib     binary
+*.so        binary
+*.exe       binary
+
+# ── GitHub linguist 提示（可选，影响 GitHub 仓库主页的语言条颜色）─────────
+# documents/ 是文档不是代码，从语言统计排除
+documents/** linguist-documentation
+testend/** linguist-vendored=false

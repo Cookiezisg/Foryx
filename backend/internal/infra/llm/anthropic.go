@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"io"
 	"iter"
+	"log/slog"
 	"net/http"
 	"strings"
 )
@@ -295,8 +296,22 @@ func buildAnthropicAssistantMsg(m LLMMessage) anthropicMessage {
 		})
 	}
 	for _, tc := range m.ToolCalls {
-		var input json.RawMessage
-		_ = json.Unmarshal([]byte(tc.Arguments), &input)
+		// History tool-call arguments came from an earlier LLM turn that we
+		// persisted; bad JSON here means upstream stored garbage. Fall back
+		// to "{}" so Anthropic's tool_use schema is satisfied (input is
+		// required JSON), but log loudly so the corruption is traceable.
+		//
+		// 历史 tool-call 的 arguments 来自更早 LLM 轮次落库的内容；这里 JSON
+		// 不合法说明上游存了脏数据。回退 "{}" 满足 Anthropic tool_use schema
+		// 必填的要求，同时高声记录以便溯源。
+		input := json.RawMessage("{}")
+		if tc.Arguments != "" {
+			if err := json.Unmarshal([]byte(tc.Arguments), &input); err != nil {
+				slog.Warn("llm/anthropic: history tool-call arguments are malformed JSON, falling back to {}",
+					"tool_call_id", tc.ID, "tool_name", tc.Name, "raw", tc.Arguments, "err", err)
+				input = json.RawMessage("{}")
+			}
+		}
 		blocks = append(blocks, anthropicContent{
 			Type:  "tool_use",
 			ID:    tc.ID,

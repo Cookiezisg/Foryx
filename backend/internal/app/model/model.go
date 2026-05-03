@@ -13,8 +13,6 @@ package model
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"strings"
@@ -22,6 +20,7 @@ import (
 	"go.uber.org/zap"
 
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
+	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
@@ -117,13 +116,4 @@ func (s *Service) PickForChat(ctx context.Context) (provider, modelID string, er
 	return m.Provider, m.ModelID, nil
 }
 
-// newID mints "mc_" + 16 hex chars (64 bits of entropy).
-//
-// newID 生成 "mc_" + 16 hex（64 位熵）。
-func newID() string {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		panic(fmt.Sprintf("model: crypto/rand failed: %v", err))
-	}
-	return "mc_" + hex.EncodeToString(b[:])
-}
+func newID() string { return idgenpkg.New("mc") }

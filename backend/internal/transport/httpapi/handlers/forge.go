@@ -1,13 +1,12 @@
-// tool.go — HTTP handler for /api/v1/forges/*. Thin: decode → service → envelope.
+// forge.go — HTTP handler for /api/v1/forges/*. Thin: decode → service → envelope.
 //
-// tool.go — /api/v1/forges/* 的 HTTP handler。薄层：解码 → service → envelope。
+// forge.go — /api/v1/forges/* 的 HTTP handler。薄层：解码 → service → envelope。
 package handlers
 
 import (
 	"encoding/json"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"go.uber.org/zap"
 
@@ -166,8 +165,7 @@ func (h *ForgeHandler) Import(w http.ResponseWriter, r *http.Request) {
 //
 // postOnForge 按 action 后缀分派 POST /api/v1/forges/{idAction}。
 func (h *ForgeHandler) postOnForge(w http.ResponseWriter, r *http.Request) {
-	idAction := r.PathValue("idAction")
-	id, action, ok := strings.Cut(idAction, ":")
+	id, action, ok := idAndAction(r, "idAction")
 	if !ok {
 		responsehttpapi.Error(w, http.StatusNotFound, "NOT_FOUND", "unknown action", nil)
 		return
@@ -365,8 +363,7 @@ func (h *ForgeHandler) DeleteTestCase(w http.ResponseWriter, r *http.Request) {
 //
 // postOnTestCase 分派 POST /api/v1/forges/{id}/test-cases/{tcIdAction}。
 func (h *ForgeHandler) postOnTestCase(w http.ResponseWriter, r *http.Request) {
-	tcIdAction := r.PathValue("tcIdAction")
-	tcID, action, ok := strings.Cut(tcIdAction, ":")
+	tcID, action, ok := idAndAction(r, "tcIdAction")
 	if !ok || action != "run" {
 		responsehttpapi.Error(w, http.StatusNotFound, "NOT_FOUND", "unknown action", nil)
 		return

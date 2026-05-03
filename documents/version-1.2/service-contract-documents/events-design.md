@@ -51,7 +51,7 @@
 | 事件名 | 载荷 = | 过滤 key | 触发点 | 状态 |
 |---|---|---|---|---|
 | `chat.message` | 完整 `Message`（含 `blocks`/`status`/`stopReason`/`errorCode`/`errorMessage`/`inputTokens`/`outputTokens`/`updatedAt`）| `conversationId` | message slot 创建、每个 LLM token、tool_call 出现、tool_call args 完整、每个 tool result 完成、最终写、pre-LLM 失败的 stub 错误消息 | ✅ |
-| `forge` | 完整 `Forge`（含 `pending` 子对象/`code`/`parameters`/`returnSchema`/`tags`/`versionCount`）| `conversationId` | create_forge / edit_forge 期间逐 token（draft 在内存增长）、最终 save 后定型；HTTP CRUD 暂不广播（MVP 单用户单窗口）| ✅ |
+| `forge` | 完整 `Forge`（含 `pending` 子对象/`code`/`parameters`/`returnSchema`/`tags`/`versionCount`/`activeVersionId`/`envStatus`/`envError`/`envSyncedAt`/`envSyncStage`/`envSyncDetail`）| `conversationId` | create_forge / edit_forge 期间逐 token（draft 在内存增长）、最终 save 后定型；**沙箱迭代 1 新增**：EnvStatus 状态转换（pending→syncing→ready/failed/evicted）、每行 uv stderr 解析（envSyncStage / envSyncDetail 变化）；HTTP CRUD 暂不广播（MVP 单用户单窗口）| ✅ |
 | `conversation` | 完整 `Conversation`（含 `title`/`autoTitled`/`systemPrompt` 等）| `conversationId` | auto-title 回写、未来归档/系统 prompt 更新等 | ✅ |
 
 **配套实现细节**：

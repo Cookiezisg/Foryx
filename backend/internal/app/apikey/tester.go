@@ -171,7 +171,7 @@ func (t *HTTPTester) testGoogleListModels(ctx context.Context, baseURL, key stri
 	if status != http.StatusOK {
 		return &TestResult{OK: false, Message: formatHTTPError(status, body), LatencyMs: latency}
 	}
-	models := parseGoogleModels(body)
+	models := parseModelsByName(body)
 	return &TestResult{
 		OK:          true,
 		Message:     fmt.Sprintf("connected, %d models available", len(models)),
@@ -195,7 +195,7 @@ func (t *HTTPTester) testOllamaTags(ctx context.Context, baseURL string) *TestRe
 	if status != http.StatusOK {
 		return &TestResult{OK: false, Message: formatHTTPError(status, body), LatencyMs: latency}
 	}
-	models := parseOllamaModels(body)
+	models := parseModelsByName(body)
 	return &TestResult{
 		OK:          true,
 		Message:     fmt.Sprintf("connected, %d local models installed", len(models)),
@@ -265,33 +265,14 @@ func parseOpenAIModels(body []byte) []string {
 	return out
 }
 
-// parseGoogleModels extracts names from {"models":[{"name":"..."}]}.
+// parseModelsByName extracts names from {"models":[{"name":"..."}]}.
+// Both Google's /v1beta/models and Ollama's /api/tags use this shape.
+// If the two ever diverge, fork this back into per-provider helpers.
 //
-// parseGoogleModels 从 {"models":[{"name":"..."}]} 提取名字。
-func parseGoogleModels(body []byte) []string {
-	var resp struct {
-		Models []struct {
-			Name string `json:"name"`
-		} `json:"models"`
-	}
-	if err := json.Unmarshal(body, &resp); err != nil {
-		return nil
-	}
-	out := make([]string, 0, len(resp.Models))
-	for _, m := range resp.Models {
-		if m.Name != "" {
-			out = append(out, m.Name)
-		}
-	}
-	return out
-}
-
-// parseOllamaModels extracts names from {"models":[{"name":"..."}]}.
-// Shape matches Google's; kept separate so future drift is a one-file change.
-//
-// parseOllamaModels 从 {"models":[{"name":"..."}]} 提取名字。
-// 与 Google 同形；保持独立，将来 schema 漂移只改一处。
-func parseOllamaModels(body []byte) []string {
+// parseModelsByName 从 {"models":[{"name":"..."}]} 提取名字。
+// Google 的 /v1beta/models 和 Ollama 的 /api/tags 都用这个形状。
+// 哪天两边形状漂移再拆回各自 helper。
+func parseModelsByName(body []byte) []string {
 	var resp struct {
 		Models []struct {
 			Name string `json:"name"`

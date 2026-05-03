@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/main/.schema/devbox.schema.json",
+  "packages": [
+    "go@1.25",
+    "python@3.12",
+    "uv@0.11",
+    "gnumake@latest"
+  ],
+  "env": {
+    "FORGIFY_DEV_RESOURCES": "$HOME/.forgify-dev-resources",
+    "PATH": "$HOME/go/bin:$PATH"
+  },
+  "shell": {
+    "init_hook": [
+      "printf '✓ forgify devbox ready — go=%s python=%s uv=%s\\n' \"$(go version | awk '{print $3}')\" \"$(python3 --version | awk '{print $2}')\" \"$(uv --version | awk '{print $2}')\""
+    ],
+    "scripts": {
+      "bootstrap": [
+        "go install github.com/air-verse/air@latest",
+        "go install honnef.co/go/tools/cmd/staticcheck@latest",
+        "go install golang.org/x/tools/cmd/deadcode@latest",
+        "make download-resources",
+        "echo ''",
+        "echo '→ bootstrap done. now run: make test-console'"
+      ]
+    }
+  }
+}

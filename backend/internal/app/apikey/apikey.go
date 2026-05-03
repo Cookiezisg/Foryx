@@ -13,8 +13,6 @@ package apikey
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -23,6 +21,7 @@ import (
 
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	cryptodomain "github.com/sunweilin/forgify/backend/internal/domain/crypto"
+	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
@@ -178,7 +177,16 @@ func (s *Service) Test(ctx context.Context, id string) (*TestResult, error) {
 	}
 	result, err := s.tester.Test(ctx, k.Provider, string(plain), k.BaseURL, k.APIFormat)
 	if err != nil {
-		_ = s.repo.UpdateTestResult(ctx, id, apikeydomain.TestStatusError, err.Error(), nil)
+		// Best-effort write of failed status. If this DB update itself fails
+		// the row stays at its previous test_status — log loudly so a stale
+		// "ok" badge in the UI doesn't go unexplained.
+		//
+		// 尽力把失败状态写库。本次写入再次失败时 test_status 维持原值——
+		// 必须高声记录，避免 UI 还显示 "ok" 但实际已坏却无线索可追。
+		if uerr := s.repo.UpdateTestResult(ctx, id, apikeydomain.TestStatusError, err.Error(), nil); uerr != nil {
+			s.log.Warn("apikey.Service.Test: persist test failure status itself failed; row stays at previous status",
+				zap.String("api_key_id", id), zap.NamedError("test_err", err), zap.Error(uerr))
+		}
 		return nil, fmt.Errorf("apikey.Service.Test: tester: %w", err)
 	}
 	status := apikeydomain.TestStatusError
@@ -263,13 +271,4 @@ func MaskKey(key string) string {
 	}
 }
 
-// newID mints "aki_" + 16 hex chars (64 bits of entropy).
-//
-// newID 生成 "aki_" + 16 hex（64 位熵）。
-func newID() string {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		panic(fmt.Sprintf("apikey: crypto/rand failed: %v", err))
-	}
-	return "aki_" + hex.EncodeToString(b[:])
-}
+func newID() string { return idgenpkg.New("aki") }

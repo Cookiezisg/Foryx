@@ -1,0 +1,52 @@
+# .air.toml — live-reload config for `make dev`. Watches backend/**/*.go and
+# restarts the dev server on save. testend/ HTML/JS is served by the running
+# server, so frontend tweaks just need a browser refresh; backend code changes
+# trigger automatic rebuild + restart.
+#
+# Run via `make dev` (NOT `air` directly) so .env vars (DEEPSEEK_API_KEY) are
+# loaded into the spawned server process.
+#
+# .air.toml — `make dev` 的 live-reload 配置。监听 backend/**/*.go，保存就
+# 重启 dev server。testend/ 的 HTML/JS 由 running server 直接 serve，前端改
+# 浏览器刷新即可；backend 代码改触发自动重 build + 重启。
+#
+# 用 `make dev` 运行（不要直接 `air`）——这样 .env 变量（DEEPSEEK_API_KEY）
+# 才能注入到 spawn 的 server 进程。
+
+# Run from project root (Makefile cd's into backend/ before invoking air with
+# this config; root_dir tells air where the .go files live relative to it).
+root = "."
+tmp_dir = "../tmp/air"
+
+[build]
+  # Build the dev server with same flags as make test-console.
+  # cmd 的相对路径基于 air 进程的 working dir（即 backend/）。
+  cmd = "go build -o ../tmp/air/server ./cmd/server"
+  bin = "../tmp/air/server"
+  full_bin = "../tmp/air/server --dev --port 8742 --data-dir /tmp/forgify-dev --collections-dir ../testend/collections --integration-dir ../testend"
+
+  # Watch only Go source files; ignore test/build artifacts.
+  # 只监听 Go 源文件；忽略测试 / build 产物。
+  include_ext = ["go"]
+  exclude_dir = ["tmp", "vendor", "node_modules"]
+  exclude_regex = ["_test\\.go$"]
+
+  # Wait 500ms after a save before rebuilding — multi-file editors save in
+  # bursts, this debounces.
+  # 保存后等 500ms 再 rebuild——多文件编辑器一次保存连环触发，去抖。
+  delay = 500
+
+  # Stop the previous server before starting the new one.
+  # 起新进程前先停旧的。
+  kill_delay = "500ms"
+  send_interrupt = true
+
+[log]
+  time = true
+
+[color]
+  build   = "yellow"
+  runner  = "green"
+  app     = "white"
+  watcher = "cyan"
+  main    = "magenta"

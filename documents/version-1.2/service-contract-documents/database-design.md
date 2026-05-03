@@ -77,14 +77,21 @@ chat domain 所有；主键 `att_<16hex>`；字段：`user_id`（索引）/ `fil
 #### `forges` ✅
 详见 [`../service-design-documents/forge.md`](../service-design-documents/forge.md) §3.1。
 主键 `f_<16hex>`；软删（`deleted_at`）；`user_id` 索引；partial UNIQUE `UNIQUE(user_id, name) WHERE deleted_at IS NULL`（在 `schema_extras.go`）。
-字段：`name` / `description` / `code`（当前活跃代码）/ `parameters`（JSON 数组）/ `return_schema`（JSON 对象）/ `tags`（JSON 数组）/ `version_count`（最大已接受版本号，0=未保存）/ `created_at` / `updated_at` / `deleted_at`。
-**计算字段（非列）**：`Pending *ForgeVersion`（`gorm:"-"`），由 service 层 `attachPending` 在 GET / List 后填充——存在 pending 时是完整 ForgeVersion 对象，无 pending 时 nil。entity-state SSE `forge` 事件载荷依赖此字段。
+字段：`name` / `description` / `code`（当前活跃代码）/ `parameters`（JSON 数组）/ `return_schema`（JSON 对象）/ `tags`（JSON 数组）/ `version_count`（最大已接受版本号，0=未保存）/ **`active_version_id`**（沙箱迭代 1：指向当前活跃 ForgeVersion.ID；草稿期空字符串）/ `created_at` / `updated_at` / `deleted_at`。
+**计算字段（非列）**：`Pending *ForgeVersion`（`gorm:"-"`），由 service 层 `attachPending` 在 GET / List 后填充。**沙箱迭代 1 新增**：`EnvStatus` / `EnvError` / `EnvSyncedAt` / `EnvSyncStage` / `EnvSyncDetail`（`gorm:"-"`），由 `attachActiveEnv` 从 ActiveVersion 拷过来——草稿期 ActiveVersionID="" 时全空。entity-state SSE `forge` 事件载荷依赖这些计算字段。
 forge 搜索通过 LLM 排序实现（SearchForge 把全量 forge 发给 LLM），无独立向量索引。
 
 #### `forge_versions` ✅
 详见 [`../service-design-documents/forge.md`](../service-design-documents/forge.md) §3.2。
 主键 `fv_<16hex>`；**兼作 pending 变更存储**：`status` 字段区分 `pending`/`accepted`/`rejected`，pending/rejected 时 `version` 为 NULL。
 完整快照字段：`name` / `description` / `code` / `parameters` / `return_schema` / `tags` / **`change_reason`**（Phase 5 改名 from `message`：LLM 指令 | "manual edit" | "reverted to v{N}" | "initial"）/ `created_at` / `updated_at`。
+**沙箱迭代 1 新增字段**：
+- **`dependencies`** TEXT default `'[]'`（PEP 508 specifier JSON 数组，由 LLM 在 create_forge / edit_forge 时申报）
+- **`python_version`** TEXT default `''`（PEP 440 spec；空回退到 `forgedomain.DefaultPythonVersion=">=3.12"`）
+- **`env_id`** TEXT 索引（沙箱按此键管 venv 目录；同 deps + python 的多版本共享同 EnvID 进而共享 venv）
+- **环境运行时状态**：`env_status` TEXT default `'pending'`（5 值：`pending`/`syncing`/`ready`/`failed`/`evicted`，白名单 service 层校验）/ `env_error` TEXT（uv stderr 在失败时）/ `env_synced_at` DATETIME（成功时戳，状态转 ready 时设，其他状态置 nil）/ `env_sync_stage` TEXT（`resolving`/`preparing`/`installing`，sync 期间）/ `env_sync_detail` TEXT（uv stderr 当前 stage 行）
+
+每版本独立的 env 状态——pending 自带自己的 sync 历史，跟 active 不串。EnvID 相同的多版本共用 venv，但 env_status 各自独立。
 accepted 版本上限 50 条/forge，超限硬删最旧。
 
 #### `forge_test_cases` ✅

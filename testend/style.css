@@ -522,3 +522,56 @@ select.cfg-input { cursor: pointer; }
   white-space: nowrap;
   cursor: help;
 }
+
+/* forge env badge — sandbox iteration EnvStatus surface in the tool action bar.
+   Color-coded by status; lights up only when the forge has an active version
+   (computed field attachActiveEnv-filled, empty for drafts). */
+.forge-env-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: 3px;
+  vertical-align: middle;
+  white-space: nowrap;
+  border: 1px solid transparent;
+  text-transform: lowercase;
+  font-family: var(--mono, monospace);
+}
+.forge-env-badge[data-env-status="ready"]    { background: #e6f4ea; color: #137333; border-color: #b6e0bf; }
+.forge-env-badge[data-env-status="syncing"]  { background: #fff7e0; color: #b06d00; border-color: #f3d77a; }
+.forge-env-badge[data-env-status="pending"]  { background: #eef2f7; color: var(--text-mute); border-color: var(--border); }
+.forge-env-badge[data-env-status="failed"]   { background: #fde7e7; color: var(--red); border-color: #f5b6b6; }
+.forge-env-badge[data-env-status="evicted"]  { background: #f5e9fb; color: #6e2d91; border-color: #d8b8ec; }
+
+.forge-env-progress {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-family: var(--mono, monospace);
+  color: #b06d00;
+  background: #fff7e0;
+  border-bottom: 1px solid #f3d77a;
+}
+.forge-env-error {
+  flex-shrink: 0;
+  padding: 6px 10px;
+  background: #fdf3f3;
+  border-bottom: 1px solid #f5b6b6;
+}
+.forge-env-error-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--red);
+  margin-bottom: 4px;
+}
+.forge-env-error-body {
+  font-size: 10px;
+  font-family: var(--mono, monospace);
+  color: #5a1a1a;
+  white-space: pre-wrap;
+  margin: 0;
+  max-height: 120px;
+  overflow: auto;
+}

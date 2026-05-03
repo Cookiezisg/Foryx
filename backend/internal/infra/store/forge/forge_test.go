@@ -455,3 +455,284 @@ func TestExecutionPagination_Cursor(t *testing.T) {
 		t.Errorf("expected empty cursor on final page, got %q", next3)
 	}
 }
+
+// ── Sandbox iteration: ActiveVersionID + Env* on ForgeVersion ─────────────────
+
+func mkEnvVersion(id, forgeID, userID, envID, status string) *forgedomain.ForgeVersion {
+	v := mkVersion(id, forgeID, userID, status, nil)
+	v.Dependencies = "[]"
+	v.EnvID = envID
+	v.EnvStatus = forgedomain.EnvStatusPending
+	return v
+}
+
+func TestUpdateForgeActiveVersion(t *testing.T) {
+	s := newStore(t)
+	if err := s.SaveForge(ctxFor(userAlice), mkForge("f_001", userAlice, "x")); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.UpdateForgeActiveVersion(ctxFor(userAlice), "f_001", "fv_v1"); err != nil {
+		t.Fatalf("UpdateForgeActiveVersion: %v", err)
+	}
+	got, err := s.GetForge(ctxFor(userAlice), "f_001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ActiveVersionID != "fv_v1" {
+		t.Errorf("ActiveVersionID = %q, want fv_v1", got.ActiveVersionID)
+	}
+
+	// Cross-user mutation must be blocked by user_id WHERE clause.
+	// 跨用户修改必须被 user_id 谓词挡掉。
+	if err := s.UpdateForgeActiveVersion(ctxFor(userBob), "f_001", "fv_evil"); err != nil {
+		t.Fatalf("UpdateForgeActiveVersion (bob): %v", err)
+	}
+	got, _ = s.GetForge(ctxFor(userAlice), "f_001")
+	if got.ActiveVersionID != "fv_v1" {
+		t.Errorf("Bob should not be able to mutate Alice's forge; got ActiveVersionID=%q", got.ActiveVersionID)
+	}
+}
+
+func TestGetVersionByID_FoundAndNotFound(t *testing.T) {
+	s := newStore(t)
+	if err := s.SaveVersion(ctxFor(userAlice), mkEnvVersion("fv_a", "f_001", userAlice, "env_aaa", forgedomain.VersionStatusPending)); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.GetVersionByID(ctxFor(userAlice), "fv_a")
+	if err != nil {
+		t.Fatalf("GetVersionByID: %v", err)
+	}
+	if got.EnvID != "env_aaa" {
+		t.Errorf("EnvID round-trip wrong: %q", got.EnvID)
+	}
+
+	// Missing → ErrVersionNotFound.
+	if _, err := s.GetVersionByID(ctxFor(userAlice), "fv_missing"); !errors.Is(err, forgedomain.ErrVersionNotFound) {
+		t.Errorf("expected ErrVersionNotFound, got %v", err)
+	}
+
+	// Cross-user → ErrVersionNotFound (user_id scoping).
+	if _, err := s.GetVersionByID(ctxFor(userBob), "fv_a"); !errors.Is(err, forgedomain.ErrVersionNotFound) {
+		t.Errorf("Bob should not see Alice's version; got %v", err)
+	}
+}
+
+func TestUpdateVersionEnvStatus_ReadyStampsSyncedAt(t *testing.T) {
+	s := newStore(t)
+	v := mkEnvVersion("fv_a", "f_001", userAlice, "env_aaa", forgedomain.VersionStatusPending)
+	if err := s.SaveVersion(ctxFor(userAlice), v); err != nil {
+		t.Fatal(err)
+	}
+
+	before := time.Now().UTC()
+	if err := s.UpdateVersionEnvStatus(ctxFor(userAlice), "fv_a", forgedomain.EnvStatusReady, ""); err != nil {
+		t.Fatalf("UpdateVersionEnvStatus ready: %v", err)
+	}
+	after := time.Now().UTC()
+
+	got, _ := s.GetVersionByID(ctxFor(userAlice), "fv_a")
+	if got.EnvStatus != forgedomain.EnvStatusReady {
+		t.Errorf("EnvStatus = %q, want ready", got.EnvStatus)
+	}
+	if got.EnvSyncedAt == nil {
+		t.Fatal("EnvSyncedAt should be set when transitioning to ready")
+	}
+	if got.EnvSyncedAt.Before(before.Add(-time.Second)) || got.EnvSyncedAt.After(after.Add(time.Second)) {
+		t.Errorf("EnvSyncedAt out of expected window: %v", got.EnvSyncedAt)
+	}
+	if got.EnvError != "" {
+		t.Errorf("EnvError should be empty for ready, got %q", got.EnvError)
+	}
+}
+
+func TestUpdateVersionEnvStatus_FailedCarriesError(t *testing.T) {
+	s := newStore(t)
+	if err := s.SaveVersion(ctxFor(userAlice), mkEnvVersion("fv_a", "f_001", userAlice, "env_aaa", forgedomain.VersionStatusPending)); err != nil {
+		t.Fatal(err)
+	}
+
+	stderr := "× No solution found"
+	if err := s.UpdateVersionEnvStatus(ctxFor(userAlice), "fv_a", forgedomain.EnvStatusFailed, stderr); err != nil {
+		t.Fatalf("UpdateVersionEnvStatus failed: %v", err)
+	}
+
+	got, _ := s.GetVersionByID(ctxFor(userAlice), "fv_a")
+	if got.EnvStatus != forgedomain.EnvStatusFailed {
+		t.Errorf("EnvStatus = %q, want failed", got.EnvStatus)
+	}
+	if got.EnvError != stderr {
+		t.Errorf("EnvError = %q, want %q", got.EnvError, stderr)
+	}
+	if got.EnvSyncedAt != nil {
+		t.Errorf("EnvSyncedAt should be nil for failed, got %v", got.EnvSyncedAt)
+	}
+}
+
+func TestUpdateVersionEnvStatus_SyncingResetsSyncedAt(t *testing.T) {
+	s := newStore(t)
+	if err := s.SaveVersion(ctxFor(userAlice), mkEnvVersion("fv_a", "f_001", userAlice, "env_aaa", forgedomain.VersionStatusPending)); err != nil {
+		t.Fatal(err)
+	}
+	// First → ready (sets EnvSyncedAt)
+	_ = s.UpdateVersionEnvStatus(ctxFor(userAlice), "fv_a", forgedomain.EnvStatusReady, "")
+	// Then re-sync: ready → syncing, EnvSyncedAt should clear.
+	_ = s.UpdateVersionEnvStatus(ctxFor(userAlice), "fv_a", forgedomain.EnvStatusSyncing, "")
+
+	got, _ := s.GetVersionByID(ctxFor(userAlice), "fv_a")
+	if got.EnvStatus != forgedomain.EnvStatusSyncing {
+		t.Errorf("EnvStatus = %q, want syncing", got.EnvStatus)
+	}
+	if got.EnvSyncedAt != nil {
+		t.Errorf("syncing should clear EnvSyncedAt, got %v", got.EnvSyncedAt)
+	}
+}
+
+func TestUpdateVersionEnvProgress(t *testing.T) {
+	s := newStore(t)
+	if err := s.SaveVersion(ctxFor(userAlice), mkEnvVersion("fv_a", "f_001", userAlice, "env_aaa", forgedomain.VersionStatusPending)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.UpdateVersionEnvProgress(ctxFor(userAlice), "fv_a", "preparing", "Prepared 12 packages"); err != nil {
+		t.Fatalf("UpdateVersionEnvProgress: %v", err)
+	}
+
+	got, _ := s.GetVersionByID(ctxFor(userAlice), "fv_a")
+	if got.EnvSyncStage != "preparing" {
+		t.Errorf("EnvSyncStage = %q, want preparing", got.EnvSyncStage)
+	}
+	if got.EnvSyncDetail != "Prepared 12 packages" {
+		t.Errorf("EnvSyncDetail = %q, want 'Prepared 12 packages'", got.EnvSyncDetail)
+	}
+}
+
+func TestUpdateVersionEnvID_OnPendingWorks(t *testing.T) {
+	s := newStore(t)
+	if err := s.SaveVersion(ctxFor(userAlice), mkEnvVersion("fv_a", "f_001", userAlice, "env_aaa", forgedomain.VersionStatusPending)); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.UpdateVersionEnvID(ctxFor(userAlice), "fv_a", "env_bbb"); err != nil {
+		t.Fatalf("UpdateVersionEnvID: %v", err)
+	}
+	got, _ := s.GetVersionByID(ctxFor(userAlice), "fv_a")
+	if got.EnvID != "env_bbb" {
+		t.Errorf("EnvID = %q, want env_bbb", got.EnvID)
+	}
+}
+
+func TestUpdateVersionEnvID_RefusesAccepted(t *testing.T) {
+	s := newStore(t)
+	if err := s.SaveVersion(ctxFor(userAlice), mkEnvVersion("fv_a", "f_001", userAlice, "env_aaa", forgedomain.VersionStatusAccepted)); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should be a silent no-op (RowsAffected=0) — accepted is immutable.
+	// 应静默 no-op（RowsAffected=0）——accepted 不可变。
+	if err := s.UpdateVersionEnvID(ctxFor(userAlice), "fv_a", "env_bbb"); err != nil {
+		t.Fatalf("UpdateVersionEnvID: %v", err)
+	}
+	got, _ := s.GetVersionByID(ctxFor(userAlice), "fv_a")
+	if got.EnvID != "env_aaa" {
+		t.Errorf("accepted version's EnvID should be unchanged, got %q", got.EnvID)
+	}
+}
+
+func TestListEnvIDsForForge_OrderByRecency(t *testing.T) {
+	s := newStore(t)
+
+	// Three versions with three different EnvIDs, saved in order so
+	// updated_at strictly increases.
+	// 三个版本对应三个不同 EnvID，按顺序保存以保证 updated_at 严格递增。
+	versions := []struct {
+		id, envID string
+	}{
+		{"fv_old", "env_aaa"}, // saved first → oldest
+		{"fv_mid", "env_bbb"},
+		{"fv_new", "env_ccc"}, // saved last → newest
+	}
+	for _, v := range versions {
+		if err := s.SaveVersion(ctxFor(userAlice), mkEnvVersion(v.id, "f_001", userAlice, v.envID, forgedomain.VersionStatusAccepted)); err != nil {
+			t.Fatal(err)
+		}
+		// SQLite millisecond resolution; force a gap to make recency
+		// ordering deterministic.
+		// SQLite 毫秒精度；强制间隔保证 recency 排序确定。
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	got, err := s.ListEnvIDsForForge(ctxFor(userAlice), "f_001")
+	if err != nil {
+		t.Fatalf("ListEnvIDsForForge: %v", err)
+	}
+	want := []string{"env_ccc", "env_bbb", "env_aaa"}
+	if len(got) != len(want) {
+		t.Fatalf("len = %d, want %d (got %v)", len(got), len(want), got)
+	}
+	for i := range got {
+		if got[i] != want[i] {
+			t.Errorf("got[%d] = %q, want %q (full: %v)", i, got[i], want[i], got)
+		}
+	}
+}
+
+func TestListEnvIDsForForge_DistinctsAndExcludesEmpty(t *testing.T) {
+	s := newStore(t)
+
+	// Two versions sharing same EnvID; one with empty EnvID (legacy / future
+	// pending pre-EnvID-compute).
+	// 两个版本共用同一个 EnvID；一个 EnvID 为空（legacy / pending 在算
+	// EnvID 之前）。
+	rows := []struct{ id, env string }{
+		{"fv_1", "env_shared"},
+		{"fv_2", "env_shared"},
+		{"fv_3", ""},
+	}
+	for _, r := range rows {
+		if err := s.SaveVersion(ctxFor(userAlice), mkEnvVersion(r.id, "f_001", userAlice, r.env, forgedomain.VersionStatusAccepted)); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := s.ListEnvIDsForForge(ctxFor(userAlice), "f_001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "env_shared" {
+		t.Errorf("expected exactly [env_shared], got %v", got)
+	}
+}
+
+func TestListEnvIDsForForge_UserScoping(t *testing.T) {
+	s := newStore(t)
+	_ = s.SaveVersion(ctxFor(userAlice), mkEnvVersion("fv_a", "f_001", userAlice, "env_alice", forgedomain.VersionStatusAccepted))
+	_ = s.SaveVersion(ctxFor(userBob), mkEnvVersion("fv_b", "f_001", userBob, "env_bob", forgedomain.VersionStatusAccepted))
+
+	got, err := s.ListEnvIDsForForge(ctxFor(userAlice), "f_001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0] != "env_alice" {
+		t.Errorf("Alice should only see env_alice, got %v", got)
+	}
+}
+
+// Ensure the test file references the sandbox iteration domain additions —
+// guards against accidental removal of new fields / constants.
+//
+// 引用沙箱迭代加的 domain 字段 / 常量——防误删。
+var _ = []any{
+	forgedomain.EnvStatusPending,
+	forgedomain.EnvStatusSyncing,
+	forgedomain.EnvStatusReady,
+	forgedomain.EnvStatusFailed,
+	forgedomain.EnvStatusEvicted,
+	forgedomain.MaxEnvIDsPerForge,
+	forgedomain.DefaultPythonVersion,
+	forgedomain.ErrEnvNotReady,
+	forgedomain.ErrEnvFailed,
+	forgedomain.ErrSandboxUnavailable,
+	forgedomain.ErrDependencyResolution,
+}

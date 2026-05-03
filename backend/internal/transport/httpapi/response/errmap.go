@@ -10,8 +10,8 @@ import (
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
-	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -63,16 +63,24 @@ var errTable = map[error]errMapping{
 	modeldomain.ErrProviderRequired: {http.StatusBadRequest, "PROVIDER_REQUIRED"},
 	modeldomain.ErrModelIDRequired:  {http.StatusBadRequest, "MODEL_ID_REQUIRED"},
 
-	// tool domain / tool domain 层
-	forgedomain.ErrNotFound:         {http.StatusNotFound, "TOOL_NOT_FOUND"},
-	forgedomain.ErrDuplicateName:    {http.StatusConflict, "TOOL_NAME_DUPLICATE"},
-	forgedomain.ErrVersionNotFound:  {http.StatusNotFound, "TOOL_VERSION_NOT_FOUND"},
-	forgedomain.ErrPendingNotFound:  {http.StatusNotFound, "TOOL_PENDING_NOT_FOUND"},
-	forgedomain.ErrPendingConflict:  {http.StatusConflict, "TOOL_PENDING_CONFLICT"},
-	forgedomain.ErrTestCaseNotFound: {http.StatusNotFound, "TOOL_TEST_CASE_NOT_FOUND"},
-	forgedomain.ErrRunFailed:        {http.StatusUnprocessableEntity, "TOOL_RUN_FAILED"},
-	forgedomain.ErrASTParseError:    {http.StatusUnprocessableEntity, "TOOL_AST_PARSE_FAILED"},
-	forgedomain.ErrImportInvalid:    {http.StatusBadRequest, "TOOL_IMPORT_INVALID"},
+	// forge domain / forge domain 层
+	// (TOOL_* wire codes preserved from Phase 1 for client compatibility;
+	// new env / sandbox sentinels use FORGE_* per sandbox iteration §12.)
+	// (TOOL_* wire code 来自 Phase 1，为客户端兼容保留；新 env / sandbox
+	// sentinel 按沙箱迭代 §12 用 FORGE_* 前缀。)
+	forgedomain.ErrNotFound:             {http.StatusNotFound, "TOOL_NOT_FOUND"},
+	forgedomain.ErrDuplicateName:        {http.StatusConflict, "TOOL_NAME_DUPLICATE"},
+	forgedomain.ErrVersionNotFound:      {http.StatusNotFound, "TOOL_VERSION_NOT_FOUND"},
+	forgedomain.ErrPendingNotFound:      {http.StatusNotFound, "TOOL_PENDING_NOT_FOUND"},
+	forgedomain.ErrPendingConflict:      {http.StatusConflict, "TOOL_PENDING_CONFLICT"},
+	forgedomain.ErrTestCaseNotFound:     {http.StatusNotFound, "TOOL_TEST_CASE_NOT_FOUND"},
+	forgedomain.ErrRunFailed:            {http.StatusUnprocessableEntity, "TOOL_RUN_FAILED"},
+	forgedomain.ErrASTParseError:        {http.StatusUnprocessableEntity, "TOOL_AST_PARSE_FAILED"},
+	forgedomain.ErrImportInvalid:        {http.StatusBadRequest, "TOOL_IMPORT_INVALID"},
+	forgedomain.ErrEnvNotReady:          {http.StatusUnprocessableEntity, "FORGE_ENV_NOT_READY"},
+	forgedomain.ErrEnvFailed:            {http.StatusUnprocessableEntity, "FORGE_ENV_FAILED"},
+	forgedomain.ErrSandboxUnavailable:   {http.StatusServiceUnavailable, "FORGE_SANDBOX_UNAVAILABLE"},
+	forgedomain.ErrDependencyResolution: {http.StatusUnprocessableEntity, "FORGE_DEPENDENCY_RESOLUTION"},
 
 	// Cross-cutting: explicitly registered to suppress the "unmapped domain
 	// error" warning while still returning 500. Both represent server-side
@@ -80,7 +88,7 @@ var errTable = map[error]errMapping{
 	//
 	// 跨层 sentinel：显式登记以抑制"unmapped domain error"警告，
 	// 同时仍返回 500。两者都代表用户无法自行恢复的服务端状态。
-	reqctxpkg.ErrMissingUserID:       {http.StatusInternalServerError, "INTERNAL_ERROR"},
+	reqctxpkg.ErrMissingUserID:        {http.StatusInternalServerError, "INTERNAL_ERROR"},
 	cryptoinfra.ErrUnsupportedVersion: {http.StatusInternalServerError, "INTERNAL_ERROR"},
 }
 

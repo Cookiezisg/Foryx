@@ -1,24 +1,16 @@
 package chat
 
 import (
-	"crypto/rand"
 	"encoding/base64"
-	"encoding/hex"
 	"fmt"
 	"os"
+
+	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 )
 
-func newMsgID() string        { return "msg_" + randHex(8) }
-func newBlockID() string      { return "blk_" + randHex(8) }
-func newAttachmentID() string { return "att_" + randHex(8) }
-
-func randHex(n int) string {
-	b := make([]byte, n)
-	if _, err := rand.Read(b); err != nil {
-		panic(fmt.Sprintf("chat: crypto/rand failed: %v", err))
-	}
-	return hex.EncodeToString(b)
-}
+func newMsgID() string        { return idgenpkg.New("msg") }
+func newBlockID() string      { return idgenpkg.New("blk") }
+func newAttachmentID() string { return idgenpkg.New("att") }
 
 func encodeBase64(data []byte) string {
 	return base64.StdEncoding.EncodeToString(data)

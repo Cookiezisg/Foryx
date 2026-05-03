@@ -208,7 +208,6 @@ func (s *Store) GetAttachment(ctx context.Context, id string) (*chatdomain.Attac
 	return &a, nil
 }
 
-
 // Compile-time check that *Store satisfies chatdomain.Repository.
 // 编译期确认 *Store 满足 chatdomain.Repository。
 var _ chatdomain.Repository = (*Store)(nil)

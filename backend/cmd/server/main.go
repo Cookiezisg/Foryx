@@ -19,17 +19,17 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
-	forgetool "github.com/sunweilin/forgify/backend/internal/app/tool/forge"
 	apikeyapp "github.com/sunweilin/forgify/backend/internal/app/apikey"
 	chatapp "github.com/sunweilin/forgify/backend/internal/app/chat"
 	convapp "github.com/sunweilin/forgify/backend/internal/app/conversation"
-	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
 	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
+	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
+	forgetool "github.com/sunweilin/forgify/backend/internal/app/tool/forge"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
-	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
 	memoryinfra "github.com/sunweilin/forgify/backend/internal/infra/events/memory"
@@ -39,8 +39,9 @@ import (
 	apikeystore "github.com/sunweilin/forgify/backend/internal/infra/store/apikey"
 	chatstore "github.com/sunweilin/forgify/backend/internal/infra/store/chat"
 	convstore "github.com/sunweilin/forgify/backend/internal/infra/store/conversation"
-	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	forgestore "github.com/sunweilin/forgify/backend/internal/infra/store/forge"
+	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
+	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	routerhttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/router"
 )
 
@@ -125,15 +126,42 @@ func main() {
 		keys:    apikeyService,
 		factory: llmFactory,
 	}
+	eventsBridge := memoryinfra.NewBridge(log)
+
+	// Sandbox: bundled-uv + bundled-Python + per-EnvID venv runtime. Bootstrap
+	// from $FORGIFY_DEV_RESOURCES (dev) — prod cmd/desktop will instead
+	// extract embed.FS into a temp dir and pass that path here. Failure to
+	// bootstrap is logged but not fatal: backend stays up; forge operations
+	// return ErrSandboxUnavailable until resources arrive.
+	//
+	// 沙箱：捆绑 uv + 捆绑 Python + 每 EnvID 一个 venv 的运行时。从
+	// $FORGIFY_DEV_RESOURCES（dev）bootstrap——prod cmd/desktop 把 embed.FS
+	// 解到临时目录后把路径传进来。bootstrap 失败仅 log 不致命：backend 仍
+	// 起来；forge 操作返 ErrSandboxUnavailable 直到资源就位。
+	sandbox := sandboxinfra.New(sandboxinfra.Config{
+		DataDir:       *dataDir,
+		DefaultPython: forgedomain.DefaultPythonVersion,
+		Logger:        log,
+	})
+	if resourceDir := os.Getenv("FORGIFY_DEV_RESOURCES"); resourceDir != "" {
+		if err := sandbox.Bootstrap(context.Background(), resourceDir); err != nil {
+			log.Warn("sandbox.Bootstrap failed (forge ops will be unavailable)",
+				zap.String("resource_dir", resourceDir),
+				zap.Error(err))
+		}
+	} else {
+		log.Warn("FORGIFY_DEV_RESOURCES not set; forge sandbox will be unavailable. Run `make download-resources` to enable forge ops.")
+	}
+
 	forgeService := forgeapp.NewService(
 		forgestore.New(gdb),
-		sandboxinfra.New("python3"),
+		sandbox,
 		forgeLLM,
+		eventsBridge,
 		log,
 	)
 
 	chatRepo := chatstore.New(gdb)
-	eventsBridge := memoryinfra.NewBridge(log)
 	chatService := chatapp.NewService(
 		chatRepo,
 		convstore.New(gdb),
@@ -151,7 +179,6 @@ func main() {
 		modelService,
 		apikeyService,
 		llmFactory,
-		eventsBridge,
 	)
 	chatService.SetTools(forgeTools)
 
@@ -224,23 +251,14 @@ type forgeLLMClientAdapter struct {
 }
 
 func (c *forgeLLMClientAdapter) Generate(ctx context.Context, prompt string) (string, error) {
-	provider, modelID, err := c.picker.PickForChat(ctx)
+	bc, err := llmclientpkg.Resolve(ctx, c.picker, c.keys, c.factory)
 	if err != nil {
-		return "", fmt.Errorf("forgeLLMClient: pick model: %w", err)
+		return "", fmt.Errorf("forgeLLMClient: %w", err)
 	}
-	creds, err := c.keys.ResolveCredentials(ctx, provider)
-	if err != nil {
-		return "", fmt.Errorf("forgeLLMClient: resolve credentials: %w", err)
-	}
-	client, baseURL, err := c.factory.Build(llminfra.Config{
-		Provider: provider, ModelID: modelID,
-		Key: creds.Key, BaseURL: creds.BaseURL,
-	})
-	if err != nil {
-		return "", fmt.Errorf("forgeLLMClient: build client: %w", err)
-	}
-	return llminfra.Generate(ctx, client, llminfra.Request{
-		ModelID: modelID, Key: creds.Key, BaseURL: baseURL,
+	return llminfra.Generate(ctx, bc.Client, llminfra.Request{
+		ModelID:  bc.ModelID,
+		Key:      bc.Key,
+		BaseURL:  bc.BaseURL,
 		Messages: []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: prompt}},
 	})
 }

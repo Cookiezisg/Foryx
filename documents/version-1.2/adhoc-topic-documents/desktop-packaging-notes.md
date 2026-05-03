@@ -99,19 +99,37 @@ SQLite 能编进二进制，Python 解释器**不能**——`exec.Command("pytho
 
 | 方案 | 思路 | 何时用 |
 |---|---|---|
-| **A. 系统 Python** | README 写明"需要 Python 3" | MVP 期，目标用户是开发者 |
-| **C. 捆绑 standalone Python** | 打包 [python-build-standalone](https://github.com/astral-sh/python-build-standalone) +30-50MB | 产品成熟、有非技术用户时 |
+| A. 系统 Python | README 写明"需要 Python 3" | 开发者预览阶段 |
+| **C. 捆绑 standalone Python + uv** | 打包 [python-build-standalone](https://github.com/astral-sh/python-build-standalone) + [uv](https://github.com/astral-sh/uv) → 每个 Forge 一份 venv | **沙箱迭代 1 已选定（2026-05-03）** |
 | D. WASM 沙箱（Pyodide） | 安全性最高 | 本地单人场景属过度工程，不考虑 |
 
-**短期 A，等用户反馈"装 Python 麻烦"再升级 C**。
+**已实施方案 C**。详见 [`sandbox-iteration-documents/01-uv-bundled-python-per-forge-venv.md`](./sandbox-iteration-documents/01-uv-bundled-python-per-forge-venv.md)。
 
 ### 方案 C 的取舍
+
+收益：
+- 用户零依赖（不装 Python 也能用 Forge）
+- uv 把"装第三方包"压到秒级（缓存 + wheel resolver）
+- 每个 Forge 一份 venv（按 EnvID = sha256(deps + pythonVersion) 共享，N=3 buffer LRU 清理），互不污染
+- 升级 Python 版本只需替换 `resources/python/`，重新 Bootstrap
+
 缺点：
-- 包大 +50-150MB
-- 标准库之外的包（numpy/pandas）需要预装或运行时 pip 装
-- macOS 公证流程会更复杂（python 二进制和 .dylib 都要重新公证）
-- 三平台路径结构不一样（mac/linux 有 `bin/`，windows 是 `python.exe` 直接在根目录）
-- Python 版本被冻结
+- 包大 +60-100MB（uv ~15MB + cpython-3.12 standalone ~50MB，三平台分别打）
+- macOS 公证范围扩大（python 二进制 + .dylib + 后续 forge 装的 wheel .so 都要 entitlements 放行，见下文）
+- 三平台路径结构不一样（mac/linux 有 `bin/python3`，windows 是 `python.exe` 直接在根目录）→ 用 `paths.go::bundledPythonPath` 抹平
+- Python 版本被冻结到捆绑那版（升级靠重新发版替换 resources）
+
+### 资源目录约定
+
+```
+resources/
+├── uv/{darwin-arm64,darwin-amd64,linux-amd64,windows-amd64}/uv[.exe]
+└── python/{darwin-arm64,darwin-amd64,linux-amd64,windows-amd64}/{bin/python3 或 python.exe}
+```
+
+- **dev**: `$FORGIFY_DEV_RESOURCES` 指向项目根 `resources/`（`scripts/download-sandbox-resources.sh` 拉一次即可）
+- **prod**: `cmd/desktop` 用 `embed.FS` 嵌入对应平台子集，启动期解压到 `cfg.DataDir/sandbox/{uv,python}/`
+- Bootstrap 在 `infra/sandbox/preflight.go` 实现：解压 + macOS 重签 + 写 `.bootstrap-hash` 幂等
 
 ---
 
@@ -137,6 +155,47 @@ SQLite 能编进二进制，Python 解释器**不能**——`exec.Command("pytho
 - README 第一段教用户绕过首次警告（mac 右键→打开 / win 点"仍要运行"）
 - **v1.0 加 macOS 公证**（最高 ROI 的一笔投入）
 - Windows 签名一直拖，自动更新等用户基数起来再做
+
+### macOS 公证的内嵌二进制覆盖（沙箱迭代发现）
+
+捆绑 uv + python-build-standalone 的场景下，公证不是简单"签 .app 完事"——有几个特殊点（2026-05 沙箱迭代讨论确定）：
+
+#### 不公证时（v0.x 早期）
+
+- 用户双击 .app → "无法验证开发者" 警告，右键→打开能绕过（一次性）
+- **但 Python 子进程仍被内核 SIGKILL**——issue uv#16726：python-build-standalone 二进制带 `com.apple.provenance` xattr + 仅 ad-hoc 签，Gatekeeper 在内核层杀，无日志
+- 应急：Bootstrap 阶段自己跑 `xattr -d com.apple.provenance + codesign --force --sign -` ad-hoc 重签所有 python 二进制（uv 内部就是这套），用户右键→打开 .app 后能正常用 forge
+
+#### 公证时（v1.0+）
+
+- 用 Developer ID 证书签 **.app 内所有可执行**（Forgify 主二进制 + uv + python3 + libpython.dylib + 所有 stdlib .so）
+- 启用 Hardened Runtime
+- **关键 entitlement**：`com.apple.security.cs.disable-library-validation = true`
+  - 让 Python 解释器能 dlopen 任意第三方 `.so` 文件
+  - 没这条，forge 后续 sync 装新依赖（pandas / numpy 等 wheel 里的 .so）会被 Hardened Runtime 拦——明明公证过的 .app 突然导入失败
+  - 这是放行"运行时下载的扩展模块"的唯一途径
+- `notarytool submit` 上传 Apple 审核 + `stapler staple` 钉 ticket 到 .app
+
+公证 ticket 覆盖 .app 内**发版时存在**的所有内嵌二进制——uv + python-build-standalone 捆绑的全部一并被覆盖。**用户后续 forge 装新包**靠 disable-library-validation entitlement 而非公证本身放行。
+
+#### 公证不解决的（5% 长尾）
+
+公证只搞定 Gatekeeper / Hardened Runtime / library validation 这条线。还有几条独立的 macOS 用户态权限不归公证管——但这些都是普通 mac app 都有的事，不是 Forgify 特有：
+
+- **TCC 隐私权限**：Python 想读 `~/Documents` / `~/Desktop` / 通讯录 / 日历等隐私目录，弹"forgify 想访问 xxx" 对话框（首次授权后记住）
+- **macOS 14+ App Management**：动 `/Applications` 下的别的 app 时额外授权
+- **网络出站**：默认放行，无需配置
+
+所以"公证完了所有 sandbox 层面的事都没了"是准确的；剩下的是用户态隐私授权，那是产品 UX 问题不是打包问题。
+
+#### Bootstrap 跟两阶段对应
+
+| 阶段 | 是否公证 | Bootstrap 阶段 mac codesign 步 |
+|---|---|---|
+| v0.x | 否 | 自己跑 `xattr -d com.apple.provenance` + `codesign --force --sign -` ad-hoc 重签整个 python dir |
+| v1.0+ | 是 | 跳过——公证 ticket 已覆盖；但 entitlements 必须含 `disable-library-validation` |
+
+详见 [`sandbox-iteration-documents/01-uv-bundled-python-per-forge-venv.md`](./sandbox-iteration-documents/01-uv-bundled-python-per-forge-venv.md) §4.3。
 
 ---
 

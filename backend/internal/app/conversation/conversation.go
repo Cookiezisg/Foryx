@@ -9,8 +9,6 @@ package conversation
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"strings"
 	"time"
@@ -18,6 +16,7 @@ import (
 	"go.uber.org/zap"
 
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
+	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
@@ -94,10 +93,4 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return s.repo.Delete(ctx, id)
 }
 
-func newID() string {
-	var b [8]byte
-	if _, err := rand.Read(b[:]); err != nil {
-		panic(fmt.Sprintf("conversation: crypto/rand failed: %v", err))
-	}
-	return "cv_" + hex.EncodeToString(b[:])
-}
+func newID() string { return idgenpkg.New("cv") }

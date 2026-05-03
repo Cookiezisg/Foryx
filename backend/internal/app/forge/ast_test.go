@@ -19,7 +19,7 @@ def parse_csv(csv_text: str, delimiter: str = ',') -> list:
     import csv, io
     return list(csv.reader(io.StringIO(csv_text), delimiter=delimiter))
 `
-	got, err := parseForgeCode(code)
+	got, err := parseForgeCode("", code)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -59,7 +59,7 @@ func TestParseToolCode_NoDocstring(t *testing.T) {
 def add(a: int, b: int) -> int:
     return a + b
 `
-	got, err := parseForgeCode(code)
+	got, err := parseForgeCode("", code)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -82,7 +82,7 @@ func TestParseToolCode_NoReturnAnnotation(t *testing.T) {
 def greet(name: str):
     return "hello " + name
 `
-	got, err := parseForgeCode(code)
+	got, err := parseForgeCode("", code)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -92,14 +92,14 @@ def greet(name: str):
 }
 
 func TestParseToolCode_SyntaxError(t *testing.T) {
-	_, err := parseForgeCode("def broken(: this is not valid python")
+	_, err := parseForgeCode("", "def broken(: this is not valid python")
 	if err == nil {
 		t.Error("expected error for invalid Python, got nil")
 	}
 }
 
 func TestParseToolCode_NoFunction(t *testing.T) {
-	_, err := parseForgeCode("x = 1 + 2")
+	_, err := parseForgeCode("", "x = 1 + 2")
 	if err == nil {
 		t.Error("expected error when no function defined")
 	}
@@ -110,7 +110,7 @@ func TestParseToolCode_ComplexDefaultValues(t *testing.T) {
 def process(data: list, options: dict = None, count: int = 10) -> dict:
     pass
 `
-	got, err := parseForgeCode(code)
+	got, err := parseForgeCode("", code)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

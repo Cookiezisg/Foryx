@@ -216,14 +216,17 @@ backend/
     │
     ├── pkg/                        ← 跨层共享纯工具（无业务、无 infra 依赖）
     │   ├── reqctx/                 ← ✅ reqctx.go（user 身份）+ locale.go + agentrun.go（convID/msgID/toolCallID）
-    │   └── pagination/             ← ✅ cursor.go（Parse + EncodeCursor + DecodeCursor + Cursor 共享类型；4 store + 4 handler 共享）
+    │   ├── pagination/             ← ✅ cursor.go（Parse + EncodeCursor + DecodeCursor + Cursor 共享类型）
+    │   ├── idgen/                  ← ✅ idgen.go（New(prefix string) string；§S15 标准 ID 形状唯一实现）
+    │   ├── llmparse/               ← ✅ extractjson.go（ExtractJSON + IsLikelyJSON；LLM 响应 markdown fence + 外层括号兜底）
+    │   └── llmclient/              ← ✅ llmclient.go（Resolve picker→keys→factory 三段舞；ErrPickModel/ErrResolveCreds/ErrBuildClient sentinel）
     │
     └── transport/
         └── httpapi/                ← 包名避开 net/http 冲突
             ├── router/             ← ✅ router.go + deps.go（DI struct，nil-tolerant）
-            ├── response/           ← ✅ envelope.go + errmap.go
+            ├── response/           ← ✅ envelope.go + errmap.go + sse.go（StreamSSE[T] 泛型 helper）
             ├── middleware/         ← ✅ recover / logger / cors / locale / auth(InjectUserID) / notfound
-            └── handlers/           ← ✅ health / apikey / model / conversation / chat / forge / dev
+            └── handlers/           ← ✅ health / apikey / model / conversation / chat / forge / dev / util.go（idAndAction）
 ```
 
 `legacy/` 存放 V1.0/V1.1 的旧实现（Electron + Eino）作为参考。`testend/` 是开发期调试控制台（详见 [`testend-design.md`](./testend-design.md)）。

@@ -213,14 +213,14 @@ type stubTool struct {
 	params json.RawMessage
 }
 
-func (s *stubTool) Name() string                                        { return s.name }
-func (s *stubTool) Description() string                                 { return s.desc }
-func (s *stubTool) Parameters() json.RawMessage                         { return s.params }
-func (s *stubTool) IsReadOnly() bool                                    { return true }
-func (s *stubTool) NeedsReadFirst() bool                                { return false }
-func (s *stubTool) RequiresWorkspace() bool                             { return false }
-func (s *stubTool) IsConcurrencySafe(json.RawMessage) bool              { return true }
-func (s *stubTool) ValidateInput(json.RawMessage) error                 { return nil }
+func (s *stubTool) Name() string                           { return s.name }
+func (s *stubTool) Description() string                    { return s.desc }
+func (s *stubTool) Parameters() json.RawMessage            { return s.params }
+func (s *stubTool) IsReadOnly() bool                       { return true }
+func (s *stubTool) NeedsReadFirst() bool                   { return false }
+func (s *stubTool) RequiresWorkspace() bool                { return false }
+func (s *stubTool) IsConcurrencySafe(json.RawMessage) bool { return true }
+func (s *stubTool) ValidateInput(json.RawMessage) error    { return nil }
 func (s *stubTool) CheckPermissions(json.RawMessage, PermissionMode) PermissionResult {
 	return PermissionAllow
 }
