@@ -39,6 +39,7 @@ import (
 	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
+	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	todoapp "github.com/sunweilin/forgify/backend/internal/app/todo"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
@@ -46,6 +47,7 @@ import (
 	forgetool "github.com/sunweilin/forgify/backend/internal/app/tool/forge"
 	searchtool "github.com/sunweilin/forgify/backend/internal/app/tool/search"
 	shelltool "github.com/sunweilin/forgify/backend/internal/app/tool/shell"
+	subagenttool "github.com/sunweilin/forgify/backend/internal/app/tool/subagent"
 	todotool "github.com/sunweilin/forgify/backend/internal/app/tool/todo"
 	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
@@ -68,6 +70,7 @@ import (
 	forgestore "github.com/sunweilin/forgify/backend/internal/infra/store/forge"
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
+	subagentstore "github.com/sunweilin/forgify/backend/internal/infra/store/subagent"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
 	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
@@ -266,6 +269,18 @@ func New(t *testing.T, opts ...Option) *Harness {
 	tools = append(tools, todotool.TodoTools(todoService)...)
 	askService := askapp.NewService()
 	tools = append(tools, asktool.AskTools(askService)...)
+
+	subagentService := subagentapp.New(
+		subagentstore.New(gdb),
+		subagentapp.NewRegistry(),
+		bridge,
+		modelService,
+		apikeyService,
+		llmFactory,
+		log,
+	)
+	tools = append(tools, subagenttool.SubagentTools(subagentService)...)
+	subagentService.SetTools(tools)
 	chatService.SetTools(tools)
 
 	handler := routerhttpapi.New(routerhttpapi.Deps{

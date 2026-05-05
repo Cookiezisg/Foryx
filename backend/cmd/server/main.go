@@ -26,12 +26,14 @@ import (
 	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
+	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	todoapp "github.com/sunweilin/forgify/backend/internal/app/todo"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
 	forgetool "github.com/sunweilin/forgify/backend/internal/app/tool/forge"
 	searchtool "github.com/sunweilin/forgify/backend/internal/app/tool/search"
 	shelltool "github.com/sunweilin/forgify/backend/internal/app/tool/shell"
+	subagenttool "github.com/sunweilin/forgify/backend/internal/app/tool/subagent"
 	todotool "github.com/sunweilin/forgify/backend/internal/app/tool/todo"
 	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
@@ -54,6 +56,7 @@ import (
 	forgestore "github.com/sunweilin/forgify/backend/internal/infra/store/forge"
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
+	subagentstore "github.com/sunweilin/forgify/backend/internal/infra/store/subagent"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
 	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
@@ -212,6 +215,29 @@ func main() {
 	tools = append(tools, todotool.TodoTools(todoService)...)
 	askService := askapp.NewService()
 	tools = append(tools, asktool.AskTools(askService)...)
+
+	// Subagent: Service holds back-refs to the global tool list, so it's
+	// constructed before the SubagentTool is appended; tools.SetTools is
+	// called after the slice is finalized so Service.filterTools sees
+	// every other tool. The structural recursion defense in Service
+	// .filterTools strips the SubagentTool itself before passing the
+	// list to a sub-runner — the sub-LLM physically can't see "Subagent".
+	//
+	// Subagent：Service 持全局 tool 列表反向引用——构造在 SubagentTool 加入
+	// 之前；slice 终稿后再 SetTools 让 filterTools 看到所有其他 tool。
+	// Service.filterTools 的结构性防递归会在传给 sub-runner 前剥掉 SubagentTool
+	// 自身——sub-LLM 物理看不到 "Subagent"。
+	subagentService := subagentapp.New(
+		subagentstore.New(gdb),
+		subagentapp.NewRegistry(),
+		eventsBridge,
+		modelService,
+		apikeyService,
+		llmFactory,
+		log,
+	)
+	tools = append(tools, subagenttool.SubagentTools(subagentService)...)
+	subagentService.SetTools(tools)
 	chatService.SetTools(tools)
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
