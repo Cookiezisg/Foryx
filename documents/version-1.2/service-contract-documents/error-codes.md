@@ -149,6 +149,8 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 
 ### Phase 5：System Tool 第二代（2026-05-04）
 
+> **NB：filesystem / search / web / shell 工具家族不向 errmap 注册**——所有失败以友好字符串返 LLM（吃在 chat.message 的 tool_result block 里），不到 handler。详见各家族 design doc 的 §6 安全边界 + §8 错误返回模式：[`filesystem.md`](../service-design-documents/filesystem.md) / [`search.md`](../service-design-documents/search.md) / [`web.md`](../service-design-documents/web.md) / [`shell.md`](../service-design-documents/shell.md)。下面仅 task / ask 因为有独立 HTTP 端点（task SSE 推 entity 事件 / ask 走 `POST /answers`），错误才会到 handler 进 errmap。
+
 #### task ✅
 详见 [`../service-design-documents/task.md`](../service-design-documents/task.md)。
 

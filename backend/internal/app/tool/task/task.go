@@ -32,3 +32,12 @@ func TaskTools(svc *taskapp.Service) []toolapp.Tool {
 		&TaskUpdate{svc: svc},
 	}
 }
+
+// ── Compile-time checks ───────────────────────────────────────────────────────
+
+var (
+	_ toolapp.Tool = (*TaskCreate)(nil)
+	_ toolapp.Tool = (*TaskList)(nil)
+	_ toolapp.Tool = (*TaskGet)(nil)
+	_ toolapp.Tool = (*TaskUpdate)(nil)
+)

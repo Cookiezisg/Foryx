@@ -76,6 +76,100 @@ func TestDefault_DeniesForgifyState(t *testing.T) {
 	}
 }
 
+// Regression: Linux runtime / secrets paths must be denied. Pre-fix the
+// deny list was macOS-biased (only /etc/, /usr/, /sys/, /private/, /System/
+// etc.) so Linux users had no protection on /proc/<pid>/environ etc.
+//
+// 回归：Linux runtime / secrets 路径必须被拒。修复前 deny list 偏 macOS
+// （只有 /etc/、/usr/、/sys/、/private/、/System/），Linux 用户在 /proc/
+// /run/secrets/ 等关键路径上完全无保护。
+func TestDefault_DeniesLinuxRuntimePaths(t *testing.T) {
+	g := NewDefault()
+	cases := []string{
+		"/proc/1/environ",
+		"/proc/self/maps",
+		"/run/secrets/kubernetes.io/serviceaccount/token",
+		"/var/run/secrets/kubernetes.io/serviceaccount/token",
+		"/sys/class/net/eth0/address",
+	}
+	for _, p := range cases {
+		ok, _ := g.Allow(p)
+		if ok {
+			t.Errorf("expected %q to be denied (Linux runtime), but was allowed", p)
+		}
+	}
+}
+
+// Regression: Windows credential-store paths under ~/AppData must be denied.
+// These rules survive on macOS / Linux too (~/ expansion on Unix yields
+// /Users/x/AppData/... which is absolute) — wasted but harmless because
+// the path won't exist there.
+//
+// 回归：Windows 凭据库路径 ~/AppData/... 必须被拒。这些 rule 在 macOS /
+// Linux 上也会进 rule 表（home 展开后仍是绝对路径）但永不命中真实文件，
+// 浪费几个 entry 但无害。
+func TestDefault_DeniesWindowsCredentialPaths(t *testing.T) {
+	g := NewDefault()
+	home := homeDir(t)
+	cases := []string{
+		filepath.Join(home, "AppData", "Roaming", "Microsoft", "Credentials", "abc"),
+		filepath.Join(home, "AppData", "Local", "Microsoft", "Credentials", "xyz"),
+		filepath.Join(home, "AppData", "Roaming", "Microsoft", "Crypto", "RSA", "key"),
+		filepath.Join(home, "AppData", "Roaming", "Microsoft", "Protect", "S-1-5-21-x"), // DPAPI master keys
+		filepath.Join(home, "AppData", "Local", "Microsoft", "Vault", "x.vsch"),
+	}
+	for _, p := range cases {
+		ok, _ := g.Allow(p)
+		if ok {
+			t.Errorf("expected %q to be denied (Windows credential store), but was allowed", p)
+		}
+	}
+}
+
+// Regression: browser saved-login databases must be denied on every
+// platform's canonical install path. Reading them lets a malicious LLM
+// exfiltrate user credentials at rest.
+//
+// 回归：浏览器登录数据库在每个平台的标准位置都必须被拒——读到即等同于
+// 偷凭据。
+func TestDefault_DeniesBrowserLoginPaths(t *testing.T) {
+	g := NewDefault()
+	home := homeDir(t)
+	cases := []string{
+		// Chrome (each platform's location, listed unconditionally — only
+		// the matching one applies on the running OS, others are harmless).
+		filepath.Join(home, "Library", "Application Support", "Google", "Chrome", "Default", "Login Data"),    // macOS
+		filepath.Join(home, ".config", "google-chrome", "Default", "Login Data"),                              // Linux
+		filepath.Join(home, "AppData", "Local", "Google", "Chrome", "User Data", "Default", "Login Data"),     // Windows
+		filepath.Join(home, "AppData", "Local", "Microsoft", "Edge", "User Data", "Default", "Login Data"),    // Windows Edge
+	}
+	for _, p := range cases {
+		ok, _ := g.Allow(p)
+		if ok {
+			t.Errorf("expected %q to be denied (browser logins), but was allowed", p)
+		}
+	}
+}
+
+// Regression: kubectl / docker config files must be denied — they hold
+// cluster credentials and registry auth tokens.
+//
+// 回归：kubectl / docker 配置文件必须被拒——含集群凭据 / registry auth token。
+func TestDefault_DeniesKubeAndDockerConfig(t *testing.T) {
+	g := NewDefault()
+	home := homeDir(t)
+	cases := []string{
+		filepath.Join(home, ".docker", "config.json"),
+		filepath.Join(home, ".kube", "config"),
+	}
+	for _, p := range cases {
+		ok, _ := g.Allow(p)
+		if ok {
+			t.Errorf("expected %q to be denied, but was allowed", p)
+		}
+	}
+}
+
 func TestDefault_AllowsNormalPaths(t *testing.T) {
 	g := NewDefault()
 	home := homeDir(t)

@@ -287,84 +287,9 @@ func (e Task) MarshalJSON() ([]byte, error) {
 
 ## 10. 附：ask 服务 + AskUserQuestion 工具
 
-**为什么放本文档**：与 task 同 V1 batch 完成；都是"LLM 在 chat 中操控 UX 状态"的工具；ask 体量太小不值得单独拉一份 design doc。
-
-### 10.1 设计
-
-**Decision D11**（progress-record.md 2026-05-03）：问题坐 `chat.message` SSE，**不**新建事件家族；答案走 `POST /api/v1/conversations/{id}/answers`。
-
-```
-LLM 调 AskUserQuestion(question, options?)
-  → 工具从 ctx 取 toolCallID → svc.Wait(ctx, toolCallID, 5min)
-                                  ↓ 注册 chan 阻塞
-  → AgentLoop 暂停（工具 Execute 阻塞中）
-  → chat.message SSE 已经把 tool_call block 推给前端
-    （block.arguments 含 question + options，UI 渲染问题）
-  
-  ┌────────── 用户在 UI 点选/输入 ──────────┐
-  ↓                                          ↑
-POST /api/v1/conversations/{id}/answers      ↑
-  body: {toolCallId, answer}                 ↑
-    → AnswerHandler → svc.Resolve            ↑
-                        ↓ 原子从 map 摘条目  ↑
-                        ↓ chan <- answer     ↑
-  → svc.Wait 解锁 → 工具返答案为 tool_result
-  → chat.message SSE 推 tool_result block
-  → AgentLoop 继续
-```
-
-### 10.2 Service（`internal/app/ask/ask.go`）
-
-```go
-type Service struct {
-    mu      sync.Mutex
-    pending map[string]chan string
-}
-
-func (s *Service) Wait(ctx context.Context, toolCallID string, timeout time.Duration) (string, error)
-func (s *Service) Resolve(toolCallID, answer string) error
-```
-
-**关键正确性细节**：`Resolve` 在持锁状态下**原子地** `delete(map, ID)` + send to chan，让二次 Resolve 必走 `ErrNoPendingQuestion` 路径——避免了 buffered channel 的双答竞态（第一版 bug，已修，详 progress-record.md 2026-05-04）。
-
-**Sentinels**：
-- `ErrNoPendingQuestion`（404）——toolCallID 不在 Wait（已超时 / 已答 / 拼错）
-- `ErrAlreadyAnswered`（409，保留）——当前实现不再产生，原子摘条目后必走 `ErrNoPendingQuestion`；保留 sentinel 用于错误码字典文档化
-- `ErrTimeout`（504，仅 Service 内部抛）——工具 Execute 转友好字符串而非上抛 handler
-
-### 10.3 AskUserQuestion 工具（`internal/app/tool/ask/ask.go`）
-
-| 字段 | 必填 | 说明 |
-|---|---|---|
-| `question` | ✅ | 问题文本 |
-| `options` | | 建议选项数组（UI 可渲染按钮；用户**不**受限于这些）|
-
-**Execute**：
-1. `reqctxpkg.GetToolCallID(ctx)` 取 LLM 分配的 callID（缺则报 wiring bug 字符串）
-2. `svc.Wait(ctx, callID, 5min)`
-3. 答案到 → 返答案字符串
-4. `ErrTimeout` → "User did not respond within the timeout. Re-ask later if still needed."
-5. `context.Canceled` → "Question cancelled by the user (conversation interrupted)."
-
-### 10.4 HTTP endpoint
-
-```
-POST /api/v1/conversations/{id}/answers
-Body: {"toolCallId": "...", "answer": "..."}
-→ 204 No Content（成功投递）
-→ 400 INVALID_REQUEST（缺字段）
-→ 404 ASK_NO_PENDING_QUESTION（toolCallId 未在 Wait）
-```
-
-**为什么 conversation 在 URL 但 callID 在 body**：路由 RESTful 清晰，但实际会合 key 是 callID（路径里的 conv-id 仅用于路由分组与未来日志/审计；当前不强制校验所有权——`§6 反校验剧场`）。
-
-### 10.5 测试覆盖
-
-| 层 | 文件 | 测试数 | 覆盖 |
-|---|---|---|---|
-| app/ask | `internal/app/ask/ask_test.go` | 7 | Wait/Resolve happy path / timeout / ctx cancel / 双答竞态防护 / 重复注册拒绝 / 50 并发清理 |
-| app/tool/ask | `internal/app/tool/ask/ask_test.go` | 12 | identity / schema / Validate / wiring bug 短路 / 答案到达 / timeout / ctx cancel |
-| pipeline | `test/uxtask/uxtask_test.go::TestUxTask_AskUserQuestionAnswerDelivered` + `_AnswerEndpoint_UnknownCallID_404` | 2 场景 | 端到端旁路 goroutine POST 答案验真实接线 + 404 |
+> **2026-05-05 batch 5A 重构**：ask 的完整设计已迁出，独立成 [`./ask.md`](./ask.md)（与 filesystem / search / web / shell 各家族一致的独立 design doc 模式）。本节保留作为"与 task 同 V1 batch（U2-U3）落地"的历史关联指针。
+>
+> **快速摘要**：`app/ask.Service` 是 in-memory 会合（`toolCallID → channel`）；`AskUserQuestion` 工具调 `Wait` 阻塞 5 分钟；HTTP `POST /api/v1/conversations/{id}/answers` 调 `Resolve` 原子摘条目唤醒；问题本身坐 `chat.message` SSE 流（决策 D11，不新建事件家族）。完整设计、Service / Tool / Handler 分层、错误码、测试覆盖见 [`./ask.md`](./ask.md)。
 
 ---
 

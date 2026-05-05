@@ -14,7 +14,6 @@ package task
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -246,14 +245,5 @@ func (s *Service) publish(ctx context.Context, t *taskdomain.Task) {
 	}
 	s.bridge.Publish(ctx, t.ConversationID, eventsdomain.Task{Task: t})
 }
-
-// Compile-time guard: errors.Is on errors returned by Service must reach
-// the canonical sentinels.
-//
-// 编译期守护：Service 返回的错误能 errors.Is 到规范 sentinel。
-var (
-	_ = errors.Is
-	_ = idgenpkg.New
-)
 
 func newID() string { return idgenpkg.New("tk") }

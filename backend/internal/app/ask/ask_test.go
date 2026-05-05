@@ -92,7 +92,16 @@ func TestService_Resolve_UnknownIDIsErrNoPendingQuestion(t *testing.T) {
 	}
 }
 
-func TestService_Resolve_DoubleAnswerIsErrAlreadyAnswered(t *testing.T) {
+// Name notes: pre-2026-05-04 the second Resolve returned ErrAlreadyAnswered;
+// after the atomic-pop refactor it now returns ErrNoPendingQuestion (the
+// entry is gone before the second caller can see it). Test name updated to
+// reflect the current contract — ErrAlreadyAnswered remains exported only
+// for errmap dictionary completeness.
+//
+// 命名注：2026-05-04 之前第二次 Resolve 返 ErrAlreadyAnswered；原子摘条目
+// 重构后改为必返 ErrNoPendingQuestion（条目在第二个调用方能看到之前已被删）。
+// 测试名跟着改；ErrAlreadyAnswered 仍导出只为 errmap 字典完整性。
+func TestService_Resolve_DoubleAnswerIsErrNoPendingQuestion(t *testing.T) {
 	svc := NewService()
 	go func() {
 		// Hold a Wait open for the test.

@@ -327,3 +327,7 @@ func markSeen(ctx context.Context, path string, size int64) {
 		state.MarkRead(path, size)
 	}
 }
+
+// ── Compile-time checks ───────────────────────────────────────────────────────
+
+var _ toolapp.Tool = (*Read)(nil)
