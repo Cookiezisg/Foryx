@@ -15,6 +15,7 @@ import (
 	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
+	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	eventsdomain "github.com/sunweilin/forgify/backend/internal/domain/events"
 	loggerinfra "github.com/sunweilin/forgify/backend/internal/infra/logger"
@@ -72,6 +73,16 @@ type Deps struct {
 	// SandboxService 支持 /api/v1/sandbox/* 管理/debug 端点（runtime + env
 	// 列表、手动 GC、bootstrap 状态/重试、per-conversation scratch env 管理）。
 	SandboxService *sandboxapp.Service
+
+	// SubagentService backs the /api/v1/subagent-* observability endpoints
+	// (run lists, run detail, message replay, type catalog). The Subagent
+	// SYSTEM TOOL is what the LLM uses to spawn runs; these endpoints are
+	// the UI/inspection surface.
+	//
+	// SubagentService 支持 /api/v1/subagent-* 观测端点（run 列表、run 详情、
+	// message 回放、类型目录）。LLM 用 Subagent 系统工具 spawn run；这些
+	// 端点是 UI / 检查面。
+	SubagentService *subagentapp.Service
 
 	// ── Dev-only fields (nil/zero when Dev=false) ─────────────────────────────
 

@@ -261,6 +261,7 @@ func main() {
 		EventsBridge:        eventsBridge,
 		AskService:          askService,
 		SandboxService:      sandboxSvc,
+		SubagentService:     subagentService,
 		Dev:                 *dev,
 		Tools:               tools,
 		DB:                  gdb,

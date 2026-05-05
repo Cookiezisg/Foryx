@@ -293,6 +293,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		EventsBridge:        bridge,
 		AskService:          askService,
 		SandboxService:      sandboxSvc,
+		SubagentService:     subagentService,
 		Dev:                 false,
 		Tools:               tools,
 		DB:                  gdb,
