@@ -1,11 +1,9 @@
 // Package pagination parses cursor-based pagination params and encodes
-// opaque continuation cursors. Cursors are base64url(JSON) so we can
-// evolve the shape (e.g. add updated_at later) without bumping the API
-// version — clients treat them as opaque.
+// opaque continuation cursors as base64url(JSON) so the internal shape
+// can evolve without bumping API versions.
 //
-// Package pagination 负责解析 cursor 分页参数并编码不透明的续传 cursor。
-// Cursor 是 base64url(JSON)，便于演化内部结构（如未来加 updated_at）
-// 而不用升级 API 版本——客户端把它当不透明字符串。
+// Package pagination 解析 cursor 分页参数并把续传 cursor 编码为 base64url(JSON)，
+// 让内部结构能演化而不升级 API 版本。
 package pagination
 
 import (
@@ -24,30 +22,29 @@ const (
 	MaxLimit     = 200
 )
 
-// Params is the normalized pagination input handed to app / infra layers.
+// Params is the normalized pagination input.
 //
-// Params 是交给 app / infra 层的标准化分页输入。
+// Params 是标准化的分页输入。
 type Params struct {
 	Cursor string
 	Limit  int
 }
 
-// Cursor is the standard (created_at, id) tuple used by every store's
-// list endpoint. The (CreatedAt, ID) ordering is stable even when timestamps
-// collide. JSON tags are short ("c"/"i") to keep encoded cursors compact.
+// Cursor is the standard (created_at, id) tuple used by every store list
+// endpoint — stable when timestamps collide. JSON tags are short ("c"/"i")
+// to keep encoded cursors compact.
 //
-// Cursor 是所有 store 列表端点统一的 (created_at, id) 元组。
-// (CreatedAt, ID) 排序在时间戳相同的情况下也能稳定分页。
-// JSON tag 用短名（"c"/"i"）让编码后的 cursor 字符串更紧凑。
+// Cursor 是所有 store 列表端点统一的 (created_at, id) 元组——时间戳相同
+// 也能稳定分页。JSON tag 用短名（"c"/"i"）让编码后字符串紧凑。
 type Cursor struct {
 	CreatedAt time.Time `json:"c"`
 	ID        string    `json:"i"`
 }
 
-// Parse extracts pagination params from query string. Invalid values
+// Parse extracts pagination params from r's query string. Invalid values
 // return errorsdomain.ErrInvalidRequest.
 //
-// Parse 从 query string 提取分页参数。非法值返回 errorsdomain.ErrInvalidRequest。
+// Parse 从 r 的 query string 提取分页参数。非法值返 errorsdomain.ErrInvalidRequest。
 func Parse(r *http.Request) (Params, error) {
 	q := r.URL.Query()
 
@@ -69,11 +66,10 @@ func Parse(r *http.Request) (Params, error) {
 	}, nil
 }
 
-// EncodeCursor marshals v as base64url for the nextCursor field.
-// Passing nil yields an empty string (meaning "no more pages").
+// EncodeCursor marshals v as base64url(JSON) for the nextCursor field.
+// nil → "" (no more pages).
 //
-// EncodeCursor 把 v 编码为 base64url，用于 nextCursor 字段。
-// 传 nil 得到空字符串（表示"没有下一页"）。
+// EncodeCursor 把 v 编码为 base64url(JSON) 用于 nextCursor 字段。nil → ""（无下一页）。
 func EncodeCursor(v any) (string, error) {
 	if v == nil {
 		return "", nil
@@ -85,11 +81,11 @@ func EncodeCursor(v any) (string, error) {
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-// DecodeCursor reverses EncodeCursor. Empty cursor is a no-op (v untouched).
-// Malformed cursors return errorsdomain.ErrInvalidRequest.
+// DecodeCursor reverses EncodeCursor. Empty cursor is a no-op (v untouched);
+// malformed cursors return errorsdomain.ErrInvalidRequest.
 //
-// DecodeCursor 是 EncodeCursor 的逆操作。空 cursor 为 no-op（v 不动）。
-// 格式错误的 cursor 返回 errorsdomain.ErrInvalidRequest。
+// DecodeCursor 是 EncodeCursor 的逆操作。空 cursor 为 no-op；
+// 格式错误的 cursor 返 errorsdomain.ErrInvalidRequest。
 func DecodeCursor(cursor string, v any) error {
 	if cursor == "" {
 		return nil

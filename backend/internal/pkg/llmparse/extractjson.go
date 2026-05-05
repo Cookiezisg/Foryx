@@ -1,11 +1,8 @@
-// Package llmparse provides shared helpers for pulling structured payloads
-// out of free-form LLM text responses. Centralised here so every site (forge
-// service GenerateTestCases, search_forges tool, future intent agents) uses
-// the same fence-stripping and bracket-fallback rules.
+// Package llmparse extracts structured payloads from free-form LLM text.
+// Shared by forge GenerateTestCases, search_forges, future intent agents.
 //
-// Package llmparse 提供从自由文本 LLM 响应中提取结构化载荷的共享 helper。
-// 集中在此包让各处（forge service GenerateTestCases、search_forges 工具、
-// 未来的意图 agent）使用同一套 fence 剥除和外层括号兜底规则。
+// Package llmparse 从自由文本 LLM 响应中提取结构化载荷。
+// 由 forge GenerateTestCases / search_forges / 未来意图 agent 共用。
 package llmparse
 
 import (
@@ -13,33 +10,18 @@ import (
 	"strings"
 )
 
-// ExtractJSON pulls a JSON value out of an LLM response, handling several
-// common shapes the LLM may use:
+// ExtractJSON pulls a JSON value out of LLM response s, handling plain JSON,
+// markdown code fences (```json … ```), and prose-wrapped output (outer
+// bracket fallback). Returns "", false when nothing parses. Fences are tried
+// first (unambiguous); bracket fallback validates via json.Unmarshal to avoid
+// stray-bracket false positives.
 //
-//  1. Plain JSON ("[...]" or "{...}") — returned as-is.
-//  2. Markdown code fence with json language hint (```json ... ``` or ``` ... ```).
-//  3. Surrounding prose ("Here's the answer: [...]") — fallback to outer
-//     bracket matching, less reliable.
-//
-// Returns the JSON substring and true when a candidate parses cleanly;
-// "", false when nothing matches. Markdown fences are tried first because
-// they are unambiguous; bracket fallback is validated with json.Unmarshal so
-// stray "[" / "]" inside prose don't produce a false positive.
-//
-// ExtractJSON 从 LLM 响应中提取 JSON 值，处理几种常见情况：
-//
-//  1. 纯 JSON（"[...]" 或 "{...}"）原样返回
-//  2. Markdown 代码 fence（```json ... ``` 或 ``` ... ```）
-//  3. 周围有散文（"Here's the answer: [...]"）—— 兜底用外层括号匹配
-//
-// 找到合法候选时返回 (substring, true)；都没匹配返 ("", false)。
-// 优先试 markdown fence（无歧义）；外层括号兜底用 json.Unmarshal 验证，
-// 避免散文里的方括号造成误匹配。
+// ExtractJSON 从 LLM 响应 s 中提取 JSON：处理纯 JSON、markdown fence、
+// 散文包裹（外层括号兜底）。无匹配返 "", false。优先 fence（无歧义），
+// 外层括号兜底用 json.Unmarshal 验证防散文误匹配。
 func ExtractJSON(s string) (string, bool) {
 	s = strings.TrimSpace(s)
 
-	// Markdown fences first (unambiguous).
-	// 优先 markdown fence（无歧义）。
 	for _, fence := range []string{"```json\n", "```json", "```\n", "```"} {
 		if idx := strings.Index(s, fence); idx >= 0 {
 			start := idx + len(fence)
@@ -53,8 +35,6 @@ func ExtractJSON(s string) (string, bool) {
 		}
 	}
 
-	// Fallback: outer-most bracket pair, validated.
-	// 兜底：外层括号匹配，验证。
 	for _, pair := range [][2]byte{{'[', ']'}, {'{', '}'}} {
 		start := strings.IndexByte(s, pair[0])
 		end := strings.LastIndexByte(s, pair[1])
@@ -68,12 +48,10 @@ func ExtractJSON(s string) (string, bool) {
 	return "", false
 }
 
-// IsLikelyJSON cheaply checks if s parses as valid JSON. Used by ExtractJSON
-// to disambiguate between candidate substrings; exported because callers may
-// want to validate post-extraction strings without forcing a specific schema.
+// IsLikelyJSON reports whether s parses as valid JSON. Exported for callers
+// that want to validate without binding a specific schema.
 //
-// IsLikelyJSON 廉价检查 s 是否合法 JSON。供 ExtractJSON 在多个候选间挑选；
-// 导出供调用方在不绑定具体 schema 时验证提取后的字符串。
+// IsLikelyJSON 报告 s 是否合法 JSON。导出供不绑定 schema 的调用方验证。
 func IsLikelyJSON(s string) bool {
 	var v any
 	return json.Unmarshal([]byte(s), &v) == nil
