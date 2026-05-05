@@ -1,13 +1,13 @@
 // bash_route_test.go — pure-function tests for the Bash auto-route layer:
-// detectRuntime classification, stripCDPrefix parsing, envBinDirsForKind
-// per-OS path derivation, prependPath env-var manipulation. The actual
-// EnsureEnv path (Bash.maybeAutoRoute → sandbox Service) is covered in
-// the D9 pipeline suite where a real sandbox can spin up.
+// detectRuntime classification (AST-based), envBinDirsForKind per-OS path
+// derivation, prependPath env-var manipulation. The actual EnsureEnv path
+// (Bash.maybeAutoRoute → sandbox Service) is covered in the D9 pipeline
+// suite where a real sandbox can spin up.
 //
 // bash_route_test.go ——Bash auto-route 层 pure-function 测试：detectRuntime
-// 分类、stripCDPrefix 解析、envBinDirsForKind per-OS 路径推导、prependPath
-// env var 操作。真 EnsureEnv 路径（Bash.maybeAutoRoute → sandbox Service）
-// 由 D9 pipeline 套覆盖（真 sandbox 启动）。
+// 分类（AST-based）、envBinDirsForKind per-OS 路径推导、prependPath env var
+// 操作。真 EnsureEnv 路径（Bash.maybeAutoRoute → sandbox Service）由 D9
+// pipeline 套覆盖（真 sandbox 启动）。
 
 package shell
 
@@ -25,6 +25,7 @@ func TestDetectRuntime_Classification(t *testing.T) {
 		cmd  string
 		want string
 	}{
+		// ── Plain runtime invocations (covered by both first-token and AST) ──
 		// Python family
 		{"python script.py", "python"},
 		{"python3 script.py", "python"},
@@ -61,21 +62,66 @@ func TestDetectRuntime_Classification(t *testing.T) {
 		{"gradle build", "java"},
 		// Dotnet
 		{"dotnet build", "dotnet"},
-		// CD prefix stripped
+
+		// ── cd-prefix and chain handling (AST walks every CallExpr) ─────
 		{"cd /tmp && pip install pandas", "python"},
 		{"cd /workspace && npm test", "node"},
-		// Plain shell — nil
+		{"cd /workspace && cd nested && npm test", "node"},
+		{"pip install foo && rm -rf /tmp", "python"},
+		{"ls && pip install foo", "python"},
+		{"pip install foo; npm install bar", "python"}, // first match wins
+		{"pip install foo | tee log.txt", "python"},
+
+		// ── Path prefix stripped (AST upgrade vs. first-token regex) ────
+		{"/usr/bin/python3 script.py", "python"},
+		{"/opt/homebrew/bin/pip install foo", "python"},
+		{"/usr/local/bin/node app.js", "node"},
+
+		// ── env wrapper / leading assignments (AST upgrade) ─────────────
+		{"FOO=bar pip install x", "python"},
+		{"PYTHONPATH=. python script.py", "python"},
+		{"env PYTHONPATH=. python script.py", "python"},
+		{"env -i CARGO_HOME=/tmp cargo build", "rust"},
+		{"FOO=bar BAZ=qux node app.js", "node"},
+
+		// ── Shell wrappers recurse into -c argument (AST upgrade) ───────
+		{`bash -c "pip install pandas"`, "python"},
+		{`sh -c 'npm install'`, "node"},
+		{`bash -c "cd /tmp && pip install foo"`, "python"},
+		{`bash -c "ls -la"`, ""},   // no runtime inside
+		{`bash -c "git status"`, ""}, // no runtime inside
+		{`bash -lc "pip install x"`, "python"}, // combined flag cluster handled
+		{`bash -cl "pip install x"`, "python"}, // c-first cluster also works
+
+		// ── Introspection commands route by argument (AST upgrade) ──────
+		{"which python3", "python"},
+		{"which npm", "node"},
+		{"type pip", "python"},
+		{"command -v cargo", "rust"},
+		{"which ls", ""}, // not a runtime
+		{"which", ""},    // bare which, no arg
+
+		// ── Subshells / command substitution (Walk descends) ────────────
+		{"(pip install pandas)", "python"},
+		{"(cd /tmp && npm install)", "node"},
+		{"echo $(pip install pandas)", "python"},
+		{"`pip install pandas`", "python"},
+
+		// ── Plain shell — nil ───────────────────────────────────────────
 		{"ls -la", ""},
 		{"git status", ""},
 		{"cat README.md", ""},
 		{"echo hello", ""},
 		{"", ""},
 		{"   ", ""},
-		// Nested constructs intentionally NOT detected
-		{`bash -c "pip install pandas"`, ""},
-		{`sh -c 'npm install'`, ""},
-		// First-token wins; "FOO=bar pip" doesn't strip env assignment
-		{"FOO=bar pip install x", ""},
+		{"git log --oneline -10", ""},
+		{"cat /tmp/file && grep foo /tmp/other", ""},
+
+		// ── Static-escape gotchas (parser CAN'T see; remain bypassed,
+		//    LLM warned in Bash.Description) ─────────────────────────────
+		{`eval "pip install pandas"`, ""},
+		{"source ./install.sh", ""},
+		{". ./install.sh", ""},
 	}
 	for _, c := range cases {
 		got := detectRuntime(c.cmd)
@@ -85,24 +131,39 @@ func TestDetectRuntime_Classification(t *testing.T) {
 	}
 }
 
-func TestStripCDPrefix(t *testing.T) {
-	cases := []struct {
-		in       string
-		wantRest string
-		wantOK   bool
-	}{
-		{"cd /tmp && pip install x", "pip install x", true},
-		{"  cd /tmp   &&   npm install", "npm install", true},
-		{"cd /workspace && cd nested && npm test", "cd nested && npm test", true},
-		{"pip install x", "pip install x", false},
-		{"cd /tmp", "cd /tmp", false}, // no &&
-		{"cd /tmp;ls", "cd /tmp;ls", false},
+// TestDetectRuntime_FirstTokenFallback asserts that when mvdan.cc/sh's
+// parser rejects the input, detectRuntime falls back to first-token
+// regex on the raw command rather than returning "" silently. Triggered
+// by truly malformed shell — most strings parse fine.
+//
+// TestDetectRuntime_FirstTokenFallback 断言 mvdan.cc/sh parser 拒绝输入时，
+// detectRuntime fallback 到原命令的 first-token regex，而非静默返 ""。由真正
+// 畸形的 shell 触发——大多数字符串都能成功 parse。
+func TestDetectRuntime_FirstTokenFallback(t *testing.T) {
+	// Unterminated double-quote — parser errors; fallback inspects first token.
+	// 未闭合双引号——parser 报错；fallback 看首 token。
+	got := detectRuntimeFirstToken(`pip install "unterminated`)
+	if got != "python" {
+		t.Errorf("first-token fallback on broken shell: got %q, want python", got)
+	}
+}
+
+// ── stripPath ────────────────────────────────────────────────────────
+
+func TestStripPath(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"python3", "python3"},
+		{"/usr/bin/python3", "python3"},
+		{"/opt/homebrew/bin/pip", "pip"},
+		{"./relative/path/cargo", "cargo"},
+		{`C:\Python312\python.exe`, "python.exe"},
+		{"", ""},
+		{"/", ""},
+		{"//double", "double"},
 	}
 	for _, c := range cases {
-		gotRest, gotOK := stripCDPrefix(c.in)
-		if gotRest != c.wantRest || gotOK != c.wantOK {
-			t.Errorf("stripCDPrefix(%q) = (%q, %v), want (%q, %v)",
-				c.in, gotRest, gotOK, c.wantRest, c.wantOK)
+		if got := stripPath(c.in); got != c.want {
+			t.Errorf("stripPath(%q) = %q, want %q", c.in, got, c.want)
 		}
 	}
 }
@@ -225,11 +286,6 @@ func contains(haystack []string, needle string) bool {
 	return false
 }
 
-// envKeyEqual is exercised indirectly by the Windows-skipped tests;
-// add a direct case so the helper itself is asserted.
-//
-// envKeyEqual 在 Windows-skipped 测试间接覆盖；加一个直接 case 让 helper
-// 自身被断言。
 func TestEnvKeyEqual(t *testing.T) {
 	if !envKeyEqual("PATH", "PATH") {
 		t.Error("identical keys should be equal")
@@ -246,10 +302,7 @@ func TestEnvKeyEqual(t *testing.T) {
 			t.Error("non-Windows: PATH/Path must be case-sensitive distinct")
 		}
 	}
-	// Smoke-test: TrimSpace usage + strings import via TrimSpace branch
-	// in detectRuntime stays exercised even when env-based detection is
-	// blank (sanity in case linter ever flags strings as unused).
-	//
-	// 烟雾测试：保 strings 包 TrimSpace 持续被引用（防 linter 报未用）。
+	// Smoke-test: keep strings import live for future test additions.
+	// 烟雾测试：保 strings 包持续被引用（防 linter 报未用）。
 	_ = strings.TrimSpace("")
 }

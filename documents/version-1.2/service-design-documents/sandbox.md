@@ -762,23 +762,47 @@ func (b *Bash) Execute(ctx context.Context, argsJSON string) (string, error) {
 
 #### detectRuntime — 命令到 runtime 的映射
 
+实现走 **AST 解析**（`mvdan.cc/sh/v3/syntax`）而非 first-token regex——`shfmt` 的同一 parser，pure Go，跨平台 0 依赖。流程：parse 命令 → `syntax.Walk` 遍历每个 `CallExpr` → 对每个 call 经 `classifyCallExpr`（剥路径前缀 / 处理 wrapper / env / which）→ 匹配下面的 runtime 表，**首次命中胜**。pattern 匹配的是规范化后的*裸命令名*（无路径、无 env 前缀、无 flag）：
+
 ```go
 var runtimeDetectors = []runtimeDetector{
-    {Kind: "python", Pattern: regexp.MustCompile(`^(?:python3?|pip3?|uv|virtualenv|pipenv|poetry)\b`)},
-    {Kind: "node",   Pattern: regexp.MustCompile(`^(?:node|npm|npx|yarn|pnpm)\b`)},
-    {Kind: "rust",   Pattern: regexp.MustCompile(`^(?:cargo|rustc|rustup)\b`)},
-    {Kind: "go",     Pattern: regexp.MustCompile(`^go\b`)},
-    {Kind: "ruby",   Pattern: regexp.MustCompile(`^(?:ruby|gem|bundle|bundler|rake)\b`)},
-    {Kind: "php",    Pattern: regexp.MustCompile(`^(?:php|composer)\b`)},
-    {Kind: "java",   Pattern: regexp.MustCompile(`^(?:java|javac|mvn|gradle)\b`)},
+    {Kind: "python", Pattern: regexp.MustCompile(`^(?:python3?(?:\.\d+)?|pip3?|uv|virtualenv|pipenv|poetry)$`)},
+    {Kind: "node",   Pattern: regexp.MustCompile(`^(?:node|npm|npx|yarn|pnpm)$`)},
+    {Kind: "rust",   Pattern: regexp.MustCompile(`^(?:cargo|rustc|rustup)$`)},
+    {Kind: "go",     Pattern: regexp.MustCompile(`^go$`)},
+    {Kind: "ruby",   Pattern: regexp.MustCompile(`^(?:ruby|gem|bundle|bundler|rake)$`)},
+    {Kind: "php",    Pattern: regexp.MustCompile(`^(?:php|composer)$`)},
+    {Kind: "java",   Pattern: regexp.MustCompile(`^(?:java|javac|mvn|gradle)$`)},
+    {Kind: "dotnet", Pattern: regexp.MustCompile(`^dotnet$`)},
     // 未来加新 runtime 1 行
 }
 ```
 
-**复杂命令处理**：
-- `cd /tmp && python script.py` → 切分后第一个有 runtime 的命令决定 routing
-- `bash -c "pip install pandas"` → 嵌套解析，检测内层
-- `which python3` → routing 到 conversation Python env，which 在该 env PATH 找
+**AST 走查覆盖的复杂命令**（first-token regex 全部漏掉）：
+
+| 写法 | AST 怎么处理 |
+|---|---|
+| `cd /tmp && python script.py` | BinaryCmd 的两支都走，`python` CallExpr 命中 |
+| `cd a && cd b && npm test` | 任意层 `cd` 链都走，最终 `npm` 命中 |
+| `pip install foo \| tee log` | pipe 两端 CallExpr 都走，第一个命中即停 |
+| `(pip install pandas)` | Subshell 下钻到 inner CallExpr |
+| `$(pip install pandas)` / 反引号 | CmdSubst 下钻 |
+| `bash -c "pip install pandas"` | `classifyCallExpr` 识别 wrapper，对 `-c` 后字面量递归调 `detectRuntime` |
+| `bash -lc "pip install x"` / `-cl` | 单短横组合 flag 含 `c` 当 `-c` 处理 |
+| `env PYTHONPATH=. python ...` | `env` wrapper 跳过赋值 / flag，首个非赋值 arg 是真命令 |
+| `FOO=bar python script.py` | AST 把前导赋值放 `Assigns`，`Args[0]` 直接是 `python` |
+| `/usr/bin/python3 script.py` | `stripPath` 取 basename 后匹配 |
+| `which python3` / `type pip` / `command -v cargo` | 自省命令按 argument 路由 |
+
+**parser 看不见的静态逃逸**（fail-open，靠 LLM 自觉避免；Bash tool description 已警告）：
+
+| 写法 | 为何看不见 |
+|---|---|
+| `eval "pip install pandas"` | eval 字符串是 Lit，AST 不下钻字面量 |
+| `source ./install.sh` / `. ./install.sh` | 脚本路径不透明，无法 introspect 文件内容 |
+| `$(<动态字符串>)` 含变量扩展 | 变量值运行时才有，static skeleton 看不到 |
+
+malformed shell（罕见）→ `detectRuntimeFirstToken` fallback：取首 token 直接匹配，至少不静默丢掉 `pip install ...` 这种简单形态。
 
 #### SpawnShell 实现
 

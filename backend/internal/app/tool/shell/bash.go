@@ -92,7 +92,11 @@ Usage:
 - ` + "`timeout`" + ` (milliseconds, foreground only) defaults to 120000 (2 min); hard max 600000 (10 min). For longer-running tasks use background mode.
 - The conversation has a tracked working directory: ` + "`cd <path>`" + ` as the entire command updates it; subsequent commands run there. Chained 'cd ... && ...' does not update the tracked cwd (matches normal subshell semantics).
 - Combined stdout+stderr is returned, capped at 256 KB. Exit code appears in a status footer.
-- This is a local single-user app — there is no banned-command list. Be careful with destructive commands; the user sees what you propose to run.`
+- This is a local single-user app — there is no banned-command list. Be careful with destructive commands; the user sees what you propose to run.
+
+Sandbox auto-routing (packages do not pollute the host system):
+- Commands that invoke a managed language runtime (` + "`pip`" + `, ` + "`python`" + `, ` + "`uv`" + `, ` + "`node`" + `, ` + "`npm`" + `, ` + "`npx`" + `, ` + "`pnpm`" + `, ` + "`cargo`" + `, ` + "`go`" + `, ` + "`gem`" + `, ` + "`bundle`" + `, ` + "`mvn`" + `, ` + "`gradle`" + `, ` + "`composer`" + `, ` + "`dotnet`" + `, etc.) automatically execute inside a per-conversation isolated environment. Detection covers nested forms — ` + "`bash -c \"pip install ...\"`" + `, ` + "`env VAR=val python ...`" + `, ` + "`/usr/bin/python3 ...`" + `, ` + "`cd /tmp && python ...`" + ` chains, subshells, and ` + "`which python3`" + `.
+- The router cannot see through ` + "`eval \"...\"`" + `, ` + "`source ./script.sh`" + `, or commands hidden inside ` + "`$(<dynamic-string>)`" + ` substitutions — those run on the host system and pollute it. When installing packages or running scripts, write the runtime command directly (e.g. ` + "`pip install pandas`" + `, not ` + "`eval \"pip install pandas\"`" + `).`
 
 var bashSchema = json.RawMessage(`{
 	"type": "object",

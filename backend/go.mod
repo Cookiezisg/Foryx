@@ -16,6 +16,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	gorm.io/gorm v1.31.1
 	honnef.co/go/tools v0.7.0
+	mvdan.cc/sh/v3 v3.13.1
 )
 
 require (
@@ -62,5 +63,4 @@ require (
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.11.0 // indirect
 	modernc.org/sqlite v1.50.0 // indirect
-	mvdan.cc/sh/v3 v3.13.1 // indirect
 )
