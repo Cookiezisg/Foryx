@@ -283,6 +283,75 @@ func (s *Service) TotalDiskUsage(ctx context.Context) (int64, error) {
 	return s.repo.TotalSizeBytes(ctx)
 }
 
+// GetEnv returns a single env by id (e.g. for the GET /sandbox/envs/{id}
+// debug endpoint). Surfaces ErrEnvNotFound on miss.
+//
+// GetEnv 按 id 返单个 env（如 GET /sandbox/envs/{id} debug 端点用）。
+// 未命中返 ErrEnvNotFound。
+func (s *Service) GetEnv(ctx context.Context, id string) (*sandboxdomain.Env, error) {
+	return s.repo.GetEnv(ctx, id)
+}
+
+// DeleteRuntime hard-removes a runtime row + its on-disk install dir.
+// Refuses to proceed if any env still references the runtime
+// (returns ErrEnvInUse so the caller can surface a 409). Used by the
+// debug HTTP endpoint and the v2 future "uninstall a runtime" flow.
+//
+// DeleteRuntime 硬删 runtime 行 + 其盘上 install 目录。仍有 env 引用时
+// 拒绝（返 ErrEnvInUse 让调用方上报 409）。debug HTTP 端点 + v2 未来
+// "卸载 runtime" 流程用。
+func (s *Service) DeleteRuntime(ctx context.Context, id string) error {
+	rt, err := s.repo.GetRuntime(ctx, id)
+	if err != nil {
+		return fmt.Errorf("sandboxapp.DeleteRuntime: get %s: %w", id, err)
+	}
+	envs, err := s.repo.ListEnvsByRuntime(ctx, id)
+	if err != nil {
+		return fmt.Errorf("sandboxapp.DeleteRuntime: list refs: %w", err)
+	}
+	if len(envs) > 0 {
+		return fmt.Errorf("sandboxapp.DeleteRuntime: %d env(s) still reference %s: %w",
+			len(envs), id, sandboxdomain.ErrEnvInUse)
+	}
+	rtPath := filepath.Join(s.sandboxRoot, rt.Path)
+	if err := removeAll(rtPath); err != nil {
+		s.log.Warn("sandbox: delete runtime dir failed (continuing to delete row)",
+			zap.String("path", rtPath), zap.Error(err))
+	}
+	return s.repo.DeleteRuntime(ctx, id)
+}
+
+// GC destroys envs whose LastUsedAt is older than now-olderThan. Returns
+// the count actually removed. v1 doesn't auto-run GC (sandbox.md §15
+// rationale: shared deps caches keep disk impact small); the user
+// triggers via POST /api/v1/sandbox:gc.
+//
+// GC 删 LastUsedAt 早于 now-olderThan 的 env。返实际删数。v1 不自动跑 GC
+// （sandbox.md §15 理由：共享 deps cache 让磁盘开销小）；用户通过
+// POST /api/v1/sandbox:gc 触发。
+func (s *Service) GC(ctx context.Context, olderThan time.Duration) (int, error) {
+	cutoff := time.Now().Add(-olderThan)
+	stale, err := s.repo.ListEnvsLastUsedBefore(ctx, cutoff)
+	if err != nil {
+		return 0, fmt.Errorf("sandboxapp.GC: list stale: %w", err)
+	}
+	removed := 0
+	for _, e := range stale {
+		owner := sandboxdomain.Owner{Kind: e.OwnerKind, ID: e.OwnerID}
+		if err := s.Destroy(ctx, owner); err != nil {
+			s.log.Warn("sandbox GC: destroy env failed (continuing)",
+				zap.String("env_id", e.ID), zap.Error(err))
+			continue
+		}
+		removed++
+	}
+	s.log.Info("sandbox GC complete",
+		zap.Int("scanned", len(stale)),
+		zap.Int("removed", removed),
+		zap.Duration("older_than", olderThan))
+	return removed, nil
+}
+
 // EnsureRuntime is sandbox.md §8 EnsureRuntime: install the runtime if
 // absent, return existing manifest row otherwise. Per-kind install lock
 // prevents racing duplicates; double-checks the DB after acquiring the
@@ -556,4 +625,40 @@ func depsEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// ── Test helpers (cross-package; do NOT call from production code) ────
+
+// MarkReadyForTest forces IsReady() to return true and sets a fake miseBin
+// path. Callers across packages (e.g. transport/httpapi handler tests)
+// use this to skip Bootstrap when a real mise extraction isn't needed.
+//
+// Production code MUST NOT call this — it bypasses the bootstrap-failed
+// degraded-mode protection. The "ForTest" suffix is a hard convention:
+// any production call site is a code review red flag.
+//
+// MarkReadyForTest 强制 IsReady() 返 true 并设假 miseBin 路径。跨包调用方
+// （如 transport/httpapi handler 测试）用它跳过 Bootstrap，当不需要真 mise
+// 抽取时。
+//
+// 生产代码**禁用**——它绕过 bootstrap 失败的 degraded mode 保护。
+// "ForTest" 后缀是硬约定：生产调用点是 code review 红旗。
+func (s *Service) MarkReadyForTest(miseBin string) {
+	s.miseBin = miseBin
+	s.bootstrapped.Store(true)
+}
+
+// ActiveHandleCountForTest returns the number of LongLived handles
+// currently registered. Tests use this to verify Spawn / Wait / Kill
+// register and un-register correctly.
+//
+// ActiveHandleCountForTest 返当前注册的 LongLived handle 数量。测试用它
+// 验证 Spawn / Wait / Kill 正确注册 + 反注册。
+func (s *Service) ActiveHandleCountForTest() int {
+	count := 0
+	s.activeHandles.Range(func(_, _ any) bool {
+		count++
+		return true
+	})
+	return count
 }

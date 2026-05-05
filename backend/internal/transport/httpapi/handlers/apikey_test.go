@@ -125,6 +125,23 @@ func dataMap(t *testing.T, env map[string]any) map[string]any {
 	return d
 }
 
+// dataSlice extracts env["data"] as slice (panics if unexpected shape).
+// Tolerates nil (returns []any{}) so callers can len() unconditionally.
+//
+// dataSlice 提取 env["data"] 为 slice（形状不对则 panic）。
+// 容忍 nil（返 []any{}）让调用方无脑 len()。
+func dataSlice(t *testing.T, env map[string]any) []any {
+	t.Helper()
+	if env["data"] == nil {
+		return []any{}
+	}
+	d, ok := env["data"].([]any)
+	if !ok {
+		t.Fatalf("data is not a slice: %+v", env)
+	}
+	return d
+}
+
 // errorCode extracts env["error"]["code"].
 //
 // errorCode 提取 env["error"]["code"]。

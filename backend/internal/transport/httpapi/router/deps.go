@@ -14,6 +14,7 @@ import (
 	convapp "github.com/sunweilin/forgify/backend/internal/app/conversation"
 	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
+	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	eventsdomain "github.com/sunweilin/forgify/backend/internal/domain/events"
 	loggerinfra "github.com/sunweilin/forgify/backend/internal/infra/logger"
@@ -63,6 +64,14 @@ type Deps struct {
 	// AskService 把 POST /api/v1/conversations/{id}/answers 收到的用户答案
 	// 路由回正在 Wait 阻塞的 AskUserQuestion 工具。
 	AskService *askapp.Service
+
+	// SandboxService backs the /api/v1/sandbox/* admin/debug endpoints
+	// (runtime + env listing, manual GC, bootstrap status / retry,
+	// per-conversation scratch env management).
+	//
+	// SandboxService 支持 /api/v1/sandbox/* 管理/debug 端点（runtime + env
+	// 列表、手动 GC、bootstrap 状态/重试、per-conversation scratch env 管理）。
+	SandboxService *sandboxapp.Service
 
 	// ── Dev-only fields (nil/zero when Dev=false) ─────────────────────────────
 

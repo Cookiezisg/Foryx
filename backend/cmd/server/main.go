@@ -231,6 +231,7 @@ func main() {
 		ChatService:         chatService,
 		EventsBridge:        eventsBridge,
 		AskService:          askService,
+		SandboxService:      sandboxSvc,
 		Dev:                 *dev,
 		Tools:               tools,
 		DB:                  gdb,
