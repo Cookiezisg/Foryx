@@ -21,7 +21,6 @@ import (
 
 	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
-	sandboxinfra "github.com/sunweilin/forgify/backend/internal/infra/sandbox"
 	forgestore "github.com/sunweilin/forgify/backend/internal/infra/store/forge"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 
@@ -43,14 +42,14 @@ type fakeSandbox struct {
 
 	pythonPath string
 
-	syncCalls   []sandboxinfra.SyncRequest
-	runCalls    []sandboxinfra.RunRequest
+	syncCalls   []SyncRequest
+	runCalls    []RunRequest
 	destroys    []string
 	destroyEnvs []destroyEnvCall
 	writeCodes  []writeCodeCall
 
-	syncFunc func(req sandboxinfra.SyncRequest) error
-	runFunc  func(req sandboxinfra.RunRequest) (*forgedomain.ExecutionResult, error)
+	syncFunc func(req SyncRequest) error
+	runFunc  func(req RunRequest) (*forgedomain.ExecutionResult, error)
 }
 
 type destroyEnvCall struct{ ForgeID, EnvID string }
@@ -58,7 +57,7 @@ type writeCodeCall struct{ ForgeID, VersionID, Code, EntryFunction string }
 
 func (s *fakeSandbox) PythonPath() string { return s.pythonPath }
 
-func (s *fakeSandbox) Sync(ctx context.Context, req sandboxinfra.SyncRequest) error {
+func (s *fakeSandbox) Sync(ctx context.Context, req SyncRequest) error {
 	s.mu.Lock()
 	s.syncCalls = append(s.syncCalls, req)
 	fn := s.syncFunc
@@ -78,7 +77,7 @@ func (s *fakeSandbox) Sync(ctx context.Context, req sandboxinfra.SyncRequest) er
 	return nil
 }
 
-func (s *fakeSandbox) Run(ctx context.Context, req sandboxinfra.RunRequest) (*forgedomain.ExecutionResult, error) {
+func (s *fakeSandbox) Run(ctx context.Context, req RunRequest) (*forgedomain.ExecutionResult, error) {
 	s.mu.Lock()
 	s.runCalls = append(s.runCalls, req)
 	fn := s.runFunc
@@ -205,8 +204,8 @@ func TestCreate_BasicFlowDrivesActiveVersionAndSync(t *testing.T) {
 
 func TestCreate_SyncFailureLeavesForgeInFailedState(t *testing.T) {
 	svc, sb, repo := newServiceWithFakes(t)
-	sb.syncFunc = func(sandboxinfra.SyncRequest) error {
-		return &sandboxinfra.SyncError{
+	sb.syncFunc = func(SyncRequest) error {
+		return &SyncError{
 			Cause:  errors.New("exit 1"),
 			Stderr: "× resolution failed: package not found",
 		}
@@ -442,8 +441,8 @@ func TestAcceptPending_NotReadyRejected(t *testing.T) {
 	}
 	// Make the next sync fail so the pending lands in failed state.
 	// 让下一次 sync 失败，pending 落 failed。
-	sb.syncFunc = func(sandboxinfra.SyncRequest) error {
-		return &sandboxinfra.SyncError{Stderr: "× boom"}
+	sb.syncFunc = func(SyncRequest) error {
+		return &SyncError{Stderr: "× boom"}
 	}
 	if _, err := svc.CreatePending(ctxAlice(), f.ID, PendingSnapshot{Code: "def base():\n    return 7\n"}); err != nil {
 		t.Fatal(err)

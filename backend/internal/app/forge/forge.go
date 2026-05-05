@@ -24,7 +24,6 @@ import (
 
 	eventsdomain "github.com/sunweilin/forgify/backend/internal/domain/events"
 	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
-	sandboxinfra "github.com/sunweilin/forgify/backend/internal/infra/sandbox"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	llmparsepkg "github.com/sunweilin/forgify/backend/internal/pkg/llmparse"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
@@ -52,18 +51,19 @@ type Sandbox interface {
 	PythonPath() string
 
 	// Sync materializes the venv directory for the given EnvID. Idempotent —
-	// already-existing .venv returns nil immediately. Failures wrap
-	// *sandboxinfra.SyncError carrying the captured uv stderr.
+	// already-existing .venv returns nil immediately. Adapter
+	// implementations wrap underlying errors (e.g. uv stderr) in their
+	// own error type.
 	//
 	// Sync 物化指定 EnvID 的 venv 目录。幂等——.venv 已存在则立即返 nil。
-	// 失败包装 *sandboxinfra.SyncError 含捕获的 uv stderr。
-	Sync(ctx context.Context, req sandboxinfra.SyncRequest) error
+	// adapter 实现包装底层错误（如 uv stderr）为自己的错类型。
+	Sync(ctx context.Context, req SyncRequest) error
 
 	// Run executes a forge in its EnvID's venv. ctx-cancel kills the whole
 	// process tree. No timeout enforced.
 	//
 	// Run 在 EnvID 的 venv 中执行 forge。ctx-cancel 杀整个进程树。无 timeout。
-	Run(ctx context.Context, req sandboxinfra.RunRequest) (*forgedomain.ExecutionResult, error)
+	Run(ctx context.Context, req RunRequest) (*forgedomain.ExecutionResult, error)
 
 	// WriteCodeFile updates main.py for a version without touching its venv.
 	// Used when EnvID is unchanged but code changed.
@@ -922,7 +922,7 @@ func (s *Service) RunForge(ctx context.Context, forgeID string, input map[string
 	if err != nil {
 		return nil, fmt.Errorf("forgeapp.RunForge: %w", err)
 	}
-	result, err := s.sandbox.Run(ctx, sandboxinfra.RunRequest{
+	result, err := s.sandbox.Run(ctx, RunRequest{
 		ForgeID:   forgeID,
 		VersionID: av.ID,
 		EnvID:     av.EnvID,
@@ -976,7 +976,7 @@ func (s *Service) RunTestCase(ctx context.Context, testCaseID, batchID string) (
 	if err != nil {
 		return nil, fmt.Errorf("forgeapp.RunTestCase: %w", err)
 	}
-	result, sandboxErr := s.sandbox.Run(ctx, sandboxinfra.RunRequest{
+	result, sandboxErr := s.sandbox.Run(ctx, RunRequest{
 		ForgeID:   f.ID,
 		VersionID: av.ID,
 		EnvID:     av.EnvID,
@@ -1465,7 +1465,7 @@ func (s *Service) SyncEnvForVersion(ctx context.Context, convID, versionID strin
 	}
 	s.publishForgeAfterChange(ctx, convID, v.ForgeID)
 
-	syncErr := s.sandbox.Sync(ctx, sandboxinfra.SyncRequest{
+	syncErr := s.sandbox.Sync(ctx, SyncRequest{
 		ForgeID:       v.ForgeID,
 		VersionID:     v.ID,
 		EnvID:         v.EnvID,
@@ -1483,7 +1483,7 @@ func (s *Service) SyncEnvForVersion(ctx context.Context, convID, versionID strin
 
 	if syncErr != nil {
 		stderr := syncErr.Error()
-		var se *sandboxinfra.SyncError
+		var se *SyncError
 		if errors.As(syncErr, &se) {
 			stderr = se.Stderr
 		}
@@ -1632,7 +1632,7 @@ func depsJSON(deps []string) string {
 func (s *Service) fillEnvFields(v *forgedomain.ForgeVersion, deps []string, pythonVersion string) {
 	v.Dependencies = depsJSON(deps)
 	v.PythonVersion = pythonVersion
-	v.EnvID = sandboxinfra.ComputeEnvID(deps, pythonVersion)
+	v.EnvID = ComputeEnvID(deps, pythonVersion)
 	v.EnvStatus = forgedomain.EnvStatusPending
 }
 

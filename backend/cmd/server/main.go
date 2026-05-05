@@ -25,6 +25,7 @@ import (
 	convapp "github.com/sunweilin/forgify/backend/internal/app/conversation"
 	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
+	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
 	taskapp "github.com/sunweilin/forgify/backend/internal/app/task"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
@@ -51,6 +52,7 @@ import (
 	convstore "github.com/sunweilin/forgify/backend/internal/infra/store/conversation"
 	forgestore "github.com/sunweilin/forgify/backend/internal/infra/store/forge"
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
+	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 	taskstore "github.com/sunweilin/forgify/backend/internal/infra/store/task"
 	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
@@ -143,34 +145,25 @@ func main() {
 	}
 	eventsBridge := memoryinfra.NewBridge(log)
 
-	// Sandbox: bundled-uv + bundled-Python + per-EnvID venv runtime. Bootstrap
-	// from $FORGIFY_DEV_RESOURCES (dev) — prod cmd/desktop will instead
-	// extract embed.FS into a temp dir and pass that path here. Failure to
-	// bootstrap is logged but not fatal: backend stays up; forge operations
-	// return ErrSandboxUnavailable until resources arrive.
+	// PluginSandbox v2 — unified runtime/env service. Bootstrap extracts
+	// the embedded mise binary; failure flips degraded mode (chat-only
+	// path stays alive) but is non-fatal. After Bootstrap we register
+	// installers + env managers covering all v1 supported runtimes.
 	//
-	// 沙箱：捆绑 uv + 捆绑 Python + 每 EnvID 一个 venv 的运行时。从
-	// $FORGIFY_DEV_RESOURCES（dev）bootstrap——prod cmd/desktop 把 embed.FS
-	// 解到临时目录后把路径传进来。bootstrap 失败仅 log 不致命：backend 仍
-	// 起来；forge 操作返 ErrSandboxUnavailable 直到资源就位。
-	sandbox := sandboxinfra.New(sandboxinfra.Config{
-		DataDir:       *dataDir,
-		DefaultPython: forgedomain.DefaultPythonVersion,
-		Logger:        log,
-	})
-	if resourceDir := os.Getenv("FORGIFY_DEV_RESOURCES"); resourceDir != "" {
-		if err := sandbox.Bootstrap(context.Background(), resourceDir); err != nil {
-			log.Warn("sandbox.Bootstrap failed (forge ops will be unavailable)",
-				zap.String("resource_dir", resourceDir),
-				zap.Error(err))
-		}
-	} else {
-		log.Warn("FORGIFY_DEV_RESOURCES not set; forge sandbox will be unavailable. Run `go run ./cmd/resources` from backend/ to enable forge ops.")
+	// PluginSandbox v2 ——统一 runtime/env 服务。Bootstrap 解 embed mise；
+	// 失败翻 degraded mode（chat-only 路径保活）但不致命。Bootstrap 后注册
+	// 覆盖所有 v1 支持 runtime 的 installer + env manager。
+	sandboxRepo := sandboxstore.New(gdb)
+	sandboxSvc := sandboxapp.New(sandboxRepo, *dataDir, log)
+	if err := sandboxSvc.Bootstrap(context.Background()); err != nil {
+		log.Warn("sandbox v2 bootstrap failed (degraded mode active; runtime ops will fail)",
+			zap.Error(err))
 	}
+	registerSandboxStack(sandboxSvc)
 
 	forgeService := forgeapp.NewService(
 		forgestore.New(gdb),
-		sandbox,
+		forgeapp.NewSandboxAdapter(sandboxSvc, *dataDir),
 		forgeLLM,
 		eventsBridge,
 		log,
@@ -298,4 +291,90 @@ func (c *forgeLLMClientAdapter) Generate(ctx context.Context, prompt string) (st
 		BaseURL:  bc.BaseURL,
 		Messages: []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: prompt}},
 	})
+}
+
+// registerSandboxStack wires the v1 PluginSandbox runtime/env matrix —
+// 4 installer kinds + 11 env managers — onto the freshly-bootstrapped
+// service. Order doesn't matter; idempotent re-registration is fine.
+//
+// Kept as a top-level helper rather than inlined in main() so the
+// service-construction block stays scannable and the registry table
+// reads as one coherent block.
+//
+// registerSandboxStack 把 v1 PluginSandbox runtime/env 矩阵——4 installer
+// kind + 11 env manager——挂到刚 bootstrap 的 service 上。顺序无关，重复
+// 注册幂等。
+//
+// 提为顶层 helper 而非内联 main() 让 service 构造段易读，注册表作整段连贯。
+func registerSandboxStack(svc *sandboxapp.Service) {
+	miseBin := svc.MiseBin()
+	if miseBin == "" {
+		// Bootstrap failed — nothing to register that depends on mise.
+		// Static binary installer is mise-independent but skipped too;
+		// degraded mode means runtime ops fail uniformly.
+		//
+		// Bootstrap 失败——依赖 mise 的不注册。Static binary installer 不依赖
+		// mise 但也跳过；degraded mode 让 runtime ops 一致 fail。
+		return
+	}
+
+	// Mise-managed runtimes (7 main langs + 5 support tools).
+	// Mise 管的 runtime（7 主流语言 + 5 支持工具）。
+	for kind, defaultVer := range map[string]string{
+		"python": "3.12",
+		"node":   "22",
+		"rust":   "stable",
+		"java":   "21",
+		"go":     "1.22",
+		"ruby":   "3.3",
+		"php":    "8.3",
+		// Support tools — used by EnvManagers via ToolRegistry.
+		// 支持工具——EnvManager 通过 ToolRegistry 用。
+		"uv":       "",
+		"pnpm":     "",
+		"maven":    "",
+		"bundler":  "",
+		"composer": "",
+	} {
+		svc.RegisterInstaller(sandboxinfra.NewMiseInstaller(miseBin, kind, defaultVer))
+	}
+
+	// Specialty installers.
+	// 专用 installer。
+	svc.RegisterInstaller(sandboxinfra.NewDotnetInstaller("8.0"))
+	// PlaywrightInstaller takes a CLI path; resolved per-call inside the
+	// EnvManager so we don't register it as a global RuntimeInstaller —
+	// PlaywrightEnvManager owns the install logic via its Node delegate.
+	// PlaywrightInstaller 接 CLI 路径；EnvManager 内 per-call 解析所以不
+	// 当全局 RuntimeInstaller 注册——PlaywrightEnvManager 通过其 Node 委托
+	// 拥有 install 逻辑。
+
+	// Env managers covering all 11 v1 supported runtimes.
+	// 覆盖所有 11 个 v1 支持 runtime 的 env manager。
+	svc.RegisterEnvManager(sandboxinfra.NewPythonEnvManager(svc))
+	svc.RegisterEnvManager(sandboxinfra.NewNodeEnvManager(svc))
+	svc.RegisterEnvManager(sandboxinfra.NewRustEnvManager())
+	svc.RegisterEnvManager(sandboxinfra.NewGoEnvManager())
+	svc.RegisterEnvManager(sandboxinfra.NewJavaEnvManager(svc))
+	svc.RegisterEnvManager(sandboxinfra.NewRubyEnvManager(svc))
+	svc.RegisterEnvManager(sandboxinfra.NewPHPEnvManager(svc))
+	svc.RegisterEnvManager(sandboxinfra.NewDotnetEnvManager())
+	svc.RegisterEnvManager(sandboxinfra.NewPlaywrightEnvManager(
+		sandboxinfra.NewNodeEnvManager(svc), svc.SandboxRoot()))
+	// Static binary EnvManager: one per static-binary plugin family
+	// (registered alongside its matching StaticBinaryInstaller). v1
+	// ships none — this is scaffolding for future plugins like
+	// GitHub MCP that ship pre-built binaries.
+	//
+	// Static binary EnvManager：每个 static-binary plugin family 一个
+	// （跟匹配的 StaticBinaryInstaller 一起注册）。v1 不发——给未来发
+	// 预构建二进制的 plugin（如 GitHub MCP）做的脚手架。
+
+	// GenericEnvManager: fallback for long-tail mise-installable languages
+	// that don't have a dedicated EnvManager. v1 doesn't pre-register
+	// any specific kind — main.go could add `NewGenericEnvManager("elixir")`
+	// etc. as needed.
+	//
+	// GenericEnvManager：mise 可装的长尾语言无专用 EnvManager 的兜底。v1
+	// 不预注册具体 kind——main.go 按需加 NewGenericEnvManager("elixir") 等。
 }
