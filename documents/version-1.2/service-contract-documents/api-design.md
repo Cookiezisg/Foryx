@@ -175,7 +175,7 @@ Forge System Tools 注入（search/get/create/edit/run，5 个）。SSE 见 even
 | search | `Grep` / `Glob` | rg 优先 + stdlib 兜底；Glob 输出 JSON 含 type/size/mtime（决策 D3：替代 LS）|
 | web | `WebFetch` / `WebSearch` | Jina r.jina.ai 摘要 + 直 GET fallback；3 层搜索 fallback（SearXNG 池 → Bing → Bing CN）；SSRF 守卫拒私网 / loopback / link-local |
 | shell | `Bash` / `BashOutput` / `KillShell` | 前后台双模式；cwd 状态机（AgentState.Cwd）；后台子进程 ProcessManager 注册 256 KB 环形缓冲；KillShell SIGKILL 幂等 |
-| task | `TaskCreate` / `TaskList` / `TaskGet` / `TaskUpdate` | 对话级任务追踪（mini-domain，详见 [`../service-design-documents/task.md`](../service-design-documents/task.md)）|
+| todo | `TodoCreate` / `TodoList` / `TodoGet` / `TodoUpdate` | 对话级 TODO 追踪（mini-domain，详见 [`../service-design-documents/todo.md`](../service-design-documents/todo.md)）|
 | ask | `AskUserQuestion` | 暂停 agent loop 等用户回答；问题坐 chat.message SSE，答案走下方 answers endpoint |
 
 详细工具集在 chat agent 注入清单见 [`../service-design-documents/chat.md`](../service-design-documents/chat.md)。
@@ -195,7 +195,7 @@ Forge System Tools 注入（search/get/create/edit/run，5 个）。SSE 见 even
 提前完成以下 4 个 domain 作为 Phase 4-5 工作流 / 智能化的基础设施。设计完成、待实施。
 
 #### subagent 📐
-详见 [`../service-design-documents/subagent.md`](../service-design-documents/subagent.md)。LLM 通过 `Subagent` system tool spawn 子 LLM loop（避开 `task` domain 撞车而改名）；独立 context、过滤后 tool registry；复用 chat runner。
+详见 [`../service-design-documents/subagent.md`](../service-design-documents/subagent.md)。LLM 通过 `Subagent` system tool spawn 子 LLM loop（避开 `todo` domain 撞车而改名）；独立 context、过滤后 tool registry；复用 chat runner。
 
 | Method | Path | 用途 |
 |---|---|---|

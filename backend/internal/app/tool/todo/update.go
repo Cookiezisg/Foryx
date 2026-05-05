@@ -1,11 +1,11 @@
-// update.go — TaskUpdate system tool: change a task's status or other
+// update.go — TodoUpdate system tool: change a todo's status or other
 // fields. Pointer fields in the schema map to "set" semantics — omit a
 // field to leave it unchanged. Status transitions are validated against
 // the whitelist; status:"deleted" soft-deletes via the Service.
 //
-// update.go — TaskUpdate 系统工具：改任务状态或其他字段。schema 字段缺
+// update.go — TodoUpdate 系统工具：改 todo 状态或其他字段。schema 字段缺
 // 即"不变"；status 按白名单校验；status:"deleted" 走 Service 软删。
-package task
+package todo
 
 import (
 	"context"
@@ -14,28 +14,28 @@ import (
 	"fmt"
 	"strings"
 
-	taskapp "github.com/sunweilin/forgify/backend/internal/app/task"
+	todoapp "github.com/sunweilin/forgify/backend/internal/app/todo"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
-	taskdomain "github.com/sunweilin/forgify/backend/internal/domain/task"
+	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 )
 
-const taskUpdateDescription = `Update a task's status or other fields.
+const todoUpdateDescription = `Update a todo's status or other fields.
 
 Usage:
-- ` + "`task_id`" + ` is the ID returned by TaskCreate (or seen in TaskList).
+- ` + "`todo_id`" + ` is the ID returned by TodoCreate (or seen in TodoList).
 - Provide only the fields you want to change; omitted fields stay as-is.
-- ` + "`status`" + ` transitions: pending → in_progress → completed. Use "deleted" to remove a task; the deletion broadcasts an SSE update so any UI drops it.
+- ` + "`status`" + ` transitions: pending → in_progress → completed. Use "deleted" to remove a todo; the deletion broadcasts an SSE update so any UI drops it.
 - ` + "`subject`" + ` / ` + "`description`" + ` / ` + "`active_form`" + ` / ` + "`owner`" + ` are simple replacements.
 - ` + "`blocked_by`" + ` replaces the entire dependency list (pass [] to clear).
-- Returns the updated task as JSON.`
+- Returns the updated todo as JSON.`
 
-var taskUpdateSchema = json.RawMessage(`{
+var todoUpdateSchema = json.RawMessage(`{
 	"type": "object",
-	"required": ["task_id"],
+	"required": ["todo_id"],
 	"properties": {
-		"task_id": {
+		"todo_id": {
 			"type": "string",
-			"description": "ID of the task to update."
+			"description": "ID of the todo to update."
 		},
 		"subject": {
 			"type": "string",
@@ -52,7 +52,7 @@ var taskUpdateSchema = json.RawMessage(`{
 		"status": {
 			"type": "string",
 			"enum": ["pending", "in_progress", "completed", "deleted"],
-			"description": "New status. \"deleted\" soft-deletes the task."
+			"description": "New status. \"deleted\" soft-deletes the todo."
 		},
 		"owner": {
 			"type": "string",
@@ -61,44 +61,44 @@ var taskUpdateSchema = json.RawMessage(`{
 		"blocked_by": {
 			"type": "array",
 			"items": {"type": "string"},
-			"description": "Replacement list of task IDs that must complete before this one starts. Pass [] to clear."
+			"description": "Replacement list of todo IDs that must complete before this one starts. Pass [] to clear."
 		}
 	}
 }`)
 
-// TaskUpdate implements the TaskUpdate system tool.
+// TodoUpdate implements the TodoUpdate system tool.
 //
-// TaskUpdate struct 是 TaskUpdate 系统工具。
-type TaskUpdate struct {
-	svc *taskapp.Service
+// TodoUpdate struct 是 TodoUpdate 系统工具。
+type TodoUpdate struct {
+	svc *todoapp.Service
 }
 
-func (t *TaskUpdate) Name() string                { return "TaskUpdate" }
-func (t *TaskUpdate) Description() string         { return taskUpdateDescription }
-func (t *TaskUpdate) Parameters() json.RawMessage { return taskUpdateSchema }
+func (t *TodoUpdate) Name() string                { return "TodoUpdate" }
+func (t *TodoUpdate) Description() string         { return todoUpdateDescription }
+func (t *TodoUpdate) Parameters() json.RawMessage { return todoUpdateSchema }
 
-func (t *TaskUpdate) IsReadOnly() bool        { return false }
-func (t *TaskUpdate) NeedsReadFirst() bool    { return false }
-func (t *TaskUpdate) RequiresWorkspace() bool { return false }
+func (t *TodoUpdate) IsReadOnly() bool        { return false }
+func (t *TodoUpdate) NeedsReadFirst() bool    { return false }
+func (t *TodoUpdate) RequiresWorkspace() bool { return false }
 
-// ValidateInput rejects empty task_id and out-of-whitelist status.
+// ValidateInput rejects empty todo_id and out-of-whitelist status.
 //
-// ValidateInput 拒空 task_id 与白名单外 status。
-func (t *TaskUpdate) ValidateInput(args json.RawMessage) error {
+// ValidateInput 拒空 todo_id 与白名单外 status。
+func (t *TodoUpdate) ValidateInput(args json.RawMessage) error {
 	var a updateRaw
 	if err := json.Unmarshal(args, &a); err != nil {
-		return fmt.Errorf("TaskUpdate.ValidateInput: %w", err)
+		return fmt.Errorf("TodoUpdate.ValidateInput: %w", err)
 	}
-	if strings.TrimSpace(a.TaskID) == "" {
-		return errors.New("task_id is required")
+	if strings.TrimSpace(a.TodoID) == "" {
+		return errors.New("todo_id is required")
 	}
-	if a.Status != nil && !taskdomain.IsValidStatus(*a.Status) {
-		return taskdomain.ErrInvalidStatus
+	if a.Status != nil && !tododomain.IsValidStatus(*a.Status) {
+		return tododomain.ErrInvalidStatus
 	}
 	return nil
 }
 
-func (t *TaskUpdate) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionMode) toolapp.PermissionResult {
+func (t *TodoUpdate) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionMode) toolapp.PermissionResult {
 	return toolapp.PermissionAllow
 }
 
@@ -107,7 +107,7 @@ func (t *TaskUpdate) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionMod
 //
 // updateRaw 是 JSON 载荷形态；指针字段编码"设值 vs 不变"语义。
 type updateRaw struct {
-	TaskID      string    `json:"task_id"`
+	TodoID      string    `json:"todo_id"`
 	Subject     *string   `json:"subject"`
 	Description *string   `json:"description"`
 	ActiveForm  *string   `json:"active_form"`
@@ -122,22 +122,22 @@ type updateRaw struct {
 //
 // Execute 通过 Service 应用部分更新；status:"deleted" 走 Service.Delete
 // 让软删 + 最终 SSE 广播集中一处。
-func (t *TaskUpdate) Execute(ctx context.Context, argsJSON string) (string, error) {
+func (t *TodoUpdate) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var raw updateRaw
 	if err := json.Unmarshal([]byte(argsJSON), &raw); err != nil {
-		return "", fmt.Errorf("TaskUpdate.Execute: %w", err)
+		return "", fmt.Errorf("TodoUpdate.Execute: %w", err)
 	}
 
 	// Special case: status:"deleted" → Service.Delete (sets deleted_at).
 	// 特例：status:"deleted" → Service.Delete（置 deleted_at）。
-	if raw.Status != nil && *raw.Status == taskdomain.StatusDeleted {
-		if err := t.svc.Delete(ctx, raw.TaskID); err != nil {
-			return classifyTaskErr(err, "delete"), nil
+	if raw.Status != nil && *raw.Status == tododomain.StatusDeleted {
+		if err := t.svc.Delete(ctx, raw.TodoID); err != nil {
+			return classifyTodoErr(err, "delete"), nil
 		}
-		return fmt.Sprintf(`{"deleted":true,"id":%q}`, raw.TaskID), nil
+		return fmt.Sprintf(`{"deleted":true,"id":%q}`, raw.TodoID), nil
 	}
 
-	updated, err := t.svc.Update(ctx, raw.TaskID, taskapp.UpdateInput{
+	updated, err := t.svc.Update(ctx, raw.TodoID, todoapp.UpdateInput{
 		Subject:     raw.Subject,
 		Description: raw.Description,
 		ActiveForm:  raw.ActiveForm,
@@ -146,7 +146,7 @@ func (t *TaskUpdate) Execute(ctx context.Context, argsJSON string) (string, erro
 		BlockedBy:   raw.BlockedBy,
 	})
 	if err != nil {
-		return classifyTaskErr(err, "update"), nil
+		return classifyTodoErr(err, "update"), nil
 	}
 	return marshalIndent(updated)
 }

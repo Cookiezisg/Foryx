@@ -104,7 +104,7 @@
 - **S12 包结构** — 见 §S12 详节
 - **S13 包命名** — 见 §S13 详节
 - **S14 📌 文档同步纪律** — 见 §S14 详节（**最高优先级**）
-- **S15 ID 生成统一**：业务 ID 一律 `<prefix>_<16hex>` 格式（前缀按 domain 取，如 `aki_` apikey / `mc_` model config / `cv_` conversation / `msg_` message / `att_` attachment / `blk_` block / `f_` forge / `fv_` forge version / `tc_` test case / `fe_` forge execution（Phase 5 起，统一替代旧 `frh_`/`fth_` 两表）/ `b_` forge test 批跑 batch / `tk_` task / `bsh_` Bash 后台 shell 进程 / `sar_` subagent run / `smm_` subagent message）；8 字节从 `crypto/rand` 取，**`rand.Read` 失败必须 panic**——熵源损坏继续会生成碰撞 ID。所有 `newID()` 函数遵守此格式（实现统一在 `pkg/idgen.New(prefix)`）
+- **S15 ID 生成统一**：业务 ID 一律 `<prefix>_<16hex>` 格式（前缀按 domain 取，如 `aki_` apikey / `mc_` model config / `cv_` conversation / `msg_` message / `att_` attachment / `blk_` block / `f_` forge / `fv_` forge version / `tc_` test case / `fe_` forge execution（Phase 5 起，统一替代旧 `frh_`/`fth_` 两表）/ `b_` forge test 批跑 batch / `td_` todo（对话级 TODO，2026-05-05 由原 `tk_` task 改名）/ `bsh_` Bash 后台 shell 进程 / `sar_` subagent run / `smm_` subagent message）；8 字节从 `crypto/rand` 取，**`rand.Read` 失败必须 panic**——熵源损坏继续会生成碰撞 ID。所有 `newID()` 函数遵守此格式（实现统一在 `pkg/idgen.New(prefix)`）
 - **S16 错误包装格式**：上抛错误用 `fmt.Errorf("<pkg>.<Method>: %w", err)`，sentinel 在最里层。例：`apikeystore.List: missing user id in context`。**禁止**裸 `errors.New` 套娃丢失原 sentinel；**禁止**自创新前缀代替 `%w` 包装。`errors.Is` 必须能从最外层 unwrap 到 sentinel
 - **S17 errmap 单一事实源**：每个会到达 handler 的 sentinel 必须登记到 `transport/httpapi/response/errmap.go::errTable`——**包括** `pkg/` 和 `infra/` 中跨层使用的（如 `reqctxpkg.ErrMissingUserID` / `cryptoinfra.ErrUnsupportedVersion`）。未登记的 sentinel 会触发"unmapped domain error" ERROR 日志，污染烟雾报警
 - **S18 Tool 接口规约** — 见 §S18 详节

@@ -117,13 +117,15 @@ HTTP 端点：`GET /api/v1/forges/{id}/executions?kind=&batchId=&cursor=&limit=`
 
 ### Phase 5：System Tool 第二代（2026-05-04）
 
-#### `tasks` ✅
-详见 [`../service-design-documents/task.md`](../service-design-documents/task.md)。
-chat 内 task 追踪 mini-domain；主键 `tk_<16hex>`；GORM 软删（`deleted_at`）；复合索引 `idx_tk_conv_status (conversation_id, status)`。
-字段：`conversation_id`（作用域键）/ `subject`（imperative 标题）/ `description`（可选长文）/ `active_form`（present-continuous，UI 显示用）/ `status`（pending\|in_progress\|completed\|deleted，**白名单 app 层校验，DB 不 CHECK**——同 model_configs 模式）/ `owner`（可选 agent 名）/ `blocked_by JSON`（依赖任务 ID 列表）/ `metadata JSON`（自由扩展）/ 时间戳 + 软删。
-Service 跨 conversation 操作返 `ErrNotFound`（防泄漏存在性）；每次变更 publish entity-state SSE `task` 事件（详 events-design.md）。
+#### `todos` ✅
+详见 [`../service-design-documents/todo.md`](../service-design-documents/todo.md)。
+chat 内 todo 追踪 mini-domain；主键 `td_<16hex>`；GORM 软删（`deleted_at`）；复合索引 `idx_td_conv_status (conversation_id, status)`。表名走 GORM 默认复数化（`Todo` struct → `todos`）。
+字段：`conversation_id`（作用域键）/ `subject`（imperative 标题）/ `description`（可选长文）/ `active_form`（present-continuous，UI 显示用）/ `status`（pending\|in_progress\|completed\|deleted，**白名单 app 层校验，DB 不 CHECK**——同 model_configs 模式）/ `owner`（可选 agent 名）/ `blocked_by JSON`（依赖 todo ID 列表）/ `metadata JSON`（自由扩展）/ 时间戳 + 软删。
+Service 跨 conversation 操作返 `ErrNotFound`（防泄漏存在性）；每次变更 publish entity-state SSE `todo` 事件（详 events-design.md）。
 
-> 不持久化的兄弟域：**ask**（AskUserQuestion 会合）—— `app/ask` 持有 in-memory `pending` map（toolCallID → channel），无 DB 表，无 entity；详见 [`../service-design-documents/task.md`](../service-design-documents/task.md) §附 ask 服务。
+> 2026-05-05 改名：原 `tasks` 表（`tk_` 前缀）改为 `todos`（`td_` 前缀），LLM-facing 工具同步 `Task*` → `Todo*`。原因：项目内"task"概念太宽泛，与计划中的 `Subagent` 工具语义易混；`Todo` 单义。
+
+> 不持久化的兄弟域：**ask**（AskUserQuestion 会合）—— `app/ask` 持有 in-memory `pending` map（toolCallID → channel），无 DB 表，无 entity；详见 [`../service-design-documents/ask.md`](../service-design-documents/ask.md)。
 
 ---
 
@@ -213,7 +215,7 @@ forges ──────── forge_versions (status: pending/accepted/rejecte
                 triggered_by + conversation_id/message_id/tool_call_id
                 把 chat 触发的执行串回去)
 
-tasks (Phase 5 新增；conversation_id 作用域，status app 层白名单)
+todos (Phase 5 新增；conversation_id 作用域，status app 层白名单)
 
 subagent_runs ─── subagent_messages (Phase 4 准备件，2026-05-05；
   parent_conversation_id 反向引用 conversations；

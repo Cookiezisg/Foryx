@@ -1,10 +1,10 @@
-// task_test.go — unit tests for taskapp.Service. Uses an in-memory
-// SQLite-backed taskstore + a recording fake bridge so we can verify
-// each mutation publishes the right Task event.
+// todo_test.go — unit tests for todoapp.Service. Uses an in-memory
+// SQLite-backed todostore + a recording fake bridge so we can verify
+// each mutation publishes the right Todo event.
 //
-// task_test.go — taskapp.Service 单测：内存 SQLite 跑 taskstore + 记录式
-// fake bridge，验证每次变更都发出正确的 Task 事件。
-package task
+// todo_test.go — todoapp.Service 单测：内存 SQLite 跑 todostore + 记录式
+// fake bridge，验证每次变更都发出正确的 Todo 事件。
+package todo
 
 import (
 	"context"
@@ -15,9 +15,9 @@ import (
 	"go.uber.org/zap"
 
 	eventsdomain "github.com/sunweilin/forgify/backend/internal/domain/events"
-	taskdomain "github.com/sunweilin/forgify/backend/internal/domain/task"
+	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
-	taskstore "github.com/sunweilin/forgify/backend/internal/infra/store/task"
+	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
@@ -57,11 +57,11 @@ func (r *recordingBridge) snapshot() []bridgeRecord {
 	return out
 }
 
-// newTestService spins up an in-memory SQLite + taskstore + recording
+// newTestService spins up an in-memory SQLite + todostore + recording
 // bridge and returns a wired Service. Returns the bridge so tests can
 // inspect publish records.
 //
-// newTestService 跑一份内存 SQLite + taskstore + 记录式 bridge，返
+// newTestService 跑一份内存 SQLite + todostore + 记录式 bridge，返
 // 装好的 Service；同时返 bridge 让测试查 publish 记录。
 func newTestService(t *testing.T) (*Service, *recordingBridge) {
 	t.Helper()
@@ -69,11 +69,11 @@ func newTestService(t *testing.T) (*Service, *recordingBridge) {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := dbinfra.Migrate(db, &taskdomain.Task{}); err != nil {
+	if err := dbinfra.Migrate(db, &tododomain.Todo{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	bridge := &recordingBridge{}
-	svc := NewService(taskstore.New(db), bridge, zap.NewNop())
+	svc := NewService(todostore.New(db), bridge, zap.NewNop())
 	return svc, bridge
 }
 
@@ -96,17 +96,17 @@ func TestService_Create_HappyPath(t *testing.T) {
 	if got.ConversationID != "cv_alpha" {
 		t.Errorf("ConversationID = %q", got.ConversationID)
 	}
-	if got.Status != taskdomain.StatusPending {
+	if got.Status != tododomain.StatusPending {
 		t.Errorf("Status = %q, want pending", got.Status)
 	}
-	// Bridge should have one Task event with conv key.
-	// bridge 应有一条 Task 事件，key 是 conv。
+	// Bridge should have one Todo event with conv key.
+	// bridge 应有一条 Todo 事件，key 是 conv。
 	recs := bridge.snapshot()
 	if len(recs) != 1 || recs[0].Key != "cv_alpha" {
 		t.Errorf("bridge records = %+v", recs)
 	}
-	if recs[0].Event.EventName() != "task" {
-		t.Errorf("event name = %q, want task", recs[0].Event.EventName())
+	if recs[0].Event.EventName() != "todo" {
+		t.Errorf("event name = %q, want todo", recs[0].Event.EventName())
 	}
 }
 
@@ -114,7 +114,7 @@ func TestService_Create_EmptySubjectRejected(t *testing.T) {
 	svc, _ := newTestService(t)
 	ctx := ctxWithConv("cv_x")
 	_, err := svc.Create(ctx, CreateInput{Subject: "  "})
-	if !errors.Is(err, taskdomain.ErrSubjectRequired) {
+	if !errors.Is(err, tododomain.ErrSubjectRequired) {
 		t.Errorf("want ErrSubjectRequired, got %v", err)
 	}
 }
@@ -138,7 +138,7 @@ func TestService_Get_ReturnsNotFoundForOtherConv(t *testing.T) {
 	}
 	ctxB := ctxWithConv("cv_beta")
 	_, err = svc.Get(ctxB, created.ID)
-	if !errors.Is(err, taskdomain.ErrNotFound) {
+	if !errors.Is(err, tododomain.ErrNotFound) {
 		t.Errorf("cross-conv Get want ErrNotFound, got %v", err)
 	}
 }
@@ -179,12 +179,12 @@ func TestService_Update_PartialFieldsApplied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	newStatus := taskdomain.StatusInProgress
+	newStatus := tododomain.StatusInProgress
 	updated, err := svc.Update(ctx, created.ID, UpdateInput{Status: &newStatus})
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	if updated.Status != taskdomain.StatusInProgress {
+	if updated.Status != tododomain.StatusInProgress {
 		t.Errorf("Status = %q", updated.Status)
 	}
 	if updated.Subject != "old subject" {
@@ -206,7 +206,7 @@ func TestService_Update_RejectsInvalidStatus(t *testing.T) {
 	}
 	bogus := "wat"
 	_, err = svc.Update(ctx, created.ID, UpdateInput{Status: &bogus})
-	if !errors.Is(err, taskdomain.ErrInvalidStatus) {
+	if !errors.Is(err, tododomain.ErrInvalidStatus) {
 		t.Errorf("want ErrInvalidStatus, got %v", err)
 	}
 }
@@ -221,7 +221,7 @@ func TestService_Update_RejectsCrossConvAsNotFound(t *testing.T) {
 	ctxB := ctxWithConv("cv_b")
 	subj := "hijack"
 	_, err = svc.Update(ctxB, created.ID, UpdateInput{Subject: &subj})
-	if !errors.Is(err, taskdomain.ErrNotFound) {
+	if !errors.Is(err, tododomain.ErrNotFound) {
 		t.Errorf("cross-conv update should be ErrNotFound, got %v", err)
 	}
 }
@@ -240,7 +240,7 @@ func TestService_Delete_SoftDeletesAndPublishesFinalSnapshot(t *testing.T) {
 	}
 	// Subsequent Get → not found.
 	// 后续 Get → not found。
-	if _, err := svc.Get(ctx, created.ID); !errors.Is(err, taskdomain.ErrNotFound) {
+	if _, err := svc.Get(ctx, created.ID); !errors.Is(err, tododomain.ErrNotFound) {
 		t.Errorf("after Delete want ErrNotFound, got %v", err)
 	}
 	// Bridge: 2 records (create + delete final snapshot).
@@ -249,12 +249,12 @@ func TestService_Delete_SoftDeletesAndPublishesFinalSnapshot(t *testing.T) {
 	if len(recs) != 2 {
 		t.Fatalf("expected 2 bridge events, got %d", len(recs))
 	}
-	deletedEvent, ok := recs[1].Event.(eventsdomain.Task)
-	if !ok || deletedEvent.Task == nil {
-		t.Fatalf("expected Task event, got %T", recs[1].Event)
+	deletedEvent, ok := recs[1].Event.(eventsdomain.Todo)
+	if !ok || deletedEvent.Todo == nil {
+		t.Fatalf("expected Todo event, got %T", recs[1].Event)
 	}
-	if deletedEvent.Task.Status != taskdomain.StatusDeleted {
-		t.Errorf("final snapshot Status = %q, want %q", deletedEvent.Task.Status, taskdomain.StatusDeleted)
+	if deletedEvent.Todo.Status != tododomain.StatusDeleted {
+		t.Errorf("final snapshot Status = %q, want %q", deletedEvent.Todo.Status, tododomain.StatusDeleted)
 	}
 }
 
@@ -266,21 +266,21 @@ func TestService_Delete_RejectsCrossConvAsNotFound(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 	ctxB := ctxWithConv("cv_b")
-	if err := svc.Delete(ctxB, created.ID); !errors.Is(err, taskdomain.ErrNotFound) {
+	if err := svc.Delete(ctxB, created.ID); !errors.Is(err, tododomain.ErrNotFound) {
 		t.Errorf("cross-conv Delete should be ErrNotFound, got %v", err)
 	}
 }
 
 // ── ID format ────────────────────────────────────────────────────────────────
 
-func TestService_Create_AssignsTKPrefix(t *testing.T) {
+func TestService_Create_AssignsTDPrefix(t *testing.T) {
 	svc, _ := newTestService(t)
 	ctx := ctxWithConv("cv_x")
 	created, err := svc.Create(ctx, CreateInput{Subject: "x"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if got := created.ID; len(got) < 3 || got[:3] != "tk_" {
-		t.Errorf("ID prefix = %q, want tk_*", got)
+	if got := created.ID; len(got) < 3 || got[:3] != "td_" {
+		t.Errorf("ID prefix = %q, want td_*", got)
 	}
 }

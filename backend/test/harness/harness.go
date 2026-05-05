@@ -39,14 +39,14 @@ import (
 	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
-	taskapp "github.com/sunweilin/forgify/backend/internal/app/task"
+	todoapp "github.com/sunweilin/forgify/backend/internal/app/todo"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
 	forgetool "github.com/sunweilin/forgify/backend/internal/app/tool/forge"
 	searchtool "github.com/sunweilin/forgify/backend/internal/app/tool/search"
 	shelltool "github.com/sunweilin/forgify/backend/internal/app/tool/shell"
-	tasktool "github.com/sunweilin/forgify/backend/internal/app/tool/task"
+	todotool "github.com/sunweilin/forgify/backend/internal/app/tool/todo"
 	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
@@ -55,7 +55,8 @@ import (
 	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
-	taskdomain "github.com/sunweilin/forgify/backend/internal/domain/task"
+	subagentdomain "github.com/sunweilin/forgify/backend/internal/domain/subagent"
+	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
 	memoryinfra "github.com/sunweilin/forgify/backend/internal/infra/events/memory"
@@ -67,7 +68,7 @@ import (
 	forgestore "github.com/sunweilin/forgify/backend/internal/infra/store/forge"
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
-	taskstore "github.com/sunweilin/forgify/backend/internal/infra/store/task"
+	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
 	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	routerhttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/router"
@@ -168,7 +169,9 @@ func New(t *testing.T, opts ...Option) *Harness {
 		&forgedomain.ForgeExecution{},
 		&sandboxdomain.Runtime{},
 		&sandboxdomain.Env{},
-		&taskdomain.Task{},
+		&subagentdomain.SubagentRun{},
+		&subagentdomain.SubagentMessage{},
+		&tododomain.Todo{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -259,8 +262,8 @@ func New(t *testing.T, opts ...Option) *Harness {
 	shells := shelltool.NewShellTools(sandboxSvc)
 	t.Cleanup(shells.Manager.Stop)
 	tools = append(tools, shells.Tools...)
-	taskService := taskapp.NewService(taskstore.New(gdb), bridge, log)
-	tools = append(tools, tasktool.TaskTools(taskService)...)
+	todoService := todoapp.NewService(todostore.New(gdb), bridge, log)
+	tools = append(tools, todotool.TodoTools(todoService)...)
 	askService := askapp.NewService()
 	tools = append(tools, asktool.AskTools(askService)...)
 	chatService.SetTools(tools)

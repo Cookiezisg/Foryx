@@ -1,12 +1,12 @@
 //go:build pipeline
 
-// uxtask_test.go — pipeline tests for the U batch (task family + Ask
+// uxtodo_test.go — pipeline tests for the U batch (todo family + Ask
 // family). Drives the full chat ReAct loop with a fake LLM.
 //
 // Scenarios:
-//  1. TaskCreateAndList — round 1 TaskCreate, round 2 TaskList; verify
-//     both tool_results carry the expected JSON shapes (a fresh Task
-//     entity from Create, total/tasks list from List).
+//  1. TodoCreateAndList — round 1 TodoCreate, round 2 TodoList; verify
+//     both tool_results carry the expected JSON shapes (a fresh Todo
+//     entity from Create, total/todos list from List).
 //  2. AskUserQuestionAnswerDelivered — fake LLM scripts AskUserQuestion,
 //     a side goroutine POSTs the answer to
 //     /api/v1/conversations/{id}/answers, verify the tool returns the
@@ -16,8 +16,8 @@
 // in-package unit tests; running the 5-minute default-timeout path
 // here would be impractical.
 //
-// uxtask_test.go — U batch（task 家族 + Ask 家族）pipeline 测试。
-package uxtask_test
+// uxtodo_test.go — U batch（todo 家族 + Ask 家族）pipeline 测试。
+package uxtodo_test
 
 import (
 	"net/http"
@@ -29,26 +29,26 @@ import (
 	th "github.com/sunweilin/forgify/backend/test/harness"
 )
 
-// ── 1. Task create + list round-trip ─────────────────────────────────────────
+// ── 1. Todo create + list round-trip ─────────────────────────────────────────
 
-func TestUxTask_TaskCreateAndList(t *testing.T) {
+func TestUxTodo_TodoCreateAndList(t *testing.T) {
 	fake := th.NewFakeLLMServer(t)
 	fake.PushScript(th.ScriptSingleToolCall(
-		"TaskCreate", "call_fake_tk_create",
-		`{"summary":"plan first task","subject":"Run unit tests","active_form":"Running unit tests"}`,
+		"TodoCreate", "call_fake_td_create",
+		`{"summary":"plan first todo","subject":"Run unit tests","active_form":"Running unit tests"}`,
 	))
 	fake.PushScript(th.ScriptSingleToolCall(
-		"TaskList", "call_fake_tk_list",
+		"TodoList", "call_fake_td_list",
 		`{"summary":"verify"}`,
 	))
 	fake.PushScript(th.ScriptText("Created and listed."))
 
 	h := th.New(t, th.WithFakeLLMBaseURL(fake.URL()))
 	h.SeedDeepSeek(t, "fake-test-key")
-	conv := h.NewConversation(t, "uxtask-task")
+	conv := h.NewConversation(t, "uxtodo-todo")
 	sub := h.SubscribeSSE(t, conv.ID)
 
-	th.PostMessage(t, h, conv.ID, "Make a task list and dump it.")
+	th.PostMessage(t, h, conv.ID, "Make a todo list and dump it.")
 
 	final := sub.WaitForAssistantTerminal(30 * time.Second)
 	if final.Status != chatdomain.StatusCompleted {
@@ -56,41 +56,41 @@ func TestUxTask_TaskCreateAndList(t *testing.T) {
 			final.Status, final.ErrorCode, final.ErrorMessage, sub.FormatRawEvents())
 	}
 
-	createRes, ok := th.ExtractToolResultByCallID(final.Blocks, "call_fake_tk_create")
+	createRes, ok := th.ExtractToolResultByCallID(final.Blocks, "call_fake_td_create")
 	if !ok {
-		t.Fatalf("no TaskCreate tool_result\nraw:\n%s", sub.FormatRawEvents())
+		t.Fatalf("no TodoCreate tool_result\nraw:\n%s", sub.FormatRawEvents())
 	}
 	if v, _ := createRes["ok"].(bool); !v {
-		t.Errorf("TaskCreate tool_result.ok = false: %v", createRes)
+		t.Errorf("TodoCreate tool_result.ok = false: %v", createRes)
 	}
 	createText, _ := createRes["result"].(string)
-	for _, want := range []string{`"id":`, `"tk_`, `"Run unit tests"`, `"pending"`} {
+	for _, want := range []string{`"id":`, `"td_`, `"Run unit tests"`, `"pending"`} {
 		if !strings.Contains(createText, want) {
-			t.Errorf("TaskCreate result missing %q in:\n%s", want, createText)
+			t.Errorf("TodoCreate result missing %q in:\n%s", want, createText)
 		}
 	}
 
-	listRes, ok := th.ExtractToolResultByCallID(final.Blocks, "call_fake_tk_list")
+	listRes, ok := th.ExtractToolResultByCallID(final.Blocks, "call_fake_td_list")
 	if !ok {
-		t.Fatalf("no TaskList tool_result")
+		t.Fatalf("no TodoList tool_result")
 	}
 	listText, _ := listRes["result"].(string)
 	for _, want := range []string{`"total"`, `"Run unit tests"`, `"pending"`} {
 		if !strings.Contains(listText, want) {
-			t.Errorf("TaskList result missing %q in:\n%s", want, listText)
+			t.Errorf("TodoList result missing %q in:\n%s", want, listText)
 		}
 	}
 	// total should be exactly 1 — accept any whitespace between the colon
 	// and the digit because json.MarshalIndent's spacing isn't load-bearing.
 	// total 应正好 1——容忍冒号后空白（MarshalIndent 排版非关键）。
 	if !strings.Contains(listText, `"total": 1`) && !strings.Contains(listText, `"total":1`) {
-		t.Errorf("TaskList total != 1 in:\n%s", listText)
+		t.Errorf("TodoList total != 1 in:\n%s", listText)
 	}
 }
 
 // ── 2. AskUserQuestion answer-delivery round-trip ────────────────────────────
 
-func TestUxTask_AskUserQuestionAnswerDelivered(t *testing.T) {
+func TestUxTodo_AskUserQuestionAnswerDelivered(t *testing.T) {
 	fake := th.NewFakeLLMServer(t)
 	fake.PushScript(th.ScriptSingleToolCall(
 		"AskUserQuestion", "call_fake_ask_001",
@@ -100,7 +100,7 @@ func TestUxTask_AskUserQuestionAnswerDelivered(t *testing.T) {
 
 	h := th.New(t, th.WithFakeLLMBaseURL(fake.URL()))
 	h.SeedDeepSeek(t, "fake-test-key")
-	conv := h.NewConversation(t, "uxtask-ask")
+	conv := h.NewConversation(t, "uxtodo-ask")
 	sub := h.SubscribeSSE(t, conv.ID)
 
 	th.PostMessage(t, h, conv.ID, "Ask me before doing it.")
@@ -150,9 +150,9 @@ func TestUxTask_AskUserQuestionAnswerDelivered(t *testing.T) {
 
 // ── 3. Answer endpoint rejects unknown toolCallId with 404 ───────────────────
 
-func TestUxTask_AnswerEndpoint_UnknownCallID_404(t *testing.T) {
+func TestUxTodo_AnswerEndpoint_UnknownCallID_404(t *testing.T) {
 	h := th.New(t)
-	conv := h.NewConversation(t, "uxtask-ask-404")
+	conv := h.NewConversation(t, "uxtodo-ask-404")
 
 	// DoRequest tolerates non-2xx responses; PostJSON would t.Fatalf.
 	// DoRequest 容忍非 2xx；PostJSON 会 t.Fatalf。

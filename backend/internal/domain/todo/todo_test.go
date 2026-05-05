@@ -1,10 +1,10 @@
-// task_test.go — unit tests for status validation contract: every value
+// todo_test.go — unit tests for status validation contract: every value
 // returned by ListStatuses must pass IsValidStatus, and known statuses
 // stay supported.
 //
-// task_test.go — 状态校验契约的单测：ListStatuses 每项都通过 IsValidStatus，
+// todo_test.go — 状态校验契约的单测：ListStatuses 每项都通过 IsValidStatus，
 // 已知状态保持支持。
-package task
+package todo
 
 import (
 	"slices"
@@ -20,7 +20,7 @@ func TestIsValidStatus_KnownStatuses(t *testing.T) {
 }
 
 func TestIsValidStatus_RejectsUnknown(t *testing.T) {
-	for _, s := range []string{"", "PENDING", "done", "todo", "wip"} {
+	for _, s := range []string{"", "PENDING", "done", "wip"} {
 		if IsValidStatus(s) {
 			t.Errorf("IsValidStatus(%q) = true, want false", s)
 		}

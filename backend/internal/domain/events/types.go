@@ -16,7 +16,7 @@ import (
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
-	taskdomain "github.com/sunweilin/forgify/backend/internal/domain/task"
+	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 )
 
 // Event is any typed message flowing through a Bridge.
@@ -83,20 +83,20 @@ func (e Conversation) MarshalJSON() ([]byte, error) {
 	return json.Marshal(e.Conversation)
 }
 
-// Task carries a full Task snapshot. Fired on Create / Update / SoftDelete
-// so the LLM and any UI sees task-list state changes in near real time.
+// Todo carries a full Todo snapshot. Fired on Create / Update / SoftDelete
+// so the LLM and any UI sees todo-list state changes in near real time.
 //
-// Task 携带完整 Task 快照。Create / Update / SoftDelete 触发，
-// 让 LLM 与 UI 近实时看到任务列表变化。
-type Task struct {
-	*taskdomain.Task
+// Todo 携带完整 Todo 快照。Create / Update / SoftDelete 触发，
+// 让 LLM 与 UI 近实时看到 TODO 列表变化。
+type Todo struct {
+	*tododomain.Todo
 }
 
-func (Task) EventName() string { return "task" }
+func (Todo) EventName() string { return "todo" }
 
-func (e Task) MarshalJSON() ([]byte, error) {
-	if e.Task == nil {
+func (e Todo) MarshalJSON() ([]byte, error) {
+	if e.Todo == nil {
 		return []byte("null"), nil
 	}
-	return json.Marshal(e.Task)
+	return json.Marshal(e.Todo)
 }

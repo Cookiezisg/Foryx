@@ -14,7 +14,8 @@ import (
 	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
-	taskdomain "github.com/sunweilin/forgify/backend/internal/domain/task"
+	subagentdomain "github.com/sunweilin/forgify/backend/internal/domain/subagent"
+	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -85,10 +86,10 @@ var errTable = map[error]errMapping{
 	forgedomain.ErrSandboxUnavailable:   {http.StatusServiceUnavailable, "FORGE_SANDBOX_UNAVAILABLE"},
 	forgedomain.ErrDependencyResolution: {http.StatusUnprocessableEntity, "FORGE_DEPENDENCY_RESOLUTION"},
 
-	// task domain / task domain 层
-	taskdomain.ErrNotFound:         {http.StatusNotFound, "TASK_NOT_FOUND"},
-	taskdomain.ErrSubjectRequired:  {http.StatusBadRequest, "TASK_SUBJECT_REQUIRED"},
-	taskdomain.ErrInvalidStatus:    {http.StatusBadRequest, "TASK_INVALID_STATUS"},
+	// todo domain / todo domain 层
+	tododomain.ErrNotFound:        {http.StatusNotFound, "TODO_NOT_FOUND"},
+	tododomain.ErrSubjectRequired: {http.StatusBadRequest, "TODO_SUBJECT_REQUIRED"},
+	tododomain.ErrInvalidStatus:   {http.StatusBadRequest, "TODO_INVALID_STATUS"},
 
 	// sandbox domain / sandbox domain 层
 	// 8 sentinels per sandbox.md §5; status mapping follows error-codes.md table.
@@ -100,6 +101,16 @@ var errTable = map[error]errMapping{
 	sandboxdomain.ErrSpawnFailed:          {http.StatusBadGateway, "SANDBOX_SPAWN_FAILED"},
 	sandboxdomain.ErrSpawnTimeout:         {http.StatusGatewayTimeout, "SANDBOX_SPAWN_TIMEOUT"},
 	sandboxdomain.ErrEnvInUse:             {http.StatusConflict, "SANDBOX_ENV_IN_USE"},
+
+	// subagent domain / subagent domain 层
+	// Only the first two reach handlers; ErrMaxTurnsExceeded / ErrCancelled
+	// are converted to friendly tool_result strings by SubagentTool.Execute
+	// and never propagate (run.Status reflects them).
+	// 只有前两个会到 handler；ErrMaxTurnsExceeded / ErrCancelled 在
+	// SubagentTool.Execute 内转友好 tool_result 字符串，不上抛
+	// （run.Status 已反映）。
+	subagentdomain.ErrTypeNotFound:     {http.StatusNotFound, "SUBAGENT_TYPE_NOT_FOUND"},
+	subagentdomain.ErrRecursionAttempt: {http.StatusUnprocessableEntity, "SUBAGENT_RECURSION"},
 
 	// ask service (AskUserQuestion answer-delivery handler) /
 	// ask service（AskUserQuestion 答案投递 handler）

@@ -56,7 +56,7 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 | `INVALID_REQUEST` | 400 | `derrors.ErrInvalidRequest` | JSON 坏 / 字段缺 / cursor 格式错 | ✅ |
 | `INTERNAL_ERROR` | 500 | `derrors.ErrInternal` | 兜底；未映射错误降级到此 | ✅ |
 | `INTERNAL_ERROR` | 500 | `reqctxpkg.ErrMissingUserID` | auth middleware 未跑（接线 bug）。显式登记以抑制 "unmapped" 警告 | ✅ |
-| `INTERNAL_ERROR` | 500 | `reqctxpkg.ErrMissingConversationID` | chat-runner 未在 ctx 印 conversation ID（接线 bug）。task / ask 工具依赖此 ID | ✅ |
+| `INTERNAL_ERROR` | 500 | `reqctxpkg.ErrMissingConversationID` | chat-runner 未在 ctx 印 conversation ID（接线 bug）。todo / ask 工具依赖此 ID | ✅ |
 | `INTERNAL_ERROR` | 500 | `cryptoinfra.ErrUnsupportedVersion` | DB 中密文版本前缀（如 `v2:`）超出当前 encryptor 支持范围（升降级 / 数据损坏）| ✅ |
 | `NOT_FOUND` | 404 | (middleware 直接发，不走 errmap) | 路由未匹配 | ✅ |
 
@@ -149,16 +149,16 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 
 ### Phase 5：System Tool 第二代（2026-05-04）
 
-> **NB：filesystem / search / web / shell 工具家族不向 errmap 注册**——所有失败以友好字符串返 LLM（吃在 chat.message 的 tool_result block 里），不到 handler。详见各家族 design doc 的 §6 安全边界 + §8 错误返回模式：[`filesystem.md`](../service-design-documents/filesystem.md) / [`search.md`](../service-design-documents/search.md) / [`web.md`](../service-design-documents/web.md) / [`shell.md`](../service-design-documents/shell.md)。下面仅 task / ask 因为有独立 HTTP 端点（task SSE 推 entity 事件 / ask 走 `POST /answers`），错误才会到 handler 进 errmap。
+> **NB：filesystem / search / web / shell 工具家族不向 errmap 注册**——所有失败以友好字符串返 LLM（吃在 chat.message 的 tool_result block 里），不到 handler。详见各家族 design doc 的 §6 安全边界 + §8 错误返回模式：[`filesystem.md`](../service-design-documents/filesystem.md) / [`search.md`](../service-design-documents/search.md) / [`web.md`](../service-design-documents/web.md) / [`shell.md`](../service-design-documents/shell.md)。下面仅 todo / ask 因为有独立 HTTP 端点（todo SSE 推 entity 事件 / ask 走 `POST /answers`），错误才会到 handler 进 errmap。
 
-#### task ✅
-详见 [`../service-design-documents/task.md`](../service-design-documents/task.md)。
+#### todo ✅
+详见 [`../service-design-documents/todo.md`](../service-design-documents/todo.md)。
 
 | Code | HTTP | Sentinel | 场景 | 状态 |
 |---|---|---|---|---|
-| `TASK_NOT_FOUND` | 404 | `task.ErrNotFound` | TaskGet/Update/Delete 时 ID 不存在；**也覆盖跨 conversation 访问场景**（防存在性泄漏，统一返 NotFound 而非 mismatch）| ✅ |
-| `TASK_SUBJECT_REQUIRED` | 400 | `task.ErrSubjectRequired` | TaskCreate / TaskUpdate 的 subject 字段为空 | ✅ |
-| `TASK_INVALID_STATUS` | 400 | `task.ErrInvalidStatus` | TaskUpdate status 不在 4 值白名单（pending/in_progress/completed/deleted）| ✅ |
+| `TODO_NOT_FOUND` | 404 | `todo.ErrNotFound` | TodoGet/Update/Delete 时 ID 不存在；**也覆盖跨 conversation 访问场景**（防存在性泄漏，统一返 NotFound 而非 mismatch）| ✅ |
+| `TODO_SUBJECT_REQUIRED` | 400 | `todo.ErrSubjectRequired` | TodoCreate / TodoUpdate 的 subject 字段为空 | ✅ |
+| `TODO_INVALID_STATUS` | 400 | `todo.ErrInvalidStatus` | TodoUpdate status 不在 4 值白名单（pending/in_progress/completed/deleted）| ✅ |
 
 #### ask ✅
 AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 错误。

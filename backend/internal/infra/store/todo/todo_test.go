@@ -1,9 +1,9 @@
-// task_test.go — integration tests for taskstore.Store against an
+// todo_test.go — integration tests for todostore.Store against an
 // in-memory SQLite. Covers Create / Get / List / Update / SoftDelete
 // happy paths + soft-delete invisibility.
 //
-// task_test.go — taskstore.Store 在内存 SQLite 上的集成测试。
-package task
+// todo_test.go — todostore.Store 在内存 SQLite 上的集成测试。
+package todo
 
 import (
 	"context"
@@ -12,7 +12,7 @@ import (
 
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
 
-	taskdomain "github.com/sunweilin/forgify/backend/internal/domain/task"
+	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 )
 
 func newTestStore(t *testing.T) *Store {
@@ -21,7 +21,7 @@ func newTestStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	if err := dbinfra.Migrate(db, &taskdomain.Task{}); err != nil {
+	if err := dbinfra.Migrate(db, &tododomain.Todo{}); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 	return New(db)
@@ -30,17 +30,17 @@ func newTestStore(t *testing.T) *Store {
 func TestStore_CreateAndGet_RoundTrip(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	in := &taskdomain.Task{
-		ID:             "tk_test_001",
+	in := &tododomain.Todo{
+		ID:             "td_test_001",
 		ConversationID: "cv_alpha",
 		Subject:        "Run tests",
 		ActiveForm:     "Running tests",
-		Status:         taskdomain.StatusPending,
+		Status:         tododomain.StatusPending,
 	}
 	if err := s.Create(ctx, in); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	got, err := s.Get(ctx, "tk_test_001")
+	got, err := s.Get(ctx, "td_test_001")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -51,8 +51,8 @@ func TestStore_CreateAndGet_RoundTrip(t *testing.T) {
 
 func TestStore_Get_NotFound(t *testing.T) {
 	s := newTestStore(t)
-	_, err := s.Get(context.Background(), "tk_does_not_exist")
-	if !errors.Is(err, taskdomain.ErrNotFound) {
+	_, err := s.Get(context.Background(), "td_does_not_exist")
+	if !errors.Is(err, tododomain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 }
@@ -60,12 +60,12 @@ func TestStore_Get_NotFound(t *testing.T) {
 func TestStore_ListByConversation_OrdersByCreatedAt(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	for i, id := range []string{"tk_a", "tk_b", "tk_c"} {
-		t := &taskdomain.Task{
+	for i, id := range []string{"td_a", "td_b", "td_c"} {
+		t := &tododomain.Todo{
 			ID:             id,
 			ConversationID: "cv_x",
 			Subject:        id,
-			Status:         taskdomain.StatusPending,
+			Status:         tododomain.StatusPending,
 		}
 		if err := s.Create(ctx, t); err != nil {
 			panic(err)
@@ -92,39 +92,39 @@ func TestStore_ListByConversation_OrdersByCreatedAt(t *testing.T) {
 func TestStore_ListByConversation_FiltersByConvID(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	if err := s.Create(ctx, &taskdomain.Task{ID: "tk_a", ConversationID: "cv_alpha", Subject: "a", Status: taskdomain.StatusPending}); err != nil {
+	if err := s.Create(ctx, &tododomain.Todo{ID: "td_a", ConversationID: "cv_alpha", Subject: "a", Status: tododomain.StatusPending}); err != nil {
 		t.Fatalf("seed cv_alpha: %v", err)
 	}
-	if err := s.Create(ctx, &taskdomain.Task{ID: "tk_b", ConversationID: "cv_beta", Subject: "b", Status: taskdomain.StatusPending}); err != nil {
+	if err := s.Create(ctx, &tododomain.Todo{ID: "td_b", ConversationID: "cv_beta", Subject: "b", Status: tododomain.StatusPending}); err != nil {
 		t.Fatalf("seed cv_beta: %v", err)
 	}
 	rows, err := s.ListByConversation(ctx, "cv_alpha")
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
-	if len(rows) != 1 || rows[0].ID != "tk_a" {
-		t.Errorf("expected only tk_a, got %+v", rows)
+	if len(rows) != 1 || rows[0].ID != "td_a" {
+		t.Errorf("expected only td_a, got %+v", rows)
 	}
 }
 
 func TestStore_Update_PersistsChanges(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	in := &taskdomain.Task{ID: "tk_u", ConversationID: "cv_x", Subject: "old", Status: taskdomain.StatusPending}
+	in := &tododomain.Todo{ID: "td_u", ConversationID: "cv_x", Subject: "old", Status: tododomain.StatusPending}
 	if err := s.Create(ctx, in); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	got, _ := s.Get(ctx, "tk_u")
+	got, _ := s.Get(ctx, "td_u")
 	got.Subject = "new"
-	got.Status = taskdomain.StatusInProgress
+	got.Status = tododomain.StatusInProgress
 	if err := s.Update(ctx, got); err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	round, err := s.Get(ctx, "tk_u")
+	round, err := s.Get(ctx, "td_u")
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
-	if round.Subject != "new" || round.Status != taskdomain.StatusInProgress {
+	if round.Subject != "new" || round.Status != tododomain.StatusInProgress {
 		t.Errorf("round-trip: %+v", round)
 	}
 }
@@ -132,14 +132,14 @@ func TestStore_Update_PersistsChanges(t *testing.T) {
 func TestStore_SoftDelete_HidesRow(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
-	if err := s.Create(ctx, &taskdomain.Task{ID: "tk_del", ConversationID: "cv_x", Subject: "x", Status: taskdomain.StatusPending}); err != nil {
+	if err := s.Create(ctx, &tododomain.Todo{ID: "td_del", ConversationID: "cv_x", Subject: "x", Status: tododomain.StatusPending}); err != nil {
 		t.Fatalf("Create: %v", err)
 	}
-	if err := s.SoftDelete(ctx, "tk_del"); err != nil {
+	if err := s.SoftDelete(ctx, "td_del"); err != nil {
 		t.Fatalf("SoftDelete: %v", err)
 	}
-	_, err := s.Get(ctx, "tk_del")
-	if !errors.Is(err, taskdomain.ErrNotFound) {
+	_, err := s.Get(ctx, "td_del")
+	if !errors.Is(err, tododomain.ErrNotFound) {
 		t.Errorf("after SoftDelete want ErrNotFound, got %v", err)
 	}
 	rows, _ := s.ListByConversation(ctx, "cv_x")
@@ -150,8 +150,8 @@ func TestStore_SoftDelete_HidesRow(t *testing.T) {
 
 func TestStore_SoftDelete_UnknownID_ReturnsNotFound(t *testing.T) {
 	s := newTestStore(t)
-	err := s.SoftDelete(context.Background(), "tk_nope")
-	if !errors.Is(err, taskdomain.ErrNotFound) {
+	err := s.SoftDelete(context.Background(), "td_nope")
+	if !errors.Is(err, tododomain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 }

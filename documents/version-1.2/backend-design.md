@@ -203,9 +203,9 @@ backend/
     │   │   ├── filesystem/         ← ✅ Read/Write/Edit/Glob/Grep
     │   │   ├── shell/              ← ✅ Bash/BashOutput/KillShell
     │   │   ├── web/                ← ✅ WebFetch/WebSearch
-    │   │   ├── task/               ← ✅ TaskCreate/List/Get/Update（Phase 5）
+    │   │   ├── todo/               ← ✅ TodoCreate/List/Get/Update（Phase 5；2026-05-05 改名 Task → Todo）
     │   │   ├── ask/                ← ✅ AskUserQuestion（Phase 5）
-    │   │   ├── subagent/           ← 📐 Phase 4 准备件 Subagent tool（spawn 子 LLM loop 入口；改名避开 task domain 撞车）
+    │   │   ├── subagent/           ← 📐 Phase 4 准备件 Subagent tool（spawn 子 LLM loop 入口；改名避开 todo domain 撞车）
     │   │   ├── mcp/                ← 📐 Phase 4 准备件 search_mcp + call_mcp
     │   │   └── skill/              ← 📐 Phase 4 准备件 search_skills + activate_skill
     │   ├── subagent/               ← 📐 D3-D4 实施中 Service{Spawn/Cancel/Get/ListTypes/ListByConversation} + subagentHost（loop.Host 实现）+ 内置 3 类型注册表
@@ -217,7 +217,7 @@ backend/
     │
     ├── infra/                      ← 技术实现
     │   ├── db/                     ← ✅ db.go（modernc.org/sqlite）+ migrate.go + schema_extras.go
-    │   ├── store/                  ← ✅ apikey / model / conversation / chat / forge / task；📐 加 subagent + sandbox
+    │   ├── store/                  ← ✅ apikey / model / conversation / chat / forge / todo；📐 加 subagent + sandbox
     │   ├── mcp/                    ← 📐 Phase 4 准备件 stdio Client wrapper（基于 modelcontextprotocol/go-sdk v1.x）
     │   ├── sandbox/                ← 🔄 大重构：原 forge-only 升级为统一 PluginRuntime
     │   │   ├── sandbox.go          ← Service 实现 RuntimeInstaller/EnvManager 注册 + spawn 派发
