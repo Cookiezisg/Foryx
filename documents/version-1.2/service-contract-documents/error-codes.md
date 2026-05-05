@@ -187,12 +187,13 @@ AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 
 
 ### Phase 4 准备件（2026-05-05 设计完成 / 待实施）
 
-#### subagent 📐
+#### subagent ✅
 
 | Code | HTTP | Sentinel | 场景 | 状态 |
 |---|---|---|---|---|
-| `SUBAGENT_TYPE_NOT_FOUND` | 404 | `subagentdomain.ErrTypeNotFound` | spawn 时 subagent_type 不在注册表 | 📐 |
-| `SUBAGENT_RECURSION` | 422 | `subagentdomain.ErrRecursionAttempt` | subagent 内尝试再 spawn（防嵌套）| 📐 |
+| `SUBAGENT_TYPE_NOT_FOUND` | 404 | `subagentdomain.ErrTypeNotFound` | spawn 时 subagent_type 不在注册表 | ✅ |
+| `SUBAGENT_RECURSION` | 422 | `subagentdomain.ErrRecursionAttempt` | subagent 内尝试再 spawn（防嵌套）| ✅ |
+| `SUBAGENT_RUN_NOT_FOUND` | 404 | `gorm.ErrRecordNotFound`（handler 内映射） | GET `/subagent-runs/{id}` 找不到 | ✅ |
 
 > 注：`subagentdomain.ErrMaxTurnsExceeded` / `ErrCancelled` **不上抛 handler**，由 SubagentTool.Execute 转友好字符串返 LLM。
 

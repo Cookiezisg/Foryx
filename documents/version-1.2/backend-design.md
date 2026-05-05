@@ -179,7 +179,7 @@ backend/
     │   ├── crypto/                 ← ✅ 接口
     │   ├── events/                 ← ✅ 接口 + types.go（强类型事件）
     │   ├── errors/                 ← ✅ 跨 domain 通用 sentinel
-    │   ├── subagent/               ← 📐 Phase 4 准备件（2026-05-05 设计完成，D3 实施中）SubagentType + SubagentRun + SubagentMessage + Repository + 4 sentinel（无 SubRunner 接口——chat/subagent 通过 app/loop 解耦，详见 service-design-documents/subagent.md §6）
+    │   ├── subagent/               ← ✅ SubagentType + SubagentRun + SubagentMessage + Repository + 4 sentinel（无 SubRunner 接口——chat/subagent 通过 app/loop 解耦，详见 service-design-documents/subagent.md §6）
     │   ├── mcp/                    ← 📐 Phase 4 准备件 ServerConfig + ServerStatus + ToolDef + RegistryEntry + 11 sentinel
     │   ├── skill/                  ← 📐 Phase 4 准备件 Skill + Frontmatter + 5 sentinel
     │   ├── catalog/                ← 📐 Phase 4 准备件 CatalogSource port + Catalog + Item + Granularity
@@ -195,7 +195,7 @@ backend/
     │   ├── apikey/                 ← ✅ apikey.go（Service + KeyProvider + MaskKey 全合并）+ providers.go + tester.go
     │   ├── model/                  ← ✅ model.go（Service + ModelPicker 合并）
     │   ├── conversation/           ← ✅ conversation.go
-    │   ├── loop/                   ← 📐 D3 抽出的通用 ReAct 引擎：loop.go（Host 接口 + Run）+ stream.go（LLM 流式装配）+ tools.go（partition by execution_group + dispatch）+ history.go（extendHistory）。chat / subagent / Skill fork / Phase 4 workflow LLM 节点都是调用方
+    │   ├── loop/                   ← ✅ 通用 ReAct 引擎：loop.go（Host 接口 + Run）+ stream.go（LLM 流式装配）+ tools.go（partition by execution_group + dispatch）+ history.go（extendHistory）。chat / subagent / Skill fork / Phase 4 workflow LLM 节点都是调用方
     │   ├── chat/                   ← ✅ 重构为 loop 调用方：chat.go / runner.go（agentRun → 构造 chatHost → loop.Run + autoTitle）/ host.go / history.go / util.go（stream/tools 已迁出到 loop 包）
     │   ├── forge/                  ← ✅ forge.go（30 方法 Service + ParseCode）+ ast.go（Python AST 解析）
     │   ├── tool/                   ← ✅ Tool framework：tool.go（9 方法接口 + 标准字段注入 + ToLLMDef）；嵌套子包按 tool 家族（§S12 例外）
@@ -205,10 +205,10 @@ backend/
     │   │   ├── web/                ← ✅ WebFetch/WebSearch
     │   │   ├── todo/               ← ✅ TodoCreate/List/Get/Update（Phase 5；2026-05-05 改名 Task → Todo）
     │   │   ├── ask/                ← ✅ AskUserQuestion（Phase 5）
-    │   │   ├── subagent/           ← 📐 Phase 4 准备件 Subagent tool（spawn 子 LLM loop 入口；改名避开 todo domain 撞车）
+    │   │   ├── subagent/           ← ✅ Subagent tool（spawn 子 LLM loop 入口；改名避开 todo domain 撞车）
     │   │   ├── mcp/                ← 📐 Phase 4 准备件 search_mcp + call_mcp
     │   │   └── skill/              ← 📐 Phase 4 准备件 search_skills + activate_skill
-    │   ├── subagent/               ← 📐 D3-D4 实施中 Service{Spawn/Cancel/Get/ListTypes/ListByConversation} + subagentHost（loop.Host 实现）+ 内置 3 类型注册表
+    │   ├── subagent/               ← ✅ Service{Spawn/Cancel/Get/ListTypes/ListByConversation/ListMessages} + subagentHost（loop.Host 实现，5min total-timeout + panic recover + agentstate token log）+ 内置 3 类型注册表（Explore / Plan / general-purpose）
     │   ├── mcp/                    ← 📐 Phase 4 准备件 Service + lifecycle + Registry + healthcheck
     │   ├── skill/                  ← 📐 Phase 4 准备件 Service + frontmatter + fsnotify watcher
     │   ├── catalog/                ← 📐 Phase 4 准备件 Service + Generator + 1s polling + atomic 单 flight + fingerprint dedup
@@ -217,7 +217,7 @@ backend/
     │
     ├── infra/                      ← 技术实现
     │   ├── db/                     ← ✅ db.go（modernc.org/sqlite）+ migrate.go + schema_extras.go
-    │   ├── store/                  ← ✅ apikey / model / conversation / chat / forge / todo；📐 加 subagent + sandbox
+    │   ├── store/                  ← ✅ apikey / model / conversation / chat / forge / todo / sandbox / subagent
     │   ├── mcp/                    ← 📐 Phase 4 准备件 stdio Client wrapper（基于 modelcontextprotocol/go-sdk v1.x）
     │   ├── sandbox/                ← 🔄 大重构：原 forge-only 升级为统一 PluginRuntime
     │   │   ├── sandbox.go          ← Service 实现 RuntimeInstaller/EnvManager 注册 + spawn 派发

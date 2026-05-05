@@ -194,8 +194,8 @@ Forge System Tools 注入（search/get/create/edit/run，5 个）。SSE 见 even
 
 提前完成以下 4 个 domain 作为 Phase 4-5 工作流 / 智能化的基础设施。设计完成、待实施。
 
-#### subagent 📐
-详见 [`../service-design-documents/subagent.md`](../service-design-documents/subagent.md)。LLM 通过 `Subagent` system tool spawn 子 LLM loop（避开 `todo` domain 撞车而改名）；独立 context、过滤后 tool registry；复用 chat runner。
+#### subagent ✅
+详见 [`../service-design-documents/subagent.md`](../service-design-documents/subagent.md)。LLM 通过 `Subagent` system tool spawn 子 LLM loop（避开 `todo` domain 撞车而改名）；独立 context、过滤后 tool registry；与 chat 都通过 `internal/app/loop` 共享 ReAct 引擎。V1 内置 3 类型（Explore / Plan / general-purpose）。**V1.2 D3-D4 完成 2026-05-06**。
 
 | Method | Path | 用途 |
 |---|---|---|

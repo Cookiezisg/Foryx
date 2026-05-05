@@ -693,17 +693,21 @@ subagent 推时三字段全填 → 前端拿到完整 message + 完整 run。
 
 ---
 
-## 13. 测试覆盖（计划）
+## 13. 测试覆盖（实际，截至 D4-5 收尾 2026-05-06）
 
-| 层 | 文件 | 测试数（计划）| 覆盖 |
+| 层 | 文件 | 测试数 | 覆盖 |
 |---|---|---|---|
-| domain | `internal/domain/subagent/subagent_test.go` | 4 | SubagentType 注册查找 / SubagentRun + SubagentMessage JSON / Blocks 类型复用 chat |
-| store | `internal/infra/store/subagent/subagent_test.go` | 10 | Run CRUD + Message AppendSeq 自增 + ListMessagesByRun 排序 + 跨 conv 隔离 + 删 run 不级联删 message（独立生命周期）|
-| app/subagent | `internal/app/subagent/subagent_test.go` | 12 | Spawn happy / type not found / recursion / max_turns 终态 / token accounting / cancel via ctx / 每 step 写 SubagentMessage / chat.message 嵌入 subagentRun 断言 |
-| app/tool/subagent | `internal/app/tool/subagent/agent_test.go` | 8 | identity / Validate / Execute happy / recursion 拒绝 / 默认参数 |
-| pipeline | `test/subagent/subagent_test.go` | 4 | Spawn Explore 完成搜索任务 / 嵌套被拒 / max_turns 触发 / 流式 chat.message 带 subagentRunId 验证 |
+| store | `internal/infra/store/subagent/subagent_test.go` | 14 | Run CRUD（含 NotFound、状态迁移、跨对话隔离、按 StartedAt 倒序 List）/ Message AppendSeq 单调（含 12-goroutine 并发竞争）+ UpdatePreservesSeq + chatdomain.Block 复用 round-trip + transient gorm:"-" 字段不落库 |
+| events | `internal/domain/events/types_test.go` | 5 | ChatMessage MarshalJSON wire 兼容（零 subagent 字段时字节级与原 Message 一致）+ subagent 三字段 set 时正确合并到顶层 + omitempty 半填场景 + EventName 稳定 |
+| agentstate | `internal/pkg/agentstate/agentstate_test.go` | 9 | MarkRead/WasRead + Cwd round-trip + SubagentTokenLog 顺序保留 + 32-goroutine 并发 append 求和不丢条目 + 返 copy 非别名 |
+| app/subagent | `internal/app/subagent/subagent_test.go` | 14 | Registry Get/List 排序 + 内置 3 类型契约（Explore 白名单纯只读 / general-purpose AllowedTools=nil 标记） + filterTools 防递归（白名单含 Subagent 也强制剥）+ composeSystemPrompt locale 行为 |
+| app/tool/subagent | `internal/app/tool/subagent/agent_test.go` | 18 | Identity / 静态元数据 / 必填字段声明 / ValidateInput 5 路径 / CheckPermissions 跨 mode 全 Allow / 运行时递归守卫（depth≥1 拒绝）/ Execute 解析失败 / appendNote 三 body 形态 |
+| handlers/subagent | `internal/transport/httpapi/handlers/subagent_test.go` | 8 | ListRuns 过滤+排序 + 空结果 / GetRun 200+404 / ListMessages 按 Seq 排序 + 空 run / ListTypes 内置 3 个按 alpha |
+| pipeline | `backend/test/subagent/subagent_test.go` | 3 | Spawn 端到端（parent → SubagentTool → Service.Spawn → loop.Run → tool_result 回 parent，DB 行 + message 落实）/ SSE 携带 subagentRun 快照（chat.message 带 subagentRunId + parentConversationId + 完整 SubagentRun JSON）/ max_turns 触发 + parent tool_result 含 "[note: hit max turns]" 注脚 |
 
-总计 ~38 测试 + 4 pipeline 场景。
+**总计 71 测试**（68 单测 + 3 pipeline）。
+
+> V1 范围说明：结构性防递归（filterTools 剥 SubagentTool）已在 app/subagent 单测覆盖；嵌套 spawn 在 sub-runner 内会降级为 "tool not found"（layer-1 设计中），加 pipeline 重复证明无价值。运行时递归守卫（depth ≥ 1 拒绝）由 app/tool/subagent 单测覆盖。
 
 ---
 
