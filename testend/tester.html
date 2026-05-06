@@ -259,6 +259,7 @@
         <button class="tab-btn" :class="{active: activeRightTab==='subagent'}" @click="selectTab('subagent')">Subagent</button>
         <button class="tab-btn" :class="{active: activeRightTab==='skill'}" @click="selectTab('skill')">Skill</button>
         <button class="tab-btn" :class="{active: activeRightTab==='mcp'}" @click="selectTab('mcp')">MCP</button>
+        <button class="tab-btn" :class="{active: activeRightTab==='sandbox'}" @click="selectTab('sandbox')">Sandbox</button>
       </div>
 
       <!-- Config Tab -->
@@ -1366,6 +1367,100 @@
         </div>
       </div>
 
+      <!-- ── Sandbox tab (TE-3e) ─────────────────────────────────── -->
+      <div class="tab-content" x-show="activeRightTab==='sandbox'" x-data="sandboxTab()">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border)">
+          <strong style="font-size:12px">Sandbox</strong>
+          <button class="btn-small" @click="loadAll()" :disabled="loading" x-text="loading ? 'loading…' : 'reload'"></button>
+          <button class="btn-small" @click="gc()" :disabled="actionBusy === 'gc'"
+                  title="Drop unreferenced envs">
+            <span x-text="actionBusy === 'gc' ? 'gc…' : 'gc'"></span>
+          </button>
+          <button class="btn-small" @click="retryBootstrap()" :disabled="actionBusy === 'bootstrap' || bootstrap?.ready"
+                  :title="bootstrap?.ready ? 'already ready' : 'retry mise extract'">
+            <span x-text="actionBusy === 'bootstrap' ? 'retrying…' : 'retry boot'"></span>
+          </button>
+          <span x-show="err"
+                :style="err.includes('failed') || err.includes('error') ? 'color:var(--err)' : 'color:var(--accent)'"
+                style="font-size:10px;margin-left:auto;max-width:50%;overflow:hidden;text-overflow:ellipsis"
+                :title="err" x-text="err"></span>
+        </div>
+
+        <div style="padding:8px 10px;font-size:11px;display:flex;flex-direction:column;gap:10px">
+          <!-- Bootstrap status -->
+          <div>
+            <div style="font-weight:600;margin-bottom:4px">bootstrap status</div>
+            <div style="display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-family:Consolas,monospace;font-size:10px">
+              <span style="color:var(--text-mute)">ready</span>
+              <span :style="bootstrap?.ready ? 'color:#2a9d3a' : 'color:var(--err)'"
+                    x-text="bootstrap?.ready ? 'yes' : 'no (degraded mode — runtime ops will fail)'"></span>
+              <span style="color:var(--text-mute)">mise binary</span>
+              <span x-text="bootstrap?.miseBin || '—'"></span>
+              <template x-if="bootstrap?.error">
+                <span style="color:var(--err)">error</span>
+              </template>
+              <template x-if="bootstrap?.error">
+                <span style="color:var(--err);white-space:pre-wrap" x-text="bootstrap?.error"></span>
+              </template>
+            </div>
+          </div>
+
+          <!-- Disk usage -->
+          <div>
+            <div style="font-weight:600;margin-bottom:4px">disk usage</div>
+            <div style="display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-family:Consolas,monospace;font-size:10px">
+              <span style="color:var(--text-mute)">total</span>
+              <span x-text="fmtBytes(disk?.totalBytes ?? 0)"></span>
+              <span style="color:var(--text-mute)">runtimes</span>
+              <span x-text="fmtBytes(disk?.runtimeBytes ?? 0)"></span>
+              <span style="color:var(--text-mute)">envs</span>
+              <span x-text="fmtBytes(disk?.envBytes ?? 0)"></span>
+            </div>
+          </div>
+
+          <!-- Runtimes -->
+          <div>
+            <div style="font-weight:600;margin-bottom:4px">runtimes (<span x-text="runtimes.length"></span>) — installed by mise on first use</div>
+            <div x-show="runtimes.length === 0" style="color:var(--text-mute)">no runtimes installed yet (lazy on first env)</div>
+            <template x-for="rt in runtimes" :key="rt.id">
+              <div style="display:flex;gap:10px;padding:3px 0;font-family:Consolas,monospace;font-size:10px">
+                <span style="min-width:50px" x-text="rt.kind"></span>
+                <span x-text="rt.version"></span>
+                <span style="color:var(--text-mute)" x-text="rt.installPath"></span>
+                <span style="color:var(--text-mute);margin-left:auto" x-text="fmtTime(rt.installedAt)"></span>
+              </div>
+            </template>
+          </div>
+
+          <!-- Conversation envs (only when conv selected) -->
+          <div x-show="conversationId">
+            <div style="font-weight:600;margin-bottom:4px">envs in current conversation (<span x-text="convEnvs.length"></span>)</div>
+            <div x-show="convEnvs.length === 0" style="color:var(--text-mute)">none yet — Bash tool spawns envs lazily on first use per kind</div>
+            <template x-for="e in convEnvs" :key="e.id">
+              <div style="display:flex;gap:8px;padding:3px 0;font-family:Consolas,monospace;font-size:10px">
+                <span style="min-width:50px" x-text="e.runtimeKind"></span>
+                <span style="color:var(--text-mute)" x-text="e.id"></span>
+              </div>
+            </template>
+          </div>
+
+          <!-- All envs -->
+          <div>
+            <div style="font-weight:600;margin-bottom:4px">all envs (<span x-text="envs.length"></span>)</div>
+            <div x-show="envs.length === 0" style="color:var(--text-mute)">no envs created yet</div>
+            <template x-for="e in envs" :key="e.id">
+              <div style="display:flex;gap:8px;padding:3px 0;font-family:Consolas,monospace;font-size:10px;align-items:center">
+                <span style="min-width:60px" x-text="(e.ownerKind || '?') + ':' + (e.ownerId || '').slice(0, 12)"></span>
+                <span style="min-width:40px" x-text="e.runtimeKind"></span>
+                <span style="color:var(--text-mute);flex:1;overflow:hidden;text-overflow:ellipsis" :title="e.envDir" x-text="e.envDir"></span>
+                <button class="btn-icon" @click="destroyEnv(e)" :disabled="actionBusy === e.id"
+                        style="font-size:10px" title="Destroy this env">✕</button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+
     </aside>
   </div>
 
@@ -1383,6 +1478,7 @@
   <script src="/dev/static/js/tab-subagent.js"></script>
   <script src="/dev/static/js/tab-skill.js"></script>
   <script src="/dev/static/js/tab-mcp.js"></script>
+  <script src="/dev/static/js/tab-sandbox.js"></script>
   <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
 </body>
 </html>
