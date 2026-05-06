@@ -413,6 +413,26 @@ func (s *Service) GetServer(_ context.Context, name string) (*mcpdomain.ServerSt
 	return &cp, nil
 }
 
+// Stderr returns the captured stderr ring-buffer tail (≤ 256 KB) for the
+// named MCP server's subprocess. Returns "" with ErrServerNotFound when no
+// such server is configured, "" with nil when configured-but-not-connected
+// (e.g. failed handshake before any stderr arrived).
+//
+// Stderr 返指定 MCP server 子进程的 stderr 环形缓冲尾部（≤ 256 KB）。
+// 未配置返 ErrServerNotFound；配置了但未连接（如握手前失败）返 ""。
+func (s *Service) Stderr(name string) (string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if _, ok := s.states[name]; !ok {
+		return "", fmt.Errorf("mcpapp.Stderr: %w: %q", mcpdomain.ErrServerNotFound, name)
+	}
+	c, ok := s.clients[name]
+	if !ok {
+		return "", nil
+	}
+	return c.StderrTail(), nil
+}
+
 // ListTools flattens every connected server's cached tools/list into one
 // stable-ordered slice (server alpha, then tool alpha). Used by Search
 // when total tool count <= topK (skip ranking) and by call_mcp's

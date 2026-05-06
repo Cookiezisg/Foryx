@@ -22,6 +22,8 @@ document.addEventListener('alpine:init', () => {
     actionBusy: '',             // server name being acted on
     err: '',
     dragOver: false,
+    // TE-14 stderr viewer
+    stderrModal: { open: false, name: '', text: '', size: 0, loading: false, err: '' },
 
     async init() {
       await Promise.all([this.loadServers(), this.loadRegistry()])
@@ -86,6 +88,33 @@ document.addEventListener('alpine:init', () => {
         this.actionBusy = ''
       }
     },
+
+    async openStderr(srv) {
+      this.stderrModal = { open: true, name: srv.name, text: '', size: 0, loading: true, err: '' }
+      await this.refreshStderr()
+    },
+
+    async refreshStderr() {
+      if (!this.stderrModal.name) return
+      this.stderrModal.loading = true
+      try {
+        const r = await fetch(`/api/v1/mcp-servers/${encodeURIComponent(this.stderrModal.name)}/stderr`)
+        if (!r.ok) {
+          this.stderrModal.err = `HTTP ${r.status}`
+          return
+        }
+        const j = await r.json()
+        this.stderrModal.text = (j.data?.stderr) || ''
+        this.stderrModal.size = j.data?.size || 0
+        this.stderrModal.err = ''
+      } catch (e) {
+        this.stderrModal.err = String(e)
+      } finally {
+        this.stderrModal.loading = false
+      }
+    },
+
+    closeStderr() { this.stderrModal.open = false },
 
     async deleteServer(srv) {
       if (!confirm(`Delete MCP server "${srv.name}"? Removes from ~/.forgify/mcp.json + disconnects subprocess.`)) return

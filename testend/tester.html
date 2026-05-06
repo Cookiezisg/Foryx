@@ -1356,6 +1356,8 @@
                 <div style="display:flex;gap:6px">
                   <button class="btn-small" @click="reconnect(selected)" :disabled="actionBusy === selected?.name">reconnect</button>
                   <button class="btn-small" @click="healthCheck(selected)" :disabled="actionBusy === selected?.name">health-check</button>
+                  <button class="btn-small" @click="openStderr(selected)" :disabled="actionBusy === selected?.name"
+                          title="View captured subprocess stderr (≤ 256 KB ring buffer)">stderr</button>
                   <button class="btn-small" @click="deleteServer(selected)" :disabled="actionBusy === selected?.name" style="color:var(--err)">delete</button>
                 </div>
 
@@ -1451,6 +1453,29 @@
                   <span x-text="actionBusy === selectedRegEntry?.name ? 'installing…' : 'install'"></span>
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TE-14 stderr modal (in mcpTab() x-data scope) -->
+        <div x-show="stderrModal.open" class="raw-modal-overlay" @click.self="closeStderr()">
+          <div class="raw-modal" style="max-width:900px;max-height:80vh;display:flex;flex-direction:column">
+            <div class="raw-modal-header">
+              <span style="font-weight:600">stderr · <span x-text="stderrModal.name"></span></span>
+              <span style="margin-left:8px;font-size:10px;color:var(--text-mute)" x-text="stderrModal.size + ' bytes'"></span>
+              <span style="margin-left:auto;display:flex;gap:6px">
+                <button class="btn-small" @click="refreshStderr()" :disabled="stderrModal.loading"
+                        x-text="stderrModal.loading ? 'loading…' : 'reload'"></button>
+                <button class="btn-small" @click="closeStderr()">close</button>
+              </span>
+            </div>
+            <div class="raw-modal-body" style="flex:1;overflow:auto">
+              <div x-show="stderrModal.err" style="color:var(--err);padding:8px" x-text="stderrModal.err"></div>
+              <div x-show="!stderrModal.err && !stderrModal.text && !stderrModal.loading"
+                   style="color:var(--text-mute);padding:8px;font-style:italic">
+                (no stderr captured — server is configured-but-not-connected, or process is silent)
+              </div>
+              <pre x-show="stderrModal.text" style="font-family:Consolas,monospace;font-size:11px;padding:8px;margin:0;white-space:pre-wrap;word-break:break-word" x-text="stderrModal.text"></pre>
             </div>
           </div>
         </div>

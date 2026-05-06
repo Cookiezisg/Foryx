@@ -74,6 +74,7 @@ func (h *MCPHandler) Register(mux *http.ServeMux) {
 	// Server CRUD/lifecycle
 	mux.HandleFunc("GET /api/v1/mcp-servers", h.ListServers)
 	mux.HandleFunc("GET /api/v1/mcp-servers/{name}", h.GetServer)
+	mux.HandleFunc("GET /api/v1/mcp-servers/{name}/stderr", h.GetServerStderr)
 	mux.HandleFunc("PUT /api/v1/mcp-servers/{name}", h.PutServer)
 	mux.HandleFunc("DELETE /api/v1/mcp-servers/{name}", h.DeleteServer)
 
@@ -104,6 +105,30 @@ func (h *MCPHandler) Register(mux *http.ServeMux) {
 func (h *MCPHandler) ListServers(w http.ResponseWriter, r *http.Request) {
 	servers := h.svc.ListServers(r.Context())
 	responsehttpapi.Success(w, http.StatusOK, servers)
+}
+
+// GetServerStderr: GET /api/v1/mcp-servers/{name}/stderr → 200 with the
+// captured stderr ring-buffer (≤ 256 KB) of the named server's subprocess.
+// Empty string when configured-but-not-connected. 404 when no such
+// server is configured. Used by testend's MCP tab to debug connection
+// failures (handshake errors, missing executables, runtime crashes —
+// all surface in stderr).
+//
+// GetServerStderr: GET /api/v1/mcp-servers/{name}/stderr → 200 返子进程
+// stderr 环形缓冲（≤ 256 KB）。配置了未连接返空。未配置 404。testend
+// MCP tab 用来调试连接失败。
+func (h *MCPHandler) GetServerStderr(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	tail, err := h.svc.Stderr(name)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, map[string]any{
+		"name":   name,
+		"stderr": tail,
+		"size":   len(tail),
+	})
 }
 
 // GetServer: GET /api/v1/mcp-servers/{name} → 200 ServerStatus / 404.
