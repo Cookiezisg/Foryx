@@ -641,3 +641,16 @@ select.cfg-input { cursor: pointer; }
   white-space: pre;
 }
 [x-cloak] { display: none !important; }
+
+/* ── TE-3: shared button + layout for new domain tabs ─────────────── */
+.btn-small {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: var(--bg-hover, #f0f0f0);
+  border: 1px solid var(--border, #ddd);
+  border-radius: 3px;
+  cursor: pointer;
+  color: var(--text, #333);
+}
+.btn-small:hover:not(:disabled) { background: var(--accent-soft, #e6f0ff); }
+.btn-small:disabled { opacity: 0.5; cursor: default; }
