@@ -18,6 +18,9 @@ document.addEventListener('alpine:init', () => {
       setInterval(() => this.load(), 8000)
       // Re-load when a new conversation is created (e.g., from chat send or title update).
       document.addEventListener('conv-created', () => this.load())
+      // TE-6: re-load after the chat tab deletes the current conv.
+      // TE-6：chat tab 删当前对话后刷新。
+      document.addEventListener('conv-deleted', () => this.load())
     },
 
     async load() {

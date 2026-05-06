@@ -24,6 +24,17 @@ document.addEventListener('alpine:init', () => {
     // JSON-stringified 给显示用 + lazy 'copied' 标志给剪贴板按钮反馈。
     rawModal: { open: false, json: '', messageId: '', copied: false },
 
+    // Catalog injection indicator: shows a small pill in the header
+    // confirming the LLM is being told about available capabilities
+    // (catalog block in system prompt). Updates on conv switch +
+    // refreshes alongside catalog tab interactions.
+    //
+    // Catalog 注入指示器：header 小 pill 确认 LLM 收到了能力清单
+    // （system prompt 里的 catalog 块）。切换对话 + catalog tab 操作时
+    // 跟随刷新。
+    catalogFp: '',
+    catalogGenerated: '',
+
     showRaw(m) {
       this.rawModal = {
         open: true,
@@ -54,6 +65,7 @@ document.addEventListener('alpine:init', () => {
     get title() { return Alpine.store('app').conversationTitle },
 
     init() {
+      this.loadCatalogStatus()
       this.$watch('conversationId', id => {
         this._closeSSE()
         this.messages = []
@@ -62,7 +74,40 @@ document.addEventListener('alpine:init', () => {
         if (id) {
           this.loadMessages(id).then(() => this._connectSSE(id))
         }
+        this.loadCatalogStatus()
       })
+    },
+
+    async loadCatalogStatus() {
+      try {
+        const r = await fetch('/api/v1/catalog')
+        if (!r.ok) { this.catalogFp = ''; return }
+        const j = await r.json()
+        const cat = j.data
+        if (cat) {
+          this.catalogFp = (cat.fingerprint || '').slice(0, 8)
+          this.catalogGenerated = cat.generatedBy || ''
+        } else {
+          this.catalogFp = ''
+        }
+      } catch { this.catalogFp = '' }
+    },
+
+    async deleteCurrentConv() {
+      const id = this.conversationId
+      if (!id) return
+      if (!confirm('Delete the current conversation? Removes all messages from the database.')) return
+      try {
+        await fetch(`/api/v1/conversations/${id}`, { method: 'DELETE' })
+        // Sidebar polls; clear local state immediately so the UI is responsive.
+        // Sidebar 会轮询；本地立即清让 UI 响应。
+        Alpine.store('app').conversationId = ''
+        Alpine.store('app').conversationTitle = ''
+        this.messages = []
+        document.dispatchEvent(new CustomEvent('conv-deleted'))
+      } catch (e) {
+        alert('delete failed: ' + e)
+      }
     },
 
     // ── loadMessages ──────────────────────────────────────────────────────────
