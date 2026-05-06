@@ -894,6 +894,8 @@
                         x-text="'Tests' + testSummaryLabel"></button>
                 <button class="tool-detail-tab" :class="{active: userDetailTab==='versions'}"
                         @click="switchDetailTab('versions')">Versions</button>
+                <button class="tool-detail-tab" :class="{active: userDetailTab==='executions'}"
+                        @click="switchDetailTab('executions')">Executions</button>
               </div>
 
               <!-- ── Run tab ── -->
@@ -1029,6 +1031,45 @@
                   </template>
                   <div x-show="!versionsLoading && versions.length===0"
                        style="padding:12px;font-size:11px;color:var(--text-mute)">No versions yet.</div>
+                </div>
+              </div>
+
+              <!-- ── Executions tab (TE-10) ── -->
+              <div x-show="userDetailTab==='executions'" class="tool-detail-body">
+                <div style="display:flex;align-items:center;gap:6px;padding:6px;border-bottom:1px solid var(--border);background:var(--bg2)">
+                  <strong style="font-size:11px">History</strong>
+                  <span style="font-size:10px;color:var(--text-mute)" x-text="executions.length + ' total'"></span>
+                  <select x-model="executionFilter" class="filter-input" style="margin-left:auto;font-size:10px">
+                    <option value="all">all</option>
+                    <option value="run">run only</option>
+                    <option value="test">test only</option>
+                  </select>
+                  <button class="btn-small" @click="loadExecutions()" :disabled="executionsLoading"
+                          x-text="executionsLoading ? 'loading…' : 'reload'"></button>
+                </div>
+                <div x-show="executionsLoading && executions.length === 0"
+                     style="padding:12px;font-size:11px;color:var(--text-mute)">Loading…</div>
+                <div x-show="!executionsLoading && executions.length === 0"
+                     style="padding:12px;font-size:11px;color:var(--text-mute)">
+                  No executions yet. Run the forge or use chat to trigger one.
+                </div>
+                <div style="overflow:auto">
+                  <template x-for="e in filteredExecutions" :key="e.id">
+                    <div style="border-bottom:1px solid var(--border);padding:6px 10px;font-family:Consolas,monospace;font-size:10px">
+                      <div style="display:flex;align-items:center;gap:8px">
+                        <span :style="'font-weight:600;color:'+execStatusColor(e)" x-text="execStatusLabel(e)"></span>
+                        <span style="color:var(--text-mute)" x-text="e.kind"></span>
+                        <span style="color:var(--text-mute)" x-text="'v'+(e.forgeVersion ?? '?')"></span>
+                        <span style="color:var(--text-mute)" x-text="(e.elapsedMs ?? 0)+'ms'"></span>
+                        <span style="color:var(--text-mute)" x-text="e.triggeredBy || '—'"></span>
+                        <span style="margin-left:auto;color:var(--text-mute)" x-text="fmtExecTime(e.createdAt)"></span>
+                      </div>
+                      <div x-show="e.errorMsg" style="color:var(--err);margin-top:2px;white-space:pre-wrap;word-break:break-all"
+                           x-text="e.errorMsg"></div>
+                      <div x-show="e.conversationId" style="color:var(--text-mute);margin-top:2px"
+                           x-text="'conv: '+e.conversationId+(e.toolCallId ? ' · tool: '+e.toolCallId : '')"></div>
+                    </div>
+                  </template>
                 </div>
               </div>
 

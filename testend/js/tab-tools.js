@@ -4,7 +4,7 @@
 document.addEventListener('alpine:init', () => {
   Alpine.data('toolsTab', () => ({
     section: 'system',          // 'system' | 'user'
-    userDetailTab: 'run',       // 'run' | 'tests' | 'versions'
+    userDetailTab: 'run',       // 'run' | 'tests' | 'versions' | 'executions'
 
     // ── System Tools ──────────────────────────────────────────────────────────
     sysTools: [],
@@ -52,6 +52,16 @@ document.addEventListener('alpine:init', () => {
     versionsLoading: false,
     pending: null,
     pendingLoading: false,
+
+    // ── Executions tab (TE-10) ────────────────────────────────────────────────
+    // Unified history of run/test executions for the selected forge. Sourced
+    // from GET /api/v1/forges/{id}/executions which returns the forge_executions
+    // table newest-first.
+    //
+    // Executions tab：选中 forge 的 run/test 统一历史。
+    executions: [],
+    executionsLoading: false,
+    executionFilter: 'all',     // 'all' | 'run' | 'test'
 
     // ─────────────────────────────────────────────────────────────────────────
 
@@ -130,8 +140,10 @@ document.addEventListener('alpine:init', () => {
       this.showAddCase = false
       this.testCases = []; this.testResults = {}; this.testAllSummary = null; this.generateLog = []
       this.versions = []; this.pending = null
+      this.executions = []
       if (this.userDetailTab === 'tests') await this.loadTestCases()
       if (this.userDetailTab === 'versions') await this.loadVersions()
+      if (this.userDetailTab === 'executions') await this.loadExecutions()
     },
 
     async switchDetailTab(tab) {
@@ -139,6 +151,39 @@ document.addEventListener('alpine:init', () => {
       if (!this.userSelected) return
       if (tab === 'tests' && this.testCases.length === 0) await this.loadTestCases()
       if (tab === 'versions' && this.versions.length === 0) await this.loadVersions()
+      if (tab === 'executions' && this.executions.length === 0) await this.loadExecutions()
+    },
+
+    async loadExecutions() {
+      if (!this.userSelected) return
+      this.executionsLoading = true
+      try {
+        const r = await fetch(`/api/v1/forges/${this.userSelected.id}/executions?limit=50`)
+        if (r.ok) { const j = await r.json(); this.executions = j.data || [] }
+      } finally { this.executionsLoading = false }
+    },
+
+    get filteredExecutions() {
+      if (this.executionFilter === 'all') return this.executions
+      return this.executions.filter(e => e.kind === this.executionFilter)
+    },
+
+    fmtExecTime(s) {
+      if (!s) return '—'
+      try { return new Date(s).toLocaleString() } catch { return s }
+    },
+
+    execStatusColor(e) {
+      if (e.kind === 'test') {
+        if (e.pass === true) return 'var(--green)'
+        if (e.pass === false) return 'var(--err)'
+      }
+      return e.ok ? 'var(--green)' : 'var(--err)'
+    },
+
+    execStatusLabel(e) {
+      if (e.kind === 'test') return e.pass === true ? 'pass' : (e.pass === false ? 'fail' : '?')
+      return e.ok ? 'ok' : 'fail'
     },
 
     // ── CRUD ─────────────────────────────────────────────────────────────────
