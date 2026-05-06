@@ -1,7 +1,7 @@
 # MCP — V1.2 详设计
 
 **Phase**：Phase 4 准备件（提前到位，本周交付）
-**状态**：📐 设计完成（2026-05-04）— 待实施
+**状态**：🔄 D5 已交付（domain types + V1 内置 6 marketplace + ~/.forgify/mcp.json I/O，2026-05-06），D6 待实施（stdio Client + Service runtime + system tools + HTTP + pipeline）
 **关联**：
 - [`../backend-design.md`](../backend-design.md) — 总规范
 - [`../service-contract-documents/database-design.md`](../service-contract-documents/database-design.md) — 无新表（mcp.json 是 source）

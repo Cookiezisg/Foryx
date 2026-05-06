@@ -197,20 +197,22 @@ AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 
 
 > 注：`subagentdomain.ErrMaxTurnsExceeded` / `ErrCancelled` **不上抛 handler**，由 SubagentTool.Execute 转友好字符串返 LLM。
 
-#### mcp 📐
+#### mcp ✅
 
 | Code | HTTP | Sentinel | 场景 | 状态 |
 |---|---|---|---|---|
-| `MCP_SERVER_NOT_FOUND` | 404 | `mcpdomain.ErrServerNotFound` | server 名不在 mcp.json | 📐 |
-| `MCP_SERVER_NOT_CONNECTED` | 409 | `mcpdomain.ErrServerNotConnected` | 调用未 connect 的 server | 📐 |
-| `MCP_TOOL_NOT_FOUND` | 404 | `mcpdomain.ErrToolNotFound` | tool 名不在 server 的 tools/list | 📐 |
-| `MCP_TOOL_CALL_FAILED` | 502 | `mcpdomain.ErrToolCallFailed` | server 自报失败（含 isError=true）| 📐 |
-| `MCP_TOOL_CALL_TIMEOUT` | 504 | `mcpdomain.ErrToolCallTimeout` | per-call 超时（默认 30s，可 per-server override）| 📐 |
-| `MCP_REGISTRY_ENTRY_NOT_FOUND` | 404 | `mcpdomain.ErrRegistryEntryNotFound` | install 时 registry name 不存在 | 📐 |
-| `MCP_RUNTIME_MISSING` | 422 | `mcpdomain.ErrRuntimeMissing` | 系统未装 node / python | 📐 |
-| `MCP_REQUIRED_ENV_MISSING` | 422 | `mcpdomain.ErrRequiredEnvMissing` | install 时 required env 未填全 | 📐 |
-| `MCP_REQUIRED_ARGS_MISSING` | 422 | `mcpdomain.ErrRequiredArgsMissing` | install 时 required args 未填全 | 📐 |
-| `MCP_INSTALL_FAILED` | 502 | `mcpdomain.ErrInstallFailed` | npm install / uvx 安装命令失败 | 📐 |
+| `MCP_SERVER_NOT_FOUND` | 404 | `mcpdomain.ErrServerNotFound` | server 名不在 mcp.json | ✅ |
+| `MCP_SERVER_NOT_CONNECTED` | 409 | `mcpdomain.ErrServerNotConnected` | 调用未 connect 的 server | ✅ |
+| `MCP_TOOL_NOT_FOUND` | 404 | `mcpdomain.ErrToolNotFound` | tool 名不在 server 的 tools/list | ✅ |
+| `MCP_TOOL_CALL_FAILED` | 502 | `mcpdomain.ErrToolCallFailed` | server 自报失败（含 isError=true）| ✅ |
+| `MCP_TOOL_CALL_TIMEOUT` | 504 | `mcpdomain.ErrToolCallTimeout` | per-call 超时（默认 30s，可 per-server override）| ✅ |
+| `MCP_REGISTRY_ENTRY_NOT_FOUND` | 404 | `mcpdomain.ErrRegistryEntryNotFound` | install 时 registry name 不存在 | ✅ |
+| `MCP_RUNTIME_MISSING` | 422 | `mcpdomain.ErrRuntimeMissing` | 系统未装 node / python | ✅ |
+| `MCP_REQUIRED_ENV_MISSING` | 422 | `mcpdomain.ErrRequiredEnvMissing` | install 时 required env 未填全 | ✅ |
+| `MCP_REQUIRED_ARGS_MISSING` | 422 | `mcpdomain.ErrRequiredArgsMissing` | install 时 required args 未填全 | ✅ |
+| `MCP_INSTALL_FAILED` | 502 | `mcpdomain.ErrInstallFailed` | npm install / uvx 安装命令失败 | ✅ |
+
+> 注：所有 10 个 sentinel + errmap 行已在 D5-1 接线（2026-05-06）。runtime sentinels（Server* / Tool*）的实际触发点在 D6 stdio Client + Service 落地后接通；Registry-flow sentinels 同样走 D6 InstallFromRegistry 路径。
 
 #### skill 📐
 

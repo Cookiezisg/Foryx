@@ -180,7 +180,7 @@ backend/
     │   ├── events/                 ← ✅ 接口 + types.go（强类型事件）
     │   ├── errors/                 ← ✅ 跨 domain 通用 sentinel
     │   ├── subagent/               ← ✅ SubagentType + SubagentRun + SubagentMessage + Repository + 4 sentinel（无 SubRunner 接口——chat/subagent 通过 app/loop 解耦，详见 service-design-documents/subagent.md §6）
-    │   ├── mcp/                    ← 📐 Phase 4 准备件 ServerConfig + ServerStatus + ToolDef + RegistryEntry + 11 sentinel
+    │   ├── mcp/                    ← ✅ ServerConfig + ServerStatus + ToolDef + HealthResult + 5 status const + RegistryEntry + 10 sentinels（D5-1+D5-2 完成 2026-05-06；runtime/Service 在 D6）
     │   ├── skill/                  ← 📐 Phase 4 准备件 Skill + Frontmatter + 5 sentinel
     │   ├── catalog/                ← 📐 Phase 4 准备件 CatalogSource port + Catalog + Item + Granularity
     │   ├── sandbox/                ← 📐 Phase 4 准备件 Runtime + Env + Owner + RuntimeInstaller / EnvManager port + 8 sentinel（统一 PluginSandbox）
@@ -209,7 +209,7 @@ backend/
     │   │   ├── mcp/                ← 📐 Phase 4 准备件 search_mcp + call_mcp
     │   │   └── skill/              ← 📐 Phase 4 准备件 search_skills + activate_skill
     │   ├── subagent/               ← ✅ Service{Spawn/Cancel/Get/ListTypes/ListByConversation/ListMessages} + subagentHost（loop.Host 实现，5min total-timeout + panic recover + agentstate token log）+ 内置 3 类型注册表（Explore / Plan / general-purpose）
-    │   ├── mcp/                    ← 📐 Phase 4 准备件 Service + lifecycle + Registry + healthcheck
+    │   ├── mcp/                    ← 🔄 V1 marketplace Registry（6 内置 + Get/List/Visible+GOOS filter）已落地 2026-05-06；Service + Connect/Disconnect/Search/CallTool/Install/Health 在 D6
     │   ├── skill/                  ← 📐 Phase 4 准备件 Service + frontmatter + fsnotify watcher
     │   ├── catalog/                ← 📐 Phase 4 准备件 Service + Generator + 1s polling + atomic 单 flight + fingerprint dedup
     │   ├── sandbox/                ← 📐 Phase 4 准备件 Service + EnsureRuntime/EnsureEnv/Spawn/SpawnLongLived/SpawnShell/Destroy/GC（统一 PluginSandbox）
@@ -218,7 +218,7 @@ backend/
     ├── infra/                      ← 技术实现
     │   ├── db/                     ← ✅ db.go（modernc.org/sqlite）+ migrate.go + schema_extras.go
     │   ├── store/                  ← ✅ apikey / model / conversation / chat / forge / todo / sandbox / subagent
-    │   ├── mcp/                    ← 📐 Phase 4 准备件 stdio Client wrapper（基于 modelcontextprotocol/go-sdk v1.x）
+    │   ├── mcp/                    ← 🔄 ~/.forgify/mcp.json Load/Save/Merge（Claude Desktop schema 兼容，0600 权限，atomic 写）已落地 2026-05-06；stdio Client wrapper（基于 modelcontextprotocol/go-sdk v1.x）在 D6
     │   ├── sandbox/                ← 🔄 大重构：原 forge-only 升级为统一 PluginRuntime
     │   │   ├── sandbox.go          ← Service 实现 RuntimeInstaller/EnvManager 注册 + spawn 派发
     │   │   ├── bootstrap/embed.go  ← go:embed mise binaries（per-platform，~10MB）

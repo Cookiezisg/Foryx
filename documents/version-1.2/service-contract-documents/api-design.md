@@ -204,8 +204,8 @@ Forge System Tools 注入（search/get/create/edit/run，5 个）。SSE 见 even
 | GET | `/api/v1/subagent-runs/{id}/messages` | run 内全部 messages（流式小窗回放用）|
 | GET | `/api/v1/subagent-types` | 列所有可用 subagent 类型（Explore / Plan / general-purpose）|
 
-#### mcp 📐
-详见 [`../service-design-documents/mcp.md`](../service-design-documents/mcp.md)。官方 `modelcontextprotocol/go-sdk` v1.x；stdio only；search/call 模式不 flat 注册（避 token 爆炸）；自包含原则（只读 `~/.forgify/mcp.json`）。
+#### mcp 🔄
+详见 [`../service-design-documents/mcp.md`](../service-design-documents/mcp.md)。官方 `modelcontextprotocol/go-sdk` v1.x；stdio only；search/call 模式不 flat 注册（避 token 爆炸）；自包含原则（只读 `~/.forgify/mcp.json`）。**V1.2 D5（2026-05-06）已落地**：domain types + 10 sentinels（errmap 已接）+ 内置 6 marketplace（Playwright/MarkItDown/Context7/DuckDuckGo/SQLite/everything）+ ~/.forgify/mcp.json Load/Save/Merge。**D6 待实施**：stdio Client + Service runtime + system tools (search_mcp/call_mcp) + HTTP endpoints + pipeline tests。下表端点 D6 前未生效。
 
 ##### Server 配置 / 生命周期
 
