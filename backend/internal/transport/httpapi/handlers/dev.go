@@ -42,6 +42,7 @@ type DevHandler struct {
 	llmFactory     *llminfra.Factory
 	shellManager   *shelltool.ProcessManager
 	log            *zap.Logger
+	buildID        string // server-start unix timestamp; cache-busts /dev/static/* in HTML on every restart
 }
 
 // NewDevHandler wires DevHandler dependencies.
@@ -63,6 +64,7 @@ func NewDevHandler(
 		collectionsDir: collectionsDir,
 		integrationDir: integrationDir,
 		port:           port,
+		buildID:        fmt.Sprintf("%d", time.Now().Unix()),
 		tools:          tools,
 		llmFactory:     llmFactory,
 		shellManager:   shellManager,
@@ -132,11 +134,20 @@ func (h *DevHandler) ServeIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "tester.html not found — check --integration-dir", http.StatusNotFound)
 		return
 	}
+	// Cache-buster: substitute __BUILD__ in the HTML with this server's
+	// startup timestamp. Lets <link rel="stylesheet" href=".../style.css?v=__BUILD__">
+	// invalidate the browser memory cache on every backend restart, so the
+	// dev tester always picks up the latest CSS/JS without Cmd+Shift+R.
+	//
+	// __BUILD__ 占位符替换：让 link 标签的 ?v=__BUILD__ 在每次 backend 重启
+	// 时变化，浏览器内存缓存自然失效，dev 时不用每次硬刷。
+	body := strings.ReplaceAll(string(data), "__BUILD__", h.buildID)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
 	// Late write error means client disconnected mid-response; nothing
 	// useful to do (status already sent). Intentionally ignored.
 	// 写出错通常是客户端中途断开，状态码已发出无可挽回，故意忽略。
-	_, _ = w.Write(data)
+	_, _ = w.Write([]byte(body))
 }
 
 // ── GET /dev/logs ─────────────────────────────────────────────────────────────

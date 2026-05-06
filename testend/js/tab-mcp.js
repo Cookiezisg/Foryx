@@ -26,6 +26,14 @@ document.addEventListener('alpine:init', () => {
     stderrModal: { open: false, name: '', text: '', size: 0, loading: false, err: '' },
 
     async init() {
+      // ESC closes the stderr modal — match the global modal-dismiss
+      // convention used everywhere else.
+      // ESC 关 stderr modal——跟其他 modal 行为一致。
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.stderrModal.open) {
+          this.closeStderr();
+        }
+      });
       await Promise.all([this.loadServers(), this.loadRegistry()])
     },
 

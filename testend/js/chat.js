@@ -46,6 +46,15 @@ document.addEventListener('alpine:init', () => {
     _pendingMsgs: new Map(),
     _pendingShouldScroll: false,
     _rafToken: 0,
+    // Smart scroll (TE-18): only auto-stick to bottom when the user is
+    // already there. If they've scrolled up to read history, new messages
+    // bump newMsgCount but don't yank the viewport — instead a floating
+    // pill ("↓ N new") appears at the bottom-center of the chat.
+    //
+    // 智能滚动：仅当用户已在底部时新消息自动滚底。用户已上滚阅读历史时，
+    // 新消息累加 newMsgCount + 浮 pill 提示，不抢走视口。
+    _userScrolledUp: false,
+    newMsgCount: 0,
     // _suppressFlush guards the send() critical section: while a send is
     // in-flight the SSE handler still buffers snapshots into _pendingMsgs
     // but we don't drain them, so the optimistic user-row (tempId) gets
@@ -113,7 +122,7 @@ document.addEventListener('alpine:init', () => {
         // if it doesn't.
         // navigator.clipboard 要 HTTPS 或 localhost；testend localhost
         // 应工作，失败时退回选中文本让用户手动 Cmd+C。
-        alert('Copy failed; select the JSON text + Cmd+C manually.')
+        toast.warn('Copy failed — select the JSON and Cmd+C manually.')
       }
     },
 
@@ -135,6 +144,16 @@ document.addEventListener('alpine:init', () => {
         }
         this.loadCatalogStatus()
       })
+      // ESC closes the raw-snapshot modal. Wire here once instead of once
+      // per modal instance — single global keydown listener is cheap and
+      // matches how every other modal (toasts, confirms, etc.) on the
+      // platform handles ESC.
+      // ESC 关 raw modal。全局监听一次即可，比按 modal 实例挂监听更轻。
+      document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && this.rawModal.open) {
+          this.closeRaw();
+        }
+      });
     },
 
     async loadConvMeta(id) {
@@ -159,7 +178,7 @@ document.addEventListener('alpine:init', () => {
         })
         if (!r.ok) {
           const j = await r.json().catch(() => ({}))
-          alert('Save failed: ' + (j.error?.message || r.status))
+          toast.error('Save failed: ' + (j.error?.message || r.status))
           return
         }
         const j = await r.json()
@@ -167,7 +186,7 @@ document.addEventListener('alpine:init', () => {
         this.systemPromptDraft = this.systemPrompt
         this.systemPromptSavedAt = Date.now()
       } catch (e) {
-        alert('Save failed: ' + e)
+        toast.error('Save failed: ' + e)
       } finally {
         this.systemPromptSaving = false
       }
@@ -207,7 +226,7 @@ document.addEventListener('alpine:init', () => {
         this.messages = []
         document.dispatchEvent(new CustomEvent('conv-deleted'))
       } catch (e) {
-        alert('delete failed: ' + e)
+        toast.error('Delete failed: ' + e)
       }
     },
 
@@ -330,7 +349,7 @@ document.addEventListener('alpine:init', () => {
         const fd = new FormData()
         fd.append('file', file)
         const r = await fetch('/api/v1/attachments', { method: 'POST', body: fd })
-        if (!r.ok) { alert('Upload failed: ' + r.status); return }
+        if (!r.ok) { toast.error('Upload failed: HTTP ' + r.status); return }
         const j = await r.json()
         this.pendingAtts.push({ id: j.data.id, fileName: j.data.fileName, mimeType: j.data.mimeType })
       } finally {
@@ -434,7 +453,11 @@ document.addEventListener('alpine:init', () => {
       this._flushPending()
 
       this.streaming = true
-      this._scrollBottom()
+      // Sending a new message = user is engaged + wants to see the
+      // assistant reply. Reset any prior "scrolled up" state so the
+      // upcoming stream auto-scrolls.
+      // 发新消息 = 用户在场，想看回复——清旧 scroll-up 状态让新流自动滚。
+      this.scrollBottomNow()
     },
 
     _dropPendingRow(tempId) {
@@ -509,10 +532,19 @@ document.addEventListener('alpine:init', () => {
           this.streaming = false
         }
       }
+      const incoming = this._pendingMsgs.size
       this._pendingMsgs.clear()
       if (this._pendingShouldScroll) {
         this._pendingShouldScroll = false
-        this._scrollBottom()
+        // Smart scroll: only stick to bottom when the user is already there.
+        // Otherwise increment the new-message counter; the floating pill
+        // shows + offers a one-click jump to bottom.
+        // 智能滚动：用户在底部时跟，否则加计数 + 浮 pill 提示。
+        if (this._userScrolledUp) {
+          this.newMsgCount += incoming
+        } else {
+          this._scrollBottom()
+        }
       }
     },
 
@@ -536,6 +568,32 @@ document.addEventListener('alpine:init', () => {
         const el = this.$el.querySelector('.chat-messages')
         if (el) el.scrollTop = el.scrollHeight
       })
+    },
+
+    // Force scroll to bottom and clear the new-message pill. Used when the
+    // user explicitly clicks "↓ N new" or sends a new message.
+    // 强制滚底 + 清 pill。用户点 pill 或发新消息时调。
+    scrollBottomNow() {
+      this._userScrolledUp = false;
+      this.newMsgCount = 0;
+      this._scrollBottom();
+    },
+
+    // Bound to .chat-messages @scroll. Threshold is 60px from bottom — gives
+    // some hysteresis so a click "go to bottom" doesn't immediately flip
+    // the flag back on if the layout settles 1-2px short.
+    // 监听 chat-messages 滚动事件。距离底部 60px 内算"在底部"，留余量
+    // 避免 layout 误差让 flag 反复抖动。
+    onChatScroll(e) {
+      const el = e.target;
+      const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+      const isAtBottom = distanceFromBottom < 60;
+      if (isAtBottom) {
+        this._userScrolledUp = false;
+        this.newMsgCount = 0;
+      } else {
+        this._userScrolledUp = true;
+      }
     },
 
     tryFmt(s) {

@@ -91,9 +91,10 @@
   --duration:       120ms;
   --duration-slow:  200ms;
 
-  /* Typography */
-  --font-mono: 'JetBrains Mono', 'Consolas', 'SF Mono', 'Menlo', 'Monaco',
-               'Courier New', monospace;
+  /* Typography — JetBrainsMonoFallback is the size-adjust override defined
+     above; it makes Consolas look identical-width to JetBrains Mono so the
+     FOUT (Flash Of Unstyled Text) swap is invisible. */
+  --font-mono: 'JetBrains Mono', 'JetBrainsMonoFallback', monospace;
 
   /* Layout */
   --topbar-h:  32px;
@@ -120,6 +121,24 @@
   --blue:      var(--accent-emphasis);
   --orange:    var(--danger-fg);
   --err:       var(--danger-fg);
+}
+
+/* ── Fallback font metrics override ───────────────────────────────────────────
+   Until JetBrains Mono finishes loading, the browser uses Consolas (or one of
+   the other monospace fallbacks). Their advance-width is ~94% of JetBrains
+   Mono — without this override, the swap causes layout to shift visibly
+   (FOUT). We override Consolas's metrics so it occupies the same horizontal
+   space as JetBrains Mono. The swap becomes invisible.
+   ───────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'JetBrainsMonoFallback';
+  src: local('Consolas'), local('SF Mono'), local('Menlo'), local('Monaco'),
+       local('Courier New');
+  size-adjust: 105%;
+  ascent-override: 96%;
+  descent-override: 24%;
+  line-gap-override: 0%;
 }
 
 /* ── Reset + Base ─────────────────────────────────────────────────────────── */
@@ -542,6 +561,7 @@ select.cfg-input { cursor: pointer; }
   overflow: hidden;
   background: var(--canvas-default);
   min-width: 320px;
+  position: relative; /* anchor for the .chat-new-msg-pill */
 }
 .chat-header {
   padding: var(--space-2) var(--space-4);
@@ -2066,6 +2086,312 @@ select.cfg-input { cursor: pointer; }
   background: var(--border-subtle);
   margin: var(--space-2) 0;
 }
+
+/* ── Toasts (replaces alert()) ────────────────────────────────────────────── */
+
+.toasts {
+  position: fixed;
+  top: calc(var(--topbar-h) + var(--space-3));
+  right: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  z-index: 1100;
+  max-width: min(360px, 90vw);
+  pointer-events: none; /* Container is click-through; toasts re-enable */
+}
+
+.toast {
+  background: var(--canvas-default);
+  border: 1px solid var(--border-default);
+  border-left-width: 3px;
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-overlay);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg-default);
+  line-height: 1.5;
+  pointer-events: auto;
+  animation: toastIn var(--duration-slow) var(--ease);
+}
+
+@keyframes toastIn {
+  from { transform: translateX(8px); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+.toast--success { border-left-color: var(--success-emphasis); }
+.toast--error   { border-left-color: var(--danger-emphasis); }
+.toast--warn    { border-left-color: var(--attention-emphasis); }
+.toast--info    { border-left-color: var(--accent-emphasis); }
+
+.toast::before {
+  content: "●";
+  flex-shrink: 0;
+  font-size: 8px;
+  margin-top: 6px;
+}
+.toast--success::before { color: var(--success-emphasis); }
+.toast--error::before   { color: var(--danger-emphasis); }
+.toast--warn::before    { color: var(--attention-emphasis); }
+.toast--info::before    { color: var(--accent-emphasis); }
+
+.toast-text {
+  flex: 1;
+  word-break: break-word;
+}
+
+.toast-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--fg-subtle);
+  font-size: var(--text-sm);
+  padding: 0 var(--space-1);
+  line-height: 1;
+  border-radius: var(--radius-1);
+  transition: color var(--duration) var(--ease);
+}
+.toast-close:hover { color: var(--fg-default); }
+
+/* ── Empty state (uniform across all panels) ──────────────────────────────── */
+
+.empty-state {
+  padding: var(--space-6) var(--space-4);
+  text-align: center;
+  color: var(--fg-subtle);
+  font-size: var(--text-sm);
+  font-style: italic;
+  line-height: 1.6;
+}
+.empty-state-title {
+  font-style: normal;
+  font-weight: 500;
+  color: var(--fg-muted);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-md);
+}
+.empty-state-hint {
+  margin-top: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--fg-subtle);
+  font-style: normal;
+}
+.empty-state-hint code {
+  font-family: var(--font-mono);
+  background: var(--canvas-subtle);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-1);
+  padding: 0 4px;
+  color: var(--accent-fg);
+}
+
+/* ── Skeleton placeholder (loading) ───────────────────────────────────────── */
+
+.skeleton {
+  background: linear-gradient(90deg,
+              var(--canvas-subtle) 0%,
+              var(--canvas-emphasis) 50%,
+              var(--canvas-subtle) 100%);
+  background-size: 200% 100%;
+  animation: skeletonShimmer 1.4s var(--ease) infinite;
+  border-radius: var(--radius-1);
+  color: transparent;
+  user-select: none;
+}
+@keyframes skeletonShimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* ── Tabs overflow dropdown (More ▾) ──────────────────────────────────────── */
+
+.tabs-more-wrap {
+  position: relative;
+  margin-left: auto; /* push to right edge of tabs-bar */
+  flex-shrink: 0;
+}
+.tabs-more-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: none;
+  border-left: 1px solid var(--border-subtle);
+  color: var(--fg-muted);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  white-space: nowrap;
+  transition: color var(--duration) var(--ease),
+              background var(--duration) var(--ease);
+}
+.tabs-more-btn:hover { color: var(--fg-default); background: var(--canvas-subtle); }
+.tabs-more-btn.has-active { color: var(--accent-emphasis); }
+
+.tabs-more-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 2px;
+  min-width: 180px;
+  background: var(--canvas-default);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-2);
+  box-shadow: var(--shadow-overlay);
+  padding: var(--space-1) 0;
+  z-index: 50;
+  animation: menuIn var(--duration) var(--ease);
+}
+@keyframes menuIn {
+  from { transform: translateY(-4px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+.tabs-more-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 5px var(--space-3);
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--fg-default);
+  transition: background var(--duration) var(--ease);
+}
+.tabs-more-item:hover { background: var(--canvas-subtle); }
+.tabs-more-item.active {
+  background: var(--accent-subtle);
+  color: var(--accent-fg);
+  font-weight: 600;
+}
+.tabs-more-item-icon {
+  width: 4px; height: 4px; border-radius: 50%;
+  background: transparent;
+  flex-shrink: 0;
+}
+.tabs-more-item.active .tabs-more-item-icon { background: var(--accent-emphasis); }
+
+/* ── Chat header pieces (was inline style) ────────────────────────────────── */
+
+.chat-streaming {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-sm);
+  color: var(--accent-emphasis);
+}
+.chat-empty-hint {
+  font-size: var(--text-sm);
+  color: var(--fg-subtle);
+}
+.chat-catalog-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-1);
+  background: var(--success-subtle);
+  color: var(--success-fg);
+  border: 1px solid var(--success-muted);
+  font-family: var(--font-mono);
+}
+.chat-catalog-pill .test-tag {
+  color: var(--fg-subtle);
+  margin-left: 2px;
+}
+.chat-header-actions {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-1);
+}
+.chat-header-btn--active { color: var(--accent-emphasis); border-color: var(--accent-muted); }
+.chat-header-btn--danger { color: var(--danger-fg); border-color: var(--danger-muted); }
+.chat-header-btn--danger:hover {
+  background: var(--danger-subtle);
+  color: var(--danger-fg);
+  border-color: var(--danger-muted);
+}
+
+/* System prompt editor (was inline style) */
+.sys-prompt-editor {
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--canvas-subtle);
+  padding: var(--space-2) var(--space-3);
+}
+.sys-prompt-editor-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+  flex-wrap: wrap;
+}
+.sys-prompt-editor-label {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+.sys-prompt-editor-btns {
+  margin-left: auto;
+  display: flex;
+  gap: var(--space-1);
+}
+.sys-prompt-editor-textarea {
+  width: 100%;
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  padding: var(--space-2);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-1);
+  resize: vertical;
+  outline: none;
+  background: var(--canvas-default);
+  line-height: 1.55;
+  transition: border-color var(--duration) var(--ease),
+              box-shadow var(--duration) var(--ease);
+}
+.sys-prompt-editor-textarea:focus {
+  border-color: var(--accent-emphasis);
+  box-shadow: var(--shadow-focus);
+}
+
+/* ── Chat: scroll-to-bottom pill ──────────────────────────────────────────── */
+
+.chat-new-msg-pill {
+  position: absolute;
+  bottom: 90px;   /* above the input area */
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent-emphasis);
+  color: var(--fg-on-emphasis);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 5px var(--space-3);
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: var(--shadow-overlay);
+  z-index: 5;
+  animation: pillIn var(--duration-slow) var(--ease);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+@keyframes pillIn {
+  from { transform: translate(-50%, 8px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+.chat-new-msg-pill:hover { background: var(--accent-emphasis-hi); }
 
 /* End — total tokens defined here are first-class.
    Add new components by composing from --canvas-* / --border-* / --fg-* /
