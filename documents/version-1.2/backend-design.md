@@ -182,7 +182,7 @@ backend/
     │   ├── subagent/               ← ✅ SubagentType + SubagentRun + SubagentMessage + Repository + 4 sentinel（无 SubRunner 接口——chat/subagent 通过 app/loop 解耦，详见 service-design-documents/subagent.md §6）
     │   ├── mcp/                    ← ✅ ServerConfig + ServerStatus + ToolDef + HealthResult + 5 status const + RegistryEntry + 10 sentinels
     │   ├── skill/                  ← ✅ Skill + Frontmatter（Anthropic SKILL.md spec 全字段保留 cross-vendor）+ 5 sentinel + MaxBodyBytes/MaxDescriptionChars 常量
-    │   ├── catalog/                ← 📐 Phase 4 准备件 CatalogSource port + Catalog + Item + Granularity
+    │   ├── catalog/                ← ✅ CatalogSource port + Catalog + Item + Granularity (PerItem/PerServer/PerCollection) + SystemPromptProvider + 2 sentinel（内部消化不进 errmap）
     │   ├── sandbox/                ← 📐 Phase 4 准备件 Runtime + Env + Owner + RuntimeInstaller / EnvManager port + 8 sentinel（统一 PluginSandbox）
     │   ├── workflow/               ← ⬜ Phase 4
     │   ├── flowrun/                ← ⬜ Phase 4
@@ -211,7 +211,7 @@ backend/
     │   ├── subagent/               ← ✅ Service{Spawn/Cancel/Get/ListTypes/ListByConversation/ListMessages} + subagentHost（loop.Host 实现，5min total-timeout + panic recover + agentstate token log）+ 内置 3 类型注册表（Explore / Plan / general-purpose）
     │   ├── mcp/                    ← ✅ Service{Start/Stop/Add/Remove/Reconnect/Search/CallTool/HealthCheck/InstallFromRegistry/Import} + 6 内置 marketplace Registry + 单 RWMutex 模型 + §5.6 健康追踪（连续失败≥3 → degraded → 自愈）+ §5.7 timeout precedence（ServerConfig > RegistryEntry > 30s）
     │   ├── skill/                  ← ✅ Service{Scan/Get/List/Search/Activate/Body/Create/Replace/Delete/Import} + atomic 写 + fsnotify watcher（debounce 500ms + symlink loop guard + Linux fd-limit fail-soft + 5min poll backstop）+ \$1/\$ARGUMENTS/\${CLAUDE_*} 占位替换 + fork 模式派发 SubagentService（depth ≥ 1 抑制嵌套 fork）
-    │   ├── catalog/                ← 📐 Phase 4 准备件 Service + Generator + 1s polling + atomic 单 flight + fingerprint dedup
+    │   ├── catalog/                ← ✅ Service{Start/Stop/Refresh/RegisterSource/GetForSystemPrompt/Get} + LLMGenerator{Generate 3-attempt retry + coverage 校验 + mechanical fallback}+ pollLoop 1s + atomic.Bool 单 flight + fingerprint dedup（hash sort source+name+description）+ ~/.forgify/.catalog.json 原子读写 + chat.runner SystemPromptProvider 注入 + 3 source（forge/skill/mcp via AsCatalogSource）
     │   ├── sandbox/                ← 📐 Phase 4 准备件 Service + EnsureRuntime/EnsureEnv/Spawn/SpawnLongLived/SpawnShell/Destroy/GC（统一 PluginSandbox）
     │   └── <Phase 4-5>/
     │

@@ -1,11 +1,11 @@
 # Capability Catalog — V1.2 详设计
 
-**Phase**：Phase 4 准备件（提前到位，本周交付）
-**状态**：📐 设计完成（2026-05-04）— 待实施
+**Phase**：Phase 4 准备件（提前到位）
+**状态**：✅ D8 全部交付（2026-05-06）：domain types + 2 sentinels + Service{Start/Stop/Refresh/RegisterSource/GetForSystemPrompt} + LLMGenerator（3-attempt retry + coverage 校验 + mechanical fallback）+ pollLoop 1s + atomic.Bool 单 flight + fingerprint dedup + atomic disk cache + 3 CatalogSource（forge/skill/mcp）+ chat runner SystemPromptProvider 注入 + 2 HTTP endpoints + 3 离线 pipeline 场景
 **关联**：
 - [`../backend-design.md`](../backend-design.md) — 总规范
 - [`../service-contract-documents/database-design.md`](../service-contract-documents/database-design.md) — 无新表（.catalog.json + memory）
-- [`../service-contract-documents/error-codes.md`](../service-contract-documents/error-codes.md) — catalog ×2（待加）
+- [`../service-contract-documents/error-codes.md`](../service-contract-documents/error-codes.md) — catalog ×2 内部消化（不进 errmap）
 - [`../service-contract-documents/events-design.md`](../service-contract-documents/events-design.md) — **不**发 SSE（详 §13）
 - 关联设计：[`forge.md`](./forge.md) / [`mcp.md`](./mcp.md) / [`skill.md`](./skill.md)（3 个 CatalogSource 实现方）
 
@@ -616,19 +616,20 @@ catalogService.Start(ctx)
 
 ---
 
-## 11. 测试覆盖（计划）
+## 11. 测试覆盖 ✅
 
 | 层 | 文件 | 测试数 | 覆盖 |
 |---|---|---|---|
-| domain | `internal/domain/catalog/catalog_test.go` | 4 | Item / Catalog JSON / Granularity enum |
-| app/catalog | `internal/app/catalog/polling_test.go` | 6 | tryRefresh 单 flight / busy CAS / pollLoop ctx cancel 退出 / Refresh 多次复用 / fingerprint 一致跳过 / forced :refresh 端点 |
-| app/catalog/generator | `internal/app/catalog/generator_test.go` | 8 | happy / coverage 缺失重试 / 重试后成功 / fallback 触发 / mechanical 完整覆盖 |
-| app/catalog | `internal/app/catalog/catalog_test.go` | 10 | RegisterSource / Start 加载 disk cache / Refresh / source fail 隔离 / SystemPromptProvider 接口 |
-| pipeline | `test/catalog/catalog_test.go` | 3 | 端到端：装 forge + skill + mcp → catalog 内容覆盖全 / 改 forge 后下秒 polling 触发 regen / fallback 路径 |
+| domain | `internal/domain/catalog/catalog_test.go` | 5 | Catalog JSON 全 7 字段 round-trip / Granularity String() + 枚举值 pin (PerItem=0 是新 source 安全默认) / Item JSON + Category omitempty / sentinel 唯一性 + 'catalog: ' 前缀审计 |
+| app/catalog | `internal/app/catalog/catalog_test.go` | 18 | NewHasEmptyCache / RegisterSourceConcurrent (并发安全) / Refresh empty/nil-gen mech-fallback/wired-gen LLM-path/gen-error-fallback/all-sources-fail-keeps-cache/partial-failure-isolation / Fingerprint 短路 + 描述变 trigger / pollLoop FiresAtLeastOnce (20ms 间隔) / TryRefresh BusyGuard SkipsConcurrent (slowGenerator entered2=0) / Start LoadsExistingCache (Version 7 → nextVersion=8) / Start CorruptCacheMovedToBak / Refresh PersistsToDisk / Fingerprint stable shuffle + changes on description + ignores ID-only |
+| app/catalog/generator | `internal/app/catalog/generator_test.go` | 8 | buildPrompt contains all items + granularity hints / first-attempt no retry hint / retry-attempt embeds missing IDs / groupSourceIDs / findMissing full coverage + partial + extras-ignored / NewLLMGenerator nil log OK |
+| app/chat | `internal/app/chat/runner_test.go` | 5 | NilProvider skips catalog block / EmptyProviderText skips (boot window safety) / NonEmptyProvider injects 顺序 (intro → catalog → locale) / per-conv SystemPrompt 独立 / SetSystemPromptProvider 真 mutate |
+| transport/handlers | `internal/transport/httpapi/handlers/catalog_test.go` | 4 | Get empty cache → null in envelope / Refresh builds + returns Catalog (asserts mech-fallback + Coverage + Summary + Fingerprint + Version 1) / Get after Refresh 返 cached / Refresh short-circuits when fingerprint unchanged |
+| pipeline | `test/catalog/catalog_test.go` | 3 | AllSourcesCovered E2E (forge + skill 都进 Coverage + Summary + GetForSystemPrompt) / ForgeDescriptionChange triggers regen (Version + Fingerprint + Summary 都变) / NoLLMKey FallsBackToMechanical (mech-fallback + 第二次 no-op Refresh 短路防 per-tick LLM 重试) |
 
-总计 ~30 测 + 3 pipeline 场景。
+总计 40 单测 + 3 pipeline 场景全绿。
 
-**fake LLM** 注入：generator test 用 fake llm 返预设 JSON，不依赖真 DeepSeek。pipeline test 用 `harness.WithFakeLLMBaseURL`。
+**实施时发现的关键 bug**：catalog 在后台 goroutine 跑（无 HTTP middleware ctx）→ 所有下游调用（source ListItems → repo 多租户查询；LLMGenerator → llmclient.Resolve → model picker）都会 fail 'reqctx: missing user id'。修复：Service.Refresh 入口注入 DefaultLocalUserID（单人 app 安全），让一处修复覆盖全 pipeline。
 
 ---
 

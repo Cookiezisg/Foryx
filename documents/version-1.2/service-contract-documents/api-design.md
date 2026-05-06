@@ -244,8 +244,8 @@ Forge System Tools 注入（search/get/create/edit/run，5 个）。SSE 见 even
 | POST | `/api/v1/skills:refresh` | 手动 Rescan（绕过 fsnotify，debug 用）|
 | POST | `/api/v1/skills/{name}:invoke` | 手动调用（slash command 路径用）|
 
-#### catalog 📐
-详见 [`../service-design-documents/catalog.md`](../service-design-documents/catalog.md)。统一能力目录（forge + skill + mcp）。LLM-gen summary + 自动跨类目路由观察。**1s polling + atomic 单 flight + fingerprint dedup**。**不发 SSE**（内部组件）。
+#### catalog ✅
+详见 [`../service-design-documents/catalog.md`](../service-design-documents/catalog.md)。统一能力目录（forge + skill + mcp）。LLM-gen summary + 自动跨类目路由观察。**1s polling + atomic.Bool 单 flight + fingerprint dedup**。**不发 SSE**（内部组件）。**V1.2 D8（2026-05-06）全部交付**：domain types + 2 sentinels + Service + LLMGenerator（3-attempt retry + coverage 校验 + mechanical fallback）+ atomic disk cache + 3 CatalogSource（forge/skill/mcp）+ chat runner SystemPromptProvider 注入 + 2 HTTP endpoints + 3 离线 pipeline 场景。
 
 | Method | Path | 用途 |
 |---|---|---|
