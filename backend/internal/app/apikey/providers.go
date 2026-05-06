@@ -25,6 +25,13 @@ const (
 	TestMethodGoogleListModels TestMethod = "google_list_models"
 	TestMethodOllamaTags       TestMethod = "ollama_tags"
 	TestMethodCustom           TestMethod = "custom"
+	// TestMethodAlwaysOK is for the "mock" dev provider — no real
+	// connectivity to test, so the connectivity check is a no-op
+	// returning a synthetic ok result with a single model slot.
+	//
+	// TestMethodAlwaysOK 给 "mock" dev provider——无真实连通性，测试是
+	// no-op 返合成 ok 结果含单 model slot。
+	TestMethodAlwaysOK TestMethod = "always_ok"
 )
 
 // ProviderMeta describes a supported LLM provider.
@@ -50,6 +57,15 @@ var providers = map[string]ProviderMeta{
 	"doubao":     {Name: "doubao", DisplayName: "字节豆包 (Doubao)", DefaultBaseURL: "https://ark.cn-beijing.volces.com/api/v3", TestMethod: TestMethodGetModels},
 	"ollama":     {Name: "ollama", DisplayName: "Ollama (local)", BaseURLRequired: true, TestMethod: TestMethodOllamaTags},
 	"custom":     {Name: "custom", DisplayName: "Custom (OpenAI/Anthropic compatible)", BaseURLRequired: true, TestMethod: TestMethodCustom},
+	// Dev-only provider: testend's Mock LLM tab pushes scripts via
+	// /dev/mock-llm/scripts; chat resolves provider="mock" → factory
+	// returns the singleton MockClient that pops the next script on
+	// each Stream call.
+	//
+	// Dev-only provider：testend Mock LLM tab 经 /dev/mock-llm/scripts
+	// 推脚本；chat 解析 provider="mock" → factory 返 MockClient 单例，
+	// 每次 Stream 弹下一脚本。
+	"mock":       {Name: "mock", DisplayName: "Mock (dev — testend-driven scripts)", TestMethod: TestMethodAlwaysOK},
 }
 
 // GetProviderMeta returns metadata for the given provider name.

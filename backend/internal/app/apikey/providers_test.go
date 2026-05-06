@@ -8,25 +8,36 @@ import (
 	"testing"
 )
 
-// expectedProviders is the contract: these 11 names must always be supported.
-// Removing one is a breaking change for existing data.
+// expectedProviders is the contract: these 11 production names must always
+// be supported. Removing one is a breaking change for existing data.
+// Plus "mock" — dev-only provider added by TE-4a for the testend Mock LLM
+// tab; not removable but treated as a separate slot since user-facing
+// provider lists should hide it.
 //
-// expectedProviders 是契约：这 11 个 provider 必须始终被支持。
-// 移除任一项会对已有数据造成破坏性变更。
+// expectedProviders 是契约：11 个生产 provider 必须始终被支持。移除任一项
+// 对已有数据造成破坏性变更。再加 "mock"——TE-4a 加的 dev-only provider
+// 给 testend Mock LLM tab 用；不可移但作独立 slot，因用户面 provider 列
+// 表应隐藏它。
 var expectedProviders = []string{
 	"openai", "anthropic", "google", "deepseek", "openrouter",
 	"qwen", "zhipu", "moonshot", "doubao", "ollama", "custom",
 }
 
-func TestListProviders_Contains11(t *testing.T) {
+const expectedDevProviders = 1 // "mock"
+
+func TestListProviders_ContainsAll(t *testing.T) {
 	got := ListProviders()
-	if len(got) != len(expectedProviders) {
-		t.Errorf("count: got %d, want %d", len(got), len(expectedProviders))
+	want := len(expectedProviders) + expectedDevProviders
+	if len(got) != want {
+		t.Errorf("count: got %d, want %d (11 production + %d dev)", len(got), want, expectedDevProviders)
 	}
 	for _, name := range expectedProviders {
 		if !slices.Contains(got, name) {
-			t.Errorf("missing provider: %q", name)
+			t.Errorf("missing production provider: %q", name)
 		}
+	}
+	if !slices.Contains(got, "mock") {
+		t.Errorf("missing dev provider: \"mock\" (added in TE-4a)")
 	}
 }
 

@@ -79,11 +79,18 @@ func (t *HTTPTester) Test(ctx context.Context, provider, key, baseURL, apiFormat
 	if effective == "" {
 		effective = strings.TrimRight(meta.DefaultBaseURL, "/")
 	}
-	if effective == "" {
+	if effective == "" && meta.TestMethod != TestMethodAlwaysOK {
 		return nil, fmt.Errorf("apikeytester: baseURL required for provider %q: %w", provider, apikeydomain.ErrBaseURLRequired)
 	}
 
 	switch meta.TestMethod {
+	case TestMethodAlwaysOK:
+		// Mock provider — always healthy. Synthetic models list with
+		// one entry so model_configs has something to point at; the
+		// MockClient ignores ModelID at Stream time anyway.
+		// mock provider——永健。合成 models list 一项让 model_configs 有
+		// 引用目标；MockClient 在 Stream 时忽略 ModelID。
+		return &TestResult{OK: true, Message: "mock provider — always ok", ModelsFound: []string{"mock-model"}}, nil
 	case TestMethodGetModels:
 		return t.testGetModels(ctx, effective, key), nil
 	case TestMethodAnthropicPing:
