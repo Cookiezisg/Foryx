@@ -12,6 +12,7 @@ import (
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
 	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
+	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 	subagentdomain "github.com/sunweilin/forgify/backend/internal/domain/subagent"
@@ -111,6 +112,25 @@ var errTable = map[error]errMapping{
 	// （run.Status 已反映）。
 	subagentdomain.ErrTypeNotFound:     {http.StatusNotFound, "SUBAGENT_TYPE_NOT_FOUND"},
 	subagentdomain.ErrRecursionAttempt: {http.StatusUnprocessableEntity, "SUBAGENT_RECURSION"},
+
+	// mcp domain / mcp domain 层
+	// 5 runtime sentinels (Server* / Tool*) + 5 Registry-flow sentinels.
+	// `ErrToolCallFailed` / `ErrInstallFailed` use 502 because the
+	// failure originates outside our process (server subprocess /
+	// package manager). Per mcp.md §11.
+	//
+	// 5 个 runtime sentinel + 5 个 Registry-flow sentinel。ErrToolCallFailed
+	// / ErrInstallFailed 用 502——失败来源在进程外（server 子进程 / 包管理器）。
+	mcpdomain.ErrServerNotFound:        {http.StatusNotFound, "MCP_SERVER_NOT_FOUND"},
+	mcpdomain.ErrServerNotConnected:    {http.StatusConflict, "MCP_SERVER_NOT_CONNECTED"},
+	mcpdomain.ErrToolNotFound:          {http.StatusNotFound, "MCP_TOOL_NOT_FOUND"},
+	mcpdomain.ErrToolCallFailed:        {http.StatusBadGateway, "MCP_TOOL_CALL_FAILED"},
+	mcpdomain.ErrToolCallTimeout:       {http.StatusGatewayTimeout, "MCP_TOOL_CALL_TIMEOUT"},
+	mcpdomain.ErrRegistryEntryNotFound: {http.StatusNotFound, "MCP_REGISTRY_ENTRY_NOT_FOUND"},
+	mcpdomain.ErrRuntimeMissing:        {http.StatusUnprocessableEntity, "MCP_RUNTIME_MISSING"},
+	mcpdomain.ErrRequiredEnvMissing:    {http.StatusUnprocessableEntity, "MCP_REQUIRED_ENV_MISSING"},
+	mcpdomain.ErrRequiredArgsMissing:   {http.StatusUnprocessableEntity, "MCP_REQUIRED_ARGS_MISSING"},
+	mcpdomain.ErrInstallFailed:         {http.StatusBadGateway, "MCP_INSTALL_FAILED"},
 
 	// ask service (AskUserQuestion answer-delivery handler) /
 	// ask service（AskUserQuestion 答案投递 handler）
