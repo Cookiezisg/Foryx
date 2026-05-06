@@ -17,6 +17,7 @@ import (
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
+	skilldomain "github.com/sunweilin/forgify/backend/internal/domain/skill"
 	subagentdomain "github.com/sunweilin/forgify/backend/internal/domain/subagent"
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 )
@@ -181,4 +182,25 @@ type MCP struct {
 }
 
 func (MCP) EventName() string { return "mcp" }
+
+// Skill carries the full snapshot of every loaded skill (skill.md §10).
+// Service.Scan publishes after each rescan (initial boot, fsnotify event,
+// manual :refresh). Whole-list snapshot (no per-skill delta) — UI replaces
+// local cache in one go; skill counts are small in practice (≤ ~50).
+//
+// Wire shape: {"skills": [...]} — body is NOT included on each Skill
+// (per spec progressive-disclosure: L2 body fetched separately via
+// GET /skills/{name}/body when the user opens the editor).
+//
+// Skill 携每个已加载 skill 的全快照（skill.md §10）。Service.Scan 后发布
+// （首次 boot、fsnotify、手动 :refresh）。全快照（无 per-skill 增量）让
+// UI 一次性替换本地；实践 skill 数量小（≤ ~50）。
+//
+// 线形：{"skills": [...]} — body 不含（spec progressive-disclosure：L2
+// body 经 GET /skills/{name}/body 单独取，用户打开编辑器时拉）。
+type Skill struct {
+	Skills []*skilldomain.Skill `json:"skills"`
+}
+
+func (Skill) EventName() string { return "skill" }
 
