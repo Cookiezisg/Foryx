@@ -76,6 +76,9 @@ func (h *DevHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /dev/collections", h.ListCollections)
 	mux.HandleFunc("GET /dev/tools", h.ListTools)
 	mux.HandleFunc("POST /dev/invoke", h.InvokeTool)
+	// TE-9 Info tab data sources
+	mux.HandleFunc("GET /dev/info", h.Info)
+	mux.HandleFunc("GET /dev/forgify-home", h.ForgifyHome)
 	// TE-4b mock LLM endpoints; nil-tolerant when --dev didn't wire
 	// the llmFactory (shouldn't happen in practice — dev mode always
 	// has it — but keeps the helper exit clean during refactor).

@@ -276,6 +276,7 @@
         <button class="tab-btn" :class="{active: activeRightTab==='sandbox'}" @click="selectTab('sandbox')">Sandbox</button>
         <button class="tab-btn" :class="{active: activeRightTab==='mock-llm'}" @click="selectTab('mock-llm')">Mock LLM</button>
         <button class="tab-btn" :class="{active: activeRightTab==='wire'}" @click="selectTab('wire')">Wire</button>
+        <button class="tab-btn" :class="{active: activeRightTab==='info'}" @click="selectTab('info')">Info</button>
       </div>
 
       <!-- Config Tab -->
@@ -1633,6 +1634,75 @@
         </div>
       </div>
 
+      <!-- ── Info tab (TE-9) ─────────────────────────────────────── -->
+      <div class="tab-content" x-show="activeRightTab==='info'" x-data="infoTab()">
+        <div style="display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--border)">
+          <strong style="font-size:12px">Info</strong>
+          <button class="btn-small" @click="load()" :disabled="loading" x-text="loading ? 'loading…' : 'reload'"></button>
+          <span x-show="err" style="color:var(--err);font-size:10px;margin-left:auto" x-text="err"></span>
+        </div>
+
+        <div x-show="info" style="padding:8px 10px;font-size:11px;display:flex;flex-direction:column;gap:10px">
+          <!-- Backend boot info -->
+          <div>
+            <div style="font-weight:600;margin-bottom:4px">backend</div>
+            <div style="display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-family:Consolas,monospace;font-size:10px">
+              <span style="color:var(--text-mute)">version</span>
+              <span x-text="info?.version"></span>
+              <span style="color:var(--text-mute)">uptime</span>
+              <span x-text="fmtUptime(info?.uptimeSeconds)"></span>
+              <span style="color:var(--text-mute)">started at</span>
+              <span x-text="fmtTime(info?.startedAt)"></span>
+              <span style="color:var(--text-mute)">port</span>
+              <span x-text="info?.port"></span>
+              <span style="color:var(--text-mute)">tool count</span>
+              <span x-text="info?.toolCount"></span>
+            </div>
+          </div>
+
+          <!-- Paths -->
+          <div>
+            <div style="font-weight:600;margin-bottom:4px">paths</div>
+            <div style="display:grid;grid-template-columns:max-content 1fr;gap:4px 12px;font-family:Consolas,monospace;font-size:10px">
+              <span style="color:var(--text-mute)">user home</span>
+              <span x-text="info?.home"></span>
+              <span style="color:var(--text-mute)">forgify home</span>
+              <span x-text="info?.forgifyHome"></span>
+              <span style="color:var(--text-mute)">mcp config</span>
+              <span x-text="info?.mcpConfigPath"></span>
+              <span style="color:var(--text-mute)">skills dir</span>
+              <span x-text="info?.skillsDir"></span>
+              <span style="color:var(--text-mute)">catalog cache</span>
+              <span x-text="info?.catalogCachePath"></span>
+              <span style="color:var(--text-mute)">integration dir</span>
+              <span x-text="info?.integrationDir"></span>
+              <span style="color:var(--text-mute)">collections dir</span>
+              <span x-text="info?.collectionsDir"></span>
+            </div>
+          </div>
+
+          <!-- ~/.forgify/ tree -->
+          <div>
+            <div style="font-weight:600;margin-bottom:4px">~/.forgify/ tree (<span x-text="home?.count ?? 0"></span> entries)</div>
+            <div x-show="home?.empty" style="color:var(--text-mute)" x-text="'(empty) — would be at ' + (home?.root || '')"></div>
+            <div x-show="!home?.empty && (home?.entries || []).length" style="font-family:Consolas,monospace;font-size:10px;background:#fafafa;border-radius:3px;padding:6px;max-height:400px;overflow:auto">
+              <template x-for="row in flatHome()" :key="row.entry.path">
+                <div style="display:flex;gap:6px;padding:1px 0;align-items:center"
+                     :style="'padding-left:' + (row.depth * 16) + 'px'">
+                  <span x-show="row.entry.isDir" @click="toggle(row.entry.path)"
+                        style="cursor:pointer;width:12px;color:var(--text-mute)"
+                        x-text="expanded[row.entry.path] ? '▾' : '▸'"></span>
+                  <span x-show="!row.entry.isDir" style="width:12px"></span>
+                  <span :style="row.entry.isDir ? 'font-weight:600' : ''"
+                        x-text="row.entry.name + (row.entry.isDir ? '/' : '')"></span>
+                  <span style="color:var(--text-mute);margin-left:auto" x-text="fmtBytes(row.entry.size)"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </aside>
   </div>
 
@@ -1653,6 +1723,7 @@
   <script src="/dev/static/js/tab-sandbox.js"></script>
   <script src="/dev/static/js/tab-mock-llm.js"></script>
   <script src="/dev/static/js/tab-wire.js"></script>
+  <script src="/dev/static/js/tab-info.js"></script>
   <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
 </body>
 </html>
