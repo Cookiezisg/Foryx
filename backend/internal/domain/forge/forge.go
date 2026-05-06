@@ -356,15 +356,35 @@ var (
 	// ErrImportInvalid：导入数据格式错误或缺少必填字段。
 	ErrImportInvalid = errors.New("forge: import data invalid")
 
-	// ErrEnvNotReady: ForgeVersion's env is not in EnvStatusReady (e.g.
-	// still syncing, in pending state, or in evicted state) and Run was
-	// attempted. The LLM should wait for the entity-state event stream to
-	// flip to ready, or trigger :resync to rebuild an evicted env.
+	// ErrEnvNotReady: the ACTIVE version's venv is not in EnvStatusReady
+	// (still syncing or evicted) when Run was attempted. The LLM should
+	// wait for the entity-state event stream to flip to ready, or trigger
+	// :resync to rebuild an evicted env.
 	//
-	// ErrEnvNotReady：ForgeVersion 的 env 不处于 EnvStatusReady（仍在
-	// syncing / pending / evicted）但调了 Run。LLM 应等 entity-state 事件
-	// 流转 ready，或触发 :resync 重建被驱逐的 env。
+	// NOTE: this is strictly about venv state on a forge that DOES have an
+	// active version. "No active version yet" is ErrNoActiveVersion, not
+	// this — the two used to share this sentinel and the merged "env not
+	// ready" wording misled callers (LLMs included) into chasing venv
+	// problems when they actually just needed to accept a pending version.
+	//
+	// ErrEnvNotReady：活跃版本的 venv 不在 EnvStatusReady（仍 syncing 或
+	// evicted），调了 Run。LLM 应等 entity-state 事件流转 ready，或调
+	// :resync 重建。**仅指 venv 状态**——"没有 active version" 走
+	// ErrNoActiveVersion，曾共用此 sentinel，"env not ready" 文案误导。
 	ErrEnvNotReady = errors.New("forge: env not ready")
+
+	// ErrNoActiveVersion: the forge has no accepted version yet (typically
+	// a freshly-created forge whose pending version hasn't been accepted),
+	// so Run / test execution can't proceed. The LLM should accept the
+	// pending version first (or, post-TE-15, this never fires for first-
+	// create flows because CreatePending now auto-accepts when there's no
+	// existing active version).
+	//
+	// ErrNoActiveVersion：forge 还没接受过任何版本（典型场景：刚 create_forge
+	// 出来 pending 还没 accept），Run / 测试无法走。LLM 应先 accept pending
+	// （TE-15 起首次创建会自动 accept，此错主要保留给 edit_forge 后未 accept
+	// 就 Run 的场景）。
+	ErrNoActiveVersion = errors.New("forge: no active version (accept the pending version first)")
 
 	// ErrEnvFailed: ForgeVersion's env is in EnvStatusFailed with EnvError
 	// populated. Caller (LLM) should call edit_forge to fix dependencies

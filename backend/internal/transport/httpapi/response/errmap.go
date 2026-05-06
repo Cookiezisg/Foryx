@@ -84,6 +84,7 @@ var errTable = map[error]errMapping{
 	forgedomain.ErrASTParseError:        {http.StatusUnprocessableEntity, "TOOL_AST_PARSE_FAILED"},
 	forgedomain.ErrImportInvalid:        {http.StatusBadRequest, "TOOL_IMPORT_INVALID"},
 	forgedomain.ErrEnvNotReady:          {http.StatusUnprocessableEntity, "FORGE_ENV_NOT_READY"},
+	forgedomain.ErrNoActiveVersion:      {http.StatusUnprocessableEntity, "FORGE_NO_ACTIVE_VERSION"},
 	forgedomain.ErrEnvFailed:            {http.StatusUnprocessableEntity, "FORGE_ENV_FAILED"},
 	forgedomain.ErrSandboxUnavailable:   {http.StatusServiceUnavailable, "FORGE_SANDBOX_UNAVAILABLE"},
 	forgedomain.ErrDependencyResolution: {http.StatusUnprocessableEntity, "FORGE_DEPENDENCY_RESOLUTION"},

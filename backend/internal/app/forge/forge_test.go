@@ -483,14 +483,18 @@ func TestAcceptPending_SyncingRejected(t *testing.T) {
 
 // ── RejectPending ────────────────────────────────────────────────────────────
 
-// TestRejectPending_DraftFirstPendingDeletesForge verifies that rejecting the
-// first pending of a freshly-created draft (created via create_forge → user
-// hits reject before any version is accepted) cleans up the entire forge —
-// otherwise the user's library would accumulate empty-shell forges with no
-// runnable code.
+// TestRejectPending_DraftFirstPendingDeletesForge verifies the "draft +
+// first pending + reject → delete entire forge" cleanup path still works
+// when CreatePending's first-create auto-accept is bypassed (which it is
+// here by simulating a sync FAILURE — auto-accept only fires when the
+// post-sync EnvStatus is ready, so a failed sync leaves the row pending
+// and reachable by RejectPending). Without this path, a draft whose first
+// venv sync fails would leave an empty-shell forge in the user's library.
 //
-// TestRejectPending_DraftFirstPendingDeletesForge：用户拒绝 create_forge
-// 首份代码时整个 forge 该消失，否则库里堆积无代码空壳。
+// TestRejectPending_DraftFirstPendingDeletesForge：草稿首个 pending 被
+// reject 时整个 forge 应消失。TE-15 起首次创建会自动 accept，所以这里
+// 通过让 sync 失败绕过 auto-accept 路径——venv 失败时保持 pending 让
+// RejectPending 可达。
 func TestRejectPending_DraftFirstPendingDeletesForge(t *testing.T) {
 	svc, sb, _ := newServiceWithFakes(t)
 
@@ -498,6 +502,13 @@ func TestRejectPending_DraftFirstPendingDeletesForge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Force the venv sync to fail so first-create auto-accept (TE-15)
+	// short-circuits and leaves the pending row reachable for RejectPending.
+	// 让 venv sync 失败，TE-15 的 auto-accept 短路保留 pending 给 reject。
+	sb.mu.Lock()
+	sb.syncFunc = func(SyncRequest) error { return errors.New("simulated venv sync failure") }
+	sb.mu.Unlock()
+
 	if _, err := svc.CreatePending(ctxAlice(), draft.ID, PendingSnapshot{
 		Code:         "def hi():\n    return 1\n",
 		ChangeReason: "initial",
@@ -514,6 +525,55 @@ func TestRejectPending_DraftFirstPendingDeletesForge(t *testing.T) {
 	}
 	if len(sb.destroys) != 1 || sb.destroys[0] != draft.ID {
 		t.Errorf("expected sandbox.Destroy(%q) once, got %v", draft.ID, sb.destroys)
+	}
+}
+
+// TestCreatePending_FirstCreate_AutoAccepts verifies TE-15: when a forge
+// has no active version yet AND the post-sync venv is ready, CreatePending
+// auto-promotes the pending to accepted. Eliminates the LLM-trips-on-first-
+// run footgun where create_forge succeeded but run_forge then returned a
+// (mis-named) ErrEnvNotReady because ActiveVersionID was empty.
+//
+// TestCreatePending_FirstCreate_AutoAccepts：TE-15 验证——首次创建（无
+// active version）+ venv ready 时 CreatePending 自动 accept。消除 LLM
+// 第一次 run 必撞 ErrNoActiveVersion 的脚坑。
+func TestCreatePending_FirstCreate_AutoAccepts(t *testing.T) {
+	svc, _, repo := newServiceWithFakes(t)
+
+	draft, err := svc.CreateDraft(ctxAlice(), CreateInput{Name: "freshly", Description: "d"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if draft.ActiveVersionID != "" {
+		t.Fatalf("CreateDraft: ActiveVersionID should be empty, got %q", draft.ActiveVersionID)
+	}
+
+	pending, err := svc.CreatePending(ctxAlice(), draft.ID, PendingSnapshot{
+		Code:         "def hi():\n    return 1\n",
+		ChangeReason: "initial",
+	})
+	if err != nil {
+		t.Fatalf("CreatePending: %v", err)
+	}
+	// Returned version should reflect post-accept state (Accepted, not
+	// Pending) so the caller's tool_result tells the LLM "ready to run".
+	// 返回的 version 应反映 accept 后状态，让 tool_result 告诉 LLM "可跑"。
+	if pending.Status != forgedomain.VersionStatusAccepted {
+		t.Errorf("returned version status = %q, want %q", pending.Status, forgedomain.VersionStatusAccepted)
+	}
+	// Forge.ActiveVersionID should now point at the freshly-accepted version.
+	// Forge.ActiveVersionID 应指向新 accept 的版本。
+	f, err := repo.GetForge(ctxAlice(), draft.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if f.ActiveVersionID != pending.ID {
+		t.Errorf("ActiveVersionID = %q, want %q", f.ActiveVersionID, pending.ID)
+	}
+	// And RunForge should now succeed (no ErrNoActiveVersion).
+	// RunForge 应能跑了（不再报 ErrNoActiveVersion）。
+	if _, err := svc.RunForge(ctxAlice(), draft.ID, map[string]any{}); err != nil {
+		t.Errorf("RunForge should succeed after auto-accept, got %v", err)
 	}
 }
 
@@ -687,7 +747,17 @@ func TestDelete_TriggersSandboxDestroy(t *testing.T) {
 
 // ── RunForge ─────────────────────────────────────────────────────────────────
 
-func TestRunForge_DraftRejected(t *testing.T) {
+// TestRunForge_NoActiveVersion verifies a draft forge (CreateDraft only,
+// no CreatePending) returns ErrNoActiveVersion — the dedicated sentinel
+// for the "no version accepted yet" case. Pre-TE-15 this returned the
+// confusingly-shared ErrEnvNotReady, which made LLMs chase venv problems
+// when the actual fix was just accept_forge (or, post-TE-15, do nothing
+// because CreatePending auto-accepts on first create).
+//
+// TestRunForge_NoActiveVersion：草稿 forge（仅 CreateDraft）返
+// ErrNoActiveVersion 专属 sentinel。TE-15 前共用 ErrEnvNotReady，LLM 误
+// 以为 venv 出问题。
+func TestRunForge_NoActiveVersion(t *testing.T) {
 	svc, _, _ := newServiceWithFakes(t)
 
 	draft, err := svc.CreateDraft(ctxAlice(), CreateInput{Name: "drafty", Description: "d"})
@@ -696,8 +766,8 @@ func TestRunForge_DraftRejected(t *testing.T) {
 	}
 
 	_, err = svc.RunForge(ctxAlice(), draft.ID, map[string]any{})
-	if !errors.Is(err, forgedomain.ErrEnvNotReady) {
-		t.Errorf("draft Run should return ErrEnvNotReady, got %v", err)
+	if !errors.Is(err, forgedomain.ErrNoActiveVersion) {
+		t.Errorf("draft Run should return ErrNoActiveVersion, got %v", err)
 	}
 }
 

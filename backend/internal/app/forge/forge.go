@@ -788,6 +788,48 @@ func (s *Service) CreatePending(ctx context.Context, forgeID string, snap Pendin
 	if err != nil {
 		return v, nil // fall back to in-memory if reread fails
 	}
+
+	// First-create auto-accept: a forge with no active version yet has no
+	// "old vs new" to review, so requiring a manual accept is pure friction
+	// (the LLM had to call accept_forge before the very first run worked,
+	// which everyone got wrong on the first try). Edit flows still go
+	// through pending → manual accept because there IS something to review
+	// (diff vs current active version).
+	//
+	// Only auto-accept when the post-sync EnvStatus is ready — a failed
+	// venv accept would leave the forge stuck active+broken, which is
+	// strictly worse than leaving it pending so the LLM sees the failure
+	// and edit_forges its way out.
+	//
+	// 首次创建自动 accept：forge 还没 active version 时不存在"新旧对比"可
+	// review，强制手动 accept 纯粹是摩擦（LLM 第一次 run 必撞 ErrNoActiveVersion，
+	// 大家第一次都错）。Edit 流仍走 pending → 手动 accept，因为有 diff 可看。
+	// 仅当 post-sync EnvStatus=ready 时自动 accept；失败的 venv 自动 accept
+	// 会让 forge 卡在 active+broken，比保持 pending 让 LLM 看错并 edit_forge
+	// 自救更糟。
+	if f.ActiveVersionID == "" && updated.EnvStatus == forgedomain.EnvStatusReady {
+		if _, acceptErr := s.AcceptPending(ctx, forgeID); acceptErr != nil {
+			// Auto-accept failure is non-fatal: pending row already exists,
+			// caller can still see it via the returned version, and accept_forge
+			// remains available as the manual fallback.
+			//
+			// 自动 accept 失败不致命：pending 已存在，调用方能从返回的 version
+			// 看到，accept_forge 仍可作为手动兜底。
+			s.log.Warn("forgeapp.CreatePending: first-create auto-accept failed (caller can retry via accept_forge)",
+				zap.String("forge_id", forgeID),
+				zap.String("version_id", updated.ID),
+				zap.Error(acceptErr))
+		} else {
+			// Re-read once more so the returned version reflects the
+			// accepted status (otherwise caller sees the row as pending
+			// even though it's accepted).
+			//
+			// 再读一次让返回的 version 反映 accepted 状态。
+			if afterAccept, rereadErr := s.repo.GetVersionByID(ctx, updated.ID); rereadErr == nil {
+				updated = afterAccept
+			}
+		}
+	}
 	return updated, nil
 }
 
@@ -904,23 +946,49 @@ func (s *Service) RejectPending(ctx context.Context, forgeID string) error {
 // （conversation/message/toolCallID）从 ctx 通过 reqctxpkg 读取；存在则标
 // TriggeredByChat，否则 TriggeredByHTTP。input 中的 att_id 必须由调用方
 // 预先解析为真实路径。
-func (s *Service) RunForge(ctx context.Context, forgeID string, input map[string]any) (*forgedomain.ExecutionResult, error) {
+// ensureRunnable resolves a forge to its currently-runnable (forge, active
+// version) pair, applying the unified guard for every Run-class method
+// (RunForge, RunTestCase, RunAllTests via RunTestCase). Returns:
+//
+//   - ErrNoActiveVersion when forge.ActiveVersionID is empty (typically a
+//     freshly-created forge whose pending hasn't been accepted).
+//   - ErrEnvFailed (wrapped with av.EnvError as %v) when the active
+//     version's venv is in EnvStatusFailed — caller should call edit_forge
+//     to fix deps.
+//   - ErrEnvNotReady when the active venv is in any other non-ready state
+//     (syncing / evicted / etc.) — caller should wait or :resync.
+//   - Any underlying repo error from GetForge / GetVersionByID.
+//
+// ensureRunnable 把 forge 解析为可跑的 (forge, active version) 对，给所有
+// Run 类方法（RunForge / RunTestCase / RunAllTests）一道统一守卫。
+// 错码：ErrNoActiveVersion / ErrEnvFailed / ErrEnvNotReady / repo 错。
+func (s *Service) ensureRunnable(ctx context.Context, forgeID string) (*forgedomain.Forge, *forgedomain.ForgeVersion, error) {
 	f, err := s.repo.GetForge(ctx, forgeID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	// Draft forges (ActiveVersionID empty, no version accepted yet) can't
-	// be run — the LLM should accept the pending first or call edit_forge
-	// to fix any failed sync.
-	//
-	// 草稿 forge（ActiveVersionID 空，无 accept 版本）不能跑——LLM 应先
-	// accept pending 或调 edit_forge 修复失败的 sync。
 	if f.ActiveVersionID == "" {
-		return nil, forgedomain.ErrEnvNotReady
+		return nil, nil, forgedomain.ErrNoActiveVersion
 	}
 	av, err := s.repo.GetVersionByID(ctx, f.ActiveVersionID)
 	if err != nil {
-		return nil, fmt.Errorf("forgeapp.RunForge: %w", err)
+		return nil, nil, fmt.Errorf("forgeapp.ensureRunnable: %w", err)
+	}
+	switch av.EnvStatus {
+	case forgedomain.EnvStatusReady:
+		return f, av, nil
+	case forgedomain.EnvStatusFailed:
+		return nil, nil, fmt.Errorf("%w: %s", forgedomain.ErrEnvFailed, av.EnvError)
+	default:
+		// pending / syncing / evicted
+		return nil, nil, forgedomain.ErrEnvNotReady
+	}
+}
+
+func (s *Service) RunForge(ctx context.Context, forgeID string, input map[string]any) (*forgedomain.ExecutionResult, error) {
+	f, av, err := s.ensureRunnable(ctx, forgeID)
+	if err != nil {
+		return nil, err
 	}
 	result, err := s.sandbox.Run(ctx, RunRequest{
 		ForgeID:   forgeID,
@@ -949,10 +1017,6 @@ func (s *Service) RunTestCase(ctx context.Context, testCaseID, batchID string) (
 	if err != nil {
 		return nil, err
 	}
-	f, err := s.repo.GetForge(ctx, tc.ForgeID)
-	if err != nil {
-		return nil, err
-	}
 	// InputData is enforced to be valid JSON object at create time
 	// (forge_test_cases stores it as parsed JSON). Failing parse here means
 	// the row was corrupted — surface it loudly so test results don't lie.
@@ -964,17 +1028,9 @@ func (s *Service) RunTestCase(ctx context.Context, testCaseID, batchID string) (
 		return nil, fmt.Errorf("forgeapp.RunTestCase: corrupted test case %q input_data: %w", testCaseID, err)
 	}
 
-	// Test runs go through the active version's venv. Draft forges (no
-	// accepted version yet) can't run tests — same rule as RunForge.
-	//
-	// 测试也走活跃版本的 venv。草稿 forge（无 accept 版本）不能跑测试——
-	// 跟 RunForge 同规则。
-	if f.ActiveVersionID == "" {
-		return nil, forgedomain.ErrEnvNotReady
-	}
-	av, err := s.repo.GetVersionByID(ctx, f.ActiveVersionID)
+	f, av, err := s.ensureRunnable(ctx, tc.ForgeID)
 	if err != nil {
-		return nil, fmt.Errorf("forgeapp.RunTestCase: %w", err)
+		return nil, err
 	}
 	result, sandboxErr := s.sandbox.Run(ctx, RunRequest{
 		ForgeID:   f.ID,

@@ -313,12 +313,19 @@ var (
     ErrImportInvalid    = errors.New("forge: import data invalid")
 
     // 沙箱迭代 1 新增。
-    ErrEnvNotReady          = errors.New("forge: env not ready")           // run / accept 时 EnvStatus 不是 ready（pending / syncing / evicted）
+    ErrEnvNotReady          = errors.New("forge: env not ready")           // ActiveVersion 的 venv 非 ready（syncing / evicted）；**仅 venv 状态**，"无 active version" 走 ErrNoActiveVersion（TE-15 拆分）
+    ErrNoActiveVersion      = errors.New("forge: no active version (accept the pending version first)") // TE-15：forge 还没接受任何版本（典型：create_forge 出来后 edit_forge 加新 pending 未 accept 即 run）
     ErrEnvFailed            = errors.New("forge: env sync failed")         // run / accept 时 EnvStatus = failed
     ErrSandboxUnavailable   = errors.New("forge: sandbox unavailable")     // sandbox.Bootstrap 没成功（资源缺失 / 解压失败 / 重签失败）
     ErrDependencyResolution = errors.New("forge: dependency resolution failed") // pyproject 渲染或 PEP 508 校验阶段就报错（罕见，多数错误归 ErrEnvFailed）
 )
 ```
+
+**TE-15 sentinel 拆分背景**：`ErrEnvNotReady` 原本两个语义共用——既覆盖 venv 非 ready，又覆盖 ActiveVersionID 为空。`forge: env not ready` 文案对后者完全误导，LLM 看到第一次 run 报错会去查 venv，但实际只需要 accept pending。TE-15 拆开 + 加首次创建 auto-accept 双修。
+
+**Run 类方法统一守卫**：`RunForge` / `RunTestCase`（`RunAllTests` 经其调用）共享 `ensureRunnable(ctx, forgeID) (*Forge, *ForgeVersion, error)` helper，保证错码序一致：(1) repo error → 透传；(2) `ActiveVersionID == ""` → `ErrNoActiveVersion`；(3) EnvStatus=ready → 通过；(4) EnvStatus=failed → `ErrEnvFailed`（带 EnvError）；(5) 其他 → `ErrEnvNotReady`。`AcceptPending` 不复用此 helper（语义不同：accept 是 *promote* pending，需要的是 pending row 的 EnvStatus 守卫）。
+
+**首次创建自动 accept**：`CreatePending` 末尾，当 `f.ActiveVersionID == ""` 且 post-sync EnvStatus=ready 时自动调 `AcceptPending`。设计权衡：首次创建无"新旧 diff"可 review，强制手动 accept 纯摩擦；edit 流仍走 pending → 手动 accept（保留 diff review 价值）。失败 venv 不自动 accept（避免卡 active+broken 状态）。
 
 ---
 

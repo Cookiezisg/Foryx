@@ -138,7 +138,8 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 | `TOOL_AST_PARSE_FAILED` | 422 | `tool.ErrASTParseError` | 代码无法被 Python AST 解析 | ✅ |
 | `TOOL_IMPORT_INVALID` | 400 | `tool.ErrImportInvalid` | 导入 JSON 格式错误 | ✅ |
 | `TOOL_IMPORT_CONFLICT` | 409 | `tool.ErrImportConflict` | 导入名字冲突需用户决策 | ⬜ |
-| `FORGE_ENV_NOT_READY` | 422 | `forge.ErrEnvNotReady` | Run 时 ActiveVersion 的 EnvStatus≠ready / Accept 时 pending 还在 syncing 或 evicted | ✅ |
+| `FORGE_ENV_NOT_READY` | 422 | `forge.ErrEnvNotReady` | ActiveVersion 的 venv 处于非-ready（syncing / evicted），需等 entity-state 翻转或调 :resync | ✅ |
+| `FORGE_NO_ACTIVE_VERSION` | 422 | `forge.ErrNoActiveVersion` | forge 还没接受过任何版本（草稿 forge 在 edit_forge 后 pending 未 accept 即 run）。TE-15 起 create_forge 自动 accept，本码主要给 edit_forge 后未 accept 的场景 | ✅ |
 | `FORGE_ENV_FAILED` | 422 | `forge.ErrEnvFailed` | Sync 失败（含 deps 解析失败 / Python 包冲突）；EnvError 含 uv stderr 全文 | ✅ |
 | `FORGE_SANDBOX_UNAVAILABLE` | 503 | `forge.ErrSandboxUnavailable` | 启动期 Bootstrap 失败（uv / python-build-standalone 资源缺失） | ✅ |
 | `FORGE_DEPENDENCY_RESOLUTION` | 422 | `forge.ErrDependencyResolution` | uv 无法解析依赖（包名拼错 / 版本约束冲突 / 网络错误）；EnvError 含 uv 完整 stderr | ✅ |
