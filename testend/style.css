@@ -785,10 +785,9 @@ select.cfg-input { cursor: pointer; }
   background: var(--canvas-default);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  overflow-x: auto;
-  scrollbar-width: thin;
+  overflow: hidden; /* JS owns overflow via responsive tabs manager */
+  min-height: 36px; /* match a single tab's height to avoid layout collapse */
 }
-.tabs-bar::-webkit-scrollbar { height: 4px; }
 
 .tab-btn {
   position: relative;
@@ -801,6 +800,7 @@ select.cfg-input { cursor: pointer; }
   font-family: var(--font-mono);
   font-weight: 500;
   white-space: nowrap;
+  flex-shrink: 0; /* tabs keep natural width so JS measurements are real */
   transition: color var(--duration) var(--ease);
 }
 .tab-btn::after {
@@ -2214,6 +2214,9 @@ select.cfg-input { cursor: pointer; }
   position: relative;
   margin-left: auto; /* push to right edge of tabs-bar */
   flex-shrink: 0;
+  align-self: stretch;
+  display: flex;
+  align-items: stretch;
 }
 .tabs-more-btn {
   display: flex;

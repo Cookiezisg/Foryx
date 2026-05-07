@@ -337,22 +337,26 @@
 
     <!-- Right: Tools Panel -->
     <aside class="tools-panel">
-      <!-- TE-18: Core tabs always visible; remaining tabs spill into the
-           "More ▾" dropdown so the bar stays tight at any panel width.
-           Tab list lives in app.js (TESTEND_CORE_TABS / TESTEND_MORE_TABS)
-           so adding a tab is a one-place edit. -->
-      <div class="tabs-bar">
-        <template x-for="t in coreTabs" :key="t.id">
+      <!-- TE-19: TRULY responsive tabs. JS measures each tab's width on
+           first paint, then ResizeObserver triggers recalc on container
+           resize. Tabs that don't fit auto-spill into "More ▾" — wider
+           panel = more tabs in bar; narrower = fewer. Single source of
+           truth: TESTEND_TABS in app.js. -->
+      <div class="tabs-bar" x-init="initTabsManager($el)">
+        <template x-for="t in visibleTabs" :key="t.id">
           <button class="tab-btn"
+                  data-tab-btn
                   :class="{active: activeRightTab === t.id}"
                   :title="t.label + ' tab'"
                   @click="selectTab(t.id)"
                   x-text="t.label"></button>
         </template>
 
-        <!-- More ▾ dropdown -->
-        <div class="tabs-more-wrap" @click.outside="moreTabsOpen = false">
+        <!-- More ▾ dropdown — only shown when tabs are spilled. -->
+        <div class="tabs-more-wrap" x-show="hasOverflow"
+             @click.outside="moreTabsOpen = false">
           <button class="tabs-more-btn"
+                  data-more-btn
                   :class="{'has-active': isMoreTabActive()}"
                   @click="moreTabsOpen = !moreTabsOpen"
                   :title="isMoreTabActive() ? activeMoreLabel() + ' (in More ▾)' : 'More tabs'">
@@ -360,7 +364,7 @@
             <span x-text="moreTabsOpen ? '▴' : '▾'"></span>
           </button>
           <div class="tabs-more-menu" x-show="moreTabsOpen" x-cloak>
-            <template x-for="t in moreTabs" :key="t.id">
+            <template x-for="t in hiddenTabs" :key="t.id">
               <button class="tabs-more-item"
                       :class="{active: activeRightTab === t.id}"
                       @click="selectTab(t.id)">
@@ -1975,29 +1979,32 @@
   </div>
 
   <!-- Globals (window.fmt*, window.toast). Loaded BEFORE Alpine + tabs so
-       every tab can call them without imports. -->
-  <script src="/dev/static/js/format.js"></script>
-  <script src="/dev/static/js/toast.js"></script>
+       every tab can call them without imports.
+       ?v=__BUILD__ is server-side substituted with backend startup unix
+       timestamp — without this, browser memory cache holds stale JS even
+       after a hard refresh of HTML. -->
+  <script src="/dev/static/js/format.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/toast.js?v=__BUILD__"></script>
 
-  <script src="/dev/static/js/drag.js"></script>
-  <script src="/dev/static/js/app.js"></script>
-  <script src="/dev/static/js/sidebar.js"></script>
-  <script src="/dev/static/js/chat.js"></script>
-  <script src="/dev/static/js/tab-sse.js"></script>
-  <script src="/dev/static/js/tab-logs.js"></script>
-  <script src="/dev/static/js/tab-sql.js"></script>
-  <script src="/dev/static/js/tab-tests.js"></script>
-  <script src="/dev/static/js/tab-config.js"></script>
-  <script src="/dev/static/js/tab-tools.js"></script>
-  <script src="/dev/static/js/tab-catalog.js"></script>
-  <script src="/dev/static/js/tab-subagent.js"></script>
-  <script src="/dev/static/js/tab-skill.js"></script>
-  <script src="/dev/static/js/tab-mcp.js"></script>
-  <script src="/dev/static/js/tab-sandbox.js"></script>
-  <script src="/dev/static/js/tab-mock-llm.js"></script>
-  <script src="/dev/static/js/tab-wire.js"></script>
-  <script src="/dev/static/js/tab-processes.js"></script>
-  <script src="/dev/static/js/tab-info.js"></script>
+  <script src="/dev/static/js/drag.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/app.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/sidebar.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/chat.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-sse.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-logs.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-sql.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-tests.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-config.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-tools.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-catalog.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-subagent.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-skill.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-mcp.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-sandbox.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-mock-llm.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-wire.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-processes.js?v=__BUILD__"></script>
+  <script src="/dev/static/js/tab-info.js?v=__BUILD__"></script>
   <script defer src="https://unpkg.com/alpinejs@3/dist/cdn.min.js"></script>
 </body>
 </html>
