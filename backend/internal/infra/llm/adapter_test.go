@@ -161,6 +161,49 @@ func TestAdapterWrappedClient_HooksInvoked(t *testing.T) {
 	}
 }
 
+// TestOllamaAdapter_DisablesStreamWhenToolsPresent verifies the TE-24 fix
+// for Ollama's OpenAI-compat tool-call quirk: when tools are sent with
+// streaming on, Ollama silently drops tool_calls. Adapter forces
+// DisableStream=true so the OpenAI client falls back to non-streaming
+// reception, which returns tool_calls properly.
+//
+// Ollama 在 streaming+tools 下吞 tool_calls；adapter 自动关流式让其用
+// 非流式接收。
+func TestOllamaAdapter_DisablesStreamWhenToolsPresent(t *testing.T) {
+	a := lookupAdapter("ollama")
+
+	// Without tools: stream stays on.
+	// 无 tools：保持流式。
+	r1 := Request{}
+	a.BeforeRequest(&r1)
+	if r1.DisableStream {
+		t.Errorf("Ollama without tools should leave DisableStream=false")
+	}
+
+	// With tools: stream auto-disabled.
+	// 有 tools：自动关流式。
+	r2 := Request{Tools: []ToolDef{{Name: "search"}}}
+	a.BeforeRequest(&r2)
+	if !r2.DisableStream {
+		t.Errorf("Ollama with tools should set DisableStream=true (avoids ollama#12557)")
+	}
+}
+
+// TestNonOllamaAdapters_DontTouchStream verifies other adapters don't
+// accidentally force non-streaming. Default behavior must stay streaming.
+//
+// 其它 adapter 不应误关流式，保持默认流式行为。
+func TestNonOllamaAdapters_DontTouchStream(t *testing.T) {
+	for _, name := range []string{"openai", "deepseek", "qwen", "moonshot", "google", "anthropic"} {
+		a := lookupAdapter(name)
+		req := Request{Tools: []ToolDef{{Name: "x"}}}
+		a.BeforeRequest(&req)
+		if req.DisableStream {
+			t.Errorf("%s should not set DisableStream; only Ollama needs that quirk", name)
+		}
+	}
+}
+
 type spyAdapter struct {
 	baseAdapter
 	before func(r *Request)

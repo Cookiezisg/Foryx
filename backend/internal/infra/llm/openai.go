@@ -72,15 +72,86 @@ func (c *openAIClient) Stream(ctx context.Context, req Request) iter.Seq[StreamE
 			return
 		}
 
-		parseOpenAISSE(ctx, resp.Body, yield)
+		// TE-24: req.DisableStream=true forces non-streaming reception
+		// (Ollama-with-tools quirk: ollama #12557 / #9632 silently drop
+		// tool_calls when streaming is on). The OpenAI client handles
+		// both shapes here so callers see the same StreamEvent sequence
+		// regardless of wire mode.
+		// req.DisableStream=true 走非流式接收（Ollama+tools quirk）。
+		if req.DisableStream {
+			parseOpenAINonStreaming(resp.Body, yield)
+		} else {
+			parseOpenAISSE(ctx, resp.Body, yield)
+		}
 	}
+}
+
+// parseOpenAINonStreaming reads a single non-streaming JSON response and
+// synthesizes a StreamEvent sequence equivalent to what parseOpenAISSE
+// would emit for the same content. Lets the rest of the system (chat
+// runner, loop, etc.) treat both wire modes identically.
+//
+// parseOpenAINonStreaming 读单条非流式 JSON 响应并合成 StreamEvent 序列，
+// 让系统其它部分（chat / loop）对两种 wire mode 一视同仁。
+func parseOpenAINonStreaming(body io.Reader, yield func(StreamEvent) bool) {
+	raw, err := io.ReadAll(io.LimitReader(body, 8<<20)) // 8 MiB cap
+	if err != nil {
+		yield(StreamEvent{Type: EventError, Err: fmt.Errorf("llm/openai: read non-streaming body: %w", err)})
+		return
+	}
+	var resp oaiNonStreamResponse
+	if err := json.Unmarshal(raw, &resp); err != nil {
+		yield(StreamEvent{Type: EventError, Err: fmt.Errorf("llm/openai: parse non-streaming response: %w", err)})
+		return
+	}
+	if resp.Error != nil {
+		yield(StreamEvent{Type: EventError, Err: fmt.Errorf("llm: provider returned error: %s", resp.Error.Message)})
+		return
+	}
+	if len(resp.Choices) == 0 {
+		yield(StreamEvent{Type: EventError, Err: fmt.Errorf("llm/openai: non-streaming response has no choices")})
+		return
+	}
+	msg := resp.Choices[0].Message
+	if msg.ReasoningContent != "" {
+		if !yield(StreamEvent{Type: EventReasoning, Delta: msg.ReasoningContent}) {
+			return
+		}
+	}
+	if msg.Content != "" {
+		if !yield(StreamEvent{Type: EventText, Delta: msg.Content}) {
+			return
+		}
+	}
+	for i, tc := range msg.ToolCalls {
+		if !yield(StreamEvent{
+			Type: EventToolStart, ToolIndex: i,
+			ToolID: tc.ID, ToolName: tc.Function.Name,
+		}) {
+			return
+		}
+		if tc.Function.Arguments != "" {
+			if !yield(StreamEvent{
+				Type: EventToolDelta, ToolIndex: i,
+				ArgsDelta: tc.Function.Arguments,
+			}) {
+				return
+			}
+		}
+	}
+	ev := StreamEvent{Type: EventFinish, FinishReason: resp.Choices[0].FinishReason}
+	if resp.Usage != nil {
+		ev.InputTokens = resp.Usage.PromptTokens
+		ev.OutputTokens = resp.Usage.CompletionTokens
+	}
+	yield(ev)
 }
 
 // ── SSE parser ────────────────────────────────────────────────────────────────
 
 func parseOpenAISSE(ctx context.Context, body io.Reader, yield func(StreamEvent) bool) {
 	scanner := bufio.NewScanner(body)
-	toolNameSent := map[int]bool{}
+	state := newToolCallState()
 
 	for scanner.Scan() {
 		if ctx.Err() != nil {
@@ -102,7 +173,7 @@ func parseOpenAISSE(ctx context.Context, body io.Reader, yield func(StreamEvent)
 			yield(StreamEvent{Type: EventError, Err: fmt.Errorf("llm/openai: malformed SSE chunk: %w", err)})
 			return
 		}
-		if !emitOpenAIChunk(chunk, toolNameSent, yield) {
+		if !emitOpenAIChunk(chunk, state, yield) {
 			return
 		}
 	}
@@ -116,7 +187,53 @@ func parseOpenAISSE(ctx context.Context, body io.Reader, yield func(StreamEvent)
 //
 // emitOpenAIChunk 把一个解析好的 SSE chunk 转换为 StreamEvent 发出。
 // consumer 发出停止信号时返回 false。
-func emitOpenAIChunk(chunk oaiChunk, toolNameSent map[int]bool, yield func(StreamEvent) bool) bool {
+// toolCallState tracks tool-call streaming state across chunks. Holds:
+//   - toolNameSent: which (resolved) tool index has had its EventToolStart emitted
+//   - idToSyntheticIdx + nextSyntheticIdx: TE-24 fallback for providers
+//     (Ollama, some Gemini paths) that leave tool_calls[].index at 0
+//     for every parallel tool call. Without this, second + third tool
+//     calls collide on key 0 and get silently merged.
+//
+// toolCallState 跨 chunk 跟踪 tool-call 流式状态。
+// idToSyntheticIdx 给 Ollama 等不填 index 的 provider 兜底，按 ID 分配 index。
+type toolCallState struct {
+	toolNameSent     map[int]bool
+	idToSyntheticIdx map[string]int
+	nextSyntheticIdx int
+}
+
+func newToolCallState() *toolCallState {
+	return &toolCallState{
+		toolNameSent:     map[int]bool{},
+		idToSyntheticIdx: map[string]int{},
+	}
+}
+
+// resolveIndex returns a unique stream-local index for the tool call.
+// Trusts a real non-zero index when present; for index=0 with an ID,
+// disambiguates same-vs-different tool by ID; for index=0 without an ID,
+// passes through as 0 (best-effort — the provider gave us nothing to
+// disambiguate with).
+//
+// resolveIndex 返流内唯一 index。真 index 非零时信任；index=0 且有 ID 时
+// 按 ID 区分；index=0 且无 ID 时 fallback 0（provider 没给可区分信号）。
+func (s *toolCallState) resolveIndex(tc oaiToolCallDelta) int {
+	if tc.Index > 0 {
+		return tc.Index
+	}
+	if tc.ID == "" {
+		return 0
+	}
+	if idx, ok := s.idToSyntheticIdx[tc.ID]; ok {
+		return idx
+	}
+	idx := s.nextSyntheticIdx
+	s.idToSyntheticIdx[tc.ID] = idx
+	s.nextSyntheticIdx++
+	return idx
+}
+
+func emitOpenAIChunk(chunk oaiChunk, state *toolCallState, yield func(StreamEvent) bool) bool {
 	// TE-23: OpenRouter (and any OpenAI-compat provider that forwards
 	// upstream errors mid-stream) embeds errors as a top-level Error
 	// field on the chunk while HTTP status stays 200. Without this
@@ -163,10 +280,11 @@ func emitOpenAIChunk(chunk oaiChunk, toolNameSent map[int]bool, yield func(Strea
 	}
 
 	for _, tc := range delta.ToolCalls {
-		if !toolNameSent[tc.Index] && tc.Function.Name != "" {
-			toolNameSent[tc.Index] = true
+		idx := state.resolveIndex(tc)
+		if !state.toolNameSent[idx] && tc.Function.Name != "" {
+			state.toolNameSent[idx] = true
 			if !yield(StreamEvent{
-				Type: EventToolStart, ToolIndex: tc.Index,
+				Type: EventToolStart, ToolIndex: idx,
 				ToolID: tc.ID, ToolName: tc.Function.Name,
 			}) {
 				return false
@@ -174,7 +292,7 @@ func emitOpenAIChunk(chunk oaiChunk, toolNameSent map[int]bool, yield func(Strea
 		}
 		if tc.Function.Arguments != "" {
 			if !yield(StreamEvent{
-				Type: EventToolDelta, ToolIndex: tc.Index,
+				Type: EventToolDelta, ToolIndex: idx,
 				ArgsDelta: tc.Function.Arguments,
 			}) {
 				return false
@@ -201,10 +319,14 @@ func buildOpenAIBody(req Request) ([]byte, error) {
 		return nil, err
 	}
 	body := oaiRequest{
-		Model:         req.ModelID,
-		Messages:      msgs,
-		Stream:        true,
-		StreamOptions: &oaiStreamOptions{IncludeUsage: true},
+		Model:    req.ModelID,
+		Messages: msgs,
+		Stream:   !req.DisableStream,
+	}
+	// stream_options.include_usage only applies to streaming requests.
+	// 仅流式请求才设 stream_options.include_usage。
+	if !req.DisableStream {
+		body.StreamOptions = &oaiStreamOptions{IncludeUsage: true}
 	}
 	if len(req.Tools) > 0 {
 		body.Tools = toOpenAITools(req.Tools)
@@ -455,6 +577,30 @@ type oaiChunkError struct {
 	Message string `json:"message"`
 	Code    any    `json:"code,omitempty"` // OpenRouter sometimes int, sometimes string
 	Type    string `json:"type,omitempty"`
+}
+
+// oaiNonStreamResponse is the single-shot JSON shape returned when
+// stream:false. Only used when req.DisableStream=true (currently:
+// Ollama-with-tools per ollamaAdapter.BeforeRequest).
+//
+// oaiNonStreamResponse 是 stream:false 时的单条 JSON 形状。仅 DisableStream
+// 路径用（当前：ollamaAdapter 在有 tools 时设）。
+type oaiNonStreamResponse struct {
+	Choices []oaiNonStreamChoice `json:"choices"`
+	Usage   *oaiUsage            `json:"usage"`
+	Error   *oaiChunkError       `json:"error,omitempty"`
+}
+
+type oaiNonStreamChoice struct {
+	Message      oaiNonStreamMessage `json:"message"`
+	FinishReason string              `json:"finish_reason"`
+}
+
+type oaiNonStreamMessage struct {
+	Role             string             `json:"role"`
+	Content          string             `json:"content"`
+	ReasoningContent string             `json:"reasoning_content"`
+	ToolCalls        []oaiToolCallDelta `json:"tool_calls"`
 }
 
 type oaiChoice struct {

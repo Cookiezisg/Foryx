@@ -452,6 +452,109 @@ data: {"error":{"message":"upstream model timeout","type":"upstream_error","code
 	}
 }
 
+// TestParseSSE_ToolCalls_IndexAllZero_OllamaQuirk verifies the TE-24 fallback:
+// providers (Ollama, some Gemini paths) leave tool_calls[].index at 0 for
+// every parallel tool call. Without per-ID synthesis they all collide on
+// key 0 → second tool's name dropped, args buffers merged. The fallback
+// disambiguates by tool ID and assigns synthetic indices 0, 1, 2...
+//
+// Ollama / 部分 Gemini 不填 index，多个并发 tool_call 都 index=0 撞键。
+// 兜底按 tool ID 区分并合成 index 0, 1, 2...
+func TestParseSSE_ToolCalls_IndexAllZero_OllamaQuirk(t *testing.T) {
+	body := `data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_A","function":{"name":"toolA","arguments":""}}]}}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_B","function":{"name":"toolB","arguments":""}}]}}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_A","function":{"arguments":"{\"x\":1}"}}]}}]}
+
+data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_B","function":{"arguments":"{\"y\":2}"}}]}}]}
+
+`
+	events := collectEvents(body)
+	// Expect 2 ToolStart (one per distinct ID) + 2 ToolDelta routed to
+	// the right (synthesized) indices.
+	// 期望 2 个 ToolStart（按 ID 区分）+ 2 个 ToolDelta 路由到正确的合成 index。
+	var starts []StreamEvent
+	var deltas []StreamEvent
+	for _, ev := range events {
+		switch ev.Type {
+		case EventToolStart:
+			starts = append(starts, ev)
+		case EventToolDelta:
+			deltas = append(deltas, ev)
+		}
+	}
+	if len(starts) != 2 {
+		t.Fatalf("want 2 ToolStart events (one per unique ID), got %d: %+v", len(starts), starts)
+	}
+	if starts[0].ToolID != "call_A" || starts[1].ToolID != "call_B" {
+		t.Errorf("ToolStart IDs wrong: %q %q", starts[0].ToolID, starts[1].ToolID)
+	}
+	if starts[0].ToolIndex == starts[1].ToolIndex {
+		t.Errorf("ToolStart indices must differ; both got %d", starts[0].ToolIndex)
+	}
+	// Verify deltas route to the matching synthetic indices (call_A → 0,
+	// call_B → 1, since they're seen in that order).
+	// 验证 delta 路由到正确的合成 index。
+	if len(deltas) != 2 {
+		t.Fatalf("want 2 ToolDelta events, got %d", len(deltas))
+	}
+	if deltas[0].ToolIndex != starts[0].ToolIndex || deltas[0].ArgsDelta != `{"x":1}` {
+		t.Errorf("first delta should match call_A index + args; got idx=%d args=%q",
+			deltas[0].ToolIndex, deltas[0].ArgsDelta)
+	}
+	if deltas[1].ToolIndex != starts[1].ToolIndex || deltas[1].ArgsDelta != `{"y":2}` {
+		t.Errorf("second delta should match call_B index + args; got idx=%d args=%q",
+			deltas[1].ToolIndex, deltas[1].ArgsDelta)
+	}
+}
+
+// TestParseOpenAINonStreaming_SynthesizesEvents verifies the non-streaming
+// path (used for Ollama+tools per TE-24) synthesizes the same StreamEvent
+// sequence as the streaming path would for equivalent content. Lets the
+// rest of the system treat both wire modes uniformly.
+//
+// 非流式路径（Ollama+tools 走）合成 StreamEvent 序列，与流式路径输出一致。
+func TestParseOpenAINonStreaming_SynthesizesEvents(t *testing.T) {
+	body := `{
+		"choices": [{
+			"message": {
+				"role": "assistant",
+				"content": "let me check",
+				"tool_calls": [
+					{"index": 0, "id": "call_X", "function": {"name": "search", "arguments": "{\"q\":\"forgify\"}"}}
+				]
+			},
+			"finish_reason": "tool_calls"
+		}],
+		"usage": {"prompt_tokens": 100, "completion_tokens": 20}
+	}`
+	var events []StreamEvent
+	parseOpenAINonStreaming(strings.NewReader(body), func(e StreamEvent) bool {
+		events = append(events, e)
+		return true
+	})
+	if len(events) < 4 {
+		t.Fatalf("expect Text + ToolStart + ToolDelta + Finish, got %d events", len(events))
+	}
+	if events[0].Type != EventText || events[0].Delta != "let me check" {
+		t.Errorf("first event = %+v, want EventText 'let me check'", events[0])
+	}
+	if events[1].Type != EventToolStart || events[1].ToolName != "search" || events[1].ToolID != "call_X" {
+		t.Errorf("second event = %+v, want EventToolStart search/call_X", events[1])
+	}
+	if events[2].Type != EventToolDelta || events[2].ArgsDelta != `{"q":"forgify"}` {
+		t.Errorf("third event = %+v, want EventToolDelta with args", events[2])
+	}
+	last := events[len(events)-1]
+	if last.Type != EventFinish || last.FinishReason != "tool_calls" {
+		t.Errorf("last event = %+v, want EventFinish tool_calls", last)
+	}
+	if last.InputTokens != 100 || last.OutputTokens != 20 {
+		t.Errorf("usage missing in finish event: %+v", last)
+	}
+}
+
 // ── Error classification ──────────────────────────────────────────────────────
 
 func TestClassifyHTTPError(t *testing.T) {

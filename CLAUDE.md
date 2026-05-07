@@ -108,6 +108,8 @@
 - **S16 错误包装格式**：上抛错误用 `fmt.Errorf("<pkg>.<Method>: %w", err)`，sentinel 在最里层。例：`apikeystore.List: missing user id in context`。**禁止**裸 `errors.New` 套娃丢失原 sentinel；**禁止**自创新前缀代替 `%w` 包装。`errors.Is` 必须能从最外层 unwrap 到 sentinel
 - **S17 errmap 单一事实源**：每个会到达 handler 的 sentinel 必须登记到 `transport/httpapi/response/errmap.go::errTable`——**包括** `pkg/` 和 `infra/` 中跨层使用的（如 `reqctxpkg.ErrMissingUserID` / `cryptoinfra.ErrUnsupportedVersion`）。未登记的 sentinel 会触发"unmapped domain error" ERROR 日志，污染烟雾报警
 - **S18 Tool 接口规约** — 见 §S18 详节
+- **S20 📌 禁止"留下次"无理由（最高优先级）**：发现 bug / 缺陷 / 风险时**默认必须当场修**。声明"留下次"必须**同时满足**两条：(a) **结构性硬约束**——例如必须先扩公共 struct / 必须先改未上线模块 / 必须等外部依赖 / commit 已经超大需要分包；(b) **当场清晰说明**——commit message 或 progress-record dev log 里写明"为什么不能现在修"+"修复需要的前置条件"+"用户场景下会怎么爆"。**禁止理由**：(1)"想分 commit 别堆太多"——commit 大小不是借口，宁可一个大 commit 也不漏 bug；(2)"目前没人撞到"——只要可触发就该修；(3)"我懒"——别说，去修。**审查机制**：每次说出"留下次 / TODO / 改天 / 之后修"的瞬间，必须自检 (a) + (b)，**不通过就立刻动手**。**触发场景**：风险表里出现"⏳ 待修"那一栏；任何"以后再说"措辞；任何"知道在哪知道怎么修就行"的自我安慰式收尾。
+
 - **S19 Dev log 节制**：`progress-record.md` 每条 dev log 1-2 句、~30-100 汉字，跟 Phase 0-2 早期条目同密度。保留：日期标签（`[refactor]` / `[fix]` / `[doc]` 等）/ 模块 / 关键数字（测试数 / 文件数 / 端点数）/ 一句结论。砍：实现细节、设计权衡 why/how、踩坑过程、命名漂移记录——这些归 git log / commit message / 设计文档。**Dev log 是日期索引，不是工程档案**——长篇是噪音，密度过高反而难找历史。
   - **超 100 字回头砍**——多半是把"做了什么"写成了"为什么这么做"，把"为什么"删了通常立刻就回到 100 字以内
   - **超 200 字硬上限**——压不下去就**裂成多条**（一条做多件事时 split 成多行表格），每行专注一个 [tag]

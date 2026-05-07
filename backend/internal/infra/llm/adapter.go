@@ -166,6 +166,25 @@ type ollamaAdapter struct{ baseAdapter }
 func (ollamaAdapter) Name() string           { return "ollama" }
 func (ollamaAdapter) DefaultBaseURL() string { return "" } // BaseURLRequired in apikey/providers.go
 
+// BeforeRequest forces non-streaming when tools are present. Ollama's
+// OpenAI-compat path (/v1/chat/completions) silently drops tool_calls
+// when streaming is on (open issues ollama #12557, #9632, #7881). The
+// model emits the tool call internally but the SSE chunks have no
+// tool_calls field — content shows empty with finish_reason=stop. The
+// only reliable workaround on the OpenAI-compat surface is to ask the
+// non-streaming endpoint, which returns tool_calls properly. Tool-less
+// turns (text generation only) keep streaming for the usual UX.
+//
+// Ollama OpenAI-compat 端点在 streaming + tools 下静默吞 tool_calls
+// （ollama #12557 / #9632 / #7881）。模型内部产生工具调用但 SSE chunk 无
+// tool_calls 字段，content 空 + finish_reason=stop。OpenAI-compat 唯一可靠
+// 解法是切非流式。无 tools 的 turn 仍流式保 UX。
+func (ollamaAdapter) BeforeRequest(req *Request) {
+	if len(req.Tools) > 0 {
+		req.DisableStream = true
+	}
+}
+
 type customAdapter struct{ baseAdapter }
 
 func (customAdapter) Name() string           { return "custom" }

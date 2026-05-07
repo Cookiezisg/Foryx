@@ -169,6 +169,19 @@ type Request struct {
 	System   string
 	Messages []LLMMessage
 	Tools    []ToolDef
+
+	// DisableStream forces non-streaming mode at the wire level. Default
+	// (false) = stream every call (current product behavior). The only
+	// production setter today is ollamaAdapter.BeforeRequest, which flips
+	// this true when len(Tools) > 0 — Ollama's OpenAI-compat path silently
+	// drops tool_calls when streaming is on (open issue ollama#12557 /
+	// #9632). Streaming back on for non-tool turns is fine.
+	//
+	// DisableStream 在 wire 层强制关流式。默认 false（当前产品行为=都流式）。
+	// 唯一 production setter 是 ollamaAdapter.BeforeRequest——有 tools 时翻
+	// true。Ollama OpenAI-compat 在 stream+tools 下静默吞 tool_calls
+	// （ollama #12557 / #9632）。无 tools 的 turn 仍流式。
+	DisableStream bool
 }
 
 // ── Client interface ──────────────────────────────────────────────────────────
