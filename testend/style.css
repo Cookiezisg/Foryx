@@ -96,10 +96,11 @@
      FOUT (Flash Of Unstyled Text) swap is invisible. */
   --font-mono: 'JetBrains Mono', 'JetBrainsMonoFallback', monospace;
 
-  /* Layout */
+  /* Layout — right panel default wide enough to fit ~12 tabs in 1 row;
+     min-width raised so the user can't drag it into uselessness. */
   --topbar-h:  32px;
   --sidebar-w: 230px;
-  --tools-w:   400px;
+  --tools-w:   560px;
 
   /* ── Backwards-compatible aliases ─────────────────────────────────────
      tester.html has dozens of inline `style="...var(--accent)..."` etc.
@@ -776,17 +777,17 @@ select.cfg-input { cursor: pointer; }
   display: flex; flex-direction: column;
   overflow: hidden;
   background: var(--canvas-default);
-  min-width: 240px;
+  min-width: 380px; /* below this, panels get cramped; raised from 240 */
   border-left: 1px solid var(--border-subtle);
 }
 
 .tabs-bar {
   display: flex;
+  flex-wrap: wrap; /* tabs flow into a 2nd row when narrow — no More dropdown */
   background: var(--canvas-default);
   border-bottom: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  overflow: hidden; /* JS owns overflow via responsive tabs manager */
-  min-height: 36px; /* match a single tab's height to avoid layout collapse */
+  row-gap: 0;
 }
 
 .tab-btn {
@@ -800,7 +801,7 @@ select.cfg-input { cursor: pointer; }
   font-family: var(--font-mono);
   font-weight: 500;
   white-space: nowrap;
-  flex-shrink: 0; /* tabs keep natural width so JS measurements are real */
+  flex-shrink: 0;
   transition: color var(--duration) var(--ease);
 }
 .tab-btn::after {
@@ -2207,82 +2208,6 @@ select.cfg-input { cursor: pointer; }
   from { background-position: 200% 0; }
   to   { background-position: -200% 0; }
 }
-
-/* ── Tabs overflow dropdown (More ▾) ──────────────────────────────────────── */
-
-.tabs-more-wrap {
-  position: relative;
-  margin-left: auto; /* push to right edge of tabs-bar */
-  flex-shrink: 0;
-  align-self: stretch;
-  display: flex;
-  align-items: stretch;
-}
-.tabs-more-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: var(--space-2) var(--space-3);
-  background: none;
-  border: none;
-  border-left: 1px solid var(--border-subtle);
-  color: var(--fg-muted);
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  font-weight: 500;
-  white-space: nowrap;
-  transition: color var(--duration) var(--ease),
-              background var(--duration) var(--ease);
-}
-.tabs-more-btn:hover { color: var(--fg-default); background: var(--canvas-subtle); }
-.tabs-more-btn.has-active { color: var(--accent-emphasis); }
-
-.tabs-more-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  margin-top: 2px;
-  min-width: 180px;
-  background: var(--canvas-default);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-2);
-  box-shadow: var(--shadow-overlay);
-  padding: var(--space-1) 0;
-  z-index: 50;
-  animation: menuIn var(--duration) var(--ease);
-}
-@keyframes menuIn {
-  from { transform: translateY(-4px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-.tabs-more-item {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: 5px var(--space-3);
-  background: none;
-  border: none;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: var(--text-sm);
-  color: var(--fg-default);
-  transition: background var(--duration) var(--ease);
-}
-.tabs-more-item:hover { background: var(--canvas-subtle); }
-.tabs-more-item.active {
-  background: var(--accent-subtle);
-  color: var(--accent-fg);
-  font-weight: 600;
-}
-.tabs-more-item-icon {
-  width: 4px; height: 4px; border-radius: 50%;
-  background: transparent;
-  flex-shrink: 0;
-}
-.tabs-more-item.active .tabs-more-item-icon { background: var(--accent-emphasis); }
 
 /* ── Chat header pieces (was inline style) ────────────────────────────────── */
 

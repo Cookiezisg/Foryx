@@ -337,43 +337,17 @@
 
     <!-- Right: Tools Panel -->
     <aside class="tools-panel">
-      <!-- TE-19: TRULY responsive tabs. JS measures each tab's width on
-           first paint, then ResizeObserver triggers recalc on container
-           resize. Tabs that don't fit auto-spill into "More ▾" — wider
-           panel = more tabs in bar; narrower = fewer. Single source of
-           truth: TESTEND_TABS in app.js. -->
-      <div class="tabs-bar" x-init="initTabsManager($el)">
-        <template x-for="t in visibleTabs" :key="t.id">
+      <!-- Tabs bar — flex-wrap means narrow panels just flow into a 2nd
+           row instead of hiding tabs behind a More ▾ menu. Single source
+           of truth: TESTEND_TABS in app.js. -->
+      <div class="tabs-bar">
+        <template x-for="t in allTabs" :key="t.id">
           <button class="tab-btn"
-                  data-tab-btn
                   :class="{active: activeRightTab === t.id}"
                   :title="t.label + ' tab'"
                   @click="selectTab(t.id)"
                   x-text="t.label"></button>
         </template>
-
-        <!-- More ▾ dropdown — only shown when tabs are spilled. -->
-        <div class="tabs-more-wrap" x-show="hasOverflow"
-             @click.outside="moreTabsOpen = false">
-          <button class="tabs-more-btn"
-                  data-more-btn
-                  :class="{'has-active': isMoreTabActive()}"
-                  @click="moreTabsOpen = !moreTabsOpen"
-                  :title="isMoreTabActive() ? activeMoreLabel() + ' (in More ▾)' : 'More tabs'">
-            <span x-text="isMoreTabActive() ? activeMoreLabel() : 'More'"></span>
-            <span x-text="moreTabsOpen ? '▴' : '▾'"></span>
-          </button>
-          <div class="tabs-more-menu" x-show="moreTabsOpen" x-cloak>
-            <template x-for="t in hiddenTabs" :key="t.id">
-              <button class="tabs-more-item"
-                      :class="{active: activeRightTab === t.id}"
-                      @click="selectTab(t.id)">
-                <span class="tabs-more-item-icon"></span>
-                <span x-text="t.label"></span>
-              </button>
-            </template>
-          </div>
-        </div>
       </div>
 
       <!-- Config Tab -->
