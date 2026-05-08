@@ -8,7 +8,7 @@
 
 document.addEventListener('alpine:init', () => {
   Alpine.data('sqlTab', () => ({
-    sql: 'SELECT id, conversation_id, role, status, stop_reason, input_tokens, output_tokens, created_at FROM messages ORDER BY created_at DESC LIMIT 20',
+    sql: 'SELECT id, conversation_id, parent_block_id, role, status, stop_reason, error_code, attrs, input_tokens, output_tokens, created_at FROM messages ORDER BY created_at DESC LIMIT 20',
     result: null,
     error: null,
     loading: false,
@@ -24,15 +24,15 @@ document.addEventListener('alpine:init', () => {
     shortcuts: [
       {
         label: 'messages',
-        sql: 'SELECT id, conversation_id, role, status, stop_reason, input_tokens, output_tokens, created_at FROM messages ORDER BY created_at DESC LIMIT 20',
+        sql: 'SELECT id, conversation_id, parent_block_id, role, status, stop_reason, error_code, attrs, input_tokens, output_tokens, created_at FROM messages ORDER BY created_at DESC LIMIT 20',
       },
       {
         label: 'message_blocks',
-        sql: 'SELECT id, message_id, seq, type, data, created_at FROM message_blocks ORDER BY created_at DESC, seq ASC LIMIT 50',
+        sql: 'SELECT id, message_id, parent_block_id, seq, type, status, attrs, content, error, created_at FROM message_blocks ORDER BY created_at DESC, seq ASC LIMIT 50',
       },
       {
         label: 'blocks for conv',
-        sql: `SELECT b.id, b.message_id, b.seq, b.type, substr(b.data,1,80) as data_preview
+        sql: `SELECT b.id, b.message_id, b.parent_block_id, b.seq, b.type, b.status, substr(b.content,1,80) as content_preview
 FROM message_blocks b
 JOIN messages m ON m.id = b.message_id
 ORDER BY m.created_at ASC, b.seq ASC
@@ -146,7 +146,7 @@ LIMIT 100`,
       const s = String(v)
       let q = null
       if (s.startsWith('msg_')) {
-        q = `SELECT b.id, b.seq, b.type, b.data, b.created_at\nFROM message_blocks b\nWHERE b.message_id = '${s}'\nORDER BY b.seq ASC`
+        q = `SELECT b.id, b.parent_block_id, b.seq, b.type, b.status, b.content, b.attrs, b.created_at\nFROM message_blocks b\nWHERE b.message_id = '${s}'\nORDER BY b.seq ASC`
       } else if (s.startsWith('blk_')) {
         q = `SELECT * FROM message_blocks WHERE id = '${s}'`
       } else if (s.startsWith('cv_')) {
