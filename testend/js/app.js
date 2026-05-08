@@ -29,6 +29,13 @@ document.addEventListener('alpine:init', () => {
   Alpine.store('app', {
     conversationId: null,
     conversationTitle: '',
+    // Mirror of appRoot.activeRightTab so per-tab setInterval polls
+    // can guard `if (store.activeRightTab !== 'X') return` from any
+    // tab's component scope. appRoot keeps it synced via $watch.
+    //
+    // 镜像 appRoot.activeRightTab 让 per-tab setInterval guard 能从任意
+    // tab 组件读到当前 active tab。appRoot 的 $watch 负责同步。
+    activeRightTab: 'config',
   });
 });
 
@@ -42,6 +49,15 @@ function appRoot() {
   return {
     activeRightTab: 'config',
     allTabs: TESTEND_TABS,
+
+    init() {
+      // Seed + sync the store mirror used by polling guards.
+      // 同步给 polling guard 用的 store 镜像。
+      Alpine.store('app').activeRightTab = this.activeRightTab;
+      this.$watch('activeRightTab', v => {
+        Alpine.store('app').activeRightTab = v;
+      });
+    },
 
     selectTab(tab) {
       this.activeRightTab = tab;
