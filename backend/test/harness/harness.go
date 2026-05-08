@@ -68,7 +68,6 @@ import (
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
 	eventloginfra "github.com/sunweilin/forgify/backend/internal/infra/eventlog"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
-	mcpinfra "github.com/sunweilin/forgify/backend/internal/infra/mcp"
 	notificationsinfra "github.com/sunweilin/forgify/backend/internal/infra/notifications"
 	sandboxinfra "github.com/sunweilin/forgify/backend/internal/infra/sandbox"
 	apikeystore "github.com/sunweilin/forgify/backend/internal/infra/store/apikey"
@@ -312,32 +311,29 @@ func New(t *testing.T, opts ...Option) *Harness {
 	// 无配置时 Service.Start 是 no-op（瞬时启动）；需要 MCP server 的
 	// pipeline 测试通过 test seam 单独灌 mcp.json + 注册 fakeClient。
 	mcpConfigPath := filepath.Join(dataDir, "mcp.json")
-	// FakeRegistrySource for tests — populated with the `everything` MCP
-	// test server (D9 pipeline) + a sample server with required args
-	// (covers install error path). Production main.go uses
-	// mcpinfra.OfficialRegistrySource (HTTP fetch); tests stay offline.
+	// In-memory test RegistrySource — production uses CuratedRegistrySource
+	// (21 hand-picked servers); tests need predictable controllable entries
+	// for install paths (the `everything` ref server + a forced-arg sample).
 	//
-	// FakeRegistrySource 给测试——含 D9 pipeline 用的 `everything` MCP 测试
-	// server + 一个有必填参数的样本（覆盖 install 错误路径）。生产 main.go
-	// 用 OfficialRegistrySource（HTTP fetch）；测试不联网。
-	mcpRegistrySource := mcpinfra.NewFakeRegistrySource([]mcpdomain.RegistryEntry{
-		{
-			Name:        "io.github.modelcontextprotocol/everything",
-			DisplayName: "everything",
+	// 内存测试 RegistrySource——生产用 CuratedRegistrySource（21 条精选）；
+	// 测试要可控固定 entry 跑 install 路径（`everything` 参考 server + 强制
+	// 必填 arg 的样本）。
+	mcpRegistrySource := newTestRegistrySource(
+		mcpdomain.RegistryEntry{
+			Name:        "everything",
 			Description: "MCP protocol reference test server (used by D9 pipeline tests).",
 			Runtime:     "node",
-			Version:     "0.0.0",
 			InstallCmd: mcpdomain.InstallCmd{
 				Command: "npx",
 				Args:    []string{"-y", "@modelcontextprotocol/server-everything"},
 			},
+			Category: "browser",
+			Tier:     0,
 		},
-		{
-			Name:        "io.github.example/sqlite-test",
-			DisplayName: "sqlite-test",
+		mcpdomain.RegistryEntry{
+			Name:        "sqlite-test",
 			Description: "Sample server with a required arg, for install error-path tests.",
 			Runtime:     "python",
-			Version:     "1.0.0",
 			InstallCmd: mcpdomain.InstallCmd{
 				Command: "uvx",
 				Args:    []string{"mcp-server-sqlite", "--db-path", "${dbPath}"},
@@ -345,8 +341,10 @@ func New(t *testing.T, opts ...Option) *Harness {
 			RequiredArgs: []mcpdomain.ArgRequirement{
 				{Name: "dbPath", Description: "Path to the SQLite db file", Type: "path"},
 			},
+			Category: "database",
+			Tier:     3,
 		},
-	})
+	)
 	mcpService := mcpapp.New(
 		mcpConfigPath,
 		mcpRegistrySource,
@@ -493,9 +491,8 @@ func New(t *testing.T, opts ...Option) *Harness {
 // independent installers (dotnet/static) are registered up front; mise-
 // managed ones are skipped if Bootstrap failed (degraded mode).
 //
-// registerSandboxStack 镜像 main.go 的同名 helper，让 harness 注册同一份 v1
-// PluginSandbox runtime/env 矩阵。Mise 无关的 installer（dotnet/static）先
-// 注册；mise 管理的 installer 在 Bootstrap 失败（degraded mode）时跳过。
+// registerSandboxStack 镜像 main.go 的同名 helper——curated marketplace 仅
+// npm + pypi，故仅注册 python + node + uv runtime / python + node EnvManager。
 func registerSandboxStack(svc *sandboxapp.Service) {
 	miseBin := svc.MiseBin()
 	if miseBin == "" {
@@ -504,33 +501,12 @@ func registerSandboxStack(svc *sandboxapp.Service) {
 	for kind, defaultVer := range map[string]string{
 		"python": "3.12",
 		"node":   "22",
-		"rust":   "stable",
-		"java":   "21",
-		"go":     "1.22",
-		"ruby":   "3.3",
-		"php":    "8.3",
-		// Mirrors main.go pin set. bundler + composer NOT registered (not
-		// in mise registry — see main.go comment for the details).
-		// 镜像 main.go 的 pin。bundler + composer 不注册（不在 mise registry
-		// ——详见 main.go 同段注释）。
-		"uv":    "0.11.4",
-		"pnpm":  "9.15.4",
-		"maven": "3.9.9",
+		"uv":     "0.11.4",
 	} {
 		svc.RegisterInstaller(sandboxinfra.NewMiseInstaller(miseBin, kind, defaultVer))
 	}
-	svc.RegisterInstaller(sandboxinfra.NewDotnetInstaller("8.0"))
-
 	svc.RegisterEnvManager(sandboxinfra.NewPythonEnvManager(svc))
 	svc.RegisterEnvManager(sandboxinfra.NewNodeEnvManager(svc))
-	svc.RegisterEnvManager(sandboxinfra.NewRustEnvManager())
-	svc.RegisterEnvManager(sandboxinfra.NewGoEnvManager())
-	svc.RegisterEnvManager(sandboxinfra.NewJavaEnvManager(svc))
-	svc.RegisterEnvManager(sandboxinfra.NewRubyEnvManager(svc))
-	svc.RegisterEnvManager(sandboxinfra.NewPHPEnvManager(svc))
-	svc.RegisterEnvManager(sandboxinfra.NewDotnetEnvManager())
-	svc.RegisterEnvManager(sandboxinfra.NewPlaywrightEnvManager(
-		sandboxinfra.NewNodeEnvManager(svc), svc.SandboxRoot()))
 }
 
 // URL returns the test server's base URL (e.g. "http://127.0.0.1:54321").

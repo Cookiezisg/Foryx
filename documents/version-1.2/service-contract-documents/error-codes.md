@@ -212,13 +212,13 @@ AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 
 | `MCP_REQUIRED_ENV_MISSING` | 422 | `mcpdomain.ErrRequiredEnvMissing` | install 时 required env 未填全 | ✅ |
 | `MCP_REQUIRED_ARGS_MISSING` | 422 | `mcpdomain.ErrRequiredArgsMissing` | install 时 required args 未填全 | ✅ |
 | `MCP_INSTALL_FAILED` | 502 | `mcpdomain.ErrInstallFailed` | npm install / uvx 安装命令失败 | ✅ |
-| `MCP_MARKETPLACE_UNAVAILABLE` | 502 | `mcpdomain.ErrMarketplaceUnavailable` | 官方 MCP Registry 不可达且无缓存（marketplace V2，2026-05-08）| ✅ |
-| `MCP_ALREADY_INSTALLED` | 409 | `mcpdomain.ErrAlreadyInstalled` | install 时 alias 已被占用（先卸或换 alias）| ✅ |
-| `MCP_ALIAS_COLLISION` | 409 | `mcpdomain.ErrAliasCollision` | alias 与已配置 server 冲突 | ✅ |
-| `MCP_UNSUPPORTED_RUNTIME` | 422 | `mcpdomain.ErrUnsupportedRuntime` | registry 条目无 Forgify 支持 runtime（npm/pypi/docker 都没匹配，或 docker daemon 缺）| ✅ |
+| `MCP_MARKETPLACE_UNAVAILABLE` | 502 | `mcpdomain.ErrMarketplaceUnavailable` | curated registry 不可达兜底（hardcoded 实际不会触发）| ✅ |
+| `MCP_QUERY_REQUIRED` | 400 | `mcpdomain.ErrQueryRequired` | Search 调用空 query | ✅ |
+| `MCP_ALREADY_INSTALLED` | 409 | `mcpdomain.ErrAlreadyInstalled` | install 时 server name 已存在 mcp.json（先卸再装）| ✅ |
+| `MCP_UNSUPPORTED_RUNTIME` | 422 | `mcpdomain.ErrUnsupportedRuntime` | registry 条目 runtime 非 npm/pypi（curated 列表不会触发）| ✅ |
 | `MCP_HANDSHAKE_FAILED` | 502 | `mcpdomain.ErrHandshakeFailed` | server 装好但 MCP initialize 握手失败 | ✅ |
 
-> 注：所有 10 个 sentinel + errmap 行已在 D5-1 接线（2026-05-06）。runtime sentinels（Server* / Tool*）的实际触发点在 D6 stdio Client + Service 落地后接通；Registry-flow sentinels 同样走 D6 InstallFromRegistry 路径。
+> 注：Marketplace V3（2026-05-08）curated 化，去掉 `MCP_ALIAS_COLLISION`（无 alias 概念了），新增 `MCP_QUERY_REQUIRED`（search-only）。所有 sentinel + errmap 已对齐。
 
 #### skill ✅
 

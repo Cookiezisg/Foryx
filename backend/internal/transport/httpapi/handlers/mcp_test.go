@@ -71,34 +71,35 @@ func newMCPTestServer(t *testing.T) *mcpHandlerHarness {
 	h := &mcpHandlerHarness{
 		clients: map[string]*fakeMCPClient{},
 	}
-	// Marketplace V2 (post-2026-05-08): registry comes from a RegistrySource
-	// port. Tests seed a small fake source with two entries — one named
-	// "playwright" (kept the old name so existing test assertions still
-	// reference a known entry) and one with a required arg (kept "sqlite"
-	// for symmetry with the install-path test).
+	// Marketplace V3 (curated): tests use an inline fakeRegistrySource
+	// (see bottom of this file) seeded with two entries — "playwright"
+	// (zero-arg) and "sqlite" (forced required arg) — to exercise both
+	// install paths without depending on the production curated catalog.
 	//
-	// Marketplace V2（2026-05-08 后）：registry 经 RegistrySource 端口。测试
-	// 注入 2 条小 fake——一条名 "playwright"（保留老名让已有断言仍指已知条目），
-	// 一条带必填 arg（保留 "sqlite" 名跟 install 路径测试对称）。
-	source := mcpinfra.NewFakeRegistrySource([]mcpdomain.RegistryEntry{
-		{
+	// Marketplace V3（curated）：测试用底部内联的 fakeRegistrySource，注入
+	// "playwright"（零参）+ "sqlite"（强制必填 arg）两条覆盖装包路径，
+	// 不依赖生产 curated 目录。
+	source := newFakeRegistrySource(
+		mcpdomain.RegistryEntry{
 			Name:        "playwright",
-			DisplayName: "playwright",
 			Description: "Browser automation reference entry for handler tests.",
 			Runtime:     "node",
-			InstallCmd: mcpdomain.InstallCmd{Command: "npx", Args: []string{"-y", "@playwright/mcp"}},
+			InstallCmd:  mcpdomain.InstallCmd{Command: "npx", Args: []string{"-y", "@playwright/mcp"}},
+			Category:    "browser",
+			Tier:        0,
 		},
-		{
+		mcpdomain.RegistryEntry{
 			Name:        "sqlite",
-			DisplayName: "sqlite",
 			Description: "SQLite reference entry for handler tests; has required dbPath.",
 			Runtime:     "python",
-			InstallCmd: mcpdomain.InstallCmd{Command: "uvx", Args: []string{"mcp-server-sqlite", "--db-path", "${dbPath}"}},
+			InstallCmd:  mcpdomain.InstallCmd{Command: "uvx", Args: []string{"mcp-server-sqlite", "--db-path", "${dbPath}"}},
 			RequiredArgs: []mcpdomain.ArgRequirement{
 				{Name: "dbPath", Description: "Path to the SQLite db file", Type: "path"},
 			},
+			Category: "database",
+			Tier:     3,
 		},
-	})
+	)
 	h.svc = mcpapp.New(
 		filepath.Join(t.TempDir(), "mcp.json"),
 		source,
@@ -475,4 +476,42 @@ func TestMCP_Install_UnknownAction(t *testing.T) {
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("status = %d, want 400", resp.StatusCode)
 	}
+}
+
+// ── inline fake RegistrySource (handler test only) ───────────────────
+
+type fakeRegistrySource struct {
+	byName map[string]mcpdomain.RegistryEntry
+	all    []mcpdomain.RegistryEntry
+}
+
+func newFakeRegistrySource(entries ...mcpdomain.RegistryEntry) *fakeRegistrySource {
+	f := &fakeRegistrySource{byName: map[string]mcpdomain.RegistryEntry{}}
+	for _, e := range entries {
+		f.byName[e.Name] = e
+		f.all = append(f.all, e)
+	}
+	return f
+}
+
+func (f *fakeRegistrySource) Search(_ context.Context, query string) ([]mcpdomain.RegistryEntry, error) {
+	if query == "" {
+		return nil, mcpdomain.ErrQueryRequired
+	}
+	var out []mcpdomain.RegistryEntry
+	for _, e := range f.all {
+		if strings.Contains(strings.ToLower(e.Name+" "+e.Description), strings.ToLower(query)) {
+			out = append(out, e)
+		}
+	}
+	return out, nil
+}
+
+func (f *fakeRegistrySource) Get(_ context.Context, name string) (*mcpdomain.RegistryEntry, error) {
+	e, ok := f.byName[name]
+	if !ok {
+		return nil, mcpdomain.ErrRegistryEntryNotFound
+	}
+	cp := e
+	return &cp, nil
 }

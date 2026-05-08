@@ -138,7 +138,6 @@ var errTable = map[error]errMapping{
 	mcpdomain.ErrMarketplaceUnavailable: {http.StatusBadGateway, "MCP_MARKETPLACE_UNAVAILABLE"},
 	mcpdomain.ErrQueryRequired:          {http.StatusBadRequest, "MCP_QUERY_REQUIRED"},
 	mcpdomain.ErrAlreadyInstalled:       {http.StatusConflict, "MCP_ALREADY_INSTALLED"},
-	mcpdomain.ErrAliasCollision:         {http.StatusConflict, "MCP_ALIAS_COLLISION"},
 	mcpdomain.ErrUnsupportedRuntime:     {http.StatusUnprocessableEntity, "MCP_UNSUPPORTED_RUNTIME"},
 	mcpdomain.ErrHandshakeFailed:        {http.StatusBadGateway, "MCP_HANDSHAKE_FAILED"},
 

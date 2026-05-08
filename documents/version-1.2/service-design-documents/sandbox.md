@@ -129,28 +129,18 @@ Service 用 envs/mcp/playwright/.runtime/node/bin/node 跑
 
 ---
 
-## 4. 覆盖语言矩阵
+## 4. 覆盖语言矩阵（V3 — 仅 npm + pypi）
 
-### v1 直接支持（1 个 mise installer 通配）
+Marketplace V3（curated 21）+ forge / skill / conversation 4 类 owner 都只用 **Python + Node**——故 sandbox 现在仅注册这两条 runtime。原 11 EnvManager 矩阵（Rust / Go / Java / Ruby / PHP / .NET / Playwright / Docker / Generic / Static）已删除（2026-05-08）。
 
-| 语言 | 默认版本 | mise 装机方式 | Env 隔离方式 |
+| 语言 | 默认版本 | mise 装机 | Env 隔离 |
 |---|---|---|---|
-| **Python** | 3.12.x | python-build-standalone（mise 内置）| `uv venv` + `uv pip install`（uv 也由 mise 装）|
-| **Node.js** | 22.x（LTS）| nodejs.org tarball（mise 装 node + pnpm）| **`pnpm install --prefix=<env_path>`** ⚡ —— content-addressable global store + symlink，多 env 装同包磁盘共享（vs npm 默认全复制 100×）|
-| **Rust** | stable | rustup-init（mise 内部走）| `cargo install --root=<env_path>` |
-| **Java** | 21（LTS）| Adoptium/Temurin | classpath 指 env 内 jars |
-| **Go** | 1.22.x | 官方 tarball | `GOPATH=<env_path>` + `go install` |
-| **Ruby** | 3.3.x | ruby-build / precompiled | Bundler `BUNDLE_PATH=<env_path>` |
-| **PHP** | 8.3.x | phpbrew / 编译 | Composer `--working-dir=<env_path>` |
-| **Erlang/Elixir/Lua/Crystal/Zig/Deno/...** 长尾 600+ | mise plugin 默认版本 | mise 各自 plugin | 因语言而异 |
+| **Python** | 3.12.x | python-build-standalone（mise 内置）| `uv venv` + `uv pip install`（uv 也由 mise 装，pin 0.11.4）|
+| **Node.js** | 22.x（LTS）| nodejs.org tarball（mise 装 node）| `npm install --prefix=<env_path>` |
 
-### v1 单独走专用 installer
+**为什么砍**：先前为"未来扩展"预留的 7 个 EnvManager 没有真实消费者——MCP marketplace 现在 curated 化只剩 npm/pypi，forge/skill/conversation 也只跑 Python/Node 脚本。删掉 ~700 行无 caller 代码 + ~200MB 不会被装的语言 runtime，遵守 §S20"留下次"= bug。
 
-| 类型 | 工具 | 原因 |
-|---|---|---|
-| **Browsers (Chromium/Firefox/Webkit)** | Playwright cli (`playwright install chromium`)| 不是语言 runtime，由 Playwright 自己管最稳 |
-| **.NET** | dotnet-install.sh / .ps1（微软官方）| 微软官方脚本，简单直接（也可走 mise，但官方脚本更稳） |
-| **静态二进制 plugin**（如 GitHub MCP 是 Go 静态 binary 不需 runtime）| 直接下载到 envs/mcp/<name>/binary | 0 runtime 依赖 |
+未来真要加 Rust/Go MCP server 时再恢复对应 EnvManager（git history 还在），不预先架空中楼阁。
 
 ### Python 的"二级火箭"
 

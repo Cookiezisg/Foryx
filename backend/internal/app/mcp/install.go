@@ -29,52 +29,34 @@ import (
 	eventlogpkg "github.com/sunweilin/forgify/backend/internal/pkg/eventlog"
 )
 
-// InstallFromRegistry installs a marketplace entry: validates user-
+// InstallFromRegistry installs a curated catalog entry: validates user-
 // supplied env/args against RequiredEnv/RequiredArgs, asks sandboxapp
 // to ensure the runtime + dependencies (one-time download for first
 // install of each runtime kind), substitutes ${name} tokens in
-// InstallCmd.Args, writes the resulting ServerConfig to mcp.json, and
-// finally Connects.
+// InstallCmd.Args, writes the resulting ServerConfig to mcp.json (using
+// `name` directly as the key — the curated catalog gives every entry a
+// short kebab-case Name, no separate alias concept), and Connects.
 //
-// PostInstallSteps (e.g. Playwright's chromium download) run synchronously
-// after EnsureEnv but before Connect — failure aborts the install with
-// ErrInstallFailed so the user gets a clean signal to retry / fix.
+// Returns ErrAlreadyInstalled when name is already a key in mcp.json.
 //
-// InstallFromRegistry 装一个 marketplace 条目：按 RequiredEnv/RequiredArgs
-// 校验用户输入，让 sandboxapp 确保 runtime + deps（每 runtime kind 首次
-// 一次性下载），替换 InstallCmd.Args 的 ${name} token，把结果 ServerConfig
-// 写 mcp.json，最后 Connect。
-//
-// PostInstallSteps（如 Playwright chromium 下载）在 EnsureEnv 后 Connect
-// 前同步跑——失败 abort install 抛 ErrInstallFailed 让用户清晰重试/修。
-// alias is the local short name stored in mcp.json (e.g. "duckduckgo-search").
-// If empty, derived as the last "/"-segment of name (e.g.
-// "io.github.x/duckduckgo-search" → "duckduckgo-search"). Returns
-// ErrAlreadyInstalled when the alias is already in mcp.json so the
-// install_mcp_server LLM tool can prompt the user for a different alias.
-//
-// alias 是存进 mcp.json 的本地短名（如 "duckduckgo-search"）。空时按 name
-// 的最后 "/"-段派生（如 "io.github.x/duckduckgo-search" → "duckduckgo-search"）。
-// alias 已在 mcp.json 返 ErrAlreadyInstalled 让 install_mcp_server LLM 工具
-// 跟用户商量换别的 alias。
-func (s *Service) InstallFromRegistry(ctx context.Context, name string, alias string, env, args map[string]string) (*mcpdomain.ServerStatus, error) {
+// InstallFromRegistry 装 curated 目录的一项：校 env/args、让 sandboxapp 确保
+// runtime + deps、替换 ${name} token、写 mcp.json（直接拿 name 作 key——
+// curated 给每条短 kebab-case Name，无独立 alias），Connect。name 已在
+// mcp.json 返 ErrAlreadyInstalled。
+func (s *Service) InstallFromRegistry(ctx context.Context, name string, env, args map[string]string) (*mcpdomain.ServerStatus, error) {
 	entry, err := s.GetRegistryEntry(ctx, name)
 	if err != nil {
 		return nil, err
 	}
 
-	if alias == "" {
-		alias = deriveAlias(name)
-	}
-
 	// Collision check before any install work — saves wasted runtime install.
 	// 安装前先查冲突——省得 runtime install 白干。
 	s.mu.RLock()
-	_, collided := s.configs[alias]
+	_, collided := s.configs[name]
 	s.mu.RUnlock()
 	if collided {
-		return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s alias=%q: %w",
-			name, alias, mcpdomain.ErrAlreadyInstalled)
+		return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s: %w",
+			name, mcpdomain.ErrAlreadyInstalled)
 	}
 
 	// Validate RequiredEnv: every name listed in entry.RequiredEnv must
@@ -106,7 +88,7 @@ func (s *Service) InstallFromRegistry(ctx context.Context, name string, alias st
 		owner := sandboxdomain.Owner{
 			Kind: "mcp",
 			ID:   entry.Name,
-			Name: entry.DisplayName,
+			Name: entry.Name,
 		}
 		spec := sandboxdomain.EnvSpec{
 			Runtime: sandboxdomain.RuntimeSpec{Kind: entry.Runtime},
@@ -162,20 +144,17 @@ func (s *Service) InstallFromRegistry(ctx context.Context, name string, alias st
 	resolvedArgs := substituteArgs(entry.InstallCmd.Args, args)
 
 	cfg := mcpdomain.ServerConfig{
-		Name:    alias, // mcp.json key is the user-friendly short name
+		Name:    name, // mcp.json key is the curated entry's Name (short slug)
 		Command: entry.InstallCmd.Command,
 		Args:    resolvedArgs,
 		Env:     env,
-	}
-	if entry.DefaultTimeoutSec > 0 {
-		cfg.TimeoutSec = entry.DefaultTimeoutSec
 	}
 
 	if err := s.AddServer(ctx, cfg); err != nil {
 		return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s: %w", name, err)
 	}
 
-	st, err := s.GetServer(ctx, alias)
+	st, err := s.GetServer(ctx, name)
 	if err != nil {
 		return nil, err
 	}
@@ -295,20 +274,6 @@ func substituteArgs(args []string, vars map[string]string) []string {
 	return out
 }
 
-// deriveAlias picks a local short name from a registry namespace name.
-// "io.github.bytedance/duckduckgo-search" → "duckduckgo-search".
-// Falls through to the input as-is when no slash present (legacy V1
-// short names already work as their own alias).
-//
-// deriveAlias 从 registry namespace name 派生本地短名。
-// "io.github.bytedance/duckduckgo-search" → "duckduckgo-search"。
-// 无斜杠原样返（V1 老短名本身就是 alias）。
-func deriveAlias(name string) string {
-	if i := strings.LastIndex(name, "/"); i >= 0 && i < len(name)-1 {
-		return name[i+1:]
-	}
-	return name
-}
 
 // expandVars does a single-pass scan replacing ${name} tokens. Doesn't
 // support nested or escaped tokens — that's beyond what RegistryEntry

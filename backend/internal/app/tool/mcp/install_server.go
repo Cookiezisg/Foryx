@@ -51,23 +51,22 @@ type InstallMCPServer struct {
 	svc *mcpapp.Service
 }
 
-const installMCPServerDescription = `Install an MCP server from the marketplace. Two-phase flow:
+const installMCPServerDescription = `Install an MCP server from Forgify's curated marketplace. Two-phase flow:
 
-PHASE 1 (discovery): Call install_mcp_server({name: "<canonical-name>"}). Tool returns {status:"needs_confirmation", suggested_question, proposed_alias, required_env, required_args}. Use ` + "`ask`" + ` to relay the question to the user, then collect any required env / args values.
+PHASE 1 (discovery): Call install_mcp_server({name: "<short-name>"}). Tool returns {status:"needs_confirmation", suggested_question, required_env, required_args, notes}. Use ` + "`ask`" + ` to relay the question to the user, then collect any required env / args values. Always relay the entry's notes to the user — they describe first-run gotchas (chromium downloads, OAuth flows, etc).
 
-PHASE 2 (commit): Call install_mcp_server({name, confirmed: true, alias?: "<short-name>", env?: {KEY:"value"}, arguments?: {key:"value"}}). Tool installs + connects the server. On success returns the new ServerStatus; on failure returns a structured error (alias_collision / missing_required_args / install_failed / handshake_failed) with hints for recovery.
+PHASE 2 (commit): Call install_mcp_server({name, confirmed: true, env?: {KEY:"value"}, arguments?: {key:"value"}}). Tool installs + connects the server. On success returns the new ServerStatus; on failure returns a structured error (already_installed / missing_required_args / install_failed / handshake_failed) with hints for recovery.
 
 Notes:
-- alias defaults to the namespace's last "/" segment (e.g. "io.github.x/duckduckgo-search" → "duckduckgo-search").
-- alias_collision means the alias is already used by another configured server — pick a different alias and retry.
-- already_installed means a server with this exact alias was previously installed; uninstall first or use a different alias.`
+- name is the curated catalog's short slug (e.g. "playwright", "notion", "ms365"). Pick from search_mcp_marketplace results.
+- name doubles as the mcp.json key — no separate alias.
+- already_installed means this name is already a configured server; uninstall first via uninstall_mcp_server.`
 
 var installMCPServerSchema = json.RawMessage(`{
 	"type": "object",
 	"properties": {
-		"name":      {"type": "string", "description": "Canonical registry name (e.g. 'io.github.example/server'). Pick from search_mcp_marketplace."},
+		"name":      {"type": "string", "description": "Curated catalog short slug (e.g. 'playwright', 'notion'). Pick from search_mcp_marketplace."},
 		"confirmed": {"type": "boolean", "description": "Set to true on the second call after user has consented. Phase-1 calls omit this."},
-		"alias":     {"type": "string", "description": "Local short name to use in mcp.json. Defaults to namespace last segment."},
 		"env":       {"type": "object", "description": "Map of env-var values for required env entries. Phase 2 only."},
 		"arguments": {"type": "object", "description": "Map of arg values for required args. Phase 2 only."}
 	},
@@ -106,7 +105,6 @@ func (t *InstallMCPServer) CheckPermissions(json.RawMessage, toolapp.PermissionM
 type installArgs struct {
 	Name      string            `json:"name"`
 	Confirmed bool              `json:"confirmed"`
-	Alias     string            `json:"alias"`
 	Env       map[string]string `json:"env"`
 	Arguments map[string]string `json:"arguments"`
 }
@@ -130,33 +128,22 @@ func (t *InstallMCPServer) Execute(ctx context.Context, argsJSON string) (string
 		return "", fmt.Errorf("install_mcp_server: %w", err)
 	}
 
-	alias := strings.TrimSpace(args.Alias)
-	if alias == "" {
-		if i := strings.LastIndex(entry.Name, "/"); i >= 0 && i < len(entry.Name)-1 {
-			alias = entry.Name[i+1:]
-		} else {
-			alias = entry.Name
-		}
-	}
-
 	// Phase 1: no confirmed → return needs_confirmation envelope.
 	// 阶段 1：没 confirmed → 返 needs_confirmation 信封。
 	if !args.Confirmed {
-		return phase1Envelope(entry, alias), nil
+		return phase1Envelope(entry), nil
 	}
 
-	// Phase 2: do the install.
-	// 阶段 2：真装。
-	st, err := t.svc.InstallFromRegistry(ctx, args.Name, alias, args.Env, args.Arguments)
+	// Phase 2: do the install. The catalog's short Name doubles as the
+	// mcp.json key (no separate alias).
+	// 阶段 2：真装。catalog 的短 Name 直接作 mcp.json key（无 alias）。
+	st, err := t.svc.InstallFromRegistry(ctx, args.Name, args.Env, args.Arguments)
 	switch {
 	case err == nil:
-		return successJSON(st, alias), nil
+		return successJSON(st, args.Name), nil
 	case errors.Is(err, mcpdomain.ErrAlreadyInstalled):
 		return errorJSON("already_installed",
-			fmt.Sprintf("Alias %q is already in use by another server. Use a different alias and retry, or uninstall the existing one first via uninstall_mcp_server.", alias)), nil
-	case errors.Is(err, mcpdomain.ErrAliasCollision):
-		return errorJSON("alias_collision",
-			fmt.Sprintf("Alias %q collides with an existing server. Pick a different alias and retry.", alias)), nil
+			fmt.Sprintf("A server named %q is already configured. Uninstall it first via uninstall_mcp_server.", args.Name)), nil
 	case errors.Is(err, mcpdomain.ErrRequiredEnvMissing):
 		return errorJSON("missing_required_args",
 			fmt.Sprintf("Missing required env: %v. Ask the user for these values, then retry with env={...}.", err.Error())), nil
@@ -177,10 +164,10 @@ func (t *InstallMCPServer) Execute(ctx context.Context, argsJSON string) (string
 //
 // phase1Envelope 构造 "needs_confirmation" 响应，带可读 summary + 给 LLM 喂
 // 入 ask 的建议问句。
-func phase1Envelope(entry *mcpdomain.RegistryEntry, alias string) string {
+func phase1Envelope(entry *mcpdomain.RegistryEntry) string {
 	// Summary line that the LLM can read to understand what it's about to do.
 	// LLM 读懂将要做啥的 summary 行。
-	summary := fmt.Sprintf("Install %s (alias=%q): %s", entry.DisplayName, alias, entry.Description)
+	summary := fmt.Sprintf("Install %s: %s", entry.Name, entry.Description)
 	if entry.Runtime != "" {
 		summary += fmt.Sprintf(" [runtime: %s]", entry.Runtime)
 	}
@@ -188,11 +175,8 @@ func phase1Envelope(entry *mcpdomain.RegistryEntry, alias string) string {
 	// Build the question the LLM should ask the user.
 	// 建 LLM 该问用户的问句。
 	var qb strings.Builder
-	fmt.Fprintf(&qb, "I'd like to install the MCP server %q (%s).\n\n%s\n\nProposed local alias: %q.",
-		entry.DisplayName, entry.Name, entry.Description, alias)
-	if entry.Runtime == "docker" {
-		qb.WriteString("\n\nThis server uses Docker. Make sure Docker Desktop is installed and running.")
-	}
+	fmt.Fprintf(&qb, "I'd like to install the MCP server %q.\n\n%s",
+		entry.Name, entry.Description)
 	if len(entry.RequiredEnv) > 0 {
 		qb.WriteString("\n\nIt needs the following environment variables:")
 		for _, e := range entry.RequiredEnv {
@@ -201,6 +185,9 @@ func phase1Envelope(entry *mcpdomain.RegistryEntry, alias string) string {
 				qb.WriteString(fmt.Sprintf(" (get one at %s)", e.SetupURL))
 			}
 		}
+	}
+	if entry.Notes != "" {
+		qb.WriteString("\n\nNotes: " + entry.Notes)
 	}
 	if len(entry.RequiredArgs) > 0 {
 		qb.WriteString("\n\nIt needs the following arguments:")
@@ -216,10 +203,11 @@ func phase1Envelope(entry *mcpdomain.RegistryEntry, alias string) string {
 	envelope := map[string]any{
 		"status":             "needs_confirmation",
 		"summary":            summary,
-		"proposed_alias":     alias,
 		"suggested_question": qb.String(),
 		"required_env":       entry.RequiredEnv,
 		"required_args":      entry.RequiredArgs,
+		"notes":              entry.Notes,
+		"tier":               entry.Tier,
 	}
 	b, _ := json.Marshal(envelope)
 	return string(b)
@@ -228,12 +216,12 @@ func phase1Envelope(entry *mcpdomain.RegistryEntry, alias string) string {
 // successJSON renders the post-install ServerStatus response.
 //
 // successJSON 渲染装后 ServerStatus 响应。
-func successJSON(st *mcpdomain.ServerStatus, alias string) string {
+func successJSON(st *mcpdomain.ServerStatus, name string) string {
 	envelope := map[string]any{
 		"status":  "installed",
-		"alias":   alias,
+		"name":    name,
 		"server":  st,
-		"message": fmt.Sprintf("Server %q installed and connected (status=%s).", alias, st.Status),
+		"message": fmt.Sprintf("Server %q installed and connected (status=%s).", name, st.Status),
 	}
 	b, _ := json.Marshal(envelope)
 	return string(b)

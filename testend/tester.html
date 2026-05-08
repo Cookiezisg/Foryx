@@ -1536,8 +1536,14 @@
                 <div style="padding:4px 6px;cursor:pointer;border-radius:3px"
                      :style="selectedRegEntry?.name === entry.name ? 'background:var(--accent-soft, #e6f0ff)' : ''"
                      @click="selectRegEntry(entry)">
-                  <div style="font-family:Consolas,monospace;font-weight:600" x-text="entry.name"></div>
-                  <div style="font-size:9px;color:var(--text-mute)" x-text="entry.runtime + ' · ' + (entry.version || '')"></div>
+                  <div style="display:flex;align-items:center;gap:4px">
+                    <span style="font-family:Consolas,monospace;font-weight:600" x-text="entry.name"></span>
+                    <span x-show="entry.tier === 0" style="font-size:9px;background:#2a9d3a;color:#fff;padding:1px 4px;border-radius:3px">T0</span>
+                    <span x-show="entry.tier === 1" style="font-size:9px;background:#3267d2;color:#fff;padding:1px 4px;border-radius:3px">T1</span>
+                    <span x-show="entry.tier === 2" style="font-size:9px;background:#c97600;color:#fff;padding:1px 4px;border-radius:3px">T2 OAuth</span>
+                    <span x-show="entry.tier === 3" style="font-size:9px;background:#888;color:#fff;padding:1px 4px;border-radius:3px">T3</span>
+                  </div>
+                  <div style="font-size:9px;color:var(--text-mute)" x-text="entry.runtime + (entry.category ? ' · ' + entry.category : '')"></div>
                 </div>
               </template>
             </div>
@@ -1546,15 +1552,22 @@
               <div x-show="!selectedRegEntry" style="color:var(--text-mute);padding:8px">select a registry entry to install</div>
               <div x-show="selectedRegEntry" style="display:flex;flex-direction:column;gap:8px">
                 <div>
-                  <div style="font-weight:600" x-text="selectedRegEntry?.displayName || selectedRegEntry?.name"></div>
-                  <div style="font-size:10px" x-text="selectedRegEntry?.description"></div>
+                  <div style="display:flex;align-items:center;gap:6px">
+                    <span style="font-weight:600" x-text="selectedRegEntry?.name"></span>
+                    <span x-show="selectedRegEntry?.tier === 0" style="font-size:9px;background:#2a9d3a;color:#fff;padding:1px 5px;border-radius:3px">T0 · zero-config</span>
+                    <span x-show="selectedRegEntry?.tier === 1" style="font-size:9px;background:#3267d2;color:#fff;padding:1px 5px;border-radius:3px">T1 · API key</span>
+                    <span x-show="selectedRegEntry?.tier === 2" style="font-size:9px;background:#c97600;color:#fff;padding:1px 5px;border-radius:3px">T2 · OAuth (watch stderr)</span>
+                    <span x-show="selectedRegEntry?.tier === 3" style="font-size:9px;background:#888;color:#fff;padding:1px 5px;border-radius:3px">T3 · DB credential</span>
+                  </div>
+                  <div style="font-size:10px;margin-top:3px" x-text="selectedRegEntry?.description"></div>
                   <div style="font-size:10px;color:var(--text-mute);margin-top:4px">
-                    runtime: <span x-text="selectedRegEntry?.runtime"></span> ·
-                    license: <span x-text="selectedRegEntry?.license || '—'"></span>
+                    runtime: <span x-text="selectedRegEntry?.runtime"></span>
+                    <span x-show="selectedRegEntry?.category"> · category: <span x-text="selectedRegEntry?.category"></span></span>
+                    <span x-show="selectedRegEntry?.homepage"> · <a :href="selectedRegEntry?.homepage" target="_blank" x-text="selectedRegEntry?.homepage"></a></span>
                   </div>
                   <div x-show="selectedRegEntry?.notes"
-                       style="font-size:10px;color:var(--text-mute);margin-top:4px;font-style:italic"
-                       x-text="selectedRegEntry?.notes"></div>
+                       style="font-size:10px;color:#c97600;margin-top:4px;background:#fff7e6;padding:4px 6px;border-radius:3px;border-left:2px solid #c97600"
+                       x-text="'⚠ ' + selectedRegEntry?.notes"></div>
                 </div>
 
                 <!-- Required env -->

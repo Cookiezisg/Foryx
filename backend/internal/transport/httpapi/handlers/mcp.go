@@ -435,11 +435,10 @@ func (h *MCPHandler) registryNameAction(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// HTTP path leaves alias empty — Service derives from name's last
-	// "/" segment. UI can override via a future `?alias=` param if needed.
-	// HTTP 路径留空 alias —— Service 按 name 末段派生。UI 后续可加 `?alias=`
-	// 参数自定义。
-	st, err := h.svc.InstallFromRegistry(r.Context(), name, "", body.Env, body.Args)
+	// Curated catalog has no separate alias — name doubles as the
+	// mcp.json key.
+	// curated 目录无独立 alias —— name 直接作 mcp.json key。
+	st, err := h.svc.InstallFromRegistry(r.Context(), name, body.Env, body.Args)
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

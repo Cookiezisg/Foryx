@@ -28,17 +28,48 @@ import (
 // 注册表真正提供"的交集——V1 有的 Category / License / Notes 被删（官方没
 // 这些，留着会强行 per-entry 人工 curation）。
 type RegistryEntry struct {
-	Name              string            `json:"name"`                   // canonical id: "io.github.<user>/<server>"
-	DisplayName       string            `json:"displayName"`            // human-readable label (UI)
-	Description       string            `json:"description"`
-	Homepage          string            `json:"homepage,omitempty"`     // sourced from server.repository.url
-	Runtime           string            `json:"runtime"`                // node / python / docker (chosen by package selector)
-	Version           string            `json:"version,omitempty"`      // server.version from registry; install pins to this
-	InstallCmd        InstallCmd        `json:"installCmd"`
-	PostInstallSteps  []PostInstallStep `json:"postInstallSteps,omitempty"`
-	RequiredEnv       []EnvRequirement  `json:"requiredEnv,omitempty"`
-	RequiredArgs      []ArgRequirement  `json:"requiredArgs,omitempty"`
-	DefaultTimeoutSec int               `json:"defaultTimeoutSec,omitempty"` // 0 = use global 30s
+	// Name is the short, human-friendly identifier (e.g. "playwright",
+	// "notion", "ms365"). Doubles as the mcp.json key once installed and
+	// as the lookup id LLM tools pass to install_mcp_server / etc.
+	// Curated catalog gives every entry a clean kebab-case slug — no
+	// canonical "io.github.X/server" prefixes.
+	//
+	// Name 是短的人性化 id（如 "playwright"、"notion"、"ms365"）。装好后同时
+	// 作 mcp.json key + LLM 工具传给 install_mcp_server 的 lookup id。curated
+	// 目录给每条一个干净的 kebab-case slug。
+	Name string `json:"name"`
+
+	Description string `json:"description"`        // one-line capability summary
+	Homepage    string `json:"homepage,omitempty"` // GitHub / docs URL
+	Runtime     string `json:"runtime"`            // node / python (curated list is npm + pypi only)
+	Version     string `json:"version,omitempty"`  // pinned version; empty means "latest"
+
+	InstallCmd   InstallCmd       `json:"installCmd"`
+	RequiredEnv  []EnvRequirement `json:"requiredEnv,omitempty"`
+	RequiredArgs []ArgRequirement `json:"requiredArgs,omitempty"`
+
+	// Category groups entries for marketplace filtering / display
+	// (browser, web-data, code, vcs, error, db, pm, docs, design, memory,
+	// sandbox, email).
+	//
+	// Category 给 marketplace 分组。
+	Category string `json:"category,omitempty"`
+
+	// Tier indicates setup friction so UIs can sort easiest-first:
+	//   0 — zero config, install and use
+	//   1 — single API key (free / easy signup)
+	//   2 — OAuth flow (device code; first run prints login URL to stderr)
+	//   3 — DB / cloud credential (DSN / connection string / multiple env)
+	//
+	// Tier 表征上手难度：0 零配置；1 一个 API key；2 OAuth 设备码；3 DB / 云凭证。
+	Tier int `json:"tier"`
+
+	// Notes are free-text "watch out" hints — first-run downloads, OAuth
+	// flow expectations, common pitfalls. Surfaced in install UI + LLM
+	// marketplace results so the agent can warn the user proactively.
+	//
+	// Notes 是"陷阱提示"——首次下载、OAuth 流、常见坑。
+	Notes string `json:"notes,omitempty"`
 }
 
 // InstallCmd is what the install flow runs to make the server available.
@@ -50,21 +81,6 @@ type RegistryEntry struct {
 type InstallCmd struct {
 	Command string   `json:"command"` // npx / uvx / docker / ...
 	Args    []string `json:"args"`
-}
-
-// PostInstallStep is an extra command run after InstallCmd succeeds —
-// e.g. Playwright needs `playwright install chromium` to download the
-// browser binary. StreamProgress is a hint to UIs to show a progress bar
-// for long-running steps.
-//
-// PostInstallStep 是 InstallCmd 成功后的额外命令——如 Playwright 需
-// `playwright install chromium`。StreamProgress 是给 UI 的提示，长任务
-// 显示进度条。
-type PostInstallStep struct {
-	Description    string   `json:"description"`
-	Command        string   `json:"command"`
-	Args           []string `json:"args"`
-	StreamProgress bool     `json:"streamProgress"`
 }
 
 // EnvRequirement is one env var the user must provide before install
@@ -154,14 +170,6 @@ var (
 	// ErrQueryRequired 由 Search 在空 query 时返。marketplace 太大无法全
 	// 列出，调用方必须传关键词。
 	ErrQueryRequired = errors.New("mcp: marketplace search requires non-empty query")
-
-	// ErrAliasCollision means the user-chosen alias for a new MCP server
-	// is already in use by another configured server. Caller should pick
-	// a different alias and retry.
-	//
-	// ErrAliasCollision 表示用户为新 MCP server 选的 alias 已被另一个已配
-	// 置的 server 占用。调用方应换个 alias 重试。
-	ErrAliasCollision = errors.New("mcp: alias already in use")
 
 	// ErrAlreadyInstalled means an install attempt targeted a server alias
 	// that's already configured (mcp.json already has it). Caller should

@@ -37,12 +37,16 @@ type SearchMarketplaceMCP struct {
 	factory *llminfra.Factory
 }
 
-const searchMarketplaceDescription = `Search the official MCP marketplace for installable servers. Use this when an MCP capability is needed but no matching server is currently installed (search_mcp_tools returned nothing).
+const searchMarketplaceDescription = `Search Forgify's curated MCP marketplace for installable servers. Use this when an MCP capability is needed but no matching server is currently installed (search_mcp_tools returned nothing).
 
-Returns up to limit servers ranked by relevance to your query. Each result includes:
-  - name: canonical id (e.g. "io.github.example/sqlite-server"), used by install_mcp_server
-  - description, version, runtime, homepage
-  - requiredEnv / requiredArgs: values the user must supply at install time
+The catalog is HAND-PICKED — about 21 servers verified to install and run out of the box. Categories: browser (playwright, chrome-devtools), web-data (firecrawl, duckduckgo, tavily), code (context7, github, gitlab, sentry), database (dbhub, mongodb, supabase), project-mgmt (linear, jira+confluence), docs (notion, slack, figma, memory), email (gmail, ms365), sandbox (e2b).
+
+Each result includes:
+  - name: canonical id used by install_mcp_server
+  - description, runtime (node/python), homepage
+  - tier: 0=zero-config, 1=one API key, 2=OAuth device-code flow, 3=DB connection string
+  - requiredEnv / requiredArgs: values to supply at install (each env carries a setupURL — pass that link to the user so they can grab the key)
+  - notes: first-run gotchas (chromium downloads, Notion sharing rituals, OAuth flow expectations) — surface these to the user when proposing the install
 
 After choosing a server, call install_mcp_server({name}) to begin the install flow. The first call returns "needs_confirmation" with details so you can use the ask tool to confirm with the user before the second call (with confirmed=true) actually installs.`
 
@@ -190,26 +194,28 @@ func (t *SearchMarketplaceMCP) Execute(ctx context.Context, argsJSON string) (st
 // name/description/version/runtime/homepage + 用户必填项。
 func marshalMarketplaceResults(entries []mcpdomain.RegistryEntry) string {
 	type result struct {
-		Name         string                       `json:"name"`
-		DisplayName  string                       `json:"displayName"`
-		Description  string                       `json:"description"`
-		Version      string                       `json:"version,omitempty"`
-		Runtime      string                       `json:"runtime"`
-		Homepage     string                       `json:"homepage,omitempty"`
-		RequiredEnv  []mcpdomain.EnvRequirement   `json:"requiredEnv,omitempty"`
-		RequiredArgs []mcpdomain.ArgRequirement   `json:"requiredArgs,omitempty"`
+		Name         string                     `json:"name"`
+		Description  string                     `json:"description"`
+		Category     string                     `json:"category,omitempty"`
+		Tier         int                        `json:"tier"`
+		Runtime      string                     `json:"runtime"`
+		Homepage     string                     `json:"homepage,omitempty"`
+		RequiredEnv  []mcpdomain.EnvRequirement `json:"requiredEnv,omitempty"`
+		RequiredArgs []mcpdomain.ArgRequirement `json:"requiredArgs,omitempty"`
+		Notes        string                     `json:"notes,omitempty"`
 	}
 	out := make([]result, 0, len(entries))
 	for _, e := range entries {
 		out = append(out, result{
 			Name:         e.Name,
-			DisplayName:  e.DisplayName,
 			Description:  e.Description,
-			Version:      e.Version,
+			Category:     e.Category,
+			Tier:         e.Tier,
 			Runtime:      e.Runtime,
 			Homepage:     e.Homepage,
 			RequiredEnv:  e.RequiredEnv,
 			RequiredArgs: e.RequiredArgs,
+			Notes:        e.Notes,
 		})
 	}
 	b, _ := json.Marshal(out)

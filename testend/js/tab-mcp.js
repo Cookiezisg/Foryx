@@ -181,6 +181,7 @@ document.addEventListener('alpine:init', () => {
     async install() {
       if (!this.selectedRegEntry) return
       const name = this.selectedRegEntry.name
+      const tier = this.selectedRegEntry.tier || 0
       this.actionBusy = name
       this.err = ''
       try {
@@ -199,10 +200,23 @@ document.addEventListener('alpine:init', () => {
         this.err = `installed ${name}: status=${status.status}` + (status.lastError ? ', err: ' + status.lastError : '')
         await this.loadServers()
         this.section = 'servers'
-        // Auto-select the freshly installed entry.
-        // 自动选刚装的。
         this.selected = this.servers.find(s => s.name === name) || null
+        const installedSrv = this.selected
         this.selectedRegEntry = null
+        // Tier 2 (OAuth device-code): auto-open stderr modal so the
+        // login URL surfaces immediately, then poll a few times to
+        // catch the URL appearing after subprocess startup.
+        // Tier 2 (OAuth 设备码)：自动打开 stderr 让登录链接立刻可见，再
+        // 短轮询几次抓 subprocess 启动后才印出的 URL。
+        if (tier === 2 && installedSrv) {
+          await this.openStderr(installedSrv)
+          for (let i = 0; i < 6; i++) {
+            await new Promise(res => setTimeout(res, 1000))
+            if (!this.stderrModal.open) break
+            await this.refreshStderr()
+            if (/https?:\/\//.test(this.stderrModal.text)) break
+          }
+        }
       } finally {
         this.actionBusy = ''
       }

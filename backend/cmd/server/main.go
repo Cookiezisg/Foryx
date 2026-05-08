@@ -230,16 +230,15 @@ func main() {
 	// MCP server 已装时能路由过去。mcpService.Start 留在 tool 切片定稿后调
 	// ——SearchRouter 在调用时查 server 状态，pre-Start 调用安全降级到 Bing CN。
 	mcpConfigPath := defaultMCPConfigPath()
-	// Marketplace V2 (2026-05-08): swap the previous in-code 6-entry
-	// registry for the official MCP Registry (registry.modelcontextprotocol.io).
-	// First marketplace use blocks ~1-15s on the catalog fetch; subsequent
-	// calls hit the in-process cache. Network failure on first fetch
-	// surfaces as ErrMarketplaceUnavailable to LLM tools / HTTP handlers.
+	// Marketplace V3 (2026-05-08, post-curation): the upstream
+	// registry.modelcontextprotocol.io has 5000+ entries of mixed quality
+	// (mostly broken, abandoned, or API-key-required). We replaced it with
+	// a hardcoded curated catalog of 21 high-value MCP servers verified to
+	// install + run out of the box. No HTTP, no flakiness, predictable list.
 	//
-	// Marketplace V2（2026-05-08）：把原 6 条内置 registry 换成官方 MCP
-	// Registry。首次 marketplace 调用 fetch ~1-15s；后续走进程缓存。首次
-	// fetch 网络失败给 LLM 工具 / HTTP handler 返 ErrMarketplaceUnavailable。
-	mcpRegistrySource := mcpinfra.NewOfficialRegistrySource("", nil, log)
+	// Marketplace V3：上游 registry 5000+ 条多数不可用，换成 21 条精选
+	// hardcoded 目录，每条都验证过装上即可用。无 HTTP / 无抖动 / 列表稳定。
+	mcpRegistrySource := mcpinfra.NewCuratedRegistrySource()
 	mcpService := mcpapp.New(
 		mcpConfigPath,
 		mcpRegistrySource,
@@ -453,127 +452,38 @@ func (c *forgeLLMClientAdapter) Generate(ctx context.Context, prompt string) (st
 // service-construction block stays scannable and the registry table
 // reads as one coherent block.
 //
-// registerSandboxStack 把 v1 PluginSandbox runtime/env 矩阵——4 installer
-// kind + 11 env manager——挂到刚 bootstrap 的 service 上。顺序无关，重复
-// 注册幂等。
+// registerSandboxStack 把 curated marketplace 用到的 runtime/env 挂到 service。
+// 砍剩 python + node + uv（Marketplace V3 = npm + pypi only），其他语言 / docker /
+// playwright 已删除（curated 21 条目都是 npx / uvx 起的纯 stdio server）。
 //
-// 提为顶层 helper 而非内联 main() 让 service 构造段易读，注册表作整段连贯。
-func registerSandboxStack(svc *sandboxapp.Service, log *zap.Logger) {
+// 提为顶层 helper 让 service 构造段易读。
+func registerSandboxStack(svc *sandboxapp.Service, _ *zap.Logger) {
 	miseBin := svc.MiseBin()
 	if miseBin == "" {
 		// Bootstrap failed — nothing to register that depends on mise.
-		// Static binary installer is mise-independent but skipped too;
-		// degraded mode means runtime ops fail uniformly.
-		//
-		// Bootstrap 失败——依赖 mise 的不注册。Static binary installer 不依赖
-		// mise 但也跳过；degraded mode 让 runtime ops 一致 fail。
+		// Bootstrap 失败——依赖 mise 的不注册。
 		return
 	}
 
-	// Mise-managed runtimes (7 main langs + 5 support tools).
-	// Mise 管的 runtime（7 主流语言 + 5 支持工具）。
+	// Mise-managed runtimes — npm + pypi only (Marketplace V3).
+	// uv pin: 0.11.9 ships without the GitHub artifact attestation mise
+	// verifies — install fails on "expected workflow .../release.yml,
+	// found certificate: None". 0.11.4 is last known-good.
+	//
+	// Mise 管的 runtime——curated marketplace 仅 npm + pypi。uv 钉 0.11.4：
+	// 0.11.9 缺 mise 校验的 GitHub attestation。
 	for kind, defaultVer := range map[string]string{
 		"python": "3.12",
 		"node":   "22",
-		"rust":   "stable",
-		"java":   "21",
-		"go":     "1.22",
-		"ruby":   "3.3",
-		"php":    "8.3",
-		// Support tools — used by EnvManagers via ToolRegistry. Versions
-		// are pinned (not "latest") to insulate from upstream surprises
-		// like the uv 0.11.9 GitHub-attestation regression. Bump deliberately.
-		//
-		// uv pin reason: 0.11.9 ships without the GitHub artifact attestation
-		// mise verifies — install fails on "expected workflow .../release.yml,
-		// found certificate: None". 0.11.4 is the last known-good. Re-test
-		// after astral-sh fixes their release pipeline.
-		//
-		// 支持工具——EnvManager 通过 ToolRegistry 用。版本均显式钉死（非
-		// "latest"）以避免上游意外（如 uv 0.11.9 的 GitHub attestation 回归）。
-		// 升级要主动评估。uv 钉 0.11.4：0.11.9 缺 mise 校验的 GitHub 工件
-		// attestation，安装会因 "expected workflow ..., found certificate:
-		// None" 失败。astral-sh 修发布管线后再升。
-		"uv":   "0.11.4",
-		"pnpm": "9.15.4",
-		"maven": "3.9.9",
-		// NB: bundler + composer NOT registered here — they're not in mise's
-		// registry (bundler ships with Ruby ≥ 2.6 stdlib; composer needs
-		// `php composer-setup.php` or static download). Ruby/PHP EnvManagers
-		// currently call EnsureTool("bundler"|"composer") which will fail
-		// — known D2-latent bug, fix is in those EnvManagers (locate `bundle`
-		// inside Ruby's install dir; install composer as static binary or
-		// via official installer script). Tracked separately, doesn't block
-		// V1 demo (Python/Node/forge are the live paths).
-		//
-		// 注：bundler + composer 不在此注册——它们不在 mise registry（bundler
-		// 随 Ruby ≥ 2.6 stdlib 自带；composer 需 `php composer-setup.php` 或
-		// 静态下载）。Ruby/PHP EnvManager 目前调 EnsureTool("bundler"|
-		// "composer") 会失败——D2 遗留 bug，修复在 EnvManager 自身（Ruby 直
-		// 接定位 bundle；composer 静态安装）。单独跟踪，不阻塞 V1 demo
-		// （Python/Node/forge 是 demo 路径）。
+		"uv":     "0.11.4",
 	} {
 		svc.RegisterInstaller(sandboxinfra.NewMiseInstaller(miseBin, kind, defaultVer))
 	}
 
-	// Specialty installers.
-	// 专用 installer。
-	svc.RegisterInstaller(sandboxinfra.NewDotnetInstaller("8.0"))
-	// Docker installer doesn't actually install Docker (system service,
-	// requires root/admin) — it verifies the user-installed daemon is
-	// reachable. Failure surfaces a platform-specific install URL through
-	// the standard sandbox error chain. Always registered; only invoked
-	// when an MCP server entry uses runtime=docker.
-	//
-	// Docker installer 不真装 Docker（系统服务，要 root/admin）—— 探活用户
-	// 装的 daemon 是否可达。缺则走标准 sandbox 错误链返平台对应安装链接。
-	// 永远注册；仅 MCP server 条目 runtime=docker 时被调。
-	svc.RegisterInstaller(sandboxinfra.NewDockerInstaller(log))
-	// PlaywrightInstaller takes a CLI path; resolved per-call inside the
-	// EnvManager so we don't register it as a global RuntimeInstaller —
-	// PlaywrightEnvManager owns the install logic via its Node delegate.
-	// PlaywrightInstaller 接 CLI 路径；EnvManager 内 per-call 解析所以不
-	// 当全局 RuntimeInstaller 注册——PlaywrightEnvManager 通过其 Node 委托
-	// 拥有 install 逻辑。
-
-	// Env managers covering all 11 v1 supported runtimes.
-	// 覆盖所有 11 个 v1 支持 runtime 的 env manager。
+	// Env managers — only python + node (Marketplace V3 runtimes).
+	// Env manager——仅 python + node。
 	svc.RegisterEnvManager(sandboxinfra.NewPythonEnvManager(svc))
 	svc.RegisterEnvManager(sandboxinfra.NewNodeEnvManager(svc))
-	svc.RegisterEnvManager(sandboxinfra.NewRustEnvManager())
-	svc.RegisterEnvManager(sandboxinfra.NewGoEnvManager())
-	svc.RegisterEnvManager(sandboxinfra.NewJavaEnvManager(svc))
-	svc.RegisterEnvManager(sandboxinfra.NewRubyEnvManager(svc))
-	svc.RegisterEnvManager(sandboxinfra.NewPHPEnvManager(svc))
-	svc.RegisterEnvManager(sandboxinfra.NewDotnetEnvManager())
-	svc.RegisterEnvManager(sandboxinfra.NewPlaywrightEnvManager(
-		sandboxinfra.NewNodeEnvManager(svc), svc.SandboxRoot()))
-	// Docker EnvManager: per-MCP-server image pull + workspace mount dir.
-	// Paired with DockerInstaller (kind="docker"). Container lifecycle is
-	// stdio-driven: `docker run -i --rm` ties container life to the spawned
-	// process (auto-remove on exit), so no daemon-side bookkeeping needed.
-	//
-	// Docker EnvManager：per-MCP-server image pull + workspace 挂卷目录。
-	// 与 DockerInstaller (kind="docker") 配对。容器生命周期 stdio 驱动：
-	// `docker run -i --rm` 把容器寿命绑到被 spawn 的进程（退出自动 rm），
-	// daemon 侧无需簿记。
-	svc.RegisterEnvManager(sandboxinfra.NewDockerEnvManager(log))
-	// Static binary EnvManager: one per static-binary plugin family
-	// (registered alongside its matching StaticBinaryInstaller). v1
-	// ships none — this is scaffolding for future plugins like
-	// GitHub MCP that ship pre-built binaries.
-	//
-	// Static binary EnvManager：每个 static-binary plugin family 一个
-	// （跟匹配的 StaticBinaryInstaller 一起注册）。v1 不发——给未来发
-	// 预构建二进制的 plugin（如 GitHub MCP）做的脚手架。
-
-	// GenericEnvManager: fallback for long-tail mise-installable languages
-	// that don't have a dedicated EnvManager. v1 doesn't pre-register
-	// any specific kind — main.go could add `NewGenericEnvManager("elixir")`
-	// etc. as needed.
-	//
-	// GenericEnvManager：mise 可装的长尾语言无专用 EnvManager 的兜底。v1
-	// 不预注册具体 kind——main.go 按需加 NewGenericEnvManager("elixir") 等。
 }
 
 // defaultMCPConfigPath returns ~/.forgify/mcp.json — the user-level MCP

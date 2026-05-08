@@ -1,7 +1,7 @@
 # MCP — V1.2 详设计
 
 **Phase**：Phase 4 准备件（提前到位）
-**状态**：✅ D5 + D6 全部交付（2026-05-06）：domain types + 10 sentinels + 6 内置 marketplace + ~/.forgify/mcp.json I/O + stdio Client wrapper（go-sdk v1.6）+ Service lifecycle/Search/CallTool/Health/Install + 2 system tools (search_mcp/call_mcp) + 10 HTTP endpoints + 4 离线 pipeline 场景 + 1 Live_ 装 everything 场景门控
+**状态**：✅ Marketplace V3 — curated（2026-05-08）：domain types + 9 sentinels + **21 条 hand-picked RegistrySource**（npm + pypi only）+ ~/.forgify/mcp.json I/O + stdio Client wrapper（go-sdk v1.6）+ Service lifecycle/Search/CallTool/Health/Install + 4 system tools (search_marketplace/install_mcp_server/search_mcp/call_mcp) + 10 HTTP endpoints + 4 离线 pipeline 场景 + 1 Live_ 装 everything 场景门控
 **关联**：
 - [`../backend-design.md`](../backend-design.md) — 总规范
 - [`../service-contract-documents/database-design.md`](../service-contract-documents/database-design.md) — 无新表（mcp.json 是 source）
@@ -205,311 +205,125 @@ var (
 
 ---
 
-## 5.5. 内置 Registry — Marketplace UX
+## 5.5. Curated Marketplace — V3
 
 ### 概念
 
-为解决"用户得知道 npm 包名、要 vim mcp.json、要手填 env"的初次体验问题，Forgify 内置一个**静态 server registry**——告诉用户"这些 server 你可以一键装"，UI 提供安装向导。点 install 后**通过 sandbox 服务 lazy 装 runtime + 包**（详 [`sandbox.md`](./sandbox.md)），不需要预装。
+Forgify 内置一份 **21 条 hand-picked 的 MCP marketplace**，由 `internal/infra/mcp/curated_registry.go::CuratedRegistrySource` 提供，覆盖**生产力域**（DB / VCS / 错误监控 / 项目管理 / 文档 / 设计 / 邮件 / 浏览器 / 沙箱 / 网搜 / 内存）。
 
-**关键设计**：不 bundle server 二进制（包体积爆炸 + 维护噩梦），只 bundle 元数据（~5-10 KB 编译进 Forgify binary）。真正的 server 由 `npx -y` / `uvx` 等按需下载到用户机器（首次安装联网，之后系统缓存）。
+**为什么 hardcoded curated**：上游 `registry.modelcontextprotocol.io` 5000+ 条目，质量参差——大量 broken / abandoned / 需企业 OAuth；端到端用户不需要"全 5000 条搜得到"，需要"我能立刻装、立刻 work 的 21 条"。
+
+**为什么单 Name 字段**：每条目 `Name` 是我们写的短 kebab-case slug（`playwright` / `notion` / `ms365`）——同时是 LLM `install_mcp_server` 的 lookup id 和 `mcp.json` key，**没有独立 alias 概念**。真正的 npm/pypi 包名只放 `InstallCmd.Args`。
+
+**为什么 npm + pypi only**：curated 列表全部用 `npx -y <pkg>` 或 `uvx <pkg>` 起 stdio server——sandbox 端只需保留 `python` + `node` runtime 与 `uv` 工具（其他 7 个 EnvManager 已删，详 [`sandbox.md`](./sandbox.md)）。
+
+### Tier — 上手摩擦分级
+
+| Tier | 含义 | 列表中数量 | 安装 UX |
+|---|---|---|---|
+| **0** | 零配置，npx/uvx 起就用 | 5 (playwright, chrome-devtools, duckduckgo, context7, memory) | 直接 install |
+| **1** | 一个 API key（free / easy signup） | 11 (tavily, firecrawl, github, gitlab, sentry, linear, atlassian, notion, slack, figma, e2b) | 填 token 后 install；entry 带 `SetupURL` |
+| **2** | OAuth device-code 流（subprocess 印登录 URL 到 stderr） | 2 (gmail, ms365) | install 后 testend **自动开 stderr modal + 短轮询**抓登录 URL |
+| **3** | DB / 云 credential（DSN / connection string） | 3 (dbhub, mongodb, supabase) | 填 DSN/PAT 后 install |
 
 ### Registry 数据结构（`internal/domain/mcp/registry.go`）
 
 ```go
 type RegistryEntry struct {
-    Name              string             `json:"name"`         // 用作 mcp.json 的 server name
-    DisplayName       string             `json:"displayName"`  // UI 显示
-    Description       string             `json:"description"`
-    Category          string             `json:"category"`     // "data" / "web" / "doc" / "browser" / "demo" / ...
-    Homepage          string             `json:"homepage"`     // 项目主页 URL
-    License           string             `json:"license"`      // MIT / Apache-2.0 / ...
-    Runtime           string             `json:"runtime"`      // "node" / "python" / "binary"
-    Bundled           bool               `json:"bundled"`      // true 时表示 v1 默认 marketplace 推荐项（在 UI 列出）；用户也可加自定义 server，Bundled=false。所有装机一律 lazy via sandbox
-    Hidden            bool               `json:"hidden"`       // ⚡ true 时 marketplace UI 不展示（用于 dev/test server）
-    InstallCmd        InstallCmd         `json:"installCmd"`
-    PostInstallSteps  []PostInstallStep  `json:"postInstallSteps,omitempty"`  // ⚡ Playwright 等需要后续步骤（下载 Chromium 等）
-    RequiredEnv       []EnvRequirement   `json:"requiredEnv,omitempty"`
-    RequiredArgs      []ArgRequirement   `json:"requiredArgs,omitempty"`
-    DefaultTimeoutSec int                `json:"defaultTimeoutSec,omitempty"`  // 0 = 用全局默认 30s
-    OnlineOnly        bool               `json:"onlineOnly,omitempty"`         // ⚡ 标记需要持续联网（如 Context7）
-    UnsupportedPlatforms []string        `json:"unsupportedPlatforms,omitempty"` // ⚡ 不支持的 GOOS（如 ["windows"]）；marketplace UI 在该 OS 隐藏；空数组 = 全平台支持
-    Notes             string             `json:"notes,omitempty"`              // UI 显示的注意事项（如 "扫描件 PDF 不支持"）
-}
-
-type InstallCmd struct {
-    Command string   `json:"command"`  // "npx" / "uvx"
-    Args    []string `json:"args"`     // 含 -y 等；user-provided args 通过模板替换合并进来
-}
-
-type PostInstallStep struct {
-    Description    string   `json:"description"`     // UI 显示，如 "Downloading Chromium browser (~150MB)"
-    Command        string   `json:"command"`
-    Args           []string `json:"args"`
-    StreamProgress bool     `json:"streamProgress"`  // UI 显示进度条
-}
-
-type EnvRequirement struct {
-    Name        string `json:"name"`        // "GITHUB_PERSONAL_ACCESS_TOKEN"
-    Description string `json:"description"` // UI 提示
-    SetupURL    string `json:"setupUrl,omitempty"` // 获取的链接（如 GitHub 设置页）
-    Secret      bool   `json:"secret"`      // UI 是否 mask 显示
-}
-
-type ArgRequirement struct {
-    Name        string `json:"name"`        // "rootPath"
-    Description string `json:"description"`
-    Type        string `json:"type"`        // "path" / "url" / "string"
-    Default     string `json:"default,omitempty"`
+    Name         string             `json:"name"`         // short kebab-case slug; 同时是 mcp.json key
+    Description  string             `json:"description"`
+    Homepage     string             `json:"homepage,omitempty"`
+    Runtime      string             `json:"runtime"`      // "node" / "python"（仅这俩）
+    Version      string             `json:"version,omitempty"`
+    InstallCmd   InstallCmd         `json:"installCmd"`
+    RequiredEnv  []EnvRequirement   `json:"requiredEnv,omitempty"`
+    RequiredArgs []ArgRequirement   `json:"requiredArgs,omitempty"`
+    Category     string             `json:"category,omitempty"`  // browser / web-data / code / vcs / error / db / pm / docs / design / memory / sandbox / email
+    Tier         int                `json:"tier"`                // 0 / 1 / 2 / 3
+    Notes        string             `json:"notes,omitempty"`     // 首跑提示（如 "first run downloads Chromium ~150MB"）
 }
 ```
 
-### v1 内置 5 个 server（4 用户可见 + 1 hidden test）
+**砍掉的字段（V2 → V3）**：`DisplayName`（Name 自身就是 short slug）/ `License` / `Bundled` / `Hidden` / `OnlineOnly` / `UnsupportedPlatforms` / `PostInstallSteps` / `DefaultTimeoutSec`——这些要么由 `Notes` 一句覆盖、要么由全局默认覆盖、要么 curated 列表全平台 + 全 npm/pypi 不需要。
 
-> **安装机制**：通过 [`sandbox.md`](./sandbox.md) 的统一 PluginRuntime 服务**lazy install**——用户点 install → mcpapp 调 `sandboxapp.EnsureEnv(Owner{Kind:"mcp", ID:<server>}, EnvSpec{...})` → sandbox 内部按需拉 runtime + 装包。**没有"预装"概念**——首次安装时联网下载（progress 通过 chat.message tool_call 流推前端）。
+### 21 条 curated 列表
 
-筛选原则（基于 web research + 项目情况）：
-- **避开与内置 system tool 重复**——不收 fetch / filesystem / git / time（分别已有 WebFetch / Read+Write+Edit+Glob+Grep / Bash 覆盖）
-- **避开 OAuth / API key**——开箱体验 体验不能破，github/notion/slack 等 v2+
-- **砍跟原生计划撞车的**——不收 memory（Forgify 计划做原生 memory，避免迁移债）
-- **保留有 wow factor 的**——演示给非 tech 用户看必须有"卧槽"瞬间
+| Tier | Name | Category | Runtime | 用途一句 |
+|---|---|---|---|---|
+| 0 | `playwright` | browser | node | AI 操作浏览器（导航/点击/截图） |
+| 0 | `chrome-devtools` | browser | node | Chrome DevTools 协议 — DOM/网络/性能 |
+| 0 | `duckduckgo` | web-data | node | 免费 web 搜索 — 无需 API key |
+| 0 | `context7` | docs | node | 库文档实时检索（持续联网） |
+| 0 | `memory` | memory | node | 知识图谱 — 跨对话记忆 |
+| 1 | `tavily` | web-data | node | LLM 级 web 搜索 — 一个免费 key |
+| 1 | `firecrawl` | web-data | node | 站点抓取 / 转 markdown |
+| 1 | `github` | vcs | node | GitHub repo / issue / PR / Action |
+| 1 | `gitlab` | vcs | node | GitLab repo / MR / pipeline |
+| 1 | `sentry` | error | python | Sentry 错误调查 |
+| 1 | `linear` | pm | node | Linear issues |
+| 1 | `atlassian` | pm | node | Jira + Confluence |
+| 1 | `notion` | docs | node | Notion pages / databases |
+| 1 | `slack` | docs | node | Slack messaging / search |
+| 1 | `figma` | design | python | Figma 文件 / frame / asset |
+| 1 | `e2b` | sandbox | python | E2B 远程沙箱执行 |
+| 2 | `gmail` | email | python | Gmail（**OAuth 设备码** — 首跑 stderr 印登录 URL） |
+| 2 | `ms365` | email | node | Microsoft 365（Outlook / Teams / OneDrive — 同 OAuth 设备码） |
+| 3 | `dbhub` | db | node | PostgreSQL / MySQL / SQLite — 一个 DSN 通吃 |
+| 3 | `mongodb` | db | node | MongoDB |
+| 3 | `supabase` | db | node | Supabase（PAT + project ref） |
 
-按 demo wow factor 排序：
+实际 entries 见 `backend/internal/infra/mcp/curated_registry.go::curatedEntries`（21 个 RegistryEntry literal，包含 npm/pypi 包名、required env 描述、Notes）。
 
-| Server | Category | Runtime | 需 args | 安装大小 | demo 一句话 |
-|---|---|---|---|---|---|
-| `playwright` | browser | Node + Chromium | 无（`useSystemChrome` 可选）| ~10 MB + ~150 MB Chromium | "AI 开浏览器、点东西、抓截图给我看"——非 tech 杀手锏 |
-| `markitdown` | doc | Python（Forgify 自带 uv）| 无 | ~50 MB | "拖 PDF/PPT/Word，AI 读懂跟我聊"——文档处理杀手锏 |
-| `context7` | docs | Node | 无 | ~5 MB | "AI 知道某库**这周** release 的最新 API"——技术用户瞳孔放大 |
-| `duckduckgo-search` | web | Python（Forgify 自带 uv）| 无 | ~10 MB | "查今天新闻 / 总结某文章"——0 setup 立即 work，无 API key |
-| `sqlite` | data | Python（Forgify 自带 uv）| DB 路径 | ~10 MB | "AI 操作我自己的 SQLite 文件" |
-| `everything` | demo | Node | 无 | ~5 MB | **`hidden:true`**——marketplace 不展示；MCP 协议 pipeline test 用 |
-
-**总安装预算**：~245 MB（Chromium 占 150 MB 大头）。在 250 MB 预算内。
-
-### v2+ 候选（不在 v1 开箱体验）
-
-| Server | 推迟原因 |
-|---|---|
-| `github` | 需 PAT，开箱体验 体验破 |
-| `notion` / `slack` / `gmail` / `google-drive` | OAuth 2.1 + DCR 当前业界普遍 broken |
-| `obsidian` | 需用户装 Local REST API 插件 |
-| `serena` | 每语言 LSP 30-200 MB，磁盘代价过大 |
-| `desktop-commander` | 跟内置 Read/Write/Edit/Bash 高度重叠 |
-| `firecrawl` / `tavily` | 免费 tier 受限 |
-| `memory` | Forgify 计划原生 memory 系统 |
-| `sequential-thinking` | 跟主 LLM reasoning block 价值重叠，按用户反馈再加 |
-| `postgres` | DSN 配置复杂 |
-| `brave-search` | 需注册 API key；DuckDuckGo 已覆盖该需求 |
-
-### Windows 平台过滤
-
-Windows 上 mise 的 Ruby/PHP/Erlang/Elixir 等语言走 bash plugin，跑不起来。mcpapp 启动时按当前 GOOS 过滤 RegistryEntry：
+### Search-only 接口（无全量列出）
 
 ```go
-func (s *Service) ListRegistry() []RegistryEntry {
-    out := []RegistryEntry{}
-    for _, e := range bundledRegistry {
-        if slices.Contains(e.UnsupportedPlatforms, runtime.GOOS) {
-            continue  // 当前平台不支持 → marketplace 隐藏
-        }
-        out = append(out, e)
-    }
-    return out
+type RegistrySource interface {
+    Search(ctx context.Context, query string) ([]RegistryEntry, error) // 空 query 返 ErrQueryRequired
+    Get(ctx context.Context, name string) (*RegistryEntry, error)      // 不存在返 ErrRegistryEntryNotFound
 }
 ```
 
-**v1 内置 5 个 server 都跨平台**（Python/Node 类）——`UnsupportedPlatforms` 字段全空。
-**v2+ 加 Ruby/PHP 等长尾语言 server 时**才标 `["windows"]`。例：
-```go
-{
-    Name: "some-ruby-server",
-    Runtime: "ruby",
-    UnsupportedPlatforms: []string{"windows"},  // ← 仅 Mac/Linux
-    ...
-}
-```
+**Search 实现**：把 query 按空白拆 token，每条 entry 在 `Name + Description + Category + Notes` 上做 case-insensitive **AND** substring 匹配。结果按 `(Tier asc, Name asc)` 稳排——上手最快的排前。
 
-详见 [`sandbox.md`](./sandbox.md) §17 跨平台支持矩阵。
+`/api/v1/mcp-registry?search=<q>` HTTP 端点直接走 Search；不传 q 返 422 `MCP_QUERY_REQUIRED`。**不暴露全量列出**——21 条不大，但 search-only 让 UI / LLM tool 心智一致（再加 server 也只走搜索）。
 
-### Registry 数据来源 — v1 静态，预留远程
+### Install 流程（两阶段，LLM 触发）
 
-**v1 实现**：编译进 binary 的静态 `[]RegistryEntry`（go embed 一份 JSON 也行，便于编辑）。
-
-**预留 future 接口**：`Service.LoadRegistry(ctx)` 内部走 strategy pattern：
-```go
-type RegistryProvider interface {
-    Load(ctx context.Context) ([]RegistryEntry, error)
-}
-// v1: type embedRegistryProvider struct{}     // 读 embed.FS
-// v2: type remoteRegistryProvider struct{ URL string }  // GET 远程 JSON + 24h cache
-```
-
-**好处**：未来想增减 server 不用重发 binary——加远程 provider 即可，registry 数据可独立更新。**v1 强制 embed**，远程留接口不实现。
-
-### v1 内置 server 的 RegistryEntry 例子
-
-```go
-{
-    Name: "playwright",
-    DisplayName: "Playwright",
-    Description: "Headless browser automation. Open URLs, click elements, fill forms, take screenshots.",
-    Category: "browser",
-    Homepage: "https://github.com/microsoft/playwright-mcp",
-    License: "Apache-2.0",
-    Runtime: "node",
-    Bundled: true,                              // v1 marketplace 推荐项
-    InstallCmd: InstallCmd{
-        Command: "npx",
-        Args: []string{"-y", "@playwright/mcp"},
-    },
-    PostInstallSteps: []PostInstallStep{
-        {
-            Description: "Downloading Chromium browser (~150MB, one-time)",
-            Command: "npx", Args: []string{"-y", "playwright", "install", "chromium"},
-            StreamProgress: true,
-        },
-    },
-    DefaultTimeoutSec: 60,                      // 浏览器操作天然慢
-    Notes: "Optionally use system Chrome via 'useSystemChrome' arg to skip download (advanced)",
-},
-{
-    Name: "markitdown",
-    Description: "Convert PDF / DOCX / PPTX / XLSX / images / audio / YouTube to markdown for LLM consumption.",
-    Category: "doc",
-    Homepage: "https://github.com/microsoft/markitdown",
-    License: "MIT",
-    Runtime: "python",
-    Bundled: true,
-    InstallCmd: InstallCmd{Command: "uvx", Args: []string{"markitdown-mcp"}},
-    Notes: "Best on text-based PDFs/Office docs. Complex layouts (scanned docs) may extract poorly.",
-},
-{
-    Name: "context7",
-    Description: "Up-to-date library docs from Context7.",
-    Category: "docs", Runtime: "node", Bundled: true,
-    Homepage: "https://github.com/upstash/context7", License: "MIT",
-    InstallCmd: InstallCmd{Command: "npx", Args: []string{"-y", "@upstash/context7-mcp"}},
-    OnlineOnly: true,                          // 持续需要联网
-    Notes: "Calls Context7 service; requires internet. Free tier rate-limited.",
-},
-{
-    Name: "duckduckgo-search",
-    Description: "Free web search via DuckDuckGo — no API key required.",
-    Category: "web", Runtime: "python", Bundled: true,
-    Homepage: "https://github.com/nickclyde/duckduckgo-mcp-server", License: "MIT",
-    InstallCmd: InstallCmd{Command: "uvx", Args: []string{"duckduckgo-mcp-server"}},
-},
-{
-    Name: "sqlite",
-    Description: "Query and modify a user-specified SQLite database.",
-    Category: "data", Runtime: "python", Bundled: true,
-    License: "MIT",
-    InstallCmd: InstallCmd{Command: "uvx", Args: []string{"mcp-server-sqlite", "--db-path", "${dbPath}"}},
-    RequiredArgs: []ArgRequirement{
-        {Name: "dbPath", Description: "Absolute path to a .sqlite/.db file", Type: "path"},
-    },
-},
-{
-    Name: "everything",
-    Description: "MCP protocol reference test server.",
-    Category: "demo", Runtime: "node", Bundled: true,
-    Hidden: true,                              // marketplace UI 不展示
-    InstallCmd: InstallCmd{Command: "npx", Args: []string{"-y", "@modelcontextprotocol/server-everything"}},
-    Notes: "For Forgify pipeline test only.",
-},
-```
-
-### Install 机制 — 委托给 sandbox 服务（lazy install）
-
-**所有 MCP server 的 runtime 装机 + 包装 + spawn 都委托给 `sandboxapp` 服务**，详见 [`sandbox.md`](./sandbox.md)。MCP service 只关心"用户要装哪个 server / server connect 状态如何 / tool 调用怎么路由"——runtime 这层 **0 关心**。
-
-**典型 install 流程**：
+LLM tool `install_mcp_server` 走两阶段：
 
 ```
-用户点 "Install Playwright MCP"
-  → POST /api/v1/mcp-registry/playwright:install
-    → mcpapp.InstallFromRegistry(ctx, "playwright", args, env)
-      → 校验 RequiredEnv / RequiredArgs 完整
-      → 写 ~/.forgify/mcp.json
-      → owner := sandboxdomain.Owner{Kind: "mcp", ID: "playwright", Name: "Playwright"}
-      → spec := sandboxdomain.EnvSpec{
-          Runtime: sandboxdomain.RuntimeSpec{Kind: "node"},
-          Deps:    []string{"@playwright/mcp"},
-          Extras:  []string{"browsers/chromium"},
-        }
-      → env, err := sandboxapp.EnsureEnv(ctx, owner, spec, progressFn)
-        ↓ sandbox 内部按需 lazy 装：
-        ↓   - 没 Node runtime → mise install node@22  (~50MB 下载)
-        ↓   - mkdir envs/mcp/playwright/
-        ↓   - npm install @playwright/mcp --prefix=envs/mcp/playwright
-        ↓   - playwright install chromium  (~150MB 下载)
-        ↓   - 写 sandbox_envs DB 行 status=ready
-      → mcpapp.Connect("playwright")
-        → 用 envs/mcp/playwright/.runtime/node bin → spawn server stdio 子进程
-        → tools/list → ready
-  ← 返 ServerStatus
+阶段 1（needs_confirmation）：
+  LLM 调 install_mcp_server({name: "github"})
+    → 后端读 RegistryEntry → 返 phase1Envelope:
+       {needsConfirmation: true, name, runtime, tier, requiredEnv, requiredArgs, notes, summary}
+    → LLM 把这个 envelope 渲染给用户："要装 github MCP，需要 GITHUB_PERSONAL_ACCESS_TOKEN（链接 …），确认装吗？"
+阶段 2（confirmed）：
+  用户填好 env / args 后 LLM 再调 install_mcp_server({name: "github", env: {...}, args: {...}, confirmed: true})
+    → mcpapp.InstallFromRegistry(ctx, name, env, args)
+       → 校验 RequiredEnv / RequiredArgs 完整
+       → 写 ~/.forgify/mcp.json (owner.Name = entry.Name)
+       → sandboxapp.EnsureEnv(Owner{Kind:"mcp", ID:name}, EnvSpec{Runtime:{Kind:entry.Runtime}, Deps:[entry.InstallCmd.Args[1]]})
+       → mcpapp.Connect(name) → tools/list → ready
+    ← 返 ServerStatus
 ```
 
-**首次安装慢，之后秒开**：
-- Node runtime 装一次后所有 Node 类 MCP server 共享（fastpath：第二个 npm-only server 装机 ~10s）
-- Chromium 装一次后所有 Playwright 类共享
-- Python runtime 同理（共享 mise-installed python+uv）
+testend `/mcp-registry/{name}:install` 直接走阶段 2（UI 自己采集 env/args 后 POST，不需要 needs_confirmation 来回）。
 
-**MCP service 不再有 runtime 检查代码**——`checkRuntime` 那段全部删掉，由 sandbox 负责。MCP layer 只 catch sandbox 返的 `ErrRuntimeMissing` 等错误转友好消息。
+### Tier 2 OAuth UX
 
-### Playwright 系统 Chrome 选项
+Gmail / MS365 子进程首跑时把设备码登录 URL 印到 stderr。
 
-Playwright 默认下自己 fork 的 Chromium（150 MB）。**用户已装 Chrome 时可选跳过**：
+- testend tab-mcp.js `install()`：检测到 `tier === 2` 时，install 成功后**自动开 stderr modal** + 短轮询 6×1s（每秒重读 stderr，直到出现 `https://`）——用户立刻看到登录链接。
+- LLM 走 `install_mcp_server` 时，phase1 envelope 自带 entry.Notes（如 "first run prints device-code URL to stderr"），LLM 渲染时会提醒用户安装后看 stderr。
 
-`POST /api/v1/mcp-registry/playwright:install` body：
-```json
-{
-  "args": {
-    "useSystemChrome": true,           // 跳过 Chromium 下载
-    "userDataDir": "/Users/me/Library/Application Support/Google/Chrome/Default"  // 可选
-  }
-}
-```
+### Sandbox 委托
 
-后端 `args.useSystemChrome=true` 时：
-- 跳过 PostInstallSteps 里的 Chromium 下载
-- mcp.json 的 args 加 `--channel chrome`
-- 可选 `--user-data-dir <path>`——LLM 继承用户已登录 session（**安全警告**：AI 拿到所有 cookie，UI 必须明确告知）
+所有 MCP server 的 runtime 装机 / 包装 / spawn **委托给 sandboxapp**（详 [`sandbox.md`](./sandbox.md)）：
+- 仅注册 `python` + `node` runtime + `uv` 工具
+- 仅注册 `python` + `node` EnvManager（其他 7 个 EnvManager 已删）
+- 每个 server 一个独立 env（owner=mcp/`<name>`）
 
-### MCP 实现工作量
-
-| 工作 | 时间 |
-|---|---|
-| RegistryEntry struct + 5 个 v1 内置 entry | 2h |
-| Install endpoint（委托 sandbox 服务）| 2-3h |
-| Server 生命周期（subprocess monitor + restart + health check）| 1 天 |
-| search_mcp / call_mcp 两个 system tool | 半天 |
-| **MCP 后端总工作量** | **~3 天** |
-
-依赖前置：sandbox v2 已就位（详 [`sandbox.md`](./sandbox.md)，~3-4 天独立工作）。
-
-### Runtime 装机 — 委托 sandbox 服务
-
-**MCP service 不再有 runtime 检查代码**——所有 runtime（Node/Python/Browsers/.NET）的装机、版本管理、env 隔离、spawn 都委托给 `sandboxapp.Service`。
-
-详细机制见 [`sandbox.md`](./sandbox.md)：
-- §6 `EnsureRuntime` — lazy install（mise 通配 + Playwright + dotnet + static）
-- §6 `EnsureEnv` — 每个 mcp server 一个独立 env（owner=mcp/<name>）
-- §8 `SpawnLongLived` — server 子进程 stdio 接 JSON-RPC
-
-MCP layer 仅 catch sandbox 返的 `ErrRuntimeMissing` 等 sentinel 转友好消息——不实现任何装机逻辑。
-
-### License / 合规
-
-| 项 | 状态 |
-|---|---|
-| MCP 协议 | Anthropic 开源，无须 ask permission |
-| modelcontextprotocol/servers 各 server | 全 MIT，自由 bundle 元数据 |
-| 我们 bundle 的 | **元数据 + 安装命令**，不是 server 二进制；server 由 npm/pypi 用户运行时下载 |
-| Attribution | About 页 + docs："Forgify supports the open Model Context Protocol by Anthropic"，每个 server 链接原项目 |
-| 商标边界 | 描述用 "compatible with" / "supports"，**不**僭称 "official" / "endorsed by" |
-
-**结论**：完全合规，无需找任何人。
+MCP layer 不实现任何装机逻辑——只 catch sandbox 返的 `ErrRuntimeMissing` 等 sentinel 转友好消息。
 
 ---
 
