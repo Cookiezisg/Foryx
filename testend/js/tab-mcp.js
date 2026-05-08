@@ -1,7 +1,7 @@
-// tab-mcp.js — MCP servers + marketplace panel (D5-D6). Two
+// tab-mcp.js — MCP servers + marketplace panel (Marketplace V3). Two
 // sub-views: configured servers (lifecycle ops + tool inspection)
-// and the built-in marketplace (one-click install with required
-// env/args validation).
+// and the curated marketplace (21 hand-picked entries — one-click
+// install with required env/args validation + Tier 2 OAuth flow).
 //
 // Drop zone accepts a Claude-Desktop-shaped JSON fragment
 // ({mcpServers: {...}}) and POSTs it to /mcp-servers:import. The
@@ -12,8 +12,10 @@ document.addEventListener('alpine:init', () => {
     section: 'servers',         // 'servers' | 'marketplace'
     servers: [],
     selected: null,
-    // marketplace: search-only — registry has 5000+ entries, no full listing
-    // marketplace：仅搜索——5000+ 条，不全列
+    // marketplace: search-only — 21 curated entries (Marketplace V3),
+    // no full-list endpoint by design (parity with future expansion).
+    // marketplace：仅搜索——21 条 curated（Marketplace V3），不开全量列出
+    // 端点（与未来扩展一致）。
     searchQuery: '',
     searching: false,
     registry: [],
@@ -37,9 +39,9 @@ document.addEventListener('alpine:init', () => {
           this.closeStderr();
         }
       });
-      // Only load installed servers up front. Marketplace fetch is gated
-      // on user search — registry has 5000+ entries, no auto-list.
-      // 仅预加载已装。Marketplace 须用户搜——5000+ 条，无 auto-list。
+      // Only load installed servers up front. Marketplace fetch is
+      // gated on user search — 21 curated entries by design, no auto-list.
+      // 仅预加载已装。Marketplace 须用户搜——21 条 curated，无 auto-list。
       await this.loadServers()
     },
 
@@ -64,7 +66,7 @@ document.addEventListener('alpine:init', () => {
     async searchRegistry() {
       const q = this.searchQuery.trim()
       if (!q) {
-        this.err = 'enter a search keyword (the marketplace has 5000+ servers; no full listing)'
+        this.err = 'enter a search keyword (21 curated entries; search-only — no full listing)'
         this.registry = []
         return
       }
@@ -102,9 +104,17 @@ document.addEventListener('alpine:init', () => {
 
     async reconnect(srv) {
       this.actionBusy = srv.name
+      this.err = ''
       try {
-        await fetch(`/api/v1/mcp-servers/${encodeURIComponent(srv.name)}:reconnect`, { method: 'POST' })
+        const r = await fetch(`/api/v1/mcp-servers/${encodeURIComponent(srv.name)}:reconnect`, { method: 'POST' })
+        if (!r.ok) {
+          const j = await r.json().catch(() => null)
+          this.err = `reconnect failed HTTP ${r.status}` + (j?.error?.message ? ': ' + j.error.message : '')
+          return
+        }
         await this.loadServers()
+      } catch (e) {
+        this.err = 'reconnect error: ' + e
       } finally {
         this.actionBusy = ''
       }
@@ -158,10 +168,18 @@ document.addEventListener('alpine:init', () => {
     async deleteServer(srv) {
       if (!confirm(`Delete MCP server "${srv.name}"? Removes from ~/.forgify/mcp.json + disconnects subprocess.`)) return
       this.actionBusy = srv.name
+      this.err = ''
       try {
-        await fetch(`/api/v1/mcp-servers/${encodeURIComponent(srv.name)}`, { method: 'DELETE' })
+        const r = await fetch(`/api/v1/mcp-servers/${encodeURIComponent(srv.name)}`, { method: 'DELETE' })
+        if (!r.ok && r.status !== 204) {
+          const j = await r.json().catch(() => null)
+          this.err = `delete failed HTTP ${r.status}` + (j?.error?.message ? ': ' + j.error.message : '')
+          return
+        }
         if (this.selected?.name === srv.name) this.selected = null
         await this.loadServers()
+      } catch (e) {
+        this.err = 'delete error: ' + e
       } finally {
         this.actionBusy = ''
       }

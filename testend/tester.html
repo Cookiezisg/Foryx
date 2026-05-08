@@ -1393,12 +1393,12 @@
           </div>
         </div>
 
-        <!-- ── Marketplace section (search-only; 5000+ entries upstream) ── -->
+        <!-- ── Marketplace section (search-only; 21 curated entries) ── -->
         <div x-show="section === 'marketplace'" style="font-size:11px;padding:8px 10px">
           <div style="display:flex;gap:6px;margin-bottom:8px;align-items:center">
             <input type="text" x-model="searchQuery"
                    @keydown="handleSearchKeydown($event)"
-                   placeholder="search marketplace (5000+ servers — keyword required)"
+                   placeholder="search marketplace (21 curated entries — keyword required)"
                    class="filter-input" style="flex:1">
             <button class="btn-small" @click="searchRegistry()" :disabled="searching">
               <span x-show="!searching">Search</span>
