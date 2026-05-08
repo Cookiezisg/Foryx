@@ -5,6 +5,7 @@ document.addEventListener('alpine:init', () => {
     entries: [],
     filter: '',
     autoScroll: true,
+    connected: false,
     _es: null,
 
     get filtered() {
@@ -24,8 +25,16 @@ document.addEventListener('alpine:init', () => {
     _connect() {
       const es = new EventSource('/dev/logs')
       this._es = es
+      es.addEventListener('open', () => { this.connected = true })
+      es.addEventListener('error', () => { this.connected = false })
       es.addEventListener('log', e => {
-        const entry = JSON.parse(e.data)
+        // Defensive parse: a single malformed payload would otherwise
+        // throw and silently kill the listener (no recovery until
+        // browser auto-reconnects). Mirrors tab-errors.js handling.
+        // 防御性解析：单条畸形数据不 try/catch 就 throw 杀掉 listener，
+        // 后续直到重连前一律收不到。匹配 tab-errors.js。
+        let entry
+        try { entry = JSON.parse(e.data) } catch { return }
         entry._time = this._shortTime(entry.time)
         this.entries.push(entry)
         // Cap to 2000 entries to avoid memory bloat.

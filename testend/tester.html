@@ -609,6 +609,10 @@
         <div class="panel-toolbar">
           <input class="filter-input" x-model="filter" placeholder="Filter logs…">
           <button class="btn btn-ghost btn-sm" @click="clear()">Clear</button>
+          <span class="status-text" style="margin-left:auto;color:var(--success-fg)"
+                x-show="connected">● live</span>
+          <span class="status-text" style="margin-left:auto;color:var(--danger-fg)"
+                x-show="!connected">● disconnected</span>
         </div>
         <div class="event-log">
           <template x-for="(e, i) in filtered" :key="i">
