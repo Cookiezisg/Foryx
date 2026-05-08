@@ -60,6 +60,17 @@ const defaultCallTimeout = 30 * time.Second
 // 下次成功自动回 ready。
 const degradedThreshold = 3
 
+// addServerTimeout caps the AddServer connect path — the first
+// install invokes `npx -y <pkg>` / `uvx <pkg>` which fetches the
+// package on demand (5-60s on first run + handshake). Reconnect
+// stays on the shorter initializeTimeout because the package is
+// already cached locally by then.
+//
+// addServerTimeout 限定 AddServer 的 connect 路径——首次 install 会跑
+// `npx -y <pkg>` / `uvx <pkg>` 现场拉包（首跑 5-60s + 握手）。Reconnect
+// 仍用更短的 initializeTimeout——那时包已经本地缓存。
+const addServerTimeout = 3 * time.Minute
+
 // initializeTimeout caps the handshake. Long enough that slow servers
 // (Java loading the JVM) succeed; short enough that broken commands
 // fail fast at boot rather than hanging Start.
@@ -259,7 +270,7 @@ func (s *Service) AddServer(ctx context.Context, cfg mcpdomain.ServerConfig) err
 	}
 	s.publishStatus(ctx, cfg.Name)
 
-	cctx, cancel := context.WithTimeout(ctx, initializeTimeout)
+	cctx, cancel := context.WithTimeout(ctx, addServerTimeout)
 	defer cancel()
 	if err := s.connectOne(cctx, cfg.Name); err != nil {
 		return fmt.Errorf("mcpapp.AddServer: connect: %w", err)

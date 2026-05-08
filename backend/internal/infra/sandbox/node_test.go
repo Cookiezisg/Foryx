@@ -1,13 +1,13 @@
 // envmanager_node_test.go — pure-function unit tests for NodeEnvManager.
 //
 // Real CreateEnv writes a small package.json so we cover that path against
-// a TempDir; pnpm shellouts (real InstallDeps) belong in the D9 pipeline
-// suite — npm + pnpm download network bytes.
+// a TempDir; npm shellouts (real InstallDeps) belong in the curated
+// pipeline suite — `npm install` downloads network bytes.
 //
 // envmanager_node_test.go ——NodeEnvManager pure-function 单测。
 //
-// 真 CreateEnv 写小 package.json 所以走 TempDir 测；pnpm shellout（真
-// InstallDeps）归 D9 pipeline 套——npm + pnpm 下网络字节。
+// 真 CreateEnv 写小 package.json 所以走 TempDir 测；npm shellout（真
+// InstallDeps）归 curated pipeline 套——`npm install` 下网络字节。
 
 package sandbox
 
@@ -25,14 +25,14 @@ import (
 var _ sandboxdomain.EnvManager = (*NodeEnvManager)(nil)
 
 func TestNodeEnvManager_Kind(t *testing.T) {
-	nm := NewNodeEnvManager(newFakeToolRegistry(map[string]string{"pnpm": "/tmp/pnpm"}))
+	nm := NewNodeEnvManager()
 	if got := nm.Kind(); got != "node" {
 		t.Errorf("Kind() = %q, want node", got)
 	}
 }
 
 func TestNodeEnvManager_CreateEnv_WritesPackageJSON(t *testing.T) {
-	nm := NewNodeEnvManager(newFakeToolRegistry(map[string]string{"pnpm": "/tmp/pnpm"}))
+	nm := NewNodeEnvManager()
 	envPath := filepath.Join(t.TempDir(), "envs", "mcp", "context7")
 	if err := nm.CreateEnv(context.Background(), "/tmp/node", envPath); err != nil {
 		t.Fatalf("CreateEnv: %v", err)
@@ -56,7 +56,7 @@ func TestNodeEnvManager_CreateEnv_WritesPackageJSON(t *testing.T) {
 }
 
 func TestNodeEnvManager_CreateEnv_Idempotent(t *testing.T) {
-	nm := NewNodeEnvManager(newFakeToolRegistry(map[string]string{"pnpm": "/tmp/pnpm"}))
+	nm := NewNodeEnvManager()
 	envPath := filepath.Join(t.TempDir(), "envs", "mcp", "context7")
 	if err := nm.CreateEnv(context.Background(), "/tmp/node", envPath); err != nil {
 		t.Fatalf("first CreateEnv: %v", err)
@@ -76,7 +76,7 @@ func TestNodeEnvManager_CreateEnv_Idempotent(t *testing.T) {
 }
 
 func TestNodeEnvManager_EnvBin_PerOS(t *testing.T) {
-	nm := NewNodeEnvManager(newFakeToolRegistry(map[string]string{"pnpm": "/tmp/pnpm"}))
+	nm := NewNodeEnvManager()
 	got := nm.EnvBin("/data/envs/mcp/context7", "tsc")
 
 	var want string
@@ -91,7 +91,7 @@ func TestNodeEnvManager_EnvBin_PerOS(t *testing.T) {
 }
 
 func TestNodeEnvManager_EnvBin_PreservesExplicitExtension(t *testing.T) {
-	nm := NewNodeEnvManager(newFakeToolRegistry(map[string]string{"pnpm": "/tmp/pnpm"}))
+	nm := NewNodeEnvManager()
 	got := nm.EnvBin("/data/envs/mcp/context7", "tsc.cmd")
 	want := "/data/envs/mcp/context7/node_modules/.bin/tsc.cmd"
 	if got != want {

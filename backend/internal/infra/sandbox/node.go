@@ -1,24 +1,15 @@
-// envmanager_node.go — pnpm-backed EnvManager for Node plugin envs.
+// envmanager_node.go — npm-backed EnvManager for Node plugin envs.
 //
-// pnpm installs to <envPath>/node_modules/ via `pnpm add <pkgs...>` from
-// envPath. pnpm's content-addressable global store at
-// ~/.local/share/pnpm/store keeps a single copy of every (package, version)
-// tuple on disk; per-env node_modules is symlinks into that store. N envs
-// depending on the same `playwright@1.50.0` share one disk-bytes copy.
+// Marketplace V3 ships only ~21 curated MCP servers, all stdio + npm —
+// the cross-env hardlink dedup npm offered isn't worth the extra
+// installer / global store. We use vanilla npm (bundled with node@22)
+// to install per-env into <envPath>/node_modules/.
 //
-// pnpm is treated as a support tool: NodeEnvManager resolves it via
-// sandboxdomain.ToolRegistry on each operation, which lazily installs pnpm
-// on first use (mise-managed in production; pre-seeded in tests).
+// envmanager_node.go ——基于 npm 的 Node plugin env EnvManager。
 //
-// envmanager_node.go ——基于 pnpm 的 Node plugin env EnvManager。
-//
-// pnpm 用 `pnpm add <pkgs...>` 在 envPath 装到 <envPath>/node_modules/。
-// pnpm 的 content-addressable 全局 store（~/.local/share/pnpm/store）每个
-// (package, version) 元组只有一份磁盘 copy；per-env node_modules 是指向 store
-// 的 symlink。N 个依赖 `playwright@1.50.0` 的 env 共享一份磁盘字节。
-//
-// pnpm 当作支持工具：NodeEnvManager 每次操作经 sandboxdomain.ToolRegistry
-// 解析 pnpm 路径，首次使用时懒装（生产 mise 管，测试预填）。
+// Marketplace V3 仅 21 条 curated MCP server、全 stdio+npm——npm 的跨 env
+// hardlink 共享对 21 条无价值，多带个 installer 不值。改用 node@22 自带的
+// npm，per-env 装到 <envPath>/node_modules/。
 
 package sandbox
 
@@ -37,19 +28,15 @@ import (
 // NodeEnvManager satisfies sandboxdomain.EnvManager for Node.
 //
 // NodeEnvManager 满足 sandboxdomain.EnvManager 的 Node 实现。
-type NodeEnvManager struct {
-	tools sandboxdomain.ToolRegistry // resolves pnpm binary lazily on first use
-}
+type NodeEnvManager struct{}
 
-// NewNodeEnvManager constructs the manager. tools must be a working
-// ToolRegistry (typically the sandbox app Service). NodeEnvManager calls
-// tools.EnsureTool(ctx, "pnpm", "") whenever it needs pnpm.
+// NewNodeEnvManager constructs the manager. No deps — npm comes
+// bundled with node@22 (resolved per-call from the runtime path).
 //
-// NewNodeEnvManager 构造 manager。tools 必须是可工作的 ToolRegistry（通常
-// sandbox app Service）。NodeEnvManager 需要 pnpm 时调
-// tools.EnsureTool(ctx, "pnpm", "")。
-func NewNodeEnvManager(tools sandboxdomain.ToolRegistry) *NodeEnvManager {
-	return &NodeEnvManager{tools: tools}
+// NewNodeEnvManager 构造 manager。无依赖——npm 随 node@22 自带（每次调用
+// 从 runtime 路径解析）。
+func NewNodeEnvManager() *NodeEnvManager {
+	return &NodeEnvManager{}
 }
 
 // Kind reports the dispatch key — must match MiseInstaller("node").
@@ -58,11 +45,11 @@ func NewNodeEnvManager(tools sandboxdomain.ToolRegistry) *NodeEnvManager {
 func (n *NodeEnvManager) Kind() string { return "node" }
 
 // CreateEnv writes a minimal package.json to envPath so subsequent
-// `pnpm install` / `pnpm add` commands have an anchor. Idempotent — already-
+// `npm install` / `npm add` commands have an anchor. Idempotent — already-
 // existing package.json returns nil.
 //
-// CreateEnv 在 envPath 写最小 package.json，让后续 `pnpm install` /
-// `pnpm add` 有锚点。幂等——已存在的 package.json 返 nil。
+// CreateEnv 在 envPath 写最小 package.json，让后续 `npm install` /
+// `npm add` 有锚点。幂等——已存在的 package.json 返 nil。
 func (n *NodeEnvManager) CreateEnv(ctx context.Context, runtimePath, envPath string) error {
 	pkgJSON := filepath.Join(envPath, "package.json")
 	if _, err := os.Stat(pkgJSON); err == nil {
@@ -72,11 +59,11 @@ func (n *NodeEnvManager) CreateEnv(ctx context.Context, runtimePath, envPath str
 		return fmt.Errorf("sandbox.NodeEnvManager.CreateEnv: mkdir env: %w", err)
 	}
 	// Minimal package.json — name derived from envPath, private to prevent
-	// accidental publish, no scripts/deps so pnpm has nothing to interpret
+	// accidental publish, no scripts/deps so npm has nothing to interpret
 	// at install time other than what we explicitly add.
 	//
 	// 最小 package.json——name 从 envPath 派生，private 防误发，无 scripts/deps
-	// 让 pnpm 在 install 时只解释我们显式 add 的东西。
+	// 让 npm 在 install 时只解释我们显式 add 的东西。
 	manifest := map[string]any{
 		"name":    "forgify-env-" + filepath.Base(envPath),
 		"version": "0.0.0",
@@ -92,24 +79,24 @@ func (n *NodeEnvManager) CreateEnv(ctx context.Context, runtimePath, envPath str
 	return nil
 }
 
-// InstallDeps runs `pnpm add <deps...>` from envPath. pnpm hardlinks /
-// symlinks into the global content-addressable store, so installing the
-// same dep tree across N envs costs roughly one tree's worth of bytes.
-// stream callbacks fire per stderr line.
+// InstallDeps runs `npm install <deps...>` from envPath using the
+// runtime's bundled npm. Marketplace V3 stripped npm from the
+// installer registry (curated 21 entries don't need cross-env hardlink
+// dedup), so we use vanilla npm — node@22 ships it.
 //
-// InstallDeps 在 envPath 跑 `pnpm add <deps...>`。pnpm 从全局
-// content-addressable store hardlink/symlink，N 个 env 装相同 dep 树总共
-// 约一份字节。stream 在每行 stderr 触发。
+// InstallDeps 在 envPath 跑 `npm install <deps...>`，用 runtime 自带的
+// npm。Marketplace V3 把 npm 从 installer 移除（curated 21 条不需要 N
+// env 共享 hardlink 优化），改用 node@22 自带的 npm。
 func (n *NodeEnvManager) InstallDeps(ctx context.Context, runtimePath, envPath string, deps []string, stream sandboxdomain.ProgressFunc) error {
 	if len(deps) == 0 {
 		return nil
 	}
-	pnpmBin, err := n.tools.EnsureTool(ctx, "pnpm", "")
-	if err != nil {
-		return fmt.Errorf("sandbox.NodeEnvManager.InstallDeps: locate pnpm: %w", err)
+	npmBin := filepath.Join(runtimePath, "bin", "npm")
+	if runtime.GOOS == "windows" {
+		npmBin = filepath.Join(runtimePath, "npm.cmd")
 	}
-	args := append([]string{"add"}, deps...)
-	cmd := exec.CommandContext(ctx, pnpmBin, args...)
+	args := append([]string{"install"}, deps...)
+	cmd := exec.CommandContext(ctx, npmBin, args...)
 	cmd.Dir = envPath
 
 	return RunWithStderrCapture(cmd, stream,
@@ -130,12 +117,12 @@ func (n *NodeEnvManager) InstallExtras(ctx context.Context, runtimePath, envPath
 }
 
 // EnvBin returns the absolute path to a binary inside the env's
-// node_modules/.bin/ shim directory (npm/pnpm convention). On Windows
-// pnpm generates *.cmd / *.ps1 wrappers; we tack on .cmd if the caller
+// node_modules/.bin/ shim directory (npm/npm convention). On Windows
+// npm generates *.cmd / *.ps1 wrappers; we tack on .cmd if the caller
 // did not provide an extension.
 //
 // EnvBin 返 env 的 node_modules/.bin/ shim 目录中某 binary 绝对路径
-// （npm/pnpm 约定）。Windows 上 pnpm 生成 *.cmd / *.ps1 包装；调用方
+// （npm/npm 约定）。Windows 上 npm 生成 *.cmd / *.ps1 包装；调用方
 // 未传扩展名时加 .cmd。
 func (n *NodeEnvManager) EnvBin(envPath, binName string) string {
 	if runtime.GOOS == "windows" && filepath.Ext(binName) == "" {

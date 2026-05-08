@@ -205,3 +205,10 @@ composer.lock   # 如为库项目，取消注释此行
 # .claude/ 含 Claude Code 的本地状态（settings.local.json /
 # scheduled_tasks.lock 等）。Per-machine 运行时数据，不进 git。
 .claude/
+
+# ============================================================
+# Pipeline 测试副产物
+# ============================================================
+# Playwright MCP server 在 cwd 写 trace/screenshot dir。
+# Curated marketplace pipeline 测试默认 cwd 是 backend/test/mcp/。
+.playwright-mcp/

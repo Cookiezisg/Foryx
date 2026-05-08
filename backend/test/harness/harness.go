@@ -67,6 +67,7 @@ import (
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
 	eventloginfra "github.com/sunweilin/forgify/backend/internal/infra/eventlog"
+	mcpinfra "github.com/sunweilin/forgify/backend/internal/infra/mcp"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	notificationsinfra "github.com/sunweilin/forgify/backend/internal/infra/notifications"
 	sandboxinfra "github.com/sunweilin/forgify/backend/internal/infra/sandbox"
@@ -90,7 +91,9 @@ import (
 type Option func(*options)
 
 type options struct {
-	fakeLLMBaseURL string
+	fakeLLMBaseURL  string
+	curatedRegistry bool
+	sandboxDataDir  string
 }
 
 // WithFakeLLMBaseURL routes the injected DeepSeek apikey's BaseURL to the
@@ -101,6 +104,32 @@ type options struct {
 // 而非真实 provider。配合 NewFakeLLMServer 做无网络 chat 测试。
 func WithFakeLLMBaseURL(url string) Option {
 	return func(o *options) { o.fakeLLMBaseURL = url }
+}
+
+// WithCuratedRegistry swaps the in-memory test registry (everything +
+// sqlite-test) for the production CuratedRegistrySource so curated
+// marketplace pipeline tests can install / handshake any of the 21
+// real entries by their slug.
+//
+// WithCuratedRegistry 把内存测试 registry 换成生产 CuratedRegistrySource，
+// 让 curated 21 条 pipeline 测试能按 slug 走真装 / 真握手。
+func WithCuratedRegistry() Option {
+	return func(o *options) { o.curatedRegistry = true }
+}
+
+// WithSandboxDataDir overrides the default per-test t.TempDir() with a
+// caller-provided directory. Lets pipeline runs share mise + npm + uv
+// caches across multiple harness instances (production reality: one
+// persistent ~/.forgify/sandbox/ warmed once); without it every test
+// re-extracts mise (~65MB) and re-downloads node@22 (~50MB) — the
+// 5-minute first-install cost dominates wall time.
+//
+// WithSandboxDataDir 用调用方提供的目录覆盖 per-test t.TempDir()。让
+// pipeline 多个 harness 实例共享 mise + npm + uv 缓存（生产现实：单一
+// ~/.forgify/sandbox/ 只 warmup 一次）。否则每个 test 重解 mise + 重下
+// node@22，5min 冷启动主导墙钟。
+func WithSandboxDataDir(dir string) Option {
+	return func(o *options) { o.sandboxDataDir = dir }
 }
 
 // Harness is a booted in-process backend ready to drive over HTTP.
@@ -223,7 +252,12 @@ func New(t *testing.T, opts ...Option) *Harness {
 	// PluginSandbox v2 ——与 main.go 同 DI 图但根目录是 per-test tempdir。
 	// Bootstrap 解 embed mise；当前平台没有就 degraded mode；需要 sandbox 的
 	// 测试自己用 IsReady() 守卫。
-	dataDir := t.TempDir()
+	var dataDir string
+	if cfg.sandboxDataDir != "" {
+		dataDir = cfg.sandboxDataDir
+	} else {
+		dataDir = t.TempDir()
+	}
 	sandboxRepo := sandboxstore.New(gdb)
 	sandboxSvc := sandboxapp.New(sandboxRepo, dataDir, log)
 	if err := sandboxSvc.Bootstrap(context.Background()); err != nil {
@@ -318,33 +352,38 @@ func New(t *testing.T, opts ...Option) *Harness {
 	// 内存测试 RegistrySource——生产用 CuratedRegistrySource（21 条精选）；
 	// 测试要可控固定 entry 跑 install 路径（`everything` 参考 server + 强制
 	// 必填 arg 的样本）。
-	mcpRegistrySource := newTestRegistrySource(
-		mcpdomain.RegistryEntry{
-			Name:        "everything",
-			Description: "MCP protocol reference test server (used by D9 pipeline tests).",
-			Runtime:     "node",
-			InstallCmd: mcpdomain.InstallCmd{
-				Command: "npx",
-				Args:    []string{"-y", "@modelcontextprotocol/server-everything"},
+	var mcpRegistrySource mcpdomain.RegistrySource
+	if cfg.curatedRegistry {
+		mcpRegistrySource = mcpinfra.NewCuratedRegistrySource()
+	} else {
+		mcpRegistrySource = newTestRegistrySource(
+			mcpdomain.RegistryEntry{
+				Name:        "everything",
+				Description: "MCP protocol reference test server (used by D9 pipeline tests).",
+				Runtime:     "node",
+				InstallCmd: mcpdomain.InstallCmd{
+					Command: "npx",
+					Args:    []string{"-y", "@modelcontextprotocol/server-everything"},
+				},
+				Category: "browser",
+				Tier:     0,
 			},
-			Category: "browser",
-			Tier:     0,
-		},
-		mcpdomain.RegistryEntry{
-			Name:        "sqlite-test",
-			Description: "Sample server with a required arg, for install error-path tests.",
-			Runtime:     "python",
-			InstallCmd: mcpdomain.InstallCmd{
-				Command: "uvx",
-				Args:    []string{"mcp-server-sqlite", "--db-path", "${dbPath}"},
+			mcpdomain.RegistryEntry{
+				Name:        "sqlite-test",
+				Description: "Sample server with a required arg, for install error-path tests.",
+				Runtime:     "python",
+				InstallCmd: mcpdomain.InstallCmd{
+					Command: "uvx",
+					Args:    []string{"mcp-server-sqlite", "--db-path", "${dbPath}"},
+				},
+				RequiredArgs: []mcpdomain.ArgRequirement{
+					{Name: "dbPath", Description: "Path to the SQLite db file", Type: "path"},
+				},
+				Category: "database",
+				Tier:     3,
 			},
-			RequiredArgs: []mcpdomain.ArgRequirement{
-				{Name: "dbPath", Description: "Path to the SQLite db file", Type: "path"},
-			},
-			Category: "database",
-			Tier:     3,
-		},
-	)
+		)
+	}
 	mcpService := mcpapp.New(
 		mcpConfigPath,
 		mcpRegistrySource,
@@ -506,7 +545,7 @@ func registerSandboxStack(svc *sandboxapp.Service) {
 		svc.RegisterInstaller(sandboxinfra.NewMiseInstaller(miseBin, kind, defaultVer))
 	}
 	svc.RegisterEnvManager(sandboxinfra.NewPythonEnvManager(svc))
-	svc.RegisterEnvManager(sandboxinfra.NewNodeEnvManager(svc))
+	svc.RegisterEnvManager(sandboxinfra.NewNodeEnvManager())
 }
 
 // URL returns the test server's base URL (e.g. "http://127.0.0.1:54321").

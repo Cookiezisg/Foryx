@@ -483,7 +483,7 @@ func registerSandboxStack(svc *sandboxapp.Service, _ *zap.Logger) {
 	// Env managers — only python + node (Marketplace V3 runtimes).
 	// Env manager——仅 python + node。
 	svc.RegisterEnvManager(sandboxinfra.NewPythonEnvManager(svc))
-	svc.RegisterEnvManager(sandboxinfra.NewNodeEnvManager(svc))
+	svc.RegisterEnvManager(sandboxinfra.NewNodeEnvManager())
 }
 
 // defaultMCPConfigPath returns ~/.forgify/mcp.json — the user-level MCP

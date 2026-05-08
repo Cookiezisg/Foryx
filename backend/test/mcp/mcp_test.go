@@ -245,7 +245,7 @@ func TestMCP_Live_RegistryInstallEverything(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 
-	st, err := h.MCP.InstallFromRegistry(ctx, "everything", "everything", nil, nil)
+	st, err := h.MCP.InstallFromRegistry(ctx, "everything", nil, nil)
 	if err != nil {
 		t.Fatalf("InstallFromRegistry everything: %v", err)
 	}
