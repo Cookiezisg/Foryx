@@ -248,6 +248,44 @@
                             </template>
                           </div>
                         </template>
+                        <!-- Subagent placeholder block (M3.5) — testend-grade
+                             rendering: collapsed pill shows status + sub-msg
+                             block count; on expand dump the sub-message JSON
+                             snapshot for raw inspection. Full chat-style
+                             nested rendering deferred (would duplicate every
+                             item template indented). -->
+                        <template x-if="item.type === 'subagent'">
+                          <div class="thinking-block">
+                            <div class="thinking-summary"
+                                 @click="toggleExpand(item.expandKey)"
+                                 style="cursor:pointer;user-select:none">
+                              <span x-text="expanded[item.expandKey] ? '▾' : '▸'" style="display:inline-block;width:10px"></span>
+                              <span>🪶 subagent</span>
+                              <span style="color:var(--text-mute);font-size:10px;margin-left:6px"
+                                    x-text="item.subType"></span>
+                              <span style="font-size:10px;margin-left:6px"
+                                    :style="'color:' + (item.done ? 'var(--success-fg, #2a9d3a)' : 'var(--text-mute)')"
+                                    x-text="item.done ? 'completed' : 'running…'"></span>
+                              <span x-show="item.subMsg" style="color:var(--text-mute);font-size:10px;margin-left:6px"
+                                    x-text="(item.subMsg ? (item.subMsg.items || []).length : 0) + ' blocks'"></span>
+                            </div>
+                            <template x-if="expanded[item.expandKey]">
+                              <pre class="thinking-content"
+                                   style="font-size:10px;font-family:Consolas,monospace"
+                                   x-text="item.subMsg ? JSON.stringify(item.subMsg, null, 2) : '(sub-message snapshot not yet received — subMessageId=' + item.subMessageId + ')'"></pre>
+                            </template>
+                          </div>
+                        </template>
+                        <!-- Progress block (sandbox install / network fetch
+                             logs) that didn't pair to a tool_call parent.
+                             Compact mono line so installs don't dominate. -->
+                        <template x-if="item.type === 'progress'">
+                          <div style="font-size:10px;color:var(--text-mute);font-family:Consolas,monospace;padding-left:14px">
+                            <span x-text="(item.done ? '✓' : '⏳') + ' '"></span>
+                            <span x-show="item.stage" x-text="'[' + item.stage + '] '"></span>
+                            <span x-text="(item.content || '').replace(/\n+$/, '')"></span>
+                          </div>
+                        </template>
                       </div>
                     </template>
                   </div>

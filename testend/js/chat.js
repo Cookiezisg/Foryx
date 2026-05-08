@@ -25,6 +25,16 @@
 document.addEventListener('alpine:init', () => {
   Alpine.data('chatPanel', () => ({
     messages: [],
+    // Sub-messages (subagent runs) keyed by their id. Stored as display
+    // models (same shape as top-level assistant messages) so SSE block
+    // handlers can mutate them via _findMsg. The chat panel never
+    // renders these top-level — they're attached to their parent's
+    // 'subagent' item via item.subMsg pointer.
+    //
+    // Sub-messages（subagent run），按 id 存。形态与顶层 assistant 一致让
+    // SSE block handler 经 _findMsg 直接 mutate。Chat panel 不顶层渲染——
+    // 经 item.subMsg 指针挂在父 subagent 项上。
+    subMessagesById: {},
     input: '',
     streaming: false,
     pendingAtts: [],      // [{id, fileName, mimeType}]
@@ -101,6 +111,7 @@ document.addEventListener('alpine:init', () => {
       this.$watch('conversationId', id => {
         this._closeEventLog()
         this.messages = []
+        this.subMessagesById = {}
         this.streaming = false
         this.pendingAtts = []
         this.systemPrompt = ''
@@ -204,8 +215,27 @@ document.addEventListener('alpine:init', () => {
       const r = await fetch(`/api/v1/conversations/${id}/messages?limit=200`)
       if (!r.ok) return
       const j = await r.json()
-      const raw = (j.data || []).filter(m => m.status !== 'pending')
-      this.messages = raw.map(m => this._messageFromSnapshot(m))
+      const all = (j.data || []).filter(m => m.status !== 'pending')
+
+      // Backend returns ALL messages including subagent sub-messages
+      // (those with non-empty parentBlockId). Split: convert + index
+      // sub-messages first so the top-level renderer can attach them
+      // via item.subMsg when it processes the 'message' block.
+      //
+      // 后端返全部消息（含 subagent sub，parentBlockId 非空）。先转 sub +
+      // 入 map，让顶层渲染器遇到 'message' block 时经 item.subMsg 挂上。
+      this.subMessagesById = {}
+      const topLevel = []
+      for (const m of all) {
+        if (m.parentBlockId) {
+          // Sub-messages are always assistant role (subagent runs).
+          // Sub-message 永远 assistant 角色（subagent run）。
+          this.subMessagesById[m.id] = this._assistantMsgFromBlocks(m)
+        } else {
+          topLevel.push(m)
+        }
+      }
+      this.messages = topLevel.map(m => this._messageFromSnapshot(m))
     },
 
     // ── Snapshot → display message (new Block model) ────────────────────────
@@ -328,17 +358,20 @@ document.addEventListener('alpine:init', () => {
 
           case 'message': {
             // Subagent placeholder. attrs.messageId points to the sub
-            // message; sub blocks are part of that message's own snapshot.
-            // For now render as a folded "subagent: <type>" pill — full
-            // nested rendering is Phase 4 testend polish.
+            // message — the sub-message snapshot lives in
+            // subMessagesById (populated in loadMessages BEFORE this
+            // function is called). Render as expandable pill; on
+            // expand the template dumps the sub-msg as JSON.
             //
-            // Subagent 占位。attrs.messageId 指向 sub message；sub blocks
-            // 是该 message 自身快照的一部分。当前折叠为 "subagent: <type>"
-            // pill——完整嵌套渲染是 Phase 4 testend polish。
+            // Subagent 占位。attrs.messageId 指向 sub message——sub 快照在
+            // subMessagesById（loadMessages 在调本函数前已先入 map）。
+            // 渲染为可展开 pill；展开时模板 dump sub-msg JSON。
+            const subId = battrs.messageId || ''
             items.push({
               type: 'subagent',
-              subMessageId: battrs.messageId || '',
+              subMessageId: subId,
               subType: battrs.type || 'subagent',
+              subMsg: subId ? (this.subMessagesById[subId] || null) : null,
               done: b.status !== 'streaming',
               expandKey: 's:' + b.id,
             })
@@ -543,7 +576,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     _findMsg(id) {
-      return this.messages.find(m => m.id === id)
+      return this.messages.find(m => m.id === id) || this.subMessagesById[id]
     },
 
     _onMessageStart(ev) {
@@ -563,6 +596,22 @@ document.addEventListener('alpine:init', () => {
       const stub = { id: ev.id, role: 'assistant', items: [], status: 'streaming',
         stopReason: '', errorCode: '', errorMessage: '',
         inputTokens: 0, outputTokens: 0, raw: ev }
+      // Sub-message routing: parentBlockId set → it's a subagent run.
+      // Index in subMessagesById (NOT pushed to top-level), then attach
+      // to the parent's 'subagent' item via blockIndex lookup so the
+      // pill's subMsg pointer becomes live and the template renders.
+      //
+      // Sub-message 路由：parentBlockId 非空 = subagent run。入
+      // subMessagesById（不顶层 push），经 blockIndex 找父 'subagent' 项挂
+      // subMsg 指针让模板可渲染。
+      if (ev.parentBlockId) {
+        this.subMessagesById[ev.id] = stub
+        const parent = this._blockIndex && this._blockIndex.get(ev.parentBlockId)
+        if (parent && parent.kind === 'message' && parent.ref) {
+          parent.ref.subMsg = stub
+        }
+        return
+      }
       this.messages.push(stub)
       if (!this._userScrolledUp) this._scrollBottom()
       else this.newMsgCount++
