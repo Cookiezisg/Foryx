@@ -73,14 +73,14 @@ var _ ConnectivityTester = (*HTTPTester)(nil)
 func (t *HTTPTester) Test(ctx context.Context, provider, key, baseURL, apiFormat string) (*TestResult, error) {
 	meta, ok := GetProviderMeta(provider)
 	if !ok {
-		return nil, fmt.Errorf("apikeytester: unknown provider %q: %w", provider, apikeydomain.ErrInvalidProvider)
+		return nil, fmt.Errorf("apikey.HTTPTester.Test: unknown provider %q: %w", provider, apikeydomain.ErrInvalidProvider)
 	}
 	effective := strings.TrimRight(baseURL, "/")
 	if effective == "" {
 		effective = strings.TrimRight(meta.DefaultBaseURL, "/")
 	}
 	if effective == "" && meta.TestMethod != TestMethodAlwaysOK {
-		return nil, fmt.Errorf("apikeytester: baseURL required for provider %q: %w", provider, apikeydomain.ErrBaseURLRequired)
+		return nil, fmt.Errorf("apikey.HTTPTester.Test: baseURL required for provider %q: %w", provider, apikeydomain.ErrBaseURLRequired)
 	}
 
 	switch meta.TestMethod {

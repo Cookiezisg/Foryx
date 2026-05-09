@@ -117,7 +117,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*apikeydomain.API
 
 func validateCreate(in CreateInput) error {
 	if !IsValidProvider(in.Provider) {
-		return fmt.Errorf("provider %q: %w", in.Provider, apikeydomain.ErrInvalidProvider)
+		return fmt.Errorf("apikey.validateCreate: provider %q: %w", in.Provider, apikeydomain.ErrInvalidProvider)
 	}
 	if strings.TrimSpace(in.Key) == "" {
 		return apikeydomain.ErrKeyRequired
@@ -180,11 +180,11 @@ func (s *Service) List(ctx context.Context, filter apikeydomain.ListFilter) ([]*
 func (s *Service) Test(ctx context.Context, id string) (*TestResult, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("apikey.Service.Test: %w", err)
 	}
 	k, err := s.repo.Get(ctx, id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("apikey.Service.Test: %w", err)
 	}
 	plain, err := s.encryptor.Decrypt(ctx, []byte(k.KeyEncrypted))
 	if err != nil {
@@ -219,7 +219,7 @@ func (s *Service) Test(ctx context.Context, id string) (*TestResult, error) {
 		models = result.ModelsFound
 	}
 	if upErr := s.repo.UpdateTestResult(detached, id, status, errMsg, models); upErr != nil {
-		return nil, upErr
+		return nil, fmt.Errorf("apikey.Service.Test: persist result: %w", upErr)
 	}
 	s.log.Info("apikey tested",
 		zap.String("key_id", id),
