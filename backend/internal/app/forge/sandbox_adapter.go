@@ -2,7 +2,7 @@
 // sandboxapp.Service. Forge service code is unchanged; this adapter
 // translates each forge call into the appropriate Service operation.
 //
-// Owner.ID convention: "<forgeID>:<envID>". Sandbox.md §5 suggests using
+// Owner.ID convention: "<forgeID>_<envID>". Sandbox.md §5 suggests using
 // just envID as the owner key (so multiple forges sharing the same deps
 // share a single env), but that breaks v1 forge's per-forge N=3 EnvID
 // buffer for quick revert. Adapter keeps v1 behavior — one env per
@@ -19,7 +19,7 @@
 // sandbox_adapter.go ——把 forge.Sandbox 端口桥接到新 sandboxapp.Service。
 // forge service 代码不变；adapter 把每个 forge 调用翻译为对应 Service 操作。
 //
-// Owner.ID 约定 "<forgeID>:<envID>"。sandbox.md §5 建议仅用 envID 作 owner
+// Owner.ID 约定 "<forgeID>_<envID>"。sandbox.md §5 建议仅用 envID 作 owner
 // key（多 forge 共享相同 deps 共享一份 env），但这破坏 v1 forge 的 per-forge
 // N=3 EnvID buffer 快速 revert。adapter 保 v1 行为——一个 env 对应一个
 // (forge, deps)——v2 dogfooding 显示磁盘影响后再考虑共享 env 优化。
@@ -88,16 +88,16 @@ func (a *SandboxAdapter) PythonPath() string {
 }
 
 // Sync materializes the venv via Service.EnsureEnv. Owner is
-// (forge, "<forgeID>:<envID>"). OnProgress is wrapped so the v1 two-arg
+// (forge, "<forgeID>_<envID>"). OnProgress is wrapped so the v1 two-arg
 // callback bridges to the v2 three-arg ProgressFunc (percent stays -1).
 //
-// Sync 通过 Service.EnsureEnv 物化 venv。Owner 是 (forge, "<forgeID>:<envID>")。
+// Sync 通过 Service.EnsureEnv 物化 venv。Owner 是 (forge, "<forgeID>_<envID>")。
 // OnProgress 包装一层，让 v1 两参 callback 桥接到 v2 三参 ProgressFunc
 // （percent 保 -1）。
 func (a *SandboxAdapter) Sync(ctx context.Context, req SyncRequest) error {
 	owner := sandboxdomain.Owner{
 		Kind: sandboxdomain.OwnerKindForge,
-		ID:   req.ForgeID + ":" + req.EnvID,
+		ID:   req.ForgeID + "_" + req.EnvID,
 	}
 	spec := sandboxdomain.EnvSpec{
 		Runtime: sandboxdomain.RuntimeSpec{Kind: "python", Version: req.PythonVersion},
@@ -154,7 +154,7 @@ func (a *SandboxAdapter) Run(ctx context.Context, req RunRequest) (*forgedomain.
 
 	owner := sandboxdomain.Owner{
 		Kind: sandboxdomain.OwnerKindForge,
-		ID:   req.ForgeID + ":" + req.EnvID,
+		ID:   req.ForgeID + "_" + req.EnvID,
 	}
 	res, spawnErr := a.svc.Spawn(ctx, owner, sandboxdomain.SpawnOpts{
 		Cmd:   "python",
@@ -226,7 +226,7 @@ func (a *SandboxAdapter) Destroy(ctx context.Context, forgeID string) error {
 	if err != nil {
 		return fmt.Errorf("forgeapp.SandboxAdapter.Destroy: list envs: %w", err)
 	}
-	prefix := forgeID + ":"
+	prefix := forgeID + "_"
 	for _, e := range envs {
 		if !strings.HasPrefix(e.OwnerID, prefix) {
 			continue
@@ -251,7 +251,7 @@ func (a *SandboxAdapter) Destroy(ctx context.Context, forgeID string) error {
 func (a *SandboxAdapter) DestroyEnv(ctx context.Context, forgeID, envID string) error {
 	owner := sandboxdomain.Owner{
 		Kind: sandboxdomain.OwnerKindForge,
-		ID:   forgeID + ":" + envID,
+		ID:   forgeID + "_" + envID,
 	}
 	return a.svc.Destroy(ctx, owner)
 }
