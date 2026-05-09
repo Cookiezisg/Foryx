@@ -10,8 +10,27 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"iter"
 	"strings"
+)
+
+// ── Sentinel errors ───────────────────────────────────────────────────────────
+//
+// HTTP-status-classified errors from upstream LLM providers. Wrapping with
+// these sentinels lets callers `errors.Is(err, llm.ErrAuthFailed)` and
+// react accordingly (e.g. apikey.Service.MarkInvalid on 401/403). All
+// registered in transport/httpapi/response/errmap.go.
+//
+// 上游 LLM provider 按 HTTP 状态分类的 sentinel。调用方可用
+// `errors.Is(err, llm.ErrAuthFailed)` 判别并相应反应（例：401/403
+// 触发 apikey.MarkInvalid）。全部登记 errmap。
+var (
+	ErrAuthFailed    = errors.New("llm: authentication failed")
+	ErrRateLimited   = errors.New("llm: rate limited")
+	ErrBadRequest    = errors.New("llm: bad request")
+	ErrModelNotFound = errors.New("llm: model not found")
+	ErrProviderError = errors.New("llm: provider error")
 )
 
 // ── Stream events ─────────────────────────────────────────────────────────────

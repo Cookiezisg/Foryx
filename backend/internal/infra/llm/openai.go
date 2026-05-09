@@ -246,9 +246,14 @@ func emitOpenAIChunk(chunk oaiChunk, state *toolCallState, yield func(StreamEven
 	// 没有这个检测流就静默终止。fire EventError 让 chat 层暴露给用户，
 	// 而不是显示空白 assistant 回复。
 	if chunk.Error != nil {
+		// In-stream provider error (TE-23 OpenRouter pattern). Wrap
+		// with ErrProviderError sentinel so callers can discriminate
+		// the same way as classifyHTTPError above.
+		// in-stream provider 错误用 ErrProviderError sentinel %w 包装，
+		// 让调用方与 classifyHTTPError 同样可 errors.Is 区分。
 		yield(StreamEvent{
 			Type: EventError,
-			Err:  fmt.Errorf("llm: provider returned in-stream error: %s", chunk.Error.Message),
+			Err:  fmt.Errorf("%w: in-stream: %s", ErrProviderError, chunk.Error.Message),
 		})
 		return false
 	}
@@ -480,9 +485,17 @@ func jsonString(s string) json.RawMessage {
 // ── HTTP error classification ─────────────────────────────────────────────────
 
 // classifyHTTPError maps HTTP status codes to descriptive errors.
-// The raw response body is included for debugging.
+// The raw response body is included for debugging. Each branch wraps
+// a sentinel (llm.ErrAuthFailed / ErrRateLimited / ErrBadRequest /
+// ErrModelNotFound / ErrProviderError) so callers can discriminate
+// via errors.Is — most importantly, 401 detection lights up the
+// apikey.MarkInvalid path so a stale API key flips to "error" status
+// in the UI rather than silently producing 500s on every call.
 //
-// classifyHTTPError 把 HTTP 状态码映射为描述性错误，包含原始响应体供调试。
+// classifyHTTPError 把 HTTP 状态码映射为描述性错误。每分支用 sentinel
+// %w 包装让调用方可 errors.Is 区分——最重要：401 检测让
+// apikey.MarkInvalid 链路点亮，过期 key 翻 UI "error" 状态而非每次调
+// 都静默 500。
 func classifyHTTPError(status int, body []byte) error {
 	msg := strings.TrimSpace(string(body))
 	if len(msg) > 200 {
@@ -490,15 +503,17 @@ func classifyHTTPError(status int, body []byte) error {
 	}
 	switch status {
 	case http.StatusUnauthorized:
-		return fmt.Errorf("llm: authentication failed (401): %s", msg)
+		return fmt.Errorf("%w (401): %s", ErrAuthFailed, msg)
+	case http.StatusForbidden:
+		return fmt.Errorf("%w (403): %s", ErrAuthFailed, msg)
 	case http.StatusTooManyRequests:
-		return fmt.Errorf("llm: rate limited (429): %s", msg)
+		return fmt.Errorf("%w (429): %s", ErrRateLimited, msg)
 	case http.StatusBadRequest:
-		return fmt.Errorf("llm: bad request (400): %s", msg)
+		return fmt.Errorf("%w (400): %s", ErrBadRequest, msg)
 	case http.StatusNotFound:
-		return fmt.Errorf("llm: model not found (404): %s", msg)
+		return fmt.Errorf("%w (404): %s", ErrModelNotFound, msg)
 	default:
-		return fmt.Errorf("llm: provider error (%d): %s", status, msg)
+		return fmt.Errorf("%w (%d): %s", ErrProviderError, status, msg)
 	}
 }
 

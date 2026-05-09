@@ -20,6 +20,7 @@ import (
 	subagentdomain "github.com/sunweilin/forgify/backend/internal/domain/subagent"
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
+	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
@@ -165,6 +166,20 @@ var errTable = map[error]errMapping{
 	reqctxpkg.ErrMissingUserID:         {http.StatusInternalServerError, "INTERNAL_ERROR"},
 	reqctxpkg.ErrMissingConversationID: {http.StatusInternalServerError, "INTERNAL_ERROR"},
 	cryptoinfra.ErrUnsupportedVersion:  {http.StatusInternalServerError, "INTERNAL_ERROR"},
+
+	// LLM provider HTTP-status sentinels — wrapped by classifyHTTPError +
+	// in-stream chunk.Error path in infra/llm. Letting callers
+	// errors.Is() these enables paths like apikey.MarkInvalid on 401/403
+	// (key auto-flips to "error" in UI) and provider-specific UX.
+	//
+	// LLM provider HTTP 状态分类 sentinel——infra/llm 的 classifyHTTPError +
+	// 流内 chunk.Error 包装。调用方 errors.Is() 能力让 401/403 触发
+	// apikey.MarkInvalid（UI 自动翻"error"）等路径成立。
+	llminfra.ErrAuthFailed:    {http.StatusUnauthorized, "LLM_AUTH_FAILED"},
+	llminfra.ErrRateLimited:   {http.StatusTooManyRequests, "LLM_RATE_LIMITED"},
+	llminfra.ErrBadRequest:    {http.StatusBadRequest, "LLM_BAD_REQUEST"},
+	llminfra.ErrModelNotFound: {http.StatusNotFound, "LLM_MODEL_NOT_FOUND"},
+	llminfra.ErrProviderError: {http.StatusBadGateway, "LLM_PROVIDER_ERROR"},
 
 	// Standard library context errors. Browser hard-refresh / tab close
 	// cancels r.Context(), which propagates up through every store call
