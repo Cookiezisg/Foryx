@@ -191,7 +191,15 @@ func (s *Service) prepareSpawn(ctx context.Context, owner sandboxdomain.Owner, o
 		return "", "", nil, fmt.Errorf("sandboxapp.Spawn: %w", sandboxdomain.ErrSpawnFailed)
 	}
 	if opts.Cmd == "" {
-		return "", "", nil, fmt.Errorf("sandboxapp.Spawn: empty Cmd")
+		// Caller wiring bug: every internal Spawn caller (forge, future
+		// workflow run) builds opts with a concrete Cmd. Empty here =
+		// future code path bypassed. panic so dev sees the stack
+		// rather than masking as 500 unmapped (same approach as
+		// apikey.HTTPTester default + mcp.AddServer + sandbox.EnsureEnv).
+		//
+		// 调用方 wiring bug：每个内部 Spawn caller 都填了 Cmd。空 = 未来
+		// 代码绕过——panic 让 dev 看 stack（同 apikey/mcp/sandbox 模式）。
+		panic("sandboxapp.Spawn: opts.Cmd is empty — caller wiring bug")
 	}
 
 	envRow, err := s.repo.FindEnvByOwner(ctx, owner.Kind, owner.ID)

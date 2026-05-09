@@ -179,6 +179,16 @@ var (
 	ErrSpawnFailed          = errors.New("sandbox: spawn process failed")
 	ErrSpawnTimeout         = errors.New("sandbox: spawn process timeout")
 	ErrEnvInUse             = errors.New("sandbox: env in use; cannot destroy")
+	// ErrInvalidOwnerID is returned when a caller-supplied owner.ID
+	// contains characters that would break PATH-prepend resolution
+	// (POSIX/Windows path separators, shell metacharacters, whitespace,
+	// NUL). Defense-in-depth against bash auto-route regression — see
+	// the B1 fix in commit 3cdf18a + sandbox.md §3.
+	//
+	// ErrInvalidOwnerID 在调用方传的 owner.ID 含会破坏 PATH 前置的字符
+	// （POSIX/Windows 分隔符、shell 元字符、空白、NUL）时返回。防 bash
+	// auto-route 回归（commit 3cdf18a 修过的 B1）+ sandbox.md §3。
+	ErrInvalidOwnerID = errors.New("sandbox: owner.ID contains PATH-meta or whitespace character")
 	// ErrDockerNotInstalled = `docker` binary not on PATH. Forgify cannot
 	// install Docker for the user (system service, requires root/admin) —
 	// caller should surface a platform-specific install URL.

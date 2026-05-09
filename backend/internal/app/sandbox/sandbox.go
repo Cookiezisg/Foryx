@@ -455,7 +455,17 @@ func (s *Service) EnsureEnv(ctx context.Context, owner sandboxdomain.Owner, spec
 		return nil, fmt.Errorf("sandboxapp.EnsureEnv: %w", sandboxdomain.ErrEnvCreateFailed)
 	}
 	if owner.Kind == "" || owner.ID == "" {
-		return nil, fmt.Errorf("sandboxapp.EnsureEnv: missing owner.Kind or owner.ID")
+		// Caller wiring bug: every internal caller (mcp.InstallFromRegistry,
+		// chat bash auto-route, forge run) constructs owner with both
+		// fields set. Empty here = future code path bypassed those.
+		// panic so dev sees the stack rather than masking as 500
+		// "unmapped domain error" (same approach as apikey.HTTPTester
+		// default branch + mcp.AddServer cfg.Name guard).
+		//
+		// 调用方 wiring bug：每个内部 caller 都填了 owner 两字段。空 =
+		// 未来代码绕过——panic 让 dev 看 stack（同 apikey.HTTPTester
+		// default + mcp.AddServer cfg.Name guard）。
+		panic("sandboxapp.EnsureEnv: missing owner.Kind or owner.ID — caller wiring bug")
 	}
 	// owner.ID becomes a literal directory name (envRel below) which
 	// gets prepended to the runtime PATH at exec time. POSIX/Windows
@@ -467,7 +477,7 @@ func (s *Service) EnsureEnv(ctx context.Context, owner sandboxdomain.Owner, spec
 	// POSIX/Windows PATH 分隔符 (":"/";")、shell 元字符与空白若进路径段
 	// 会让解析悄悄断掉。早 reject 防 bash auto-route 那次修复回归。
 	if strings.ContainsAny(owner.ID, ":;= \t\n\r\x00") {
-		return nil, fmt.Errorf("sandboxapp.EnsureEnv: owner.ID contains PATH-meta or whitespace character: %q", owner.ID)
+		return nil, fmt.Errorf("sandboxapp.EnsureEnv: %w: %q", sandboxdomain.ErrInvalidOwnerID, owner.ID)
 	}
 
 	envLock := s.ownerLock(owner)
@@ -547,7 +557,18 @@ func (s *Service) EnsureEnv(ctx context.Context, owner sandboxdomain.Owner, spec
 	env.Status = sandboxdomain.EnvStatusReady
 	env.SizeBytes = computeDirSize(envPath)
 	env.UpdatedAt = time.Now()
-	if err := s.repo.UpdateEnv(ctx, env); err != nil {
+	// Terminal-state write per §S9 — ride context.Background(), not
+	// the request ctx. Env table doesn't filter by uid, so no identity
+	// is needed; if the caller cancels mid-install, the install work
+	// has already happened on disk and the row must reflect ready or
+	// the next caller sees status=installing forever (only self-heals
+	// via deps-drift rebuild). Mirrors spawn.go::trackedHandle.unregister.
+	//
+	// 终态写（§S9）走 context.Background()——env 表不按 uid 过滤无需身份；
+	// caller 取消时装包已在磁盘落地，row 必须反映 ready，否则下次 caller
+	// 看到 status=installing 永远不脱（只能靠 deps-drift 自愈）。同
+	// spawn.go::trackedHandle.unregister 模式。
+	if err := s.repo.UpdateEnv(context.Background(), env); err != nil {
 		return nil, fmt.Errorf("sandboxapp.EnsureEnv: persist ready: %w", err)
 	}
 	s.publishEnv(ctx, env) // status=ready
@@ -594,13 +615,23 @@ func (s *Service) destroyLocked(ctx context.Context, owner sandboxdomain.Owner, 
 // Best-effort — if the update itself fails, we log and let the caller
 // surface the original error.
 //
-// markEnvFailed 翻 Status=failed + 把 err.Error() 写 ErrorMsg。Best-effort
-// ——更新失败 log 让调用方上报原错。
+// Terminal-state write per §S9 — uses context.Background() so a
+// caller cancel mid-install (which is exactly when failure paths
+// fire) doesn't drop the failure record, leaving the env stuck at
+// status=installing. Same reasoning as the success path's
+// UpdateEnv at the EnsureEnv ready transition.
+//
+// markEnvFailed 翻 Status=failed + 把 err.Error() 写 ErrorMsg。
+// Best-effort ——更新失败 log 让调用方上报原错。
+//
+// 终态写（§S9）走 context.Background()——caller 取消（正是失败路径
+// 触发时刻）不能丢失败记录否则 env 卡 status=installing。同 EnsureEnv
+// ready 那处的逻辑。
 func (s *Service) markEnvFailed(ctx context.Context, env *sandboxdomain.Env, cause error) {
 	env.Status = sandboxdomain.EnvStatusFailed
 	env.ErrorMsg = cause.Error()
 	env.UpdatedAt = time.Now()
-	if err := s.repo.UpdateEnv(ctx, env); err != nil {
+	if err := s.repo.UpdateEnv(context.Background(), env); err != nil {
 		s.log.Warn("sandbox: failed-status persist failed",
 			zap.String("env_id", env.ID),
 			zap.Error(err))

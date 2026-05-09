@@ -105,6 +105,7 @@ var errTable = map[error]errMapping{
 	sandboxdomain.ErrSpawnFailed:          {http.StatusBadGateway, "SANDBOX_SPAWN_FAILED"},
 	sandboxdomain.ErrSpawnTimeout:         {http.StatusGatewayTimeout, "SANDBOX_SPAWN_TIMEOUT"},
 	sandboxdomain.ErrEnvInUse:             {http.StatusConflict, "SANDBOX_ENV_IN_USE"},
+	sandboxdomain.ErrInvalidOwnerID:       {http.StatusBadRequest, "SANDBOX_INVALID_OWNER_ID"},
 
 	// subagent domain / subagent domain 层
 	// Only the first two reach handlers; ErrMaxTurnsExceeded / ErrCancelled
