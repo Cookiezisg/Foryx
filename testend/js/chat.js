@@ -41,7 +41,7 @@ document.addEventListener('alpine:init', () => {
     uploading: false,
     askDraft: {},         // toolCallId → draft answer text (for in-flight AskUserQuestion)
     _es: null,            // /api/v1/eventlog SSE
-    _ns: null,            // /api/v1/notifications SSE
+    _unsubNotif: null,    // notifBus subscription disposer
 
     // Per-block expansion state — keyed by block.id (reasoning) or
     // tool-call id (tool steps). Default-folded keeps DOM bounded
@@ -784,17 +784,16 @@ document.addEventListener('alpine:init', () => {
     // ── SSE: notifications (global) ─────────────────────────────────────────
 
     _connectNotifications() {
-      // Persistent SSE for the lifetime of the chat panel. Listens for
-      // entity updates: conversation rename, todo updates, future
-      // mcp/skill/system warnings.
+      // Subscribe to the shared notifBus instead of opening our own
+      // EventSource. The bus owns the underlying /api/v1/notifications
+      // connection (see app.js Alpine.store('notifBus')) and fans events
+      // to every listener — saves an HTTP/1.1 connection slot, since
+      // tab-notifications.js subscribes to the same bus.
       //
-      // 持久 SSE。监听 entity 更新：conv 改名 / todo 更新 / 未来 mcp/skill/系统警告。
-      const ns = new EventSource('/api/v1/notifications')
-      this._ns = ns
-      ns.addEventListener('notification', e => {
-        let n
-        try { n = JSON.parse(e.data) } catch { return }
-        if (!n || !n.type) return
+      // 订共享 notifBus 而不是自己开 EventSource。bus 持有 /api/v1/notifications
+      // 真实连接（见 app.js）并把事件分发给所有 listener——省一个
+      // HTTP/1.1 connection slot（tab-notifications 也订同一 bus）。
+      this._unsubNotif = Alpine.store('notifBus').subscribe(n => {
         switch (n.type) {
           case 'conversation':
             // autoTitle / rename — update title if it's the active conv.
@@ -820,7 +819,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     _closeNotifications() {
-      if (this._ns) { this._ns.close(); this._ns = null }
+      if (this._unsubNotif) { this._unsubNotif(); this._unsubNotif = null }
     },
 
     // ── Scroll ──────────────────────────────────────────────────────────────

@@ -14,20 +14,20 @@ document.addEventListener('alpine:init', () => {
     levelFilter: 'all', // 'all' | 'error' | 'warn+'
     textFilter: '',
     connected: false,
-    _es: null,
+    _unsub: null,
 
     init() {
       this._connect();
     },
 
     _connect() {
-      const es = new EventSource('/dev/logs');
-      this._es = es;
-      es.addEventListener('open', () => { this.connected = true; });
-      es.addEventListener('error', () => { this.connected = false; });
-      es.addEventListener('log', e => {
-        let entry;
-        try { entry = JSON.parse(e.data); } catch { return; }
+      // Subscribe to the shared logBus rather than opening a second
+      // /dev/logs EventSource — tab-logs already keeps the bus open.
+      // 订共享 logBus 而不是开第二条 /dev/logs——tab-logs 已让 bus 保持开启。
+      const bus = Alpine.store('logBus');
+      this.connected = bus.connState === 'live';
+      this.$watch('$store.logBus.connState', v => { this.connected = v === 'live'; });
+      this._unsub = bus.subscribe(entry => {
         // Server-side log entries don't always carry a level for raw stdout
         // captures; default to 'info' so the row at least renders. Only
         // ERROR/WARN/INFO/DEBUG are styled — anything else falls through to
@@ -52,7 +52,7 @@ document.addEventListener('alpine:init', () => {
     },
 
     destroy() {
-      if (this._es) { this._es.close(); this._es = null; }
+      if (this._unsub) { this._unsub(); this._unsub = null; }
     },
 
     get filteredEntries() {

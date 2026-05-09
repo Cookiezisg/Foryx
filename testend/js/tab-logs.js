@@ -6,7 +6,7 @@ document.addEventListener('alpine:init', () => {
     filter: '',
     autoScroll: true,
     connected: false,
-    _es: null,
+    _unsub: null,         // logBus subscription disposer
 
     get filtered() {
       if (!this.filter) return this.entries
@@ -23,18 +23,13 @@ document.addEventListener('alpine:init', () => {
     },
 
     _connect() {
-      const es = new EventSource('/dev/logs')
-      this._es = es
-      es.addEventListener('open', () => { this.connected = true })
-      es.addEventListener('error', () => { this.connected = false })
-      es.addEventListener('log', e => {
-        // Defensive parse: a single malformed payload would otherwise
-        // throw and silently kill the listener (no recovery until
-        // browser auto-reconnects). Mirrors tab-errors.js handling.
-        // 防御性解析：单条畸形数据不 try/catch 就 throw 杀掉 listener，
-        // 后续直到重连前一律收不到。匹配 tab-errors.js。
-        let entry
-        try { entry = JSON.parse(e.data) } catch { return }
+      // Subscribe to the shared logBus instead of opening our own
+      // EventSource — tab-errors subscribes to the same bus.
+      // 订共享 logBus 而不是自己 new EventSource，tab-errors 同享。
+      const bus = Alpine.store('logBus')
+      this.connected = bus.connState === 'live'
+      this.$watch('$store.logBus.connState', v => { this.connected = v === 'live' })
+      this._unsub = bus.subscribe(entry => {
         entry._time = this._shortTime(entry.time)
         this.entries.push(entry)
         // Cap to 2000 entries to avoid memory bloat.

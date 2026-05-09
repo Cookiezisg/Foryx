@@ -34,10 +34,11 @@ document.addEventListener('alpine:init', () => {
     sourceFilter: 'all',
     typeFilters: new Set(),
 
-    // SSE state. _ns is the EventSource; null when closed.
+    // notifBus subscription disposer; bus connection state mirrored
+    // into our local connState so the existing UI indicator stays.
     //
-    // SSE 状态。
-    _ns: null,
+    // notifBus 订阅 disposer；bus 的 connState 镜像到本地保持 UI 指示器不变。
+    _unsubNotif: null,
     connState: 'closed',
 
     // Type vocabularies (for filter chip menus).
@@ -74,27 +75,29 @@ document.addEventListener('alpine:init', () => {
     },
 
     _connectSSE() {
-      const es = new EventSource('/api/v1/notifications')
-      this._ns = es
-      this.connState = 'live'
-      es.addEventListener('notification', e => {
-        let n
-        try { n = JSON.parse(e.data) } catch { return }
-        if (!n || !n.type) return
+      // Subscribe to the shared notifBus rather than open our own
+      // EventSource. The bus exposes connState as a string; we mirror
+      // it into local state via a tiny watcher (Alpine $watch on a
+      // store path works inline).
+      //
+      // 订共享 notifBus 而不是自己 new EventSource。bus 暴露 connState，
+      // 用 $watch 镜像到本地。
+      const bus = Alpine.store('notifBus')
+      this.connState = bus.connState
+      this._unsubNotif = bus.subscribe((n, lastEventId) => {
         this.events.push({
-          id: 'sse:' + (e.lastEventId || (Date.now() + ':' + Math.random())),
+          id: 'sse:' + (lastEventId || (Date.now() + ':' + Math.random())),
           source: 'sse',
           type: n.type,
           ts: Date.now(),
           summary: this._summarizeSSE(n),
           data: n,
-          seq: e.lastEventId || '',
+          seq: lastEventId || '',
           conversationId: n.conversationId || '',
         })
         this._trim()
       })
-      es.onopen = () => { this.connState = 'live' }
-      es.onerror = () => { this.connState = 'error' }
+      this.$watch('$store.notifBus.connState', v => { this.connState = v })
     },
 
     _trim() {

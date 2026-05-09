@@ -534,89 +534,6 @@
 
       </div>
 
-      <!-- SSE Tab — raw two-channel viewer for /api/v1/eventlog +
-           /api/v1/notifications. Higher-level rendering lives in
-           chat.js (eventlog → bubbles) and tab-notifications.js
-           (notifications → entity feed). This tab is for protocol
-           debugging — every event renders as a one-liner with the
-           full JSON payload behind a <details> expander.
-           SSE tab —— /api/v1/eventlog + /api/v1/notifications 的 raw
-           两通道 viewer。语义渲染在 chat.js + tab-notifications.js；
-           本 tab 调试协议用，每事件一行 + <details> 展开看 JSON。 -->
-      <div class="tab-content" x-show="activeRightTab==='sse'" x-data="sseTab()">
-        <div class="panel-toolbar">
-          <!-- Channel switch -->
-          <div style="display:flex;gap:2px">
-            <button class="sse-view-btn" :class="{active: channel==='notifications'}"
-                    @click="setChannel('notifications')">notifications</button>
-            <button class="sse-view-btn" :class="{active: channel==='eventlog'}"
-                    @click="setChannel('eventlog')">eventlog</button>
-          </div>
-          <!-- Eventlog conversationId input (hidden when notifications) -->
-          <input x-show="channel==='eventlog'"
-                 x-model="convId"
-                 placeholder="conversationId (cv_…)"
-                 style="font-family:Consolas,monospace;font-size:11px;padding:3px 6px;width:200px;border:1px solid var(--border);border-radius:3px"
-                 @keydown.enter="connect()">
-          <button x-show="channel==='eventlog'" class="btn-small" @click="connect()">reload</button>
-
-          <span style="margin-left:auto;display:flex;gap:6px;align-items:center;font-size:10px;color:var(--text-mute)">
-            <span x-text="visibleEvents().length + (filterTypes.size ? '/' + events.length : '') + ' / 500'"></span>
-            <span :style="'color:' + (connState==='live' ? '#2a9d3a' : connState==='error' ? '#c93434' : '#888')"
-                  x-text="connState==='live' ? '● live' : connState==='error' ? '✕ error' : '○ closed'"></span>
-            <button class="btn-small" @click="togglePause()" :title="paused ? 'Resume' : 'Pause'"
-                    x-text="paused ? '▶' : '⏸'"></button>
-            <button class="btn-small" @click="clear()">clear</button>
-          </span>
-        </div>
-
-        <!-- Type filter — multi-select chips. None selected = show all -->
-        <div style="padding:4px 10px;display:flex;gap:4px;flex-wrap:wrap;border-bottom:1px solid var(--border);background:var(--canvas-subtle)">
-          <span style="font-size:10px;color:var(--text-mute);align-self:center">filter:</span>
-          <template x-for="t in knownTypes()" :key="t">
-            <button class="btn-small"
-                    :style="filterTypes.has(t) ? 'background:var(--accent-soft, #e6f0ff);font-weight:600' : ''"
-                    @click="toggleFilter(t)"
-                    x-text="t"></button>
-          </template>
-          <span x-show="filterTypes.size" style="font-size:10px;color:var(--text-mute);align-self:center;margin-left:8px">
-            (<span x-text="filterTypes.size"></span> active)
-          </span>
-        </div>
-
-        <!-- Stream — newest at bottom, console-style. Auto-scroll to
-             bottom unless the user has scrolled up. -->
-        <div x-ref="stream" class="event-log" style="font-size:11px">
-          <template x-for="(ev, i) in visibleEvents()" :key="i">
-            <details style="border-left:2px solid var(--border-subtle);padding:2px 6px;margin-bottom:2px;background:var(--canvas-default)">
-              <summary style="cursor:pointer;display:flex;gap:8px;align-items:baseline;font-family:Consolas,monospace">
-                <span style="color:var(--text-mute);min-width:36px" x-text="'#' + ev.seq"></span>
-                <span style="color:var(--text-mute);min-width:88px" x-text="ev.time"></span>
-                <span :style="'color:' + typeColor(ev.type) + ';font-weight:600;min-width:120px'"
-                      x-text="ev.type"></span>
-                <span style="color:var(--fg-muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
-                      x-text="ev.summary"></span>
-              </summary>
-              <pre style="margin:4px 0 4px 36px;padding:4px;background:var(--canvas-subtle);font-family:Consolas,monospace;font-size:10px;white-space:pre-wrap;max-height:300px;overflow:auto"
-                   x-text="pretty(ev.parsed)"></pre>
-            </details>
-          </template>
-          <div x-show="events.length === 0 && connState === 'live'"
-               style="color:var(--text-mute);font-size:11px;padding:8px">
-            Connected — waiting for events on
-            <code x-text="channel === 'eventlog' ? '/api/v1/eventlog?conversationId=' + convId : '/api/v1/notifications'"></code>
-          </div>
-          <div x-show="connState === 'closed' && channel === 'eventlog' && !convId"
-               style="color:var(--text-mute);font-size:11px;padding:8px">
-            Enter a conversationId above + press Enter (or click reload) to subscribe.
-          </div>
-          <div x-show="connState === 'error'"
-               style="color:var(--err);font-size:11px;padding:8px">
-            Connection error — check the backend is up and the conversationId exists. EventSource will keep retrying automatically.
-          </div>
-        </div>
-      </div>
-
       <!-- Logs Tab -->
       <div class="tab-content" x-show="activeRightTab==='logs'" x-data="logsTab()">
         <div class="panel-toolbar">
@@ -2143,7 +2060,6 @@
   <script src="/dev/static/js/app.js?v=__BUILD__"></script>
   <script src="/dev/static/js/sidebar.js?v=__BUILD__"></script>
   <script src="/dev/static/js/chat.js?v=__BUILD__"></script>
-  <script src="/dev/static/js/tab-sse.js?v=__BUILD__"></script>
   <script src="/dev/static/js/tab-logs.js?v=__BUILD__"></script>
   <script src="/dev/static/js/tab-sql.js?v=__BUILD__"></script>
   <script src="/dev/static/js/tab-tests.js?v=__BUILD__"></script>
