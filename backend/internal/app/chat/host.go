@@ -72,7 +72,7 @@ func (h *chatHost) WriteFinalize(ctx context.Context, blocks []chatdomain.Block,
 	//
 	// 事件日志：关 assistant message 走 detached ctx——上游 cancel 不能让
 	// Bridge.Publish 在订阅者（SSE 流）拿到 message_stop 前触发 ctx.Done 早退。
-	h.svc.emitter.StopMessage(saveCtx, h.msgID, mapEventLogStatus(msg.Status),
+	h.svc.emitter.StopMessage(saveCtx, h.msgID, h.mapEventLogStatus(msg.Status),
 		msg.StopReason, msg.ErrorCode, msg.ErrorMessage,
 		msg.InputTokens, msg.OutputTokens)
 	_ = ctx // legacy param retained for loop.Host signature
@@ -87,9 +87,17 @@ func (h *chatHost) WriteFinalize(ctx context.Context, blocks []chatdomain.Block,
 }
 
 // mapEventLogStatus translates chatdomain.Status* → eventlogdomain.Status*.
+// Default branch returns Completed for unknown inputs, but logs a Warn so
+// chatdomain status drift (new Status* added without updating this switch)
+// surfaces in operator audit trail rather than silently mapping to a
+// possibly-incorrect terminal state. Method receiver gives access to the
+// service logger; previously a free function.
 //
 // mapEventLogStatus 翻译 chatdomain.Status* → eventlogdomain.Status*。
-func mapEventLogStatus(s string) string {
+// default 分支返 Completed 兜底未知输入，同时 Warn log 让 chatdomain 增加
+// 新 Status* 但未更新 switch 的漂移能在 operator 日志可见——不悄悄映射成
+// 可能错误的终态。改成 method 接收者以拿 service logger（之前是自由函数）。
+func (h *chatHost) mapEventLogStatus(s string) string {
 	switch s {
 	case chatdomain.StatusStreaming:
 		return eventlogdomain.StatusStreaming
@@ -97,7 +105,11 @@ func mapEventLogStatus(s string) string {
 		return eventlogdomain.StatusError
 	case chatdomain.StatusCancelled:
 		return eventlogdomain.StatusCancelled
+	case chatdomain.StatusCompleted, chatdomain.StatusPending:
+		return eventlogdomain.StatusCompleted
 	default:
+		h.svc.log.Warn("chat.host.mapEventLogStatus: unknown chatdomain status; mapped to Completed",
+			zap.String("status", s), zap.String("msg_id", h.msgID))
 		return eventlogdomain.StatusCompleted
 	}
 }
