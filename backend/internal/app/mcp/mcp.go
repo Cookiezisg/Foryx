@@ -248,7 +248,22 @@ func (s *Service) Stop(_ context.Context) error {
 // （让用户编辑 + Reconnect，不至于丢配置）。
 func (s *Service) AddServer(ctx context.Context, cfg mcpdomain.ServerConfig) error {
 	if cfg.Name == "" {
-		return fmt.Errorf("mcpapp.AddServer: server name required")
+		// Programming bug: every caller (PUT /mcp-servers/{name} handler
+		// fills from URL path; InstallFromRegistry fills from registry
+		// entry; Import iterates over named map keys) constructs cfg
+		// with a non-empty Name. Empty here means a future call site
+		// bypassed those — wiring bug, not user input. panic so dev
+		// sees the stack immediately rather than the call landing as
+		// a generic 500 "unmapped domain error". Same approach as
+		// apikey.HTTPTester.Test default branch (calibration audit).
+		//
+		// 编程 bug：每个调用方都填了 Name（PUT /mcp-servers/{name} 从
+		// URL path / InstallFromRegistry 从 registry entry / Import 从
+		// 命名 map key 迭代）。空 = 未来某调用方绕过了这些——wiring bug
+		// 不是用户输入。panic 让 dev 立刻看 stack，避免 caller 看到
+		// generic 500 "unmapped domain error"。同 apikey.HTTPTester.Test
+		// default 分支（calibration audit）。
+		panic("mcpapp.Service.AddServer: cfg.Name is empty — caller wiring bug; every code path should fill Name (URL path / registry slug / Import map key)")
 	}
 
 	s.mu.Lock()
@@ -380,7 +395,7 @@ func (s *Service) connectOne(ctx context.Context, name string) error {
 	state := s.states[name]
 	s.mu.RUnlock()
 	if !ok || state == nil {
-		return fmt.Errorf("connectOne: %w: %q", mcpdomain.ErrServerNotFound, name)
+		return fmt.Errorf("mcpapp.connectOne: %w: %q", mcpdomain.ErrServerNotFound, name)
 	}
 
 	s.mu.Lock()
@@ -396,11 +411,11 @@ func (s *Service) connectOne(ctx context.Context, name string) error {
 		state.LastErrorAt = &now
 		s.mu.Unlock()
 		if cerr := client.Close(); cerr != nil {
-			s.log.Warn("connectOne: close after Initialize-fail also failed; orphan subprocess",
+			s.log.Warn("mcpapp.connectOne: close after Initialize-fail also failed; orphan subprocess",
 				zap.String("server", name), zap.Error(cerr))
 		}
 		s.publishStatus(ctx, name)
-		return err
+		return fmt.Errorf("mcpapp.connectOne: initialize: %w", err)
 	}
 
 	tools, err := client.ListTools(ctx)
@@ -412,11 +427,11 @@ func (s *Service) connectOne(ctx context.Context, name string) error {
 		state.LastErrorAt = &now
 		s.mu.Unlock()
 		if cerr := client.Close(); cerr != nil {
-			s.log.Warn("connectOne: close after ListTools-fail also failed; orphan subprocess",
+			s.log.Warn("mcpapp.connectOne: close after ListTools-fail also failed; orphan subprocess",
 				zap.String("server", name), zap.Error(cerr))
 		}
 		s.publishStatus(ctx, name)
-		return err
+		return fmt.Errorf("mcpapp.connectOne: list tools: %w", err)
 	}
 
 	now := time.Now().UTC()
@@ -525,7 +540,11 @@ func (s *Service) ListTools(_ context.Context) []mcpdomain.ToolDef {
 // V3（2026-05-09）替代 V2 仅 Search——curated 目录 ~21 条全列入 LLM context
 // 完全 OK，而 V2 关键词 AND-match 实测召回过低。
 func (s *Service) ListRegistry(ctx context.Context) ([]mcpdomain.RegistryEntry, error) {
-	return s.source.List(ctx)
+	entries, err := s.source.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("mcpapp.ListRegistry: %w", err)
+	}
+	return entries, nil
 }
 
 // GetRegistryEntry returns one entry by canonical short slug (e.g.

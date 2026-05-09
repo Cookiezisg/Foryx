@@ -45,7 +45,7 @@ import (
 func (s *Service) InstallFromRegistry(ctx context.Context, name string, env, args map[string]string) (*mcpdomain.ServerStatus, error) {
 	entry, err := s.GetRegistryEntry(ctx, name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s: %w", name, err)
 	}
 
 	// Collision check before any install work — saves wasted runtime install.
@@ -152,7 +152,7 @@ func (s *Service) InstallFromRegistry(ctx context.Context, name string, env, arg
 
 	st, err := s.GetServer(ctx, name)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s: %w", name, err)
 	}
 	return st, nil
 }

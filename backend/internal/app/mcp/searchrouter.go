@@ -82,8 +82,10 @@ func (r *SearchRouter) CallSearchTool(ctx context.Context, query string, limit i
 		return "", ErrSearchServerUnavailable
 	}
 	if !mcpdomain.IsCallable(st.Status) {
-		return "", fmt.Errorf("%w (status=%s)", ErrSearchServerUnavailable, st.Status)
+		return "", fmt.Errorf("mcpapp.SearchRouter.CallSearchTool: %w (status=%s)", ErrSearchServerUnavailable, st.Status)
 	}
+	// Marshal of {string, int} map literal cannot fail at runtime; ignore err.
+	// 字符串/int 字面量 map Marshal 不会运行时失败；忽略 err。
 	args, _ := json.Marshal(map[string]any{
 		"query":       query,
 		"max_results": limit,

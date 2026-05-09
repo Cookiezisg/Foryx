@@ -90,6 +90,11 @@ func runOneTool(
 	seq int,
 	log *zap.Logger,
 ) chatdomain.Block {
+	// tc.Arguments is built by parseToolArgs from a map of basic types
+	// (string / number / bool / nested basic-type maps); Marshal cannot
+	// fail at runtime — discard err.
+	// tc.Arguments 由 parseToolArgs 从基本类型 map（字串/数字/布尔/嵌套
+	// 基本类型 map）构造，Marshal 运行时不可能失败——忽略 err。
 	argsJSON, _ := json.Marshal(tc.Arguments)
 
 	// reqctx for tool internals: ToolCallID + ParentBlockID (= tool_call's

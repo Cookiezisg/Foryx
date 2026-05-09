@@ -296,11 +296,11 @@ func buildRankingPrompt(query string, all []mcpdomain.ToolDef, topK int) string 
 func parseRankedIndices(resp string, total int) ([]int, error) {
 	jsonStr, ok := llmparsepkg.ExtractJSON(resp)
 	if !ok {
-		return nil, fmt.Errorf("no JSON in response: %q", trimResp(resp, 200))
+		return nil, fmt.Errorf("mcpapp.parseRankedIndices: no JSON in response: %q", trimResp(resp, 200))
 	}
 	var raw []int
 	if err := json.Unmarshal([]byte(jsonStr), &raw); err != nil {
-		return nil, fmt.Errorf("parse JSON: %w", err)
+		return nil, fmt.Errorf("mcpapp.parseRankedIndices: parse JSON: %w", err)
 	}
 	out := make([]int, 0, len(raw))
 	for _, idx := range raw {

@@ -229,6 +229,10 @@ func assembleBlocks(text, reasoning string, accums map[int]*toolAccum) []chatdom
 	for _, i := range indices {
 		a := accums[i]
 		_, args := parseToolArgs(a.args.String())
+		// args / attrs are basic-type maps built in-process; Marshal
+		// cannot fail at runtime — discard err.
+		// args / attrs 是 in-process 构造的基本类型 map，Marshal 运行时
+		// 不可能失败——忽略 err。
 		argsJSON, _ := json.Marshal(args)
 		attrsJSON, _ := json.Marshal(map[string]any{"tool": a.name})
 		blocks = append(blocks, chatdomain.Block{
