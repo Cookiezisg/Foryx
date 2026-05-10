@@ -29,6 +29,8 @@ package search
 import (
 	"os/exec"
 
+	"go.uber.org/zap"
+
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 )
@@ -38,9 +40,9 @@ import (
 // the abstract Tool interface.
 //
 // SearchTools 构造装配好依赖的 search system tool。返回 []toolapp.Tool。
-func SearchTools(pathGuard pathguardpkg.PathGuard) []toolapp.Tool {
+func SearchTools(pathGuard pathguardpkg.PathGuard, log *zap.Logger) []toolapp.Tool {
 	return []toolapp.Tool{
-		newGrep(pathGuard),
+		newGrep(pathGuard, log),
 		newGlob(pathGuard),
 	}
 }
@@ -49,9 +51,9 @@ func SearchTools(pathGuard pathguardpkg.PathGuard) []toolapp.Tool {
 // Empty rgPath means the stdlib fallback will be used.
 //
 // newGrep 构造 Grep，PATH 上自动检测 rg；空 rgPath 意味着用 stdlib fallback。
-func newGrep(pathGuard pathguardpkg.PathGuard) *Grep {
+func newGrep(pathGuard pathguardpkg.PathGuard, log *zap.Logger) *Grep {
 	rgPath, _ := exec.LookPath("rg") // err = not in PATH; treat as fallback
-	return &Grep{pathGuard: pathGuard, rgPath: rgPath}
+	return &Grep{pathGuard: pathGuard, rgPath: rgPath, log: log}
 }
 
 // newGlob constructs a Glob.

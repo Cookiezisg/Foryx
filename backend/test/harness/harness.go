@@ -315,7 +315,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		forgeService, chatRepo, modelService, apikeyService, llmFactory,
 	)
 	tools = append(tools, fstool.FilesystemTools(pathGuard)...)
-	tools = append(tools, searchtool.SearchTools(pathGuard)...)
+	tools = append(tools, searchtool.SearchTools(pathGuard, log)...)
 	// WebTools wired without MCP router in pipeline harness — tests that
 	// need MCP routing should construct WebSearch directly with a fake
 	// MCPSearchRouter. nil router = no MCP tier (BYOK + Bing CN only).

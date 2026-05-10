@@ -280,7 +280,7 @@ func main() {
 		llmFactory,
 	)
 	tools = append(tools, fstool.FilesystemTools(pathGuard)...)
-	tools = append(tools, searchtool.SearchTools(pathGuard)...)
+	tools = append(tools, searchtool.SearchTools(pathGuard, log)...)
 	tools = append(tools, webtool.WebTools(modelService, apikeyService, llmFactory, mcpapp.NewSearchRouter(mcpService), log)...)
 	shells := shelltool.NewShellTools(sandboxSvc)
 	defer shells.Manager.Stop() // graceful shutdown: kill any background children

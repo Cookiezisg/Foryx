@@ -288,7 +288,7 @@ func (t *Bash) maybeAutoRoute(ctx context.Context, command string) ([]string, er
 		return nil, nil // non-runtime command — system shell is fine
 	}
 	if t.sandbox == nil {
-		return nil, fmt.Errorf("sandbox service not wired (this is a server build / config issue — please report)")
+		return nil, fmt.Errorf("shelltool.Bash.maybeAutoRoute: sandbox service not wired (this is a server build / config issue — please report)")
 	}
 	if !t.sandbox.IsReady() {
 		bootErr := t.sandbox.BootstrapError()
@@ -296,11 +296,11 @@ func (t *Bash) maybeAutoRoute(ctx context.Context, command string) ([]string, er
 		if bootErr != nil {
 			reason = "bootstrap failed: " + bootErr.Error()
 		}
-		return nil, fmt.Errorf("sandbox not ready (%s) — %s commands cannot run safely on the system shell", reason, kind)
+		return nil, fmt.Errorf("shelltool.Bash.maybeAutoRoute: sandbox not ready (%s) — %s commands cannot run safely on the system shell", reason, kind)
 	}
 	convID, ok := reqctxpkg.GetConversationID(ctx)
 	if !ok || convID == "" {
-		return nil, fmt.Errorf("no conversation context — %s commands need a conversation-scoped sandbox env", kind)
+		return nil, fmt.Errorf("shelltool.Bash.maybeAutoRoute: no conversation context — %s commands need a conversation-scoped sandbox env", kind)
 	}
 	// owner.ID joins convID + runtimeKind with "_" (NOT ":"): owner.ID
 	// becomes a literal directory name (sandbox.go:478) that prepends
@@ -346,7 +346,7 @@ func (t *Bash) maybeAutoRoute(ctx context.Context, command string) ([]string, er
 			}, progress)
 		})
 	if err != nil {
-		return nil, fmt.Errorf("sandbox env install failed (%s for %s): %w", kind, convID, err)
+		return nil, fmt.Errorf("shelltool.Bash.maybeAutoRoute: sandbox env install failed (%s for %s): %w", kind, convID, err)
 	}
 	envPath := filepath.Join(t.sandbox.SandboxRoot(), env.Path)
 	return envBinDirsForKind(envPath, kind), nil

@@ -27,6 +27,8 @@ import (
 	"path/filepath"
 	"strings"
 
+	"go.uber.org/zap"
+
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 )
@@ -184,6 +186,7 @@ func (a *grepArgs) normalize() {
 type Grep struct {
 	pathGuard pathguardpkg.PathGuard
 	rgPath    string // empty = use stdlib fallback
+	log       *zap.Logger
 }
 
 // Identity --------------------------------------------------------------------
@@ -270,9 +273,18 @@ func (t *Grep) Execute(ctx context.Context, argsJSON string) (string, error) {
 		out, err := t.execRg(ctx, args)
 		// rg failed for unexpected reason — fall back to stdlib so the
 		// search still succeeds (per pkg doc, stdlib has same surface).
-		// rg 异常失败 → fallback 到 stdlib，让搜索仍能成功（包文档保证两后端
-		// 同 surface）。
+		// Log loudly so operator sees rg backend rotting + the fallback
+		// path becoming the de-facto backend (PCRE-only patterns silently
+		// produce different results without this audit trail). Same
+		// defect class lesson as B2 bash auto-route silent fallback fix.
+		//
+		// rg 异常失败 → fallback 到 stdlib（包文档保两后端同 surface）。
+		// 高声 log 让 operator 看到 rg 后端腐化 / fallback 变事实后端
+		// （PCRE-only 模式悄悄产不同结果无审计）。同 B2 bash auto-route
+		// silent fallback 经验。
 		if err != nil {
+			t.log.Warn("Grep: rg backend failed; falling through to stdlib (results may differ for PCRE-only patterns)",
+				zap.String("rg_path", t.rgPath), zap.Error(err))
 			return t.execStdlib(ctx, args, info.IsDir())
 		}
 		return out, nil
