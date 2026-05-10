@@ -259,6 +259,13 @@ func writeBinary(r io.Reader, dst string) error {
 	}
 	if _, err := io.Copy(out, r); err != nil {
 		out.Close()
+		// Best-effort cleanup of half-written tmp; copy already failed
+		// so caller will surface that. A Remove failure here (e.g. file
+		// got renamed by concurrent run, permission flipped) is not
+		// actionable for the build script. §S3 例外。
+		//
+		// 半成 tmp 尽力清理；copy 已失败上抛。Remove 失败（被并发运行
+		// 改名 / 权限翻转）无可执行动作。§S3 例外。
 		_ = os.Remove(tmp)
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}

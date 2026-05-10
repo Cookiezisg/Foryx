@@ -480,7 +480,7 @@ type forgeLLMClientAdapter struct {
 func (c *forgeLLMClientAdapter) Generate(ctx context.Context, prompt string) (string, error) {
 	bc, err := llmclientpkg.Resolve(ctx, c.picker, c.keys, c.factory)
 	if err != nil {
-		return "", fmt.Errorf("forgeLLMClient: %w", err)
+		return "", fmt.Errorf("forgeLLMClient.Generate: %w", err)
 	}
 	return llminfra.Generate(ctx, bc.Client, llminfra.Request{
 		ModelID:  bc.ModelID,
