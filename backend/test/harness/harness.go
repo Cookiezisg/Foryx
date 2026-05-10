@@ -312,7 +312,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 	pathGuard := pathguardpkg.NewDefault()
 
 	tools := forgetool.ForgeTools(
-		forgeService, chatRepo, modelService, apikeyService, llmFactory,
+		forgeService, chatRepo, modelService, apikeyService, llmFactory, log,
 	)
 	tools = append(tools, fstool.FilesystemTools(pathGuard)...)
 	tools = append(tools, searchtool.SearchTools(pathGuard, log)...)

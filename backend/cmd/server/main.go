@@ -278,6 +278,7 @@ func main() {
 		modelService,
 		apikeyService,
 		llmFactory,
+		log,
 	)
 	tools = append(tools, fstool.FilesystemTools(pathGuard)...)
 	tools = append(tools, searchtool.SearchTools(pathGuard, log)...)

@@ -18,6 +18,8 @@ import (
 	"fmt"
 	"strings"
 
+	"go.uber.org/zap"
+
 	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
@@ -45,9 +47,10 @@ func ForgeTools(
 	picker modeldomain.ModelPicker,
 	keys apikeydomain.KeyProvider,
 	factory *llminfra.Factory,
+	log *zap.Logger,
 ) []toolapp.Tool {
 	return []toolapp.Tool{
-		&SearchForge{svc: svc, picker: picker, keys: keys, factory: factory},
+		&SearchForge{svc: svc, picker: picker, keys: keys, factory: factory, log: log},
 		&GetForge{svc: svc},
 		&CreateForge{svc: svc, picker: picker, keys: keys, factory: factory},
 		&EditForge{svc: svc, picker: picker, keys: keys, factory: factory},

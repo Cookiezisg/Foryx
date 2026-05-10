@@ -10,6 +10,8 @@ import (
 	"fmt"
 	"strings"
 
+	"go.uber.org/zap"
+
 	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
@@ -27,6 +29,7 @@ type SearchForge struct {
 	picker  modeldomain.ModelPicker
 	keys    apikeydomain.KeyProvider
 	factory *llminfra.Factory
+	log     *zap.Logger
 }
 
 // ── Identity ──────────────────────────────────────────────────────────────────
@@ -119,7 +122,10 @@ func (t *SearchForge) Execute(ctx context.Context, argsJSON string) (string, err
 	}
 	jsonStr, ok := llmparsepkg.ExtractJSON(resp)
 	if !ok {
-		return "", fmt.Errorf("search_forges: LLM response contained no JSON: %q", resp)
+		// Wrap with llm.ErrProviderError sentinel so callers can errors.Is
+		// — same pattern as other LLM-call-failure paths (mcp calltool, etc).
+		// 用 llm.ErrProviderError sentinel 包，让调用方 errors.Is 区分。
+		return "", fmt.Errorf("search_forges: LLM response contained no JSON: %w: %q", llminfra.ErrProviderError, resp)
 	}
 	if err = json.Unmarshal([]byte(jsonStr), &ranked); err != nil {
 		return "", fmt.Errorf("search_forges: parse ranking: %w", err)
@@ -154,11 +160,21 @@ func (t *SearchForge) Execute(ctx context.Context, argsJSON string) (string, err
 	out := make([]result, 0, len(fetched))
 	for _, f := range fetched {
 		// Unmarshal errors here mean DB data is corrupted for this forge;
-		// keep the forge in the result with nil schemas rather than aborting search.
-		// DB 数据损坏时保留 forge 但 schema 为 nil，不中止整个搜索。
+		// keep the forge in the result with nil schemas rather than aborting
+		// search. Log Warn so the corruption surfaces in operator logs
+		// instead of silently producing forges-without-schemas in search
+		// results — same defect-class lesson as B2 silent fallback.
+		// DB 损坏时保留 forge 但 schema=nil 不中止搜索。Warn log 让损坏
+		// 在 operator 日志可见——同 B2 silent fallback 经验。
 		var params, ret any
-		json.Unmarshal([]byte(f.Parameters), &params) //nolint:errcheck
-		json.Unmarshal([]byte(f.ReturnSchema), &ret)  //nolint:errcheck
+		if err := json.Unmarshal([]byte(f.Parameters), &params); err != nil && t.log != nil {
+			t.log.Warn("forgetool.SearchForge: corrupt Parameters JSON; using nil schema in search result",
+				zap.String("forge_id", f.ID), zap.Error(err))
+		}
+		if err := json.Unmarshal([]byte(f.ReturnSchema), &ret); err != nil && t.log != nil {
+			t.log.Warn("forgetool.SearchForge: corrupt ReturnSchema JSON; using nil schema in search result",
+				zap.String("forge_id", f.ID), zap.Error(err))
+		}
 		out = append(out, result{
 			ID: f.ID, Name: f.Name, Description: f.Description,
 			Parameters: params, ReturnSchema: ret, Score: scoreMap[f.ID],
