@@ -22,6 +22,7 @@ package eventlog
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
@@ -164,20 +165,40 @@ func (em *emitter) requireConv(ctx context.Context, op string) (string, bool) {
 }
 
 // publish forwards e to the Bridge and returns the assigned seq. ok=false
-// signals a failed publish (logged); callers may still proceed (DB writes
-// keyed off blockID, not seq, are still safe — only block_start cares
-// about seq for the message_blocks_v2 row).
+// signals a failed publish; callers may still proceed (DB writes keyed
+// off blockID, not seq, are still safe — only block_start cares about
+// seq for the message_blocks_v2 row).
 //
-// publish 把 e 转给 Bridge 并返分配的 seq。ok=false 表示发布失败（已记
-// 日志）；调用方仍可继续（基于 blockID 的 DB 写入与 seq 无关——只有
-// block_start 用 seq 给 message_blocks_v2 行）。
+// Log level is split by err class so producer bugs surface loudly while
+// expected cancellations stay quiet:
+//   - ErrInvalidEvent: Error (producer wiring bug — caller violated event
+//     contract; needs developer attention)
+//   - ctx.Err (Canceled / DeadlineExceeded): Debug (user closed tab /
+//     stream cancelled — expected, not actionable)
+//   - other (Bridge buffer full / underlying I/O): Warn (capacity issue
+//     — operator might want to look)
+//
+// publish 把 e 转给 Bridge 并返分配的 seq。ok=false 表示发布失败；调用
+// 方仍可继续（基于 blockID 的 DB 写入与 seq 无关——只有 block_start 用
+// seq 给 message_blocks_v2 行）。
+//
+// log 级别按 err 类分流让 producer bug 显著显形而预期 cancel 保持安静。
 func (em *emitter) publish(ctx context.Context, convID string, e eventlogdomain.Event) (int64, bool) {
 	env, err := em.bridge.Publish(ctx, convID, e)
 	if err != nil {
-		em.log.Warn("emit failed",
+		fields := []zap.Field{
 			zap.String("type", e.EventType()),
 			zap.String("conversationId", convID),
-			zap.Error(err))
+			zap.Error(err),
+		}
+		switch {
+		case errors.Is(err, eventlogdomain.ErrInvalidEvent):
+			em.log.Error("emit failed: invalid event (producer bug)", fields...)
+		case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+			em.log.Debug("emit skipped: ctx cancelled", fields...)
+		default:
+			em.log.Warn("emit failed", fields...)
+		}
 		return 0, false
 	}
 	return env.Seq, true
@@ -189,13 +210,22 @@ func (em *emitter) StartMessage(ctx context.Context, role, parentBlockID string,
 		return ""
 	}
 	msgID := idgenpkg.New("msg")
-	em.publish(ctx, convID, eventlogdomain.MessageStart{
+	if _, ok := em.publish(ctx, convID, eventlogdomain.MessageStart{
 		ConversationID: convID,
 		ID:             msgID,
 		ParentBlockID:  parentBlockID,
 		Role:           role,
 		Attrs:          attrs,
-	})
+	}); !ok {
+		// Publish failed — return "" so caller doesn't propagate this msgID
+		// downstream as a parentBlockID / parent target. Returning the ID
+		// would create a §S21 dangling-parentId producer bug (subsequent
+		// block_start events reference a message that was never published).
+		// 发布失败——返 "" 阻止调用方把此 msgID 当 parentBlockID / 父目标
+		// 下传。返 ID 会制造 §S21 dangling-parentId producer bug（后续
+		// block_start 引用从未发布的 message）。
+		return ""
+	}
 	return msgID
 }
 
@@ -219,7 +249,21 @@ func (em *emitter) saveBlockRow(ctx context.Context, convID, id, parentID, messa
 	}
 	attrsJSON := ""
 	if len(attrs) > 0 {
-		if b, err := json.Marshal(attrs); err == nil {
+		b, err := json.Marshal(attrs)
+		if err != nil {
+			// Producer bug: attrs contained non-JSON-marshalable value. Log
+			// loud + continue with empty attrs (block row still gets written
+			// so history replay sees the block, just with attrs lost). Forge
+			// attrs are always plain map[string]any of strings/numbers/bools
+			// — a marshal fail here means upstream wired a func/chan/etc.
+			//
+			// Producer bug：attrs 含不可 JSON 化的值。Loud log + 用空 attrs
+			// 续（block 行仍写入让 history replay 看见，只 attrs 丢）。Forge
+			// attrs 历来是 map[string]any of string/number/bool——marshal
+			// 失败说明上游接进了 func/chan/etc。
+			em.log.Error("attrs json.Marshal failed (producer bug); writing block with empty attrs",
+				zap.String("blockId", id), zap.Error(err))
+		} else {
 			attrsJSON = string(b)
 		}
 	}
@@ -407,10 +451,19 @@ func (em *emitter) StopBlock(ctx context.Context, blockID, status string, err er
 		Status:         status,
 		Error:          errStr,
 	})
-	// DB dual-write: finalize status + error. Best-effort.
-	// DB 双写：终态化 status + error。Best-effort。
+	// DB dual-write: finalize status + error. Use context.Background()
+	// so caller-cancel between SSE publish above and DB FinalizeStop
+	// doesn't leave block row stuck at status=streaming forever
+	// (§S21 invariant violation — frontend history replay would see
+	// terminal block as still-streaming). Same §S9 reasoning as
+	// chat/host.go::WriteFinalize::StopMessage (commit f272503).
+	//
+	// DB 双写终态化用 Background：caller 在 SSE publish 与 FinalizeStop
+	// 间 cancel 不能让 block 行卡 status=streaming 永远不脱（违 §S21
+	// invariant，前端 history replay 看终态 block 仍 streaming）。同
+	// chat/host.go::WriteFinalize::StopMessage 模式（commit f272503）。
 	if em.repo != nil {
-		if e := em.repo.FinalizeStop(ctx, blockID, status, errStr); e != nil {
+		if e := em.repo.FinalizeStop(context.Background(), blockID, status, errStr); e != nil {
 			em.log.Warn("blockV2 dual-write failed (stop)",
 				zap.String("blockId", blockID), zap.Error(e))
 		}
