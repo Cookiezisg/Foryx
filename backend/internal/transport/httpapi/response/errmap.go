@@ -20,6 +20,7 @@ import (
 	subagentdomain "github.com/sunweilin/forgify/backend/internal/domain/subagent"
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
+	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -180,6 +181,19 @@ var errTable = map[error]errMapping{
 	llminfra.ErrBadRequest:    {http.StatusBadRequest, "LLM_BAD_REQUEST"},
 	llminfra.ErrModelNotFound: {http.StatusNotFound, "LLM_MODEL_NOT_FOUND"},
 	llminfra.ErrProviderError: {http.StatusBadGateway, "LLM_PROVIDER_ERROR"},
+
+	// BYOK web-search providers (Brave / Serper / Tavily / Bocha) — same
+	// HTTP-status-classifier pattern as llm above, separate sentinels
+	// because providers and discrimination logic differ. Lets
+	// search.go::markInvalidIfAuthErr drive apikey.MarkInvalid via
+	// errors.Is instead of string matching.
+	//
+	// BYOK web search provider sentinel——同 llm 模式但独立（provider 与
+	// discrimination 逻辑不同）。让 markInvalidIfAuthErr 用 errors.Is 触发
+	// apikey.MarkInvalid，替代 string match。
+	webtool.ErrAuthFailed:   {http.StatusUnauthorized, "WEBSEARCH_AUTH_FAILED"},
+	webtool.ErrRateLimited:  {http.StatusTooManyRequests, "WEBSEARCH_RATE_LIMITED"},
+	webtool.ErrUpstreamHTTP: {http.StatusBadGateway, "WEBSEARCH_UPSTREAM_HTTP"},
 
 	// Standard library context errors. Browser hard-refresh / tab close
 	// cancels r.Context(), which propagates up through every store call

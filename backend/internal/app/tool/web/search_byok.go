@@ -198,7 +198,23 @@ func (t *WebSearch) doSearchHTTP(req *http.Request, provider string) ([]byte, er
 		}
 	}
 	if resp.StatusCode/100 != 2 {
-		return nil, fmt.Errorf("%s: HTTP %d: %s", provider, resp.StatusCode, snippet(body, 200))
+		// Wrap with status-classified sentinel so errors.Is can drive
+		// downstream behaviour (e.g. markInvalidIfAuthErr → flip apikey
+		// status). Previously err.Error() string-matched "HTTP 401" /
+		// "HTTP 403" — fragile and breaks if format changes.
+		// 用状态分类 sentinel 包装让 errors.Is 驱动下游（如 markInvalidIfAuthErr
+		// → 翻 apikey 状态）。原来 err.Error() string match "HTTP 401"
+		// 易碎，格式变就破。
+		var sentinel error
+		switch resp.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden:
+			sentinel = ErrAuthFailed
+		case http.StatusTooManyRequests:
+			sentinel = ErrRateLimited
+		default:
+			sentinel = ErrUpstreamHTTP
+		}
+		return nil, fmt.Errorf("%s: HTTP %d: %w: %s", provider, resp.StatusCode, sentinel, snippet(body, 200))
 	}
 	return body, nil
 }

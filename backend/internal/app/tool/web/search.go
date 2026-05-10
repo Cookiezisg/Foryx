@@ -46,6 +46,25 @@ import (
 	"go.uber.org/zap"
 )
 
+// ── Sentinel errors ───────────────────────────────────────────────────────────
+//
+// HTTP-status-classified errors from BYOK provider calls. Wrapping with
+// these sentinels lets markInvalidIfAuthErr (and any future caller) use
+// errors.Is instead of fragile substring matching on err.Error(). Mirrors
+// the llm.ErrAuthFailed / ErrRateLimited pattern from infra/llm (commit
+// 363b084) — separate sentinel set because BYOK search providers
+// (Brave / Serper / Tavily / Bocha) are not LLM transports.
+//
+// BYOK 调用按 HTTP 状态分类的 sentinel。markInvalidIfAuthErr（及未来调用方）
+// 用 errors.Is 替代 err.Error() substring 匹配。同 infra/llm 的
+// llm.ErrAuthFailed / ErrRateLimited 模式（commit 363b084）——独立
+// sentinel 因为 BYOK search provider 不是 LLM transport。
+var (
+	ErrAuthFailed    = errors.New("websearch: provider authentication failed")
+	ErrRateLimited   = errors.New("websearch: provider rate limited")
+	ErrUpstreamHTTP  = errors.New("websearch: provider upstream HTTP error")
+)
+
 // ── Limits & defaults ─────────────────────────────────────────────────────────
 
 const (
@@ -256,10 +275,20 @@ func (t *WebSearch) Execute(ctx context.Context, argsJSON string) (string, error
 func (t *WebSearch) tryBYOKProvider(ctx context.Context, provider, query string, limit int) ([]searchResult, string, bool) {
 	creds, err := t.keys.ResolveCredentials(ctx, provider)
 	if err != nil {
-		// ErrNotFoundForProvider is the silent path. Other errors (e.g.
-		// decryption fail) are still silent here — the next tier covers it.
-		// ErrNotFoundForProvider 是静默路径；其他错误（如解密失败）这里也静默
-		// ——下层兜。
+		// ErrNotFoundForProvider IS the silent path — user just hasn't
+		// configured this provider, fall through to next tier without
+		// noise. Other errors (decryption fail, store fail, ctx canceled)
+		// are NOT user-recoverable from "no key configured" — they
+		// indicate something concrete is broken (corrupt encryption /
+		// DB issue). Log loudly so operator sees the difference.
+		// Same defect-class lesson as B2 bash auto-route silent fallback.
+		//
+		// ErrNotFoundForProvider 是静默路径——用户没配，无声降级到下层。
+		// 其他错误（解密失败、store 失败、ctx 取消）不是"没配"——是有真问
+		// 题。高声 log 让 operator 看出区别。同 B2 bash auto-route 经验。
+		if !errors.Is(err, apikeydomain.ErrNotFoundForProvider) {
+			t.warnf(fmt.Sprintf("WebSearch BYOK %q ResolveCredentials failed (not 'no key configured')", provider), err)
+		}
 		return nil, "", false
 	}
 
@@ -306,8 +335,12 @@ func (t *WebSearch) tryBYOKProvider(ctx context.Context, provider, query string,
 // markInvalidIfAuthErr 把 BYOK 401/403 通知 apikey 域让 UI 状态翻转。
 // best-effort：marker 失败 debug log。
 func (t *WebSearch) markInvalidIfAuthErr(ctx context.Context, provider string, err error) {
-	msg := err.Error()
-	if !strings.Contains(msg, "HTTP 401") && !strings.Contains(msg, "HTTP 403") {
+	// errors.Is(ErrAuthFailed) catches both 401 + 403 (sentinel covers
+	// both). Replaced fragile string match `Contains(msg, "HTTP 401")`
+	// — see audit doc app-tool-web/search.go.md site #12.
+	// errors.Is(ErrAuthFailed) 同时捕获 401 + 403（sentinel 覆盖两者）。
+	// 替代脆 substring 匹配——见 audit doc。
+	if !errors.Is(err, ErrAuthFailed) {
 		return
 	}
 	if t.keys == nil {
@@ -323,7 +356,7 @@ func (t *WebSearch) markInvalidIfAuthErr(ctx context.Context, provider string, e
 	if uid != "" {
 		mctx = reqctxpkg.SetUserID(context.Background(), uid)
 	}
-	if merr := t.keys.MarkInvalid(mctx, provider, msg); merr != nil {
+	if merr := t.keys.MarkInvalid(mctx, provider, err.Error()); merr != nil {
 		t.debugf(fmt.Sprintf("MarkInvalid for %q failed", provider), merr)
 	}
 }
