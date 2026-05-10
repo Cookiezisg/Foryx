@@ -111,12 +111,16 @@ var errTable = map[error]errMapping{
 	sandboxdomain.ErrCmdRequired:          {http.StatusBadRequest, "SANDBOX_CMD_REQUIRED"},
 
 	// subagent domain / subagent domain 层
-	// Only the first two reach handlers; ErrMaxTurnsExceeded / ErrCancelled
-	// are converted to friendly tool_result strings by SubagentTool.Execute
-	// and never propagate (run.Status reflects them).
-	// 只有前两个会到 handler；ErrMaxTurnsExceeded / ErrCancelled 在
-	// SubagentTool.Execute 内转友好 tool_result 字符串，不上抛
-	// （run.Status 已反映）。
+	// Only these two are real Go sentinels reaching handlers. Max-turns
+	// + cancellation surface as `subagentapp.StatusMaxTurns` /
+	// `StatusCancelled` string constants on `SpawnResult.Status`, not
+	// errors — SubagentTool.Execute renders them as friendly tool_result
+	// text, so they never enter the error path / errmap.
+	//
+	// 只有这两个是真 Go sentinel 会到 handler。Max-turns + 取消是
+	// `subagentapp.StatusMaxTurns` / `StatusCancelled` 字符串常量挂
+	// `SpawnResult.Status`，不是 error；SubagentTool.Execute 渲染为
+	// 友好 tool_result 文本，不进 error 路径 / errmap。
 	subagentdomain.ErrTypeNotFound:     {http.StatusNotFound, "SUBAGENT_TYPE_NOT_FOUND"},
 	subagentdomain.ErrRecursionAttempt: {http.StatusUnprocessableEntity, "SUBAGENT_RECURSION"},
 
