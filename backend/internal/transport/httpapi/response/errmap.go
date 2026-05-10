@@ -110,6 +110,15 @@ var errTable = map[error]errMapping{
 	sandboxdomain.ErrEnvInUse:             {http.StatusConflict, "SANDBOX_ENV_IN_USE"},
 	sandboxdomain.ErrInvalidOwnerID:       {http.StatusBadRequest, "SANDBOX_INVALID_OWNER_ID"},
 	sandboxdomain.ErrCmdRequired:          {http.StatusBadRequest, "SANDBOX_CMD_REQUIRED"},
+	// Phase 5 docker sentinels — pre-registered so future docker-runtime
+	// integration won't trigger "unmapped domain error" warnings on first
+	// touch. 0 current consumers; sentinels live in domain/sandbox/sandbox.go.
+	//
+	// Phase 5 docker sentinel——预登记防未来 docker-runtime 接入时触发
+	// "unmapped domain error"。当前 0 消费者；sentinel 在
+	// domain/sandbox/sandbox.go。
+	sandboxdomain.ErrDockerNotInstalled: {http.StatusUnprocessableEntity, "SANDBOX_DOCKER_NOT_INSTALLED"},
+	sandboxdomain.ErrDockerDaemonDown:   {http.StatusServiceUnavailable, "SANDBOX_DOCKER_DAEMON_DOWN"},
 
 	// subagent domain / subagent domain 层
 	// Only these two are real Go sentinels reaching handlers. Max-turns

@@ -24,6 +24,8 @@ package handlers
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -152,7 +154,7 @@ type skillCreateRequest struct {
 func (h *SkillsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req skillCreateRequest
 	if err := decodeJSONLimit(w, r, skillImportMaxBytes, &req); err != nil {
-		responsehttpapi.Error(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), nil)
+		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
 	if strings.TrimSpace(req.Name) == "" {
@@ -176,7 +178,7 @@ func (h *SkillsHandler) Replace(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	var req skillCreateRequest
 	if err := decodeJSONLimit(w, r, skillImportMaxBytes, &req); err != nil {
-		responsehttpapi.Error(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), nil)
+		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
 	sk, err := h.svc.Replace(r.Context(), name, req.Frontmatter, req.Body)
@@ -272,21 +274,28 @@ func (h *SkillsHandler) Import(w http.ResponseWriter, r *http.Request) {
 			f, err := fh.Open()
 			if err != nil {
 				responsehttpapi.Error(w, http.StatusBadRequest, "INVALID_REQUEST",
-					"open part "+fh.Filename+": "+err.Error(), nil)
+					fmt.Sprintf("handlers.Import: open part %q: %v", fh.Filename, err), nil)
 				return
 			}
-			buf := make([]byte, 0, fh.Size)
-			tmp := make([]byte, 4096)
-			for {
-				n, rerr := f.Read(tmp)
-				if n > 0 {
-					buf = append(buf, tmp[:n]...)
-				}
-				if rerr != nil {
-					break
-				}
-			}
+			// Use io.ReadAll instead of a hand-rolled Read loop so non-EOF
+			// io errors (disk fail / connection drop) surface as a 400
+			// rather than getting silently swallowed via `if rerr != nil
+			// { break }`. The previous loop would treat truncated buffers
+			// as legitimate SKILL.md bytes and let the service-layer
+			// frontmatter parser report a misleading "invalid frontmatter"
+			// error instead of the real I/O cause.
+			//
+			// 用 io.ReadAll 而非手卷 Read loop——non-EOF io error（disk
+			// fail / 连接断）会显式 400 而非被 silent break 吞。原 loop
+			// 会把截断 buf 当合法 SKILL.md，service parse fail 报"invalid
+			// frontmatter"误导调试。
+			buf, rerr := io.ReadAll(f)
 			f.Close()
+			if rerr != nil {
+				responsehttpapi.Error(w, http.StatusBadRequest, "INVALID_REQUEST",
+					fmt.Sprintf("handlers.Import: read part %q: %v", fh.Filename, rerr), nil)
+				return
+			}
 			files = append(files, skillapp.ImportFile{Name: name, RawSkillMD: buf})
 		}
 	} else {
@@ -347,7 +356,7 @@ func (h *SkillsHandler) NameAction(w http.ResponseWriter, r *http.Request) {
 		// 空 body OK（无位置参数的 skill）。
 		if r.ContentLength > 0 {
 			if err := decodeJSONLimit(w, r, skillImportMaxBytes, &req); err != nil {
-				responsehttpapi.Error(w, http.StatusBadRequest, "INVALID_REQUEST", err.Error(), nil)
+				responsehttpapi.FromDomainError(w, h.log, err)
 				return
 			}
 		}
@@ -367,18 +376,23 @@ func (h *SkillsHandler) NameAction(w http.ResponseWriter, r *http.Request) {
 
 // decodeJSONLimit reads up to maxBytes from r.Body and decodes into out.
 // MaxBytesReader prevents giant uploads from exhausting memory.
+// Errors are wrapped via joinInvalidRequest so handler can route them
+// through responsehttpapi.FromDomainError → 400 INVALID_REQUEST (same
+// pattern as decodeJSON, B2 §S16 fix).
 //
-// decodeJSONLimit 从 r.Body 读至多 maxBytes 解到 out。MaxBytesReader 防
-// 巨型上传爆内存。
+// decodeJSONLimit 从 r.Body 读至多 maxBytes 解到 out。MaxBytesReader
+// 防巨型上传爆内存。错误经 joinInvalidRequest 包装让 handler 走
+// FromDomainError → 400 INVALID_REQUEST（同 decodeJSON pattern）。
 func decodeJSONLimit(w http.ResponseWriter, r *http.Request, maxBytes int64, out any) error {
 	body := http.MaxBytesReader(w, r.Body, maxBytes)
 	dec := json.NewDecoder(body)
 	if err := dec.Decode(out); err != nil {
 		var maxBytesError *http.MaxBytesError
 		if errors.As(err, &maxBytesError) {
-			return errors.New("request body exceeds size limit")
+			return fmt.Errorf("handlers.decodeJSONLimit: request body exceeds %d bytes: %w",
+				maxBytes, joinInvalidRequest(err))
 		}
-		return err
+		return fmt.Errorf("handlers.decodeJSONLimit: %w", joinInvalidRequest(err))
 	}
 	return nil
 }

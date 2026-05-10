@@ -18,7 +18,6 @@
 package handlers
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -93,7 +92,7 @@ func (m *mockEventInput) toStreamEvent() (llminfra.StreamEvent, error) {
 			ev.Err = errors.New(m.Error)
 		}
 	default:
-		return ev, fmt.Errorf("unknown event type %q (want text/reasoning/tool_start/tool_delta/finish/error)", m.Type)
+		return ev, fmt.Errorf("handlers.toStreamEvent: unknown event type %q (want text/reasoning/tool_start/tool_delta/finish/error)", m.Type)
 	}
 	return ev, nil
 }
@@ -113,9 +112,8 @@ func (h *DevHandler) MockLLMPushScripts(w http.ResponseWriter, r *http.Request) 
 	var body struct {
 		Scripts []mockScriptInput `json:"scripts"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-		responsehttpapi.Error(w, http.StatusBadRequest, "INVALID_REQUEST",
-			"failed to parse JSON body: "+err.Error(), nil)
+	if err := decodeJSON(r, &body); err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
 	if len(body.Scripts) == 0 {
