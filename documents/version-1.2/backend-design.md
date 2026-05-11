@@ -105,10 +105,10 @@ handler.SendMessage
       → agentRun → client.Stream(Request)       → iter.Seq[StreamEvent] → SSE
 ```
 
-### Phase 3 — 工具锻造能力（已完成）
-`forge` 主 domain（版本 / pending / 测试用例 / 沙箱执行 / 导入导出，22 端点）+ `app/tool/forge/`（5 个 forge 系统工具：search/get/create/edit/run.go 各一文件）+ chat 升级支持 ReAct 多步循环。Python 沙箱 `infra/sandbox/python.go`（subprocess + 30s 超时 + AST 函数提取）。
+### Phase 3 — 工具锻造能力（已完成,forge_redesign Plan 01 重构为 function trinity）
+`function` 主 domain（版本 / pending / sandbox 执行 / 执行日志 D22,13 端点）+ `app/tool/function/`（9 个 LLM 工具:search/get/create/edit/revert/delete/run + search_function_executions/get_function_execution）+ chat ReAct 多步循环。Python 沙箱通过统一 PluginSandbox v2(mise embed)+ SandboxAdapter。
 
-> Phase 3 后优化轮（2026-05-02）大改造：(1) `tool` 大重命名 → `forge`（types/tables/IDs/paths/22 endpoints/LLM-facing 名）；(2) `agent` 包重命名 `tool`，新建嵌套子包结构（forge/filesystem/shell/web）；(3) Tool 接口扩到 10 方法（IsReadOnly / NeedsReadFirst / RequiresWorkspace / IsConcurrencySafe / ValidateInput / CheckPermissions 等）；(4) 删除 8 个旧通用 system tool（read_file / write_file / list_dir / run_shell / run_python / datetime / web_search / fetch_url），新一代 system tools（Read/Write/Edit/Bash/Glob/Grep/LS）将在 Phase 5 重建。详见 progress-record.md。
+> Phase 3 历史:(1) 2026-05-02 第一轮 `tool` → `forge` 大重命名;(2) 2026-05-11 forge_redesign Plan 01 — 把 forge 重新设计为 trinity 域(Function / Handler / Workflow)的 Function 部分;forge 代码路径(domain/forge / app/forge / app/tool/forge / infra/store/forge / handlers/forge.go)整批删除;function trinity 一致替代(平铺包结构 + 7 CRUD/exec LLM 工具 + 2 D22 execution log 工具 + 11 HTTP endpoints + sentinel-correct errmap + 端到端 pipeline test)。详见 [`adhoc-topic-documents/forge_redesign/`](./adhoc-topic-documents/forge_redesign/) 系列文档(00-overview 决策 D1-D22 / 02-function spec / 08-executions D22 schema / plans/01-function-domain.md 详细任务)。
 
 **Phase 3 后基础设施优化轮（2026-04-27 起，进行中）**：chat 基础设施重构（移除 Eino + Block 模型）/ chat pipeline.go → runner.go 二次重构 / Brewfile + Makefile setup / Claude Code 内部机制调研（9 份报告）/ SQLite 驱动迁移（mattn → modernc，纯 Go） / 桌面端 Wails 分发方向定型 / 大规模代码 review 战役（staticcheck / 死代码 / 跨域重复 / errmap 完整性等）。详见 [`progress-record.md`](./progress-record.md) §2。
 
@@ -134,7 +134,7 @@ handler.SendMessage
         │ workflow │  │   tool   │  │knowledge │  ← 中层"能力载体"
         └────┬─────┘  └────┬─────┘  └────┬─────┘
              ↓             ↓             ↓
-        flowrun       forge         document
+        flowrun       function      document
         scheduler     attachment    (向量库)
         trigger
                                     ┌──────────┐
@@ -177,7 +177,7 @@ backend/
     │   ├── model/                  ← ✅
     │   ├── conversation/           ← ✅
     │   ├── chat/                   ← ✅ Message + Block + Attachment（Block 模型，2026-04-27 重构）
-    │   ├── forge/                  ← ✅ Forge + ForgeVersion + ForgeTestCase + ForgeRunHistory + ForgeTestHistory（Phase 1 大重命名 tool→forge）
+    │   ├── function/               ← ✅ Function + Version + Execution (D22) + Repository + ExecutionRepository + 14 sentinel（forge_redesign Plan 01 替代 forge domain）
     │   ├── crypto/                 ← ✅ 接口
     │   ├── events/                 ← ✅ 接口 + types.go（强类型事件）
     │   ├── errors/                 ← ✅ 跨 domain 通用 sentinel
@@ -199,9 +199,9 @@ backend/
     │   ├── conversation/           ← ✅ conversation.go
     │   ├── loop/                   ← ✅ 通用 ReAct 引擎：loop.go（Host 接口 + Run）+ stream.go（LLM 流式装配）+ tools.go（partition by execution_group + dispatch）+ history.go（extendHistory）。chat / subagent / Skill fork / Phase 4 workflow LLM 节点都是调用方
     │   ├── chat/                   ← ✅ 重构为 loop 调用方：chat.go / runner.go（agentRun → 构造 chatHost → loop.Run + autoTitle）/ host.go / history.go / util.go（stream/tools 已迁出到 loop 包）
-    │   ├── forge/                  ← ✅ forge.go（30 方法 Service + ParseCode）+ ast.go（Python AST 解析）
+    │   ├── function/               ← ✅ function.go (Service + Sandbox port) + apply.go (6-op engine + ParseOps) + validate.go + crud.go (CRUD + pending/accept/reject/revert) + run.go (RunFunction + SyncEnvForVersion + recordExecution) + executions.go (SearchExecutions + GetExecutionDetail + hints) + sandbox_adapter.go + sandbox_types.go + catalog_source.go
     │   ├── tool/                   ← ✅ Tool framework：tool.go（9 方法接口 + 标准字段注入 + ToLLMDef）；嵌套子包按 tool 家族（§S12 例外）
-    │   │   ├── forge/              ← ✅ user-forged-tool 系统工具
+    │   │   ├── function/           ← ✅ 9 LLM tools: search/get/create/edit/revert/delete/run + search_function_executions/get_function_execution (D22)
     │   │   ├── filesystem/         ← ✅ Read/Write/Edit/Glob/Grep
     │   │   ├── shell/              ← ✅ Bash/BashOutput/KillShell
     │   │   ├── web/                ← ✅ WebFetch/WebSearch
@@ -213,15 +213,15 @@ backend/
     │   ├── subagent/               ← ✅ Service{Spawn/Cancel/Get/ListTypes/ListByConversation/ListMessages} + subagentHost（loop.Host 实现，5min total-timeout + panic recover + agentstate token log）+ 内置 3 类型注册表（Explore / Plan / general-purpose）
     │   ├── mcp/                    ← ✅ Service{Start/Stop/Add/Remove/Reconnect/Search/CallTool/HealthCheck/InstallFromRegistry/Import} + 6 内置 marketplace Registry + 单 RWMutex 模型 + §5.6 健康追踪（连续失败≥3 → degraded → 自愈）+ §5.7 timeout precedence（ServerConfig > RegistryEntry > 30s）
     │   ├── skill/                  ← ✅ Service{Scan/Get/List/Search/Activate/Body/Create/Replace/Delete/Import} + atomic 写 + fsnotify watcher（debounce 500ms + symlink loop guard + Linux fd-limit fail-soft + 5min poll backstop）+ \$1/\$ARGUMENTS/\${CLAUDE_*} 占位替换 + fork 模式派发 SubagentService（depth ≥ 1 抑制嵌套 fork）
-    │   ├── catalog/                ← ✅ Service{Start/Stop/Refresh/RegisterSource/GetForSystemPrompt/Get} + LLMGenerator{Generate 3-attempt retry + coverage 校验 + mechanical fallback}+ pollLoop 1s + atomic.Bool 单 flight + fingerprint dedup（hash sort source+name+description）+ ~/.forgify/.catalog.json 原子读写 + chat.runner SystemPromptProvider 注入 + 3 source（forge/skill/mcp via AsCatalogSource）
+    │   ├── catalog/                ← ✅ Service{Start/Stop/Refresh/RegisterSource/GetForSystemPrompt/Get} + LLMGenerator{Generate 3-attempt retry + coverage 校验 + mechanical fallback}+ pollLoop 1s + atomic.Bool 单 flight + fingerprint dedup（hash sort source+name+description）+ ~/.forgify/.catalog.json 原子读写 + chat.runner SystemPromptProvider 注入 + 3 source（function/skill/mcp via AsCatalogSource）
     │   ├── sandbox/                ← 📐 Phase 4 准备件 Service + EnsureRuntime/EnsureEnv/Spawn/SpawnLongLived/SpawnShell/Destroy/GC（统一 PluginSandbox）
     │   └── <Phase 4-5>/
     │
     ├── infra/                      ← 技术实现
     │   ├── db/                     ← ✅ db.go（modernc.org/sqlite）+ migrate.go + schema_extras.go
-    │   ├── store/                  ← ✅ apikey / model / conversation / chat / forge / todo / sandbox / subagent
+    │   ├── store/                  ← ✅ apikey / model / conversation / chat / function (含 execution_log) / todo / sandbox
     │   ├── mcp/                    ← ✅ ~/.forgify/mcp.json Load/Save/Merge（Claude Desktop schema 兼容，0600 权限，atomic 写）+ stdio Client wrapper（基于 modelcontextprotocol/go-sdk v1.6；stderr→zap+256KB ring；CommandTransport 处理 SIGTERM→5s→SIGKILL）
-    │   ├── sandbox/                ← 🔄 大重构：原 forge-only 升级为统一 PluginRuntime
+    │   ├── sandbox/                ← ✅ 统一 PluginRuntime（mise embed + per-plugin 隔离 env,4 类 owner: function/mcp/skill/conversation）
     │   │   ├── sandbox.go          ← Service 实现 RuntimeInstaller/EnvManager 注册 + spawn 派发
     │   │   ├── bootstrap/embed.go  ← go:embed mise binaries（per-platform，~10MB）
     │   │   └── installer/          ← 各语言子包
@@ -252,7 +252,7 @@ backend/
             ├── router/             ← ✅ router.go + deps.go（DI struct，nil-tolerant）
             ├── response/           ← ✅ envelope.go + errmap.go + sse.go（StreamSSE[T] 泛型 helper）
             ├── middleware/         ← ✅ recover / logger / cors / locale / auth(InjectUserID) / notfound
-            └── handlers/           ← ✅ health / apikey / model / conversation / chat / forge / dev / util.go（idAndAction）
+            └── handlers/           ← ✅ health / apikey / model / conversation / chat / function / dev / util.go（idAndAction）
 ```
 
 `legacy/` 存放 V1.0/V1.1 的旧实现（Electron + Eino）作为参考。`testend/` 是开发期调试控制台（详见 [`testend-design.md`](./testend-design.md)）。
@@ -331,7 +331,7 @@ backend/
 - 分页参数生效
 
 ### 端到端场景（Phase 3 起，集成测试 13 组覆盖）
-A. Conversation CRUD / B. API Key & Model Config / C. 分页 cursor / D-E. 系统工具组 / F. 并行 tool call / G. 多步 ReAct（write→read→python）/ H. Attachment 内联 / I. 错误处理 / J. Auto-title / K. 含 tool_call blocks 的多轮历史重建 / L. SSE messageId 一致性 / M. Forge 工具创建。详见 [`progress-record.md`](./progress-record.md) 的 chat 重构段。
+A. Conversation CRUD / B. API Key & Model Config / C. 分页 cursor / D-E. 系统工具组 / F. 并行 tool call / G. 多步 ReAct（write→read→python）/ H. Attachment 内联 / I. 错误处理 / J. Auto-title / K. 含 tool_call blocks 的多轮历史重建 / L. SSE messageId 一致性 / M. Function 工具创建。详见 [`progress-record.md`](./progress-record.md) 的 chat 重构段。
 
 ### 性能基准
 - 流式对话 token latency < 旧版 110%

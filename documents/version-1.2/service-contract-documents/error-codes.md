@@ -12,7 +12,7 @@
 
 ### 错误码命名
 - 全部大写 + 下划线：`SCREAMING_SNAKE_CASE`
-- 按 domain 加前缀（除非通用）：`TOOL_NOT_FOUND`、`API_KEY_INVALID`
+- 按 domain 加前缀（除非通用）：`FUNCTION_NOT_FOUND`、`API_KEY_INVALID`
 
 ### 三层错误模型
 
@@ -126,30 +126,29 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 
 ---
 
-### Phase 3：工具锻造能力
+### Phase 3：工具锻造能力 — function trinity (forge_redesign Plan 01)
 
-#### tool ✅
-详见 [`../service-design-documents/forge.md`](../service-design-documents/forge.md) §12。
+#### function ✅
+详见 [`../service-design-documents/function.md`](../service-design-documents/function.md) §10 + redesign topic [`../adhoc-topic-documents/forge_redesign/02-function.md`](../adhoc-topic-documents/forge_redesign/02-function.md)。
 
 | Code | HTTP | Sentinel | 场景 | 状态 |
 |---|---|---|---|---|
-| `TOOL_NOT_FOUND` | 404 | `forgedomain.ErrNotFound` | id 查不到 | ✅ |
-| `TOOL_NAME_DUPLICATE` | 409 | `forgedomain.ErrDuplicateName` | 创建/改名时撞名 | ✅ |
-| `TOOL_VERSION_NOT_FOUND` | 404 | `forgedomain.ErrVersionNotFound` | revert/get version 版本不存在 | ✅ |
-| `TOOL_PENDING_NOT_FOUND` | 404 | `forgedomain.ErrPendingNotFound` | accept/reject 时无 pending | ✅ |
-| `TOOL_PENDING_CONFLICT` | 409 | `forgedomain.ErrPendingConflict` | edit_forge 时已有未处理 pending | ✅ |
-| `TOOL_TEST_CASE_NOT_FOUND` | 404 | `forgedomain.ErrTestCaseNotFound` | 测试用例找不到 | ✅ |
-| `TOOL_RUN_FAILED` | 422 | `forgedomain.ErrRunFailed` | sandbox 内部错误（≠ ok=false 的执行失败）| ✅ |
-| `TOOL_AST_PARSE_FAILED` | 422 | `forgedomain.ErrASTParseError` | 代码无法被 Python AST 解析 | ✅ |
-| `TOOL_IMPORT_INVALID` | 400 | `forgedomain.ErrImportInvalid` | 导入 JSON 格式错误 | ✅ |
-| `TOOL_IMPORT_CONFLICT` | 409 | `forgedomain.ErrImportConflict` | 导入名字冲突需用户决策 | ⬜ |
-| `FORGE_ENV_NOT_READY` | 422 | `forge.ErrEnvNotReady` | ActiveVersion 的 venv 处于非-ready（syncing / evicted），需等 entity-state 翻转或调 :resync | ✅ |
-| `FORGE_NO_ACTIVE_VERSION` | 422 | `forge.ErrNoActiveVersion` | forge 还没接受过任何版本（草稿 forge 在 edit_forge 后 pending 未 accept 即 run）。TE-15 起 create_forge 自动 accept，本码主要给 edit_forge 后未 accept 的场景 | ✅ |
-| `FORGE_ENV_FAILED` | 422 | `forge.ErrEnvFailed` | ActiveVersion 的 env 处于 `EnvStatusFailed`（venv 安装步本身失败 / 系统级故障，**非** deps 解析失败——后者用 `FORGE_DEPENDENCY_RESOLUTION`）；EnvError 含 uv stderr | ✅ |
-| `FORGE_SANDBOX_UNAVAILABLE` | 503 | `forge.ErrSandboxUnavailable` | 启动期 Bootstrap 失败（uv / python-build-standalone 资源缺失） | ✅ |
-| `FORGE_DEPENDENCY_RESOLUTION` | 422 | `forge.ErrDependencyResolution` | uv 无法解析依赖（包名拼错 / 版本约束冲突 / 网络错误）；EnvError 含 uv 完整 stderr | ✅ |
+| `FUNCTION_NOT_FOUND` | 404 | `functiondomain.ErrNotFound` | id 查不到 | ✅ |
+| `FUNCTION_NAME_DUPLICATE` | 409 | `functiondomain.ErrDuplicateName` | 创建/改名时撞名(partial UNIQUE 兜底) | ✅ |
+| `FUNCTION_VERSION_NOT_FOUND` | 404 | `functiondomain.ErrVersionNotFound` | revert/get version 版本号或 id 不存在 | ✅ |
+| `FUNCTION_PENDING_NOT_FOUND` | 404 | `functiondomain.ErrPendingNotFound` | accept/reject 时无 pending | ✅ |
+| `FUNCTION_PENDING_CONFLICT` | 409 | `functiondomain.ErrPendingConflict` | edit_function 时已有未处理 pending | ✅ |
+| `FUNCTION_RUN_FAILED` | 422 | `functiondomain.ErrRunFailed` | sandbox 基础设施错误(≠ ok=false 的用户代码失败,后者经 ExecutionResult.OK=false + ErrorMsg 返) | ✅ |
+| `FUNCTION_AST_PARSE_FAILED` | 422 | `functiondomain.ErrASTParseError` | final validation 失败(无 top-level def / D7 handler-import 黑名单 / 签名一致性) | ✅ |
+| `FUNCTION_OP_INVALID` | 400 | `functiondomain.ErrOpInvalid` | 单 op apply 失败(未知 op 类型 / payload 形状错 / incremental 校验破规则) | ✅ |
+| `FUNCTION_NO_ACTIVE_VERSION` | 422 | `functiondomain.ErrNoActiveVersion` | RunFunction 时 Function.ActiveVersionID == "" (Create 自动 accept v1,该错主要给手动构造 entity 的边角 case) | ✅ |
+| `FUNCTION_ENV_NOT_READY` | 422 | `functiondomain.ErrEnvNotReady` | ActiveVersion 的 venv 处于非-ready;等 entity-state 翻转或 :resync | ✅ |
+| `FUNCTION_ENV_FAILED` | 422 | `functiondomain.ErrEnvFailed` | ActiveVersion 的 env=failed(venv 装包失败);EnvError 含 sandbox stderr | ✅ |
+| `FUNCTION_DEPENDENCY_RESOLUTION` | 422 | `functiondomain.ErrDependencyResolution` | uv 无法解析依赖(包名错 / 版本冲突 / 网络);EnvError 含完整 stderr | ✅ |
+| `FUNCTION_SANDBOX_UNAVAILABLE` | 503 | `functiondomain.ErrSandboxUnavailable` | sandbox v2 Bootstrap 失败(mise binary 缺) | ✅ |
+| `FUNCTION_EXECUTION_NOT_FOUND` | 404 | `functiondomain.ErrExecutionNotFound` | get_function_execution / GET /function-executions/{id} 查不到 | ✅ |
 
-> 现有 `TOOL_*` wire codes 是 Phase 1 大重命名时为客户端兼容保留——sentinel 自身已是 `forgedomain.Err*`。新增的沙箱迭代 sentinel 用 `FORGE_*` 前缀；客户端兼容性清理留到未来独立任务。
+> 历史 `TOOL_*` / `FORGE_*` wire codes 已随 forge 代码路径在 Plan 01 Phase 7 同步移除。trinity domain 统一用 `FUNCTION_*` 前缀。
 
 ---
 
@@ -244,7 +243,7 @@ AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 
 
 | Code | HTTP | Sentinel | 场景 | 状态 |
 |---|---|---|---|---|
-| `CATALOG_ALL_SOURCES_FAILED` | 503 | `catalogdomain.ErrAllSourcesFailed` | 全部 source（forge/skill/mcp）同时挂；`POST /catalog:refresh` 时上抛 | ✅ |
+| `CATALOG_ALL_SOURCES_FAILED` | 503 | `catalogdomain.ErrAllSourcesFailed` | 全部 source（function/skill/mcp）同时挂；`POST /catalog:refresh` 时上抛 | ✅ |
 
 > `ErrCoverageIncomplete` / `ErrGenerationFailed` 内部消化（3 次 retry + mechanical fallback），不上抛 handler。仅 `ErrAllSourcesFailed` 在所有 source 同时失败时透出 503。
 

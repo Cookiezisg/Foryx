@@ -129,42 +129,33 @@ type Error = {
 
 ---
 
-### Phase 3：工具锻造能力
+### Phase 3：工具锻造能力 — function trinity (forge_redesign Plan 01)
 
-#### forge ✅
-详见 [`../service-design-documents/forge.md`](../service-design-documents/forge.md) §11–12。
+#### function ✅
+详见 [`../service-design-documents/function.md`](../service-design-documents/function.md) §6 + redesign topic [`../adhoc-topic-documents/forge_redesign/02-function.md`](../adhoc-topic-documents/forge_redesign/02-function.md)。
 
 | Method | Path | 用途 |
 |---|---|---|
-| POST | `/api/v1/forges` | 创建工具（直接传 code）|
-| GET | `/api/v1/forges` | 列表（分页）|
-| GET | `/api/v1/forges/{id}` | 详情 |
-| PATCH | `/api/v1/forges/{id}` | 更新（直接生效）|
-| DELETE | `/api/v1/forges/{id}` | 软删 |
-| POST | `/api/v1/forges/{id}:run` | 执行工具 |
-| POST | `/api/v1/forges/{id}:export` | 导出 JSON |
-| POST | `/api/v1/forges:import` | 导入 JSON |
-| GET | `/api/v1/forges/{id}/versions` | 版本列表 |
-| GET | `/api/v1/forges/{id}/versions/{version}` | 单版本详情 |
-| POST | `/api/v1/forges/{id}:revert` | 回滚版本 |
-| GET | `/api/v1/forges/{id}/pending` | 当前 pending |
-| POST | `/api/v1/forges/{id}/pending:accept` | 接受 pending |
-| POST | `/api/v1/forges/{id}/pending:reject` | 拒绝 pending |
-| GET | `/api/v1/forges/{id}/test-cases` | 测试用例列表 |
-| POST | `/api/v1/forges/{id}/test-cases` | 创建测试用例 |
-| DELETE | `/api/v1/forges/{id}/test-cases/{tcId}` | 删除测试用例 |
-| POST | `/api/v1/forges/{id}/test-cases/{tcId}:run` | 运行单个测试 |
-| POST | `/api/v1/forges/{id}:test` | 运行全部测试；返聚合 envelope `{total, passed, failed, results: [{tcId, passed, ...}]}` |
-| POST | `/api/v1/forges/{id}:generate-test-cases` | LLM 生成测试用例（一次性返回 JSON 批量）；接受可选 `?count=N`（1-20，默认 5）|
-| GET | `/api/v1/forges/{id}/executions` | 执行历史（统一端点，?kind=run\|test &batchId=&cursor=&limit= 过滤；替代旧的 run-history + test-history）✅ Phase 5 |
-| GET | `/api/v1/forges/{id}` | 详情（响应含 `pending` 字段，存在时为完整 ForgeVersion 对象，否则缺省）✅ Phase 5 |
+| POST | `/api/v1/functions` | 创建 function(扁平 definition: name/description/code/parameters/dependencies/...);后台起 env sync。HTTP 走扁平,LLM 走 ops。|
+| GET | `/api/v1/functions` | 列表(分页 cursor) |
+| GET | `/api/v1/functions/{id}` | 详情(含 pending + active version env 状态镜像字段) |
+| PATCH | `/api/v1/functions/{id}` | 改元数据(name/description/tags;code/deps 走 LLM ops 流) |
+| DELETE | `/api/v1/functions/{id}` | 软删(D20 级联:workflow domain 收到 notification 标 needs_attention) |
+| POST | `/api/v1/functions/{id}:run` | 执行(body `{args, version?, timeoutMs?}`);返 ExecutionResult |
+| POST | `/api/v1/functions/{id}:resync` | 强制重建 active version 的 venv(后台);幂等 |
+| POST | `/api/v1/functions/{id}:revert` | 回滚到指定 accepted 版本号 |
+| GET | `/api/v1/functions/{id}/versions` | 版本分页(?status= filter) |
+| GET | `/api/v1/functions/{id}/versions/{v}` | 单版本(integer→ByNumber, fnv_*→ById) |
+| GET | `/api/v1/functions/{id}/pending` | 当前 pending(无则 404 FUNCTION_PENDING_NOT_FOUND) |
+| POST | `/api/v1/functions/{id}/pending:accept` | accept → 新 accepted 版本 + 翻 ActiveVersionID;应用 AcceptedVersionCap=50 |
+| POST | `/api/v1/functions/{id}/pending:reject` | reject(状态 → rejected,不动 ActiveVersion) |
+| GET | `/api/v1/functions/{id}/executions` | 执行日志列表 ✅ D22(? versionId/status/conversationId/flowrunId &cursor &limit);返 previews + aggregates |
+| GET | `/api/v1/function-executions/{execId}` | 全局执行详情 ✅ D22;返完整行 + machine-computed hints(outputEmpty / significantlySlower) |
 
-> Phase 5 整合（2026-05-02）：原 `forge_run_history` + `forge_test_history` 两表合并为 `forge_executions`（kind 字段区分），HTTP 端点对应合并为单 `:executions`。响应是分页 envelope（`{data, nextCursor, hasMore}`），与其他列表端点一致。
-
-> **沙箱迭代 1（2026-05-03）**——`POST /forges` body 加 **`dependencies` (PEP 508 string array, optional)** + **`pythonVersion` (PEP 440 spec, optional)**；service 同步等 venv sync 完成才返，响应的 forge 对象计算字段含 `envStatus` / `envError` / `envSyncedAt` / `envSyncStage` / `envSyncDetail` / `activeVersionId`（由 `attachActiveEnv` 填充）。`PATCH /forges/{id}` 不接 deps 改动——deps 改走 `edit_forge` LLM tool / pending → accept 流程。`POST /forges/{id}/pending:accept` 守卫 pending 的 `envStatus`：仅 `ready` 才放行；`failed` 返 422 `FORGE_ENV_FAILED`，其他态返 422 `FORGE_ENV_NOT_READY`。`POST /forges/{id}:revert` 自动检测目标版本 `envStatus="evicted"` 并触发同步 sync 重建。LLM tool args（`create_forge` / `edit_forge`）schema 同样含 `dependencies` 与 `python_version` 字段，并在 `tool_result` 返回 `env_status` / `env_error` 让 LLM 据此决定下一步（详 forge.md §10）。
+> forge_redesign Plan 01(2026-05-11):整套 forge 代码路径在 Phase 7 删除,trinity domain function 替代。POST 走扁平 definition(curl/UI/script 友好),LLM 走 ops 增量编辑(create_function / edit_function 工具单 op emit 1 progress delta)。env sync 是 caller-owns lifetime(D3):创建/edit/accept 后 SyncEnvForVersion 后台起 goroutine,UI 经 GET /functions/{id} 看 envStatus 翻 ready/failed。D22:每次 RunFunction 终态写 1 行 function_executions(detached ctx §S9);9 LLM tools 含 search_function_executions / get_function_execution 让 LLM 自诊断。
 
 #### chat（Phase 3 升级）✅
-Forge System Tools 注入（search/get/create/edit/run，5 个）。SSE 见 events-design.md。无新 HTTP 端点，见 Phase 2 chat 端点。
+Function System Tools 注入（7 CRUD/exec + 2 D22 execution log,共 9 个）。SSE 见 events-design.md。无新 HTTP 端点,见 Phase 2 chat 端点。
 
 > Phase 3 后优化轮（2026-05-02）删除了原 Phase 3 装的 8 个通用 system tool（read_file/write_file/list_dir/run_shell/run_python/datetime/web_search/fetch_url）。新一代 system tools（Read/Write/Edit/Bash/Glob/Grep/LS）将在 Phase 5 重建。
 
@@ -246,24 +237,24 @@ Forge System Tools 注入（search/get/create/edit/run，5 个）。SSE 见 even
 | POST | `/api/v1/skills/{name}:invoke` | 手动调用（slash command 路径用）；body `{arguments: string[]}`（位置参数），返 200 `{result: out}` |
 
 #### catalog ✅
-详见 [`../service-design-documents/catalog.md`](../service-design-documents/catalog.md)。统一能力目录（forge + skill + mcp）。LLM-gen summary + 自动跨类目路由观察。**1s polling + atomic.Bool 单 flight + fingerprint dedup**。**不发 SSE**（内部组件）。**V1.2 D8（2026-05-06）全部交付**：domain types + 2 sentinels + Service + LLMGenerator（3-attempt retry + coverage 校验 + mechanical fallback）+ atomic disk cache + 3 CatalogSource（forge/skill/mcp）+ chat runner SystemPromptProvider 注入 + 2 HTTP endpoints + 3 离线 pipeline 场景。
+详见 [`../service-design-documents/catalog.md`](../service-design-documents/catalog.md)。统一能力目录（function + skill + mcp）。LLM-gen summary + 自动跨类目路由观察。**1s polling + atomic.Bool 单 flight + fingerprint dedup**。**不发 SSE**（内部组件）。**V1.2 D8（2026-05-06）全部交付**：domain types + 2 sentinels + Service + LLMGenerator（3-attempt retry + coverage 校验 + mechanical fallback）+ atomic disk cache + 3 CatalogSource（function/skill/mcp）+ chat runner SystemPromptProvider 注入 + 2 HTTP endpoints + 3 离线 pipeline 场景。
 
 | Method | Path | 用途 |
 |---|---|---|
 | GET | `/api/v1/catalog` | 当前 catalog cache 内容（debug / UI 显示）；**未 Refresh 时返 envelope 内 `null`**——UI 需 null-guard |
 | POST | `/api/v1/catalog:refresh` | 强制立即 refresh（绕过 1s polling 间隔）|
 
-**没有 routing-hints 端点**——路由提示由 generator LLM-gen 时直接写进 summary，用户想影响路由 → 编辑源头 forge/skill/mcp 的 description。
+**没有 routing-hints 端点**——路由提示由 generator LLM-gen 时直接写进 summary，用户想影响路由 → 编辑源头 function/skill/mcp 的 description。
 
 #### sandbox ✅
-详见 [`../service-design-documents/sandbox.md`](../service-design-documents/sandbox.md)。统一 PluginSandbox v2（mise embed + per-plugin 隔离 env，4 类 owner：forge / mcp / skill / conversation）。Bootstrap 自启 + lazy install runtime。
+详见 [`../service-design-documents/sandbox.md`](../service-design-documents/sandbox.md)。统一 PluginSandbox v2（mise embed + per-plugin 隔离 env，4 类 owner：function / mcp / skill / conversation）。Bootstrap 自启 + lazy install runtime。
 
 ##### Read 端点
 
 | Method | Path | 用途 |
 |---|---|---|
 | GET | `/api/v1/sandbox/runtimes` | 列所有已装 runtime（kind/version/path/sizeBytes/isDefault）|
-| GET | `/api/v1/sandbox/envs?ownerKind=forge\|mcp\|skill\|conversation` | 按 ownerKind 列 envs（**ownerKind 必填**，否则 400 OWNER_KIND_REQUIRED）|
+| GET | `/api/v1/sandbox/envs?ownerKind=function\|mcp\|skill\|conversation` | 按 ownerKind 列 envs（**ownerKind 必填**，否则 400 OWNER_KIND_REQUIRED）|
 | GET | `/api/v1/sandbox/envs/{id}` | 单 env 详情 |
 | GET | `/api/v1/sandbox/disk-usage` | 全 sandbox 磁盘占用 `{totalBytes}` |
 | GET | `/api/v1/sandbox/bootstrap-status` | Bootstrap 状态 `{ok, miseBin?, error?}` |
