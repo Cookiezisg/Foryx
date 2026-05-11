@@ -15,20 +15,26 @@ import (
 )
 
 // OwnerKind enumerates env owner types. Stable strings — used as DB / JSON
-// values; renames require migration. OwnerKindSkill is reserved for the
-// skill domain when its sandbox integration ships (no current producer).
+// values; renames require migration. OwnerKindFunction is the trinity-domain
+// replacement for OwnerKindForge (forge is deleted after Plan 01 Phase 7).
+// OwnerKindSkill is reserved for the skill domain when its sandbox
+// integration ships (no current producer).
 //
 // OwnerKind 枚举 env 所有者类型。稳定字符串——直接作 DB / JSON 值；改名需迁移。
-// OwnerKindSkill 预留给 skill domain 接 sandbox 时用（暂无生产 producer）。
+// OwnerKindFunction 是 trinity-domain 对 OwnerKindForge 的替代（forge 在
+// Plan 01 Phase 7 之后删除）。OwnerKindSkill 预留给 skill domain 接 sandbox
+// 时用（暂无生产 producer）。
 const (
 	OwnerKindForge        = "forge"
+	OwnerKindFunction     = "function"
 	OwnerKindMCP          = "mcp"
 	OwnerKindSkill        = "skill"
 	OwnerKindConversation = "conversation"
 )
 
 // Owner identifies an Env's owner. ID semantics depend on Kind:
-//   - forge:        EnvID hash (deps-content addressed)
+//   - forge:        "<forgeID>_<envID>" (per-forge envID buffer for revert)
+//   - function:     "<functionID>_<envID>" (same shape as forge)
 //   - mcp:          server name (e.g. "playwright")
 //   - skill:        skill name
 //   - conversation: "<conv_id>_<runtime_kind>" (use `_`, not `:` —
@@ -86,7 +92,7 @@ const (
 // Path 相对 sandbox envs 根目录。Status="failed" 时 ErrorMsg 存失败文本。
 type Env struct {
 	ID         string    `gorm:"primaryKey;type:text"                                      json:"id"` // se_<16hex>
-	OwnerKind  string    `gorm:"not null;type:text;uniqueIndex:uniq_se_owner,priority:1;index:idx_se_owner,priority:1;check:owner_kind IN ('forge','mcp','skill','conversation')" json:"ownerKind"`
+	OwnerKind  string    `gorm:"not null;type:text;uniqueIndex:uniq_se_owner,priority:1;index:idx_se_owner,priority:1;check:owner_kind IN ('forge','function','mcp','skill','conversation')" json:"ownerKind"`
 	OwnerID    string    `gorm:"not null;type:text;uniqueIndex:uniq_se_owner,priority:2;index:idx_se_owner,priority:2" json:"ownerId"`
 	OwnerName  string    `gorm:"type:text"                                                 json:"ownerName,omitempty"`
 	RuntimeID  string    `gorm:"not null;type:text;index"                                  json:"runtimeId"`
