@@ -243,17 +243,17 @@ func TestFindEnvByOwner(t *testing.T) {
 	if err := s.CreateRuntime(ctx, mkRuntime("sr_001", "python", "3.12.5")); err != nil {
 		t.Fatalf("seed runtime: %v", err)
 	}
-	if err := s.CreateEnv(ctx, mkEnv("se_001", sandboxdomain.OwnerKindForge, "f_abc", "sr_001")); err != nil {
+	if err := s.CreateEnv(ctx, mkEnv("se_001", sandboxdomain.OwnerKindFunction, "f_abc", "sr_001")); err != nil {
 		t.Fatalf("seed env: %v", err)
 	}
-	got, err := s.FindEnvByOwner(ctx, sandboxdomain.OwnerKindForge, "f_abc")
+	got, err := s.FindEnvByOwner(ctx, sandboxdomain.OwnerKindFunction, "f_abc")
 	if err != nil {
 		t.Fatalf("FindEnvByOwner: %v", err)
 	}
 	if got.ID != "se_001" {
 		t.Errorf("want se_001, got %s", got.ID)
 	}
-	_, err = s.FindEnvByOwner(ctx, sandboxdomain.OwnerKindForge, "f_missing")
+	_, err = s.FindEnvByOwner(ctx, sandboxdomain.OwnerKindFunction, "f_missing")
 	if !errors.Is(err, sandboxdomain.ErrEnvNotFound) {
 		t.Errorf("missing owner: want ErrEnvNotFound, got %v", err)
 	}
@@ -270,7 +270,7 @@ func TestListEnvsByRuntime_FKReverseLookup(t *testing.T) {
 	}
 	for i, e := range []*sandboxdomain.Env{
 		mkEnv("se_a", sandboxdomain.OwnerKindMCP, "playwright", "sr_001"),
-		mkEnv("se_b", sandboxdomain.OwnerKindForge, "f_one", "sr_001"),
+		mkEnv("se_b", sandboxdomain.OwnerKindFunction, "f_one", "sr_001"),
 		mkEnv("se_c", sandboxdomain.OwnerKindMCP, "context7", "sr_002"),
 	} {
 		if err := s.CreateEnv(ctx, e); err != nil {
@@ -349,7 +349,7 @@ func TestDeleteEnv(t *testing.T) {
 	if err := s.CreateRuntime(ctx, mkRuntime("sr_001", "python", "3.12.5")); err != nil {
 		t.Fatalf("seed runtime: %v", err)
 	}
-	if err := s.CreateEnv(ctx, mkEnv("se_001", sandboxdomain.OwnerKindForge, "f_abc", "sr_001")); err != nil {
+	if err := s.CreateEnv(ctx, mkEnv("se_001", sandboxdomain.OwnerKindFunction, "f_abc", "sr_001")); err != nil {
 		t.Fatalf("seed env: %v", err)
 	}
 	if err := s.DeleteEnv(ctx, "se_001"); err != nil {
@@ -379,7 +379,7 @@ func TestTotalSizeBytes(t *testing.T) {
 	if err := s.CreateRuntime(ctx, r); err != nil {
 		t.Fatalf("seed runtime: %v", err)
 	}
-	e := mkEnv("se_001", sandboxdomain.OwnerKindForge, "f_abc", "sr_001")
+	e := mkEnv("se_001", sandboxdomain.OwnerKindFunction, "f_abc", "sr_001")
 	e.SizeBytes = 250
 	if err := s.CreateEnv(ctx, e); err != nil {
 		t.Fatalf("seed env: %v", err)
@@ -476,7 +476,7 @@ func TestListEnvsLastUsedBefore(t *testing.T) {
 		{"se_old2", "f_old2", now.Add(-2 * time.Hour)},
 		{"se_new", "f_new", now.Add(-30 * time.Minute)},
 	} {
-		e := mkEnv(ent.id, sandboxdomain.OwnerKindForge, ent.ownerID, "sr_001")
+		e := mkEnv(ent.id, sandboxdomain.OwnerKindFunction, ent.ownerID, "sr_001")
 		e.LastUsedAt = ent.lastUsed
 		if err := s.CreateEnv(ctx, e); err != nil {
 			t.Fatalf("seed[%d]: %v", i, err)

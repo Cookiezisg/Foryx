@@ -65,10 +65,10 @@ func TestD9_CatalogReachesLLM(t *testing.T) {
 	h := th.New(t, th.WithFakeLLMBaseURL(fake.URL()))
 	h.SeedDeepSeek(t, "fake-test-key")
 
-	// Seed one forge + one skill so the catalog has real content to
+	// Seed one function + one skill so the catalog has real content to
 	// surface (and not a 'no capabilities' empty section).
-	// 种一 forge + 一 skill 让 catalog 有真内容（非 '无 capabilities' 空段）。
-	h.NewForge(t, "csv-clean", "def run(args):\n    return args\n")
+	// 种一 function + 一 skill 让 catalog 有真内容（非 '无 capabilities' 空段）。
+	h.NewFunction(t, "csv-clean", "def csv_clean(args):\n    return args\n")
 	seedSkill(t, h, "deploy", "Deploy via internal CI")
 
 	// Force an immediate catalog refresh so we don't depend on the 1s
@@ -211,12 +211,12 @@ func TestD9_BootSmoke(t *testing.T) {
 
 	// Service handles non-nil.
 	// service handle 非 nil。
-	if h.Forge == nil || h.Skill == nil || h.MCP == nil ||
+	if h.Function == nil || h.Skill == nil || h.MCP == nil ||
 		h.Catalog == nil || h.Sandbox == nil ||
 		h.APIKey == nil || h.Model == nil || h.Conversation == nil ||
 		h.Chat == nil {
-		t.Fatalf("service field nil after harness boot:\n  Forge=%v Skill=%v MCP=%v Catalog=%v Sandbox=%v APIKey=%v Model=%v Conv=%v Chat=%v",
-			h.Forge != nil, h.Skill != nil, h.MCP != nil, h.Catalog != nil, h.Sandbox != nil,
+		t.Fatalf("service field nil after harness boot:\n  Function=%v Skill=%v MCP=%v Catalog=%v Sandbox=%v APIKey=%v Model=%v Conv=%v Chat=%v",
+			h.Function != nil, h.Skill != nil, h.MCP != nil, h.Catalog != nil, h.Sandbox != nil,
 			h.APIKey != nil, h.Model != nil, h.Conversation != nil, h.Chat != nil)
 	}
 
@@ -231,8 +231,9 @@ func TestD9_BootSmoke(t *testing.T) {
 		gotNames[tool.Name()] = true
 	}
 	wantTools := []string{
-		// forge family
-		"search_forges", "get_forge", "create_forge", "edit_forge", "run_forge",
+		// function family (forge_redesign trinity)
+		"search_function", "get_function", "create_function", "edit_function",
+		"revert_function", "delete_function", "run_function",
 		// filesystem family
 		"Read", "Write", "Edit", "Glob", "Grep",
 		// shell family

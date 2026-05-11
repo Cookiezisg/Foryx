@@ -87,7 +87,7 @@ func newServiceWithEnv(t *testing.T, kind string) (*Service, sandboxdomain.Owner
 	if err := repo.CreateRuntime(ctx, rt); err != nil {
 		t.Fatalf("seed runtime: %v", err)
 	}
-	owner := sandboxdomain.Owner{Kind: sandboxdomain.OwnerKindForge, ID: "f_test"}
+	owner := sandboxdomain.Owner{Kind: sandboxdomain.OwnerKindFunction, ID: "f_test"}
 	envRel := "envs/forge/f_test"
 	env := &sandboxdomain.Env{
 		ID: "se_test", OwnerKind: owner.Kind, OwnerID: owner.ID,

@@ -64,12 +64,12 @@ func PostMessage(t *testing.T, h *Harness, convID, content string) string {
 	return resp.Data.MessageID
 }
 
-// PostForge is a shorthand for POST /api/v1/forges.
+// PostFunction is a shorthand for POST /api/v1/functions.
 //
-// PostForge 是 POST /api/v1/forges 的简写。
-func PostForge(t *testing.T, h *Harness, name, code string, out any) int {
+// PostFunction 是 POST /api/v1/functions 的简写。
+func PostFunction(t *testing.T, h *Harness, name, code string, out any) int {
 	t.Helper()
-	return DoRequest(t, h, "POST", "/api/v1/forges", map[string]any{
+	return DoRequest(t, h, "POST", "/api/v1/functions", map[string]any{
 		"name": name,
 		"code": code,
 	}, out)

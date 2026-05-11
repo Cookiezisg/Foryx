@@ -9,13 +9,14 @@ package harness
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 
 	apikeyapp "github.com/sunweilin/forgify/backend/internal/app/apikey"
-	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
+	functionapp "github.com/sunweilin/forgify/backend/internal/app/function"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
-	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
+	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -27,8 +28,10 @@ import (
 // （不放 domain）因为 domain 把 provider 当自由字符串。
 const ProviderDeepSeek = "deepseek"
 
-// SimpleForgeCode is minimal valid Python for forge tests.
-const SimpleForgeCode = `def hello(name: str) -> str:
+// SimpleFunctionCode is minimal valid Python for function pipeline tests.
+//
+// SimpleFunctionCode 是 function pipeline 测试用的最小可用 Python。
+const SimpleFunctionCode = `def hello(name: str) -> str:
     """Greet someone.
 
     Args:
@@ -94,33 +97,35 @@ func (h *Harness) NewConversation(t *testing.T, title string) *convdomain.Conver
 	return c
 }
 
-// NewForge creates a forge with the given name + Python code via the forge
-// service. Code is parsed (AST validated) by the service; on parse failure
-// the test fails. Returns the persisted entity.
+// NewFunction creates a function with the given name + Python code via the
+// function service. Builds a minimal ops sequence (set_meta + set_code) so
+// validation passes; tests that need parameters / dependencies / etc construct
+// their own DirectCreateInput.
 //
-// NewForge 通过 forge service 新建一个 forge（含 AST 校验）。解析失败 fail。
-// 返回已落库 entity。
-func (h *Harness) NewForge(t *testing.T, name, code string) *forgedomain.Forge {
+// NewFunction 通过 function service 新建一个 function。仅 set_meta + set_code
+// 让 final 校验通过;需要 parameters/deps 的测试自构 DirectCreateInput。
+func (h *Harness) NewFunction(t *testing.T, name, code string) *functiondomain.Function {
 	t.Helper()
-	f, err := h.Forge.Create(h.LocalCtx(), forgeapp.CreateInput{
-		Name: name,
-		Code: code,
-	})
+	rawMeta, _ := json.Marshal(map[string]any{"name": name})
+	rawCode, _ := json.Marshal(map[string]any{"code": code})
+	ops := []functionapp.Op{
+		{Type: "set_meta", Raw: rawMeta},
+		{Type: "set_code", Raw: rawCode},
+	}
+	f, _, err := h.Function.Create(h.LocalCtx(), functionapp.CreateInput{Ops: ops})
 	if err != nil {
-		t.Fatalf("create forge %q: %v", name, err)
+		t.Fatalf("create function %q: %v", name, err)
 	}
 	return f
 }
 
-// RequireForgeResources skips the test when the v2 sandbox isn't ready —
+// RequireFunctionResources skips the test when the v2 sandbox isn't ready —
 // either the mise binary wasn't embedded for the current platform (run
-// `make resources`) or Bootstrap failed for some other reason. All forge-
+// `make resources`) or Bootstrap failed for some other reason. All function-
 // sandbox pipeline tests should call this at the top.
 //
-// RequireForgeResources 在 v2 sandbox 未 ready 时 skip——要么当前平台没 embed
-// mise（跑 `make resources`），要么 Bootstrap 因其他原因失败。所有 forge
-// sandbox pipeline 测试在开头调用。
-func RequireForgeResources(t *testing.T, h *Harness) {
+// RequireFunctionResources 在 v2 sandbox 未 ready 时 skip。
+func RequireFunctionResources(t *testing.T, h *Harness) {
 	t.Helper()
 	if !h.Sandbox.IsReady() {
 		err := h.Sandbox.BootstrapError()

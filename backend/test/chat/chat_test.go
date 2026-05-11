@@ -5,7 +5,7 @@
 // From chat_pipeline_test.go (5 scenarios):
 //  1. SimpleText_StreamingSnapshots  — fake LLM, text streaming, monotonic growth, DB persistence
 //  2. MissingModelConfig_ErrorCodePersisted — no LLM needed (pre-LLM error path)
-//  3. ToolCall_SearchForges          — fake LLM triggers search_forges round-trip
+//  3. ToolCall_SearchFunction          — fake LLM triggers search_function round-trip
 //  4. CancelMidStream_StatusCancelled — fake LLM slow stream, client cancels
 //  5. Live_ReasoningModel_BlocksSeparate — real DeepSeek, opt-in via DEEPSEEK_API_KEY
 //
@@ -16,7 +16,7 @@
 //
 // From chat_react_pipeline_test.go (3 scenarios):
 //  9. MultiStep_TwoToolRounds — two tool-call rounds
-//  10. ParallelToolCalls_BothExecuted — two parallel search_forges
+//  10. ParallelToolCalls_BothExecuted — two parallel search_function
 //  11. HistoryRebuild_OrderCorrect — two sequential messages
 //
 // From chat_autotitle_pipeline_test.go (2 scenarios):
@@ -162,30 +162,30 @@ func TestChat_MissingModelConfig_ErrorCodePersisted(t *testing.T) {
 	}
 }
 
-// ── 3. Tool call (search_forges) ─────────────────────────────────────────────
+// ── 3. Tool call (search_function) ───────────────────────────────────────────
 
-func TestChat_ToolCall_SearchForges(t *testing.T) {
+func TestChat_ToolCall_SearchFunction(t *testing.T) {
 	fake := th.NewFakeLLMServer(t)
-	// Script 1: LLM returns a tool call for search_forges.
-	// Script 1：LLM 返回 search_forges 的 tool call。
+	// Script 1: LLM returns a tool call for search_function.
+	// Script 1：LLM 返回 search_function 的 tool call。
 	fake.PushScript(th.ScriptSingleToolCall(
-		"search_forges", "call_fake_search_001",
-		`{"query":"csv","summary":"searching forges for csv parsing"}`,
+		"search_function", "call_fake_search_001",
+		`{"query":"csv","summary":"searching functions for csv parsing"}`,
 	))
 	// Script 2: LLM responds after receiving the (empty) tool result.
-	// search_forges returns [] immediately when no forges exist (early-exit path),
-	// so no Python/sandbox is needed for this test.
+	// search_function returns [] immediately when no functions exist (early-exit
+	// path), so no Python/sandbox is needed.
 	//
 	// Script 2：LLM 收到（空）tool result 后响应。
-	// search_forges 在无 forge 时直接返 []（early-exit），无需 Python/sandbox。
-	fake.PushScript(th.ScriptText("I searched your forge library but found no CSV-related forges."))
+	// search_function 在无 function 时直接返 []（early-exit），无需 Python/sandbox。
+	fake.PushScript(th.ScriptText("I searched your function library but found no CSV-related functions."))
 
 	h := th.New(t, th.WithFakeLLMBaseURL(fake.URL()))
 	h.SeedDeepSeek(t, "fake-test-key")
 	conv := h.NewConversation(t, "tool-call")
 	sub := h.SubscribeSSE(t, conv.ID)
 
-	th.PostMessage(t, h, conv.ID, "List forges I have for parsing CSV.")
+	th.PostMessage(t, h, conv.ID, "List functions I have for parsing CSV.")
 
 	final := sub.WaitForAssistantTerminal(30 * time.Second)
 	if final.Status != chatdomain.StatusCompleted {
@@ -193,25 +193,19 @@ func TestChat_ToolCall_SearchForges(t *testing.T) {
 			final.Status, final.ErrorCode, sub.FormatRawEvents())
 	}
 
-	// Final blocks must contain a search_forges tool_call and its paired tool_result.
-	// 最终 blocks 必含 search_forges 的 tool_call 和配对 tool_result。
-	toolCallID, sawCall := th.ExtractToolCallByName(final.Blocks, "search_forges")
+	// Final blocks must contain a search_function tool_call and its paired tool_result.
+	// 最终 blocks 必含 search_function 的 tool_call 和配对 tool_result。
+	toolCallID, sawCall := th.ExtractToolCallByName(final.Blocks, "search_function")
 	if !sawCall {
-		t.Errorf("no tool_call block for search_forges; blocks=%d\nraw:\n%s",
+		t.Errorf("no tool_call block for search_function; blocks=%d\nraw:\n%s",
 			len(final.Blocks), sub.FormatRawEvents())
 	}
 	resultData, sawResult := th.ExtractToolResultByCallID(final.Blocks, toolCallID)
 	if !sawResult {
-		t.Errorf("no paired tool_result for search_forges call %q", toolCallID)
+		t.Errorf("no paired tool_result for search_function call %q", toolCallID)
 	}
 	if ok, _ := resultData["ok"].(bool); !ok {
-		t.Errorf("tool_result.ok=false for search_forges; data=%v", resultData)
-	}
-
-	// search_forges is read-only — no ForgeExecution row should be written.
-	// search_forges 只读，不写 forge_executions。
-	if n := th.DBCount(t, h, "forge_executions", ""); n != 0 {
-		t.Errorf("forge_executions count=%d, search_forges must not record executions", n)
+		t.Errorf("tool_result.ok=false for search_function; data=%v", resultData)
 	}
 }
 
@@ -398,7 +392,7 @@ func TestChat_CancelDuringSecondLLMCall_StatusCancelled(t *testing.T) {
 	// Script 1：LLM 触发 tool call。
 	// Script 2：LLM 在收到 tool result 后缓慢流文字——取消落在这里。
 	fake.PushScript(th.ScriptSingleToolCall(
-		"search_forges", "call_cancel_test",
+		"search_function", "call_cancel_test",
 		`{"query":"anything","summary":"searching forges"}`,
 	))
 	fake.PushScript(th.ScriptSlowText(
@@ -437,19 +431,19 @@ func TestChat_CancelDuringSecondLLMCall_StatusCancelled(t *testing.T) {
 
 func TestChatReact_MultiStep_TwoToolRounds(t *testing.T) {
 	fake := th.NewFakeLLMServer(t)
-	// Round 1: LLM calls search_forges.
-	// Round 2: LLM calls search_forges again (simulating a second reasoning step).
+	// Round 1: LLM calls search_function.
+	// Round 2: LLM calls search_function again (simulating a second reasoning step).
 	// Round 3: LLM returns text.
 	//
-	// 第 1 轮：LLM 调 search_forges。
-	// 第 2 轮：LLM 再调 search_forges（模拟第二次推理步骤）。
+	// 第 1 轮：LLM 调 search_function。
+	// 第 2 轮：LLM 再调 search_function（模拟第二次推理步骤）。
 	// 第 3 轮：LLM 返回文字。
 	fake.PushScript(th.ScriptSingleToolCall(
-		"search_forges", "call_step1",
+		"search_function", "call_step1",
 		`{"query":"csv","summary":"first search"}`,
 	))
 	fake.PushScript(th.ScriptSingleToolCall(
-		"search_forges", "call_step2",
+		"search_function", "call_step2",
 		`{"query":"json","summary":"second search"}`,
 	))
 	fake.PushScript(th.ScriptText("I searched twice and found no matching forges."))
@@ -469,9 +463,9 @@ func TestChatReact_MultiStep_TwoToolRounds(t *testing.T) {
 
 	// Verify two tool_call blocks and their paired tool_result blocks.
 	// 验证两个 tool_call block 和配对的 tool_result block。
-	_, found1 := th.ExtractToolCallByName(final.Blocks, "search_forges")
+	_, found1 := th.ExtractToolCallByName(final.Blocks, "search_function")
 	if !found1 {
-		t.Error("no search_forges tool_call block in final message")
+		t.Error("no search_function tool_call block in final message")
 	}
 
 	toolCallCount := 0
@@ -498,19 +492,19 @@ func TestChatReact_MultiStep_TwoToolRounds(t *testing.T) {
 	}
 }
 
-// ── 10. Parallel tool calls: two search_forges in one LLM response ─────────────
+// ── 10. Parallel tool calls: two search_function in one LLM response ─────────────
 
 func TestChatReact_ParallelToolCalls_BothExecuted(t *testing.T) {
 	fake := th.NewFakeLLMServer(t)
-	// Script 1: LLM returns two parallel search_forges calls.
+	// Script 1: LLM returns two parallel search_function calls.
 	// Script 2: LLM responds after receiving both tool results.
 	//
-	// Script 1：LLM 返回两个并行 search_forges 调用。
+	// Script 1：LLM 返回两个并行 search_function 调用。
 	// Script 2：LLM 收到两个 tool result 后响应。
 	fake.PushScript(th.ScriptParallelToolCalls([]th.ToolCallSpec{
-		{Name: "search_forges", ToolID: "call_parallel_a",
+		{Name: "search_function", ToolID: "call_parallel_a",
 			ArgsJSON: `{"query":"csv","summary":"search a"}`},
-		{Name: "search_forges", ToolID: "call_parallel_b",
+		{Name: "search_function", ToolID: "call_parallel_b",
 			ArgsJSON: `{"query":"json","summary":"search b"}`},
 	}))
 	fake.PushScript(th.ScriptText("Both searches returned no results."))

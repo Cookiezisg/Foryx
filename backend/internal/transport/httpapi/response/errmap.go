@@ -13,7 +13,6 @@ import (
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
-	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
@@ -68,28 +67,8 @@ var errTable = map[error]errMapping{
 	modeldomain.ErrProviderRequired: {http.StatusBadRequest, "PROVIDER_REQUIRED"},
 	modeldomain.ErrModelIDRequired:  {http.StatusBadRequest, "MODEL_ID_REQUIRED"},
 
-	// forge domain / forge domain 层
-	// (TOOL_* wire codes preserved from Phase 1 for client compatibility;
-	// new env / sandbox sentinels use FORGE_* per sandbox iteration §12.)
-	// (TOOL_* wire code 来自 Phase 1，为客户端兼容保留；新 env / sandbox
-	// sentinel 按沙箱迭代 §12 用 FORGE_* 前缀。)
-	forgedomain.ErrNotFound:             {http.StatusNotFound, "TOOL_NOT_FOUND"},
-	forgedomain.ErrDuplicateName:        {http.StatusConflict, "TOOL_NAME_DUPLICATE"},
-	forgedomain.ErrVersionNotFound:      {http.StatusNotFound, "TOOL_VERSION_NOT_FOUND"},
-	forgedomain.ErrPendingNotFound:      {http.StatusNotFound, "TOOL_PENDING_NOT_FOUND"},
-	forgedomain.ErrPendingConflict:      {http.StatusConflict, "TOOL_PENDING_CONFLICT"},
-	forgedomain.ErrTestCaseNotFound:     {http.StatusNotFound, "TOOL_TEST_CASE_NOT_FOUND"},
-	forgedomain.ErrRunFailed:            {http.StatusUnprocessableEntity, "TOOL_RUN_FAILED"},
-	forgedomain.ErrASTParseError:        {http.StatusUnprocessableEntity, "TOOL_AST_PARSE_FAILED"},
-	forgedomain.ErrImportInvalid:        {http.StatusBadRequest, "TOOL_IMPORT_INVALID"},
-	forgedomain.ErrEnvNotReady:          {http.StatusUnprocessableEntity, "FORGE_ENV_NOT_READY"},
-	forgedomain.ErrNoActiveVersion:      {http.StatusUnprocessableEntity, "FORGE_NO_ACTIVE_VERSION"},
-	forgedomain.ErrEnvFailed:            {http.StatusUnprocessableEntity, "FORGE_ENV_FAILED"},
-	forgedomain.ErrSandboxUnavailable:   {http.StatusServiceUnavailable, "FORGE_SANDBOX_UNAVAILABLE"},
-	forgedomain.ErrDependencyResolution: {http.StatusUnprocessableEntity, "FORGE_DEPENDENCY_RESOLUTION"},
-
-	// function domain (forge_redesign trinity replacement) / function domain
-	// (forge_redesign trinity 替代)
+	// function domain (forge_redesign trinity — primary Python tool surface) /
+	// function domain
 	functiondomain.ErrNotFound:             {http.StatusNotFound, "FUNCTION_NOT_FOUND"},
 	functiondomain.ErrDuplicateName:        {http.StatusConflict, "FUNCTION_NAME_DUPLICATE"},
 	functiondomain.ErrVersionNotFound:      {http.StatusNotFound, "FUNCTION_VERSION_NOT_FOUND"},

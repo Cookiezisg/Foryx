@@ -24,7 +24,6 @@ import (
 	askapp "github.com/sunweilin/forgify/backend/internal/app/ask"
 	chatapp "github.com/sunweilin/forgify/backend/internal/app/chat"
 	convapp "github.com/sunweilin/forgify/backend/internal/app/conversation"
-	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
 	functionapp "github.com/sunweilin/forgify/backend/internal/app/function"
 	mcpapp "github.com/sunweilin/forgify/backend/internal/app/mcp"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
@@ -35,7 +34,6 @@ import (
 	catalogapp "github.com/sunweilin/forgify/backend/internal/app/catalog"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
-	forgetool "github.com/sunweilin/forgify/backend/internal/app/tool/forge"
 	functiontool "github.com/sunweilin/forgify/backend/internal/app/tool/function"
 	mcptool "github.com/sunweilin/forgify/backend/internal/app/tool/mcp"
 	searchtool "github.com/sunweilin/forgify/backend/internal/app/tool/search"
@@ -47,7 +45,6 @@ import (
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
-	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
@@ -65,12 +62,10 @@ import (
 	apikeystore "github.com/sunweilin/forgify/backend/internal/infra/store/apikey"
 	chatstore "github.com/sunweilin/forgify/backend/internal/infra/store/chat"
 	convstore "github.com/sunweilin/forgify/backend/internal/infra/store/conversation"
-	forgestore "github.com/sunweilin/forgify/backend/internal/infra/store/forge"
 	functionstore "github.com/sunweilin/forgify/backend/internal/infra/store/function"
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
-	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	routerhttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/router"
 )
@@ -137,10 +132,6 @@ func main() {
 		&chatdomain.Message{},
 		&chatdomain.Block{}, // message_blocks table (event-log协议 unified shape)
 		&chatdomain.Attachment{},
-		&forgedomain.Forge{},
-		&forgedomain.ForgeVersion{},
-		&forgedomain.ForgeTestCase{},
-		&forgedomain.ForgeExecution{},
 		&functiondomain.Function{},
 		&functiondomain.Version{},
 		&sandboxdomain.Runtime{},
@@ -185,16 +176,6 @@ func main() {
 		log.Info("LLM trace recorder enabled (--dev) — testend Wire tab will replay every Stream call")
 	}
 
-	// forgeLLMClient satisfies forgeapp.LLMClient for GenerateTestCases
-	// (non-streaming JSON calls only).
-	//
-	// forgeLLMClient 满足 forgeapp.LLMClient 接口，仅用于 GenerateTestCases
-	// 的非流式 JSON 调用。
-	forgeLLM := &forgeLLMClientAdapter{
-		picker:  modelService,
-		keys:    apikeyService,
-		factory: llmFactory,
-	}
 	eventLogBridge := eventloginfra.NewBridge(log)
 	notificationsBridge := notificationsinfra.NewBridge(log)
 	notificationsPub := notificationspkg.New(notificationsBridge, log)
@@ -216,18 +197,6 @@ func main() {
 	}
 	registerSandboxStack(sandboxSvc, log)
 
-	forgeService := forgeapp.NewService(
-		forgestore.New(gdb),
-		forgeapp.NewSandboxAdapter(sandboxSvc, *dataDir),
-		forgeLLM,
-		log,
-	)
-
-	// Function service (forge_redesign trinity). Coexists with forgeService
-	// until Plan 01 Phase 7 deletes the legacy forge code path.
-	//
-	// Function service(forge_redesign trinity)。与 forgeService 并存,
-	// 直到 Plan 01 Phase 7 删 legacy forge。
 	functionService := functionapp.NewService(
 		functionstore.New(gdb),
 		functionapp.NewSandboxAdapter(sandboxSvc, *dataDir),
@@ -290,21 +259,13 @@ func main() {
 		log,
 	)
 
-	tools := forgetool.ForgeTools(
-		forgeService,
-		chatRepo,
-		modelService,
-		apikeyService,
-		llmFactory,
-		log,
-	)
-	tools = append(tools, functiontool.FunctionTools(
+	tools := functiontool.FunctionTools(
 		functionService,
 		modelService,
 		apikeyService,
 		llmFactory,
 		log,
-	)...)
+	)
 	tools = append(tools, fstool.FilesystemTools(pathGuard)...)
 	tools = append(tools, searchtool.SearchTools(pathGuard, log)...)
 	tools = append(tools, webtool.WebTools(modelService, apikeyService, llmFactory, mcpapp.NewSearchRouter(mcpService), log)...)
@@ -375,7 +336,7 @@ func main() {
 	}
 	tools = append(tools, skilltool.SkillTools(skillService)...)
 
-	// Capability Catalog: subscribes to forge / skill / mcp via the
+	// Capability Catalog: subscribes to function / skill / mcp via the
 	// CatalogSource port, polls every 1s with fingerprint short-circuit,
 	// regenerates the system-prompt summary via LLM (3-attempt retry +
 	// mechanical fallback) when descriptions change. The summary is
@@ -384,14 +345,11 @@ func main() {
 	// own tool description already enumerates subagent types
 	// (catalog.md §1).
 	//
-	// Catalog 订阅 forge / skill / mcp 经 CatalogSource 接口，每 1s
+	// Catalog 订阅 function / skill / mcp 经 CatalogSource 接口，每 1s
 	// 轮询 fingerprint 短路，description 变时经 LLM regen system-prompt
-	// summary（3 attempt + mechanical fallback）。summary 教 LLM "你有
-	// 哪些类目能力 + 何时优先何者"。subagent 不注册——其 tool description
-	// 已枚举 subagent 类型（catalog.md §1）。
+	// summary（3 attempt + mechanical fallback）。subagent 不注册。
 	catalogService := catalogapp.New(filepath.Join(homeRoot, ".catalog.json"), notificationsPub, log)
 	catalogService.SetGenerator(catalogapp.NewLLMGenerator(modelService, apikeyService, llmFactory, log))
-	catalogService.RegisterSource(forgeService.AsCatalogSource())
 	catalogService.RegisterSource(functionService.AsCatalogSource())
 	catalogService.RegisterSource(skillService.AsCatalogSource())
 	catalogService.RegisterSource(mcpService.AsCatalogSource())
@@ -418,7 +376,6 @@ func main() {
 		APIKeyService:       apikeyService,
 		ModelService:        modelService,
 		ConversationService: convService,
-		ForgeService:        forgeService,
 		FunctionService:     functionService,
 		ChatService:         chatService,
 		EventLogBridge:      eventLogBridge,
@@ -491,30 +448,6 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Error("shutdown", zap.Error(err))
 	}
-}
-
-// forgeLLMClientAdapter satisfies forgeapp.LLMClient using infra/llm.
-// Used only for non-streaming calls (GenerateTestCases).
-//
-// forgeLLMClientAdapter 用 infra/llm 满足 forgeapp.LLMClient 接口，
-// 仅用于非流式调用（GenerateTestCases）。
-type forgeLLMClientAdapter struct {
-	picker  modeldomain.ModelPicker
-	keys    apikeydomain.KeyProvider
-	factory *llminfra.Factory
-}
-
-func (c *forgeLLMClientAdapter) Generate(ctx context.Context, prompt string) (string, error) {
-	bc, err := llmclientpkg.Resolve(ctx, c.picker, c.keys, c.factory)
-	if err != nil {
-		return "", fmt.Errorf("forgeLLMClient.Generate: %w", err)
-	}
-	return llminfra.Generate(ctx, bc.Client, llminfra.Request{
-		ModelID:  bc.ModelID,
-		Key:      bc.Key,
-		BaseURL:  bc.BaseURL,
-		Messages: []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: prompt}},
-	})
 }
 
 // registerSandboxStack wires the v1 PluginSandbox runtime/env matrix —

@@ -132,7 +132,7 @@ func TestSandboxHandler_ListEnvs_FilteredByOwnerKind(t *testing.T) {
 	defer srv.Close()
 	seedRuntime(t, repo, "sr_001", "python", "3.12.5")
 	seedEnv(t, repo, "se_a", sandboxdomain.OwnerKindMCP, "playwright", "sr_001")
-	seedEnv(t, repo, "se_b", sandboxdomain.OwnerKindForge, "f_x:env_y", "sr_001")
+	seedEnv(t, repo, "se_b", sandboxdomain.OwnerKindFunction, "f_x:env_y", "sr_001")
 
 	status, env := do(t, srv, "GET", "/api/v1/sandbox/envs?ownerKind=mcp", nil)
 	if status != http.StatusOK {
@@ -169,7 +169,7 @@ func TestSandboxHandler_DiskUsage(t *testing.T) {
 	srv, repo := newSandboxTestServer(t)
 	defer srv.Close()
 	seedRuntime(t, repo, "sr_001", "python", "3.12.5") // 100 bytes
-	seedEnv(t, repo, "se_a", sandboxdomain.OwnerKindForge, "f_x:env_y", "sr_001") // 50 bytes
+	seedEnv(t, repo, "se_a", sandboxdomain.OwnerKindFunction, "f_x:env_y", "sr_001") // 50 bytes
 
 	status, env := do(t, srv, "GET", "/api/v1/sandbox/disk-usage", nil)
 	if status != http.StatusOK {

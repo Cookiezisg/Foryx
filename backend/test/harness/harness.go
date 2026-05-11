@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -38,7 +37,6 @@ import (
 	catalogapp "github.com/sunweilin/forgify/backend/internal/app/catalog"
 	chatapp "github.com/sunweilin/forgify/backend/internal/app/chat"
 	convapp "github.com/sunweilin/forgify/backend/internal/app/conversation"
-	forgeapp "github.com/sunweilin/forgify/backend/internal/app/forge"
 	functionapp "github.com/sunweilin/forgify/backend/internal/app/function"
 	mcpapp "github.com/sunweilin/forgify/backend/internal/app/mcp"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
@@ -49,7 +47,6 @@ import (
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
-	forgetool "github.com/sunweilin/forgify/backend/internal/app/tool/forge"
 	functiontool "github.com/sunweilin/forgify/backend/internal/app/tool/function"
 	mcptool "github.com/sunweilin/forgify/backend/internal/app/tool/mcp"
 	searchtool "github.com/sunweilin/forgify/backend/internal/app/tool/search"
@@ -61,7 +58,6 @@ import (
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
-	forgedomain "github.com/sunweilin/forgify/backend/internal/domain/forge"
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
@@ -77,13 +73,11 @@ import (
 	apikeystore "github.com/sunweilin/forgify/backend/internal/infra/store/apikey"
 	chatstore "github.com/sunweilin/forgify/backend/internal/infra/store/chat"
 	convstore "github.com/sunweilin/forgify/backend/internal/infra/store/conversation"
-	forgestore "github.com/sunweilin/forgify/backend/internal/infra/store/forge"
 	functionstore "github.com/sunweilin/forgify/backend/internal/infra/store/function"
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
 	eventlogpkg "github.com/sunweilin/forgify/backend/internal/pkg/eventlog"
-	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	notificationspkg "github.com/sunweilin/forgify/backend/internal/pkg/notifications"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	routerhttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/router"
@@ -161,7 +155,6 @@ type Harness struct {
 	APIKey       *apikeyapp.Service
 	Model        *modelapp.Service
 	Conversation *convapp.Service
-	Forge        *forgeapp.Service
 	Function     *functionapp.Service
 	Chat         *chatapp.Service
 	Tools        []toolapp.Tool
@@ -213,10 +206,6 @@ func New(t *testing.T, opts ...Option) *Harness {
 		&chatdomain.Message{},
 		&chatdomain.Block{},
 		&chatdomain.Attachment{},
-		&forgedomain.Forge{},
-		&forgedomain.ForgeVersion{},
-		&forgedomain.ForgeTestCase{},
-		&forgedomain.ForgeExecution{},
 		&functiondomain.Function{},
 		&functiondomain.Version{},
 		&sandboxdomain.Runtime{},
@@ -288,15 +277,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		}
 	})
 
-	forgeLLM := &forgeLLMAdapter{picker: modelService, keys: apikeyService, factory: llmFactory}
 	convService := convapp.NewService(convstore.New(gdb), notificationsPub, log)
-
-	forgeService := forgeapp.NewService(
-		forgestore.New(gdb),
-		forgeapp.NewSandboxAdapter(sandboxSvc, dataDir),
-		forgeLLM,
-		log,
-	)
 
 	functionService := functionapp.NewService(
 		functionstore.New(gdb),
@@ -325,12 +306,9 @@ func New(t *testing.T, opts ...Option) *Harness {
 	// 不在黑名单里）。
 	pathGuard := pathguardpkg.NewDefault()
 
-	tools := forgetool.ForgeTools(
-		forgeService, chatRepo, modelService, apikeyService, llmFactory, log,
-	)
-	tools = append(tools, functiontool.FunctionTools(
+	tools := functiontool.FunctionTools(
 		functionService, modelService, apikeyService, llmFactory, log,
-	)...)
+	)
 	tools = append(tools, fstool.FilesystemTools(pathGuard)...)
 	tools = append(tools, searchtool.SearchTools(pathGuard, log)...)
 	// WebTools wired without MCP router in pipeline harness — tests that
@@ -481,7 +459,6 @@ func New(t *testing.T, opts ...Option) *Harness {
 	// fallback——内容仍 populate、Coverage 仍全，只少 LLM 生成的"Notes
 	// on choosing" prose。D9 + test/catalog 场景全针对 mechanical 标记
 	// 断言，都通过。
-	catalogService.RegisterSource(forgeService.AsCatalogSource())
 	catalogService.RegisterSource(functionService.AsCatalogSource())
 	catalogService.RegisterSource(skillService.AsCatalogSource())
 	catalogService.RegisterSource(mcpService.AsCatalogSource())
@@ -505,7 +482,6 @@ func New(t *testing.T, opts ...Option) *Harness {
 		APIKeyService:       apikeyService,
 		ModelService:        modelService,
 		ConversationService: convService,
-		ForgeService:        forgeService,
 		FunctionService:     functionService,
 		ChatService:         chatService,
 		EventLogBridge:      eventLogBridge,
@@ -545,7 +521,6 @@ func New(t *testing.T, opts ...Option) *Harness {
 		APIKey:              apikeyService,
 		Model:               modelService,
 		Conversation:        convService,
-		Forge:               forgeService,
 		Function:            functionService,
 		Chat:                chatService,
 		Tools:               tools,
@@ -672,23 +647,3 @@ func RequireDeepSeekKey(t *testing.T) string {
 	return key
 }
 
-// ── forgeLLMAdapter (mirrors main.go) ─────────────────────────────────────────
-
-type forgeLLMAdapter struct {
-	picker  modeldomain.ModelPicker
-	keys    apikeydomain.KeyProvider
-	factory *llminfra.Factory
-}
-
-func (c *forgeLLMAdapter) Generate(ctx context.Context, prompt string) (string, error) {
-	bc, err := llmclientpkg.Resolve(ctx, c.picker, c.keys, c.factory)
-	if err != nil {
-		return "", fmt.Errorf("forgeLLMAdapter: %w", err)
-	}
-	return llminfra.Generate(ctx, bc.Client, llminfra.Request{
-		ModelID:  bc.ModelID,
-		Key:      bc.Key,
-		BaseURL:  bc.BaseURL,
-		Messages: []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: prompt}},
-	})
-}

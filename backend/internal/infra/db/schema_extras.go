@@ -38,25 +38,12 @@ type extraGroup struct {
 // 旧索引基于已删除的 messages.content 列。后续将基于 message_blocks.data 重建。
 var schemaExtraGroups = []extraGroup{
 	{
-		// forges — partial UNIQUE index so that soft-deleted forges do not
-		// block re-creation of a forge with the same name.
-		// A regular GORM uniqueIndex would include deleted rows.
+		// functions — partial UNIQUE index so that soft-deleted functions do
+		// not block re-creation of a function with the same name. A regular
+		// GORM uniqueIndex would include deleted rows.
 		//
-		// forges — 部分唯一索引，使软删除的工具不阻止同名工具的重新创建。
-		// GORM 普通 uniqueIndex 会覆盖已删除行，不符合需求。
-		table: "forges",
-		stmts: []string{
-			`CREATE UNIQUE INDEX IF NOT EXISTS idx_forges_user_name_active
-				ON forges(user_id, name)
-				WHERE deleted_at IS NULL`,
-		},
-	},
-	{
-		// functions — partial UNIQUE index (per forge_redesign D22 / Plan 01).
-		// Same rationale as forges: soft-deleted rows must not block name reuse.
-		//
-		// functions — partial UNIQUE 索引(per forge_redesign D22 / Plan 01)。
-		// 软删行不能阻塞同名重建,跟 forges 同理。
+		// functions — partial UNIQUE 索引,软删行不阻塞同名重建。
+		// GORM 普通 uniqueIndex 会覆盖软删行,不符合需求。
 		table: "functions",
 		stmts: []string{
 			`CREATE UNIQUE INDEX IF NOT EXISTS idx_functions_user_name_active

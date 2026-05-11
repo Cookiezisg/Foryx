@@ -41,9 +41,6 @@ func New(deps Deps) http.Handler {
 	if deps.ConversationService != nil {
 		handlershttpapi.NewConversationHandler(deps.ConversationService, deps.Log).Register(mux)
 	}
-	if deps.ForgeService != nil {
-		handlershttpapi.NewForgeHandler(deps.ForgeService, deps.Log).Register(mux)
-	}
 	if deps.FunctionService != nil {
 		handlershttpapi.NewFunctionHandler(deps.FunctionService, deps.Log).Register(mux)
 	}

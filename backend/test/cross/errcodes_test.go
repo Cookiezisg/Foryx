@@ -9,7 +9,7 @@
 //   - API_KEY_TEST_FAILED:  covered by TestAPIKey_Test_FakeServer_Auth401_Returns422
 //   - MODEL_NOT_CONFIGURED: covered by TestChat_MissingModelConfig_ErrorCodePersisted
 //   - API_KEY_PROVIDER_NOT_FOUND: covered by TestChat_MissingAPIKey_ErrorCodePersisted
-//   - Forge codes needing sandbox: in the sandbox-gated section below
+//   - Function codes: in TestErrCodes_FunctionDomain below
 //
 // errcodes_test.go — 扫描 sentinel 错误码，验证每个通过真实 HTTP 路径
 // 映射到正确的 HTTP 状态 + envelope code。
@@ -149,35 +149,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 			nil, http.StatusNotFound, "STREAM_NOT_FOUND",
 		},
 
-		// TOOL_NOT_FOUND — GET a non-existent forge.
-		// TOOL_NOT_FOUND — GET 不存在的 forge。
-		{
-			"TOOL_NOT_FOUND",
-			"GET", "/api/v1/forges/f_doesnotexist0000000",
-			nil, http.StatusNotFound, "TOOL_NOT_FOUND",
-		},
-
-		// TOOL_PENDING_NOT_FOUND — GET /pending on a non-existent forge ID.
-		// The service queries forge_versions directly, so forge existence is not
-		// checked first — returns TOOL_PENDING_NOT_FOUND rather than TOOL_NOT_FOUND.
-		//
-		// TOOL_PENDING_NOT_FOUND — GET /pending 用不存在的 forge ID。
-		// service 直接查 forge_versions，不先校验 forge 存在——返回 TOOL_PENDING_NOT_FOUND。
-		{
-			"TOOL_PENDING_NOT_FOUND",
-			"GET", "/api/v1/forges/f_doesnotexist0000000/pending",
-			nil, http.StatusNotFound, "TOOL_PENDING_NOT_FOUND",
-		},
-
-		// TOOL_VERSION_NOT_FOUND — GET /versions/99 on a non-existent forge ID.
-		// Same pattern as TOOL_PENDING_NOT_FOUND above.
-		//
-		// TOOL_VERSION_NOT_FOUND — GET /versions/99 用不存在的 forge ID。
-		{
-			"TOOL_VERSION_NOT_FOUND",
-			"GET", "/api/v1/forges/f_doesnotexist0000000/versions/99",
-			nil, http.StatusNotFound, "TOOL_VERSION_NOT_FOUND",
-		},
 	}
 
 	for _, tc := range cases {
@@ -195,58 +166,52 @@ func TestErrCodes_Sweep(t *testing.T) {
 	}
 }
 
-// ── Sandbox-gated errcodes (require FORGIFY_DEV_RESOURCES) ───────────────────
+// ── Function errcodes (no sandbox required — pure validation) ───────────────
 
-func TestErrCodes_ForgeWithSandbox(t *testing.T) {
+func TestErrCodes_FunctionDomain(t *testing.T) {
 	h := th.New(t)
-	th.RequireForgeResources(t, h)
 
-	// Create two forges to test duplicate-name and run-specific errors.
-	// 创建两个 forge 测试重名和运行错误。
-	h.NewForge(t, "errcodes_forge_a", th.SimpleForgeCode)
+	h.NewFunction(t, "errcodes_fn_a", th.SimpleFunctionCode)
 
-	t.Run("TOOL_NAME_DUPLICATE", func(t *testing.T) {
+	t.Run("FUNCTION_NAME_DUPLICATE", func(t *testing.T) {
 		var errResp th.ErrEnvelope
-		status := th.PostForge(t, h, "errcodes_forge_a", th.SimpleForgeCode, &errResp)
+		status := th.PostFunction(t, h, "errcodes_fn_a", th.SimpleFunctionCode, &errResp)
 		if status != http.StatusConflict {
 			t.Errorf("status=%d, want 409", status)
 		}
-		if errResp.Error.Code != "TOOL_NAME_DUPLICATE" {
-			t.Errorf("error.code=%q, want TOOL_NAME_DUPLICATE", errResp.Error.Code)
+		if errResp.Error.Code != "FUNCTION_NAME_DUPLICATE" {
+			t.Errorf("error.code=%q, want FUNCTION_NAME_DUPLICATE", errResp.Error.Code)
 		}
 	})
 
-	t.Run("TOOL_TEST_CASE_NOT_FOUND", func(t *testing.T) {
-		var createForge struct {
-			Data struct{ ID string `json:"id"` } `json:"data"`
-		}
-		th.PostForge(t, h, "errcodes_forge_b", th.SimpleForgeCode, &createForge)
-		forgeID := createForge.Data.ID
-
-		// DELETE is idempotent (no-op on missing row → 204).
-		// Use :run on a non-existent test case id to trigger ErrTestCaseNotFound.
-		// DELETE 幂等（行不存在返 204）；要触发 ErrTestCaseNotFound 须用 :run。
+	t.Run("FUNCTION_NOT_FOUND_on_get", func(t *testing.T) {
 		var errResp th.ErrEnvelope
-		status := th.DoRequest(t, h, "POST",
-			"/api/v1/forges/"+forgeID+"/test-cases/tc_doesnotexist0000:run",
-			nil, &errResp)
+		status := th.DoRequest(t, h, "GET", "/api/v1/functions/fn_doesnotexist0000", nil, &errResp)
 		if status != http.StatusNotFound {
 			t.Errorf("status=%d, want 404", status)
 		}
-		if errResp.Error.Code != "TOOL_TEST_CASE_NOT_FOUND" {
-			t.Errorf("error.code=%q, want TOOL_TEST_CASE_NOT_FOUND", errResp.Error.Code)
+		if errResp.Error.Code != "FUNCTION_NOT_FOUND" {
+			t.Errorf("error.code=%q, want FUNCTION_NOT_FOUND", errResp.Error.Code)
 		}
 	})
 
-	t.Run("TOOL_IMPORT_INVALID", func(t *testing.T) {
-		var errResp th.ErrEnvelope
-		status := th.DoRequest(t, h, "POST", "/api/v1/forges:import",
-			map[string]any{"notAForge": true}, &errResp)
-		if status != http.StatusBadRequest {
-			t.Errorf("status=%d, want 400", status)
+	t.Run("FUNCTION_PENDING_NOT_FOUND_on_accept", func(t *testing.T) {
+		var createResp struct {
+			Data struct {
+				Function struct{ ID string `json:"id"` } `json:"function"`
+			} `json:"data"`
 		}
-		if errResp.Error.Code != "TOOL_IMPORT_INVALID" {
-			t.Errorf("error.code=%q, want TOOL_IMPORT_INVALID", errResp.Error.Code)
+		th.PostFunction(t, h, "errcodes_fn_b", th.SimpleFunctionCode, &createResp)
+		fnID := createResp.Data.Function.ID
+
+		var errResp th.ErrEnvelope
+		status := th.DoRequest(t, h, "POST",
+			"/api/v1/functions/"+fnID+"/pending:accept", nil, &errResp)
+		if status != http.StatusNotFound {
+			t.Errorf("status=%d, want 404", status)
+		}
+		if errResp.Error.Code != "FUNCTION_PENDING_NOT_FOUND" {
+			t.Errorf("error.code=%q, want FUNCTION_PENDING_NOT_FOUND", errResp.Error.Code)
 		}
 	})
 }
