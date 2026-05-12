@@ -25,6 +25,7 @@ import (
 	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	shelltool "github.com/sunweilin/forgify/backend/internal/app/tool/shell"
+	workflowapp "github.com/sunweilin/forgify/backend/internal/app/workflow"
 	eventlogdomain "github.com/sunweilin/forgify/backend/internal/domain/eventlog"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	loggerinfra "github.com/sunweilin/forgify/backend/internal/infra/logger"
@@ -68,6 +69,15 @@ type Deps struct {
 	// HandlerService 管理用户 Python handler 库(CRUD、版本、sandbox 起的
 	// 长跑 instance、AES-GCM init args config)。Trinity 第二条腿。
 	HandlerService *handlerapp.Service
+
+	// WorkflowService manages the user's DAG workflow library (CRUD,
+	// versions, ops engine, validation). Plan 04 / trinity third leg.
+	// Trigger + execution plane live in Plan 05 (scheduler / trigger /
+	// flowrun).
+	//
+	// WorkflowService 管理用户 DAG workflow 库(CRUD、版本、ops 引擎、校验)。
+	// Plan 04 / trinity 第三条腿;trigger + 执行在 Plan 05。
+	WorkflowService *workflowapp.Service
 
 	// ChatService implements messaging, attachment upload, and Agent streaming.
 	// ChatService 实现消息收发、附件上传和 Agent 流式输出。

@@ -57,6 +57,8 @@ import (
 	subagenttool "github.com/sunweilin/forgify/backend/internal/app/tool/subagent"
 	todotool "github.com/sunweilin/forgify/backend/internal/app/tool/todo"
 	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
+	workflowtool "github.com/sunweilin/forgify/backend/internal/app/tool/workflow"
+	workflowapp "github.com/sunweilin/forgify/backend/internal/app/workflow"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
@@ -66,6 +68,7 @@ import (
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
+	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
 	eventloginfra "github.com/sunweilin/forgify/backend/internal/infra/eventlog"
@@ -82,6 +85,7 @@ import (
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
+	workflowstore "github.com/sunweilin/forgify/backend/internal/infra/store/workflow"
 	eventlogpkg "github.com/sunweilin/forgify/backend/internal/pkg/eventlog"
 	forgepkg "github.com/sunweilin/forgify/backend/internal/pkg/forge"
 	notificationspkg "github.com/sunweilin/forgify/backend/internal/pkg/notifications"
@@ -165,6 +169,7 @@ type Harness struct {
 	Conversation *convapp.Service
 	Function     *functionapp.Service
 	Handler      *handlerapp.Service
+	Workflow     *workflowapp.Service
 	Chat         *chatapp.Service
 	Tools        []toolapp.Tool
 }
@@ -219,6 +224,8 @@ func New(t *testing.T, opts ...Option) *Harness {
 		&functiondomain.Version{},
 		&handlerdomain.Handler{},
 		&handlerdomain.Version{},
+		&workflowdomain.Workflow{},
+		&workflowdomain.Version{},
 		&sandboxdomain.Runtime{},
 		&sandboxdomain.Env{},
 		&tododomain.Todo{},
@@ -311,6 +318,23 @@ func New(t *testing.T, opts ...Option) *Harness {
 		handlerService.Shutdown(context.Background())
 	})
 
+	// Workflow service — Plan 04 third leg of trinity. CapabilityChecker
+	// gets function + handler now; Skill + MCP filled in after their
+	// services exist below.
+	//
+	// Workflow service —— Plan 04 trinity 第三条腿。CapabilityChecker 先填
+	// function + handler;Skill + MCP 在下方各服务构造后回填。
+	workflowChecker := &workflowapp.ProductionChecker{
+		Function: functionService,
+		Handler:  handlerService,
+	}
+	workflowService := workflowapp.NewService(
+		workflowstore.New(gdb),
+		workflowChecker,
+		notificationsPub,
+		log,
+	)
+
 	chatRepo := chatstore.New(gdb)
 	chatEmitter := eventlogpkg.New(eventLogBridge, chatRepo, log)
 	chatService := chatapp.NewService(
@@ -336,6 +360,9 @@ func New(t *testing.T, opts ...Option) *Harness {
 	)
 	tools = append(tools, handlertool.HandlerTools(
 		handlerService, modelService, apikeyService, llmFactory, forgePub, log,
+	)...)
+	tools = append(tools, workflowtool.WorkflowTools(
+		workflowService, forgePub, log,
 	)...)
 	tools = append(tools, fstool.FilesystemTools(pathGuard)...)
 	tools = append(tools, searchtool.SearchTools(pathGuard, log)...)
@@ -504,6 +531,11 @@ func New(t *testing.T, opts ...Option) *Harness {
 	t.Cleanup(catalogService.Stop)
 	chatService.SetSystemPromptProvider(catalogService)
 
+	// Skill + MCP services now exist — backfill the workflow CapabilityChecker.
+	// 此时 Skill + MCP 就位,回填 workflow CapabilityChecker。
+	workflowChecker.Skill = skillService
+	workflowChecker.MCP = mcpService
+
 	chatService.SetTools(tools)
 
 	handler := routerhttpapi.New(routerhttpapi.Deps{
@@ -513,6 +545,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		ConversationService: convService,
 		FunctionService:     functionService,
 		HandlerService:      handlerService,
+		WorkflowService:     workflowService,
 		ChatService:         chatService,
 		EventLogBridge:      eventLogBridge,
 		BlockV2Repo:         chatRepo,
@@ -556,6 +589,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		Conversation:        convService,
 		Function:            functionService,
 		Handler:             handlerService,
+		Workflow:            workflowService,
 		Chat:                chatService,
 		Tools:               tools,
 	}

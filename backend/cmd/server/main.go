@@ -32,6 +32,7 @@ import (
 	skillapp "github.com/sunweilin/forgify/backend/internal/app/skill"
 	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	todoapp "github.com/sunweilin/forgify/backend/internal/app/todo"
+	workflowapp "github.com/sunweilin/forgify/backend/internal/app/workflow"
 	catalogapp "github.com/sunweilin/forgify/backend/internal/app/catalog"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
@@ -44,6 +45,7 @@ import (
 	subagenttool "github.com/sunweilin/forgify/backend/internal/app/tool/subagent"
 	todotool "github.com/sunweilin/forgify/backend/internal/app/tool/todo"
 	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
+	workflowtool "github.com/sunweilin/forgify/backend/internal/app/tool/workflow"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
@@ -52,6 +54,7 @@ import (
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
+	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
 	eventloginfra "github.com/sunweilin/forgify/backend/internal/infra/eventlog"
@@ -72,6 +75,7 @@ import (
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
+	workflowstore "github.com/sunweilin/forgify/backend/internal/infra/store/workflow"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	routerhttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/router"
 )
@@ -142,6 +146,8 @@ func main() {
 		&functiondomain.Version{},
 		&handlerdomain.Handler{},
 		&handlerdomain.Version{},
+		&workflowdomain.Workflow{},
+		&workflowdomain.Version{},
 		&sandboxdomain.Runtime{},
 		&sandboxdomain.Env{},
 		&tododomain.Todo{},
@@ -228,6 +234,26 @@ func main() {
 		log,
 	)
 
+	// Workflow service (Plan 04 trinity third leg). DAG authoring: CRUD,
+	// versions, ops engine, validation. CapabilityChecker is wired after
+	// MCP + Skill services are constructed below (closure over the four
+	// services so it stays in sync if they're nil during init).
+	//
+	// Workflow service(Plan 04 trinity 第三条腿)。DAG 锻造:CRUD、版本、ops、
+	// 校验。CapabilityChecker 在下方 MCP/Skill 构造后再装(闭包持四服务引用)。
+	workflowChecker := &workflowapp.ProductionChecker{
+		Function: functionService,
+		Handler:  handlerService,
+		// Skill / MCP filled below after their services are constructed.
+		// Skill / MCP 在下方各自 service 构造后回填。
+	}
+	workflowService := workflowapp.NewService(
+		workflowstore.New(gdb),
+		workflowChecker,
+		notificationsPub,
+		log,
+	)
+
 	chatRepo := chatstore.New(gdb)
 	chatEmitter := eventlogpkg.New(eventLogBridge, chatRepo, log)
 	chatService := chatapp.NewService(
@@ -296,6 +322,11 @@ func main() {
 		modelService,
 		apikeyService,
 		llmFactory,
+		forgePub,
+		log,
+	)...)
+	tools = append(tools, workflowtool.WorkflowTools(
+		workflowService,
 		forgePub,
 		log,
 	)...)
@@ -392,6 +423,15 @@ func main() {
 	}
 	chatService.SetSystemPromptProvider(catalogService)
 
+	// Fill in workflow CapabilityChecker now that MCP + Skill services exist.
+	// The Service holds the *ProductionChecker pointer, so mutating fields
+	// here is observed on every subsequent validation call.
+	//
+	// 此时 MCP + Skill 已构造,回填 workflow CapabilityChecker。Service 持
+	// *ProductionChecker 指针,后续校验都看得到。
+	workflowChecker.Skill = skillService
+	workflowChecker.MCP = mcpService
+
 	chatService.SetTools(tools)
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
@@ -412,6 +452,7 @@ func main() {
 		ConversationService: convService,
 		FunctionService:     functionService,
 		HandlerService:      handlerService,
+		WorkflowService:     workflowService,
 		ChatService:         chatService,
 		EventLogBridge:      eventLogBridge,
 		BlockV2Repo:         chatRepo,

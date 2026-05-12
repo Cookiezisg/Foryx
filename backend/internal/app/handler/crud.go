@@ -154,6 +154,21 @@ func (s *Service) Get(ctx context.Context, id string) (*handlerdomain.Handler, e
 	return h, nil
 }
 
+// GetByName fetches one handler by name (skips computed fields — meant for
+// cross-domain existence checks like workflow validation).
+//
+// GetByName 按 name 查 handler(不填计算字段;跨 domain 存在性检查用)。
+func (s *Service) GetByName(ctx context.Context, name string) (*handlerdomain.Handler, error) {
+	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
+		return nil, fmt.Errorf("handlerapp.GetByName: %w", err)
+	}
+	h, err := s.repo.GetHandlerByName(ctx, name)
+	if err != nil {
+		return nil, fmt.Errorf("handlerapp.GetByName: %w", err)
+	}
+	return h, nil
+}
+
 // attachComputed fills Pending + Env* + ConfigState + LiveInstances on a
 // Handler row. Best-effort: individual fetch failures log a warning but
 // don't fail the parent call.

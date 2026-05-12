@@ -96,7 +96,7 @@ func TestFileOps_ReadEditClosedLoop(t *testing.T) {
 	if v, _ := editResult["ok"].(bool); !v {
 		t.Errorf("Edit tool_result not ok: %v", editResult)
 	}
-	if got, _ := editResult["result"].(string); !strings.Contains(got, "Successfully replaced 1 occurrence") {
+	if got, _ := editResult["result"].(string); !strings.Contains(got, "Replaced 1 occurrence") {
 		t.Errorf("Edit result message missing explicit count: %q", got)
 	}
 

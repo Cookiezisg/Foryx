@@ -219,6 +219,9 @@ func TestD9_BootSmoke(t *testing.T) {
 			h.Function != nil, h.Skill != nil, h.MCP != nil, h.Catalog != nil, h.Sandbox != nil,
 			h.APIKey != nil, h.Model != nil, h.Conversation != nil, h.Chat != nil)
 	}
+	if h.Workflow == nil || h.Handler == nil {
+		t.Fatalf("trinity service nil: Workflow=%v Handler=%v", h.Workflow != nil, h.Handler != nil)
+	}
 
 	// All expected tool families registered. Each system tool has a
 	// stable Name(). We assert the set we expect contains the tools we
@@ -231,10 +234,18 @@ func TestD9_BootSmoke(t *testing.T) {
 		gotNames[tool.Name()] = true
 	}
 	wantTools := []string{
-		// function family (forge_redesign trinity) — 7 CRUD/exec + 2 execution log
+		// function family (forge_redesign trinity 1st leg) — 7 CRUD/exec + 2 execution log
 		"search_function", "get_function", "create_function", "edit_function",
 		"revert_function", "delete_function", "run_function",
 		"search_function_executions", "get_function_execution",
+		// handler family (forge_redesign trinity 2nd leg) — 8 CRUD/call + 2 call log
+		"search_handler", "get_handler", "create_handler", "edit_handler",
+		"revert_handler", "delete_handler", "call_handler", "update_handler_config",
+		"search_handler_calls", "get_handler_call",
+		// workflow family (forge_redesign trinity 3rd leg) — 6 CRUD authoring
+		// (trigger + execution tools live in Plan 05)
+		"search_workflow", "get_workflow", "create_workflow", "edit_workflow",
+		"revert_workflow", "delete_workflow",
 		// filesystem family
 		"Read", "Write", "Edit", "Glob", "Grep",
 		// shell family
