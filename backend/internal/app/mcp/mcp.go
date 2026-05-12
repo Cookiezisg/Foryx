@@ -106,6 +106,13 @@ type Service struct {
 	notif       notificationspkg.Publisher
 	log         *zap.Logger
 
+	// callRepo persists D22 mcp_calls rows. Optional — nil means call log
+	// is disabled (Service.CallTool still works, just no audit trail).
+	// E11 introduces this.
+	//
+	// callRepo 持 mcp_calls 行(D22);nil 时禁日志,CallTool 照常 work。
+	callRepo mcpdomain.CallRepository
+
 	// newClient lets unit tests inject fake Clients. Production wires
 	// mcpinfra.NewStdioClient.
 	//
@@ -166,6 +173,17 @@ func New(
 // mcpinfra.NewStdioClient 是 main.go 接的。
 func (s *Service) SetClientFactory(f func(cfg mcpdomain.ServerConfig, log *zap.Logger) mcpinfra.Client) {
 	s.newClient = f
+}
+
+// SetCallRepo wires the D22 call log Repository. Optional — nil disables
+// the audit trail. E15 main.go calls this after constructing the GORM-
+// backed Store.
+//
+// SetCallRepo 接 D22 call log Repository;nil 禁日志;E15 main.go 装。
+func (s *Service) SetCallRepo(r mcpdomain.CallRepository) {
+	s.mu.Lock()
+	s.callRepo = r
+	s.mu.Unlock()
 }
 
 // ── Lifecycle ────────────────────────────────────────────────────────

@@ -21,6 +21,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -31,8 +32,10 @@ import (
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	eventlogpkg "github.com/sunweilin/forgify/backend/internal/pkg/eventlog"
+	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	llmparsepkg "github.com/sunweilin/forgify/backend/internal/pkg/llmparse"
+	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
 // CallTool routes one tool/call to the named server. Computes the per-
@@ -73,9 +76,105 @@ func (s *Service) CallTool(ctx context.Context, server, tool string, args json.R
 	cctx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
+	startedAt := time.Now().UTC()
 	result, err := client.CallTool(cctx, tool, args)
+	endedAt := time.Now().UTC()
 	s.recordCallResult(server, err)
+	// D22 call log (terminal write, detached ctx per §S9 — fire-and-forget).
+	// D22 call log 终态写 detached ctx (fire-and-forget,失败不挂主调用)。
+	s.recordCallLog(ctx, server, tool, state, args, result, err, startedAt, endedAt)
 	return result, err
+}
+
+// recordCallLog persists one mcp_calls row (D22). Best-effort — failure
+// logs but doesn't fail the CallTool path. Uses a detached ctx + user
+// stamp so caller-cancel doesn't lose the audit row (§S9).
+//
+// recordCallLog 写 mcp_calls 一行(D22)best-effort;detached ctx + user
+// stamp 防 caller-cancel 丢 audit。
+func (s *Service) recordCallLog(ctx context.Context, server, tool string, state *mcpdomain.ServerStatus, args json.RawMessage, result string, callErr error, startedAt, endedAt time.Time) {
+	s.mu.RLock()
+	repo := s.callRepo
+	s.mu.RUnlock()
+	if repo == nil {
+		return
+	}
+	uid, _ := reqctxpkg.RequireUserID(ctx)
+	if uid == "" {
+		uid = reqctxpkg.DefaultLocalUserID
+	}
+	convID, _ := reqctxpkg.GetConversationID(ctx)
+	msgID, _ := reqctxpkg.GetMessageID(ctx)
+	toolCallID, _ := reqctxpkg.GetToolCallID(ctx)
+
+	status := mcpdomain.CallStatusOK
+	errCode := ""
+	errMsg := ""
+	if callErr != nil {
+		switch {
+		case errors.Is(callErr, context.Canceled):
+			status = mcpdomain.CallStatusCancelled
+			errCode = "CTX_CANCELLED"
+		case errors.Is(callErr, context.DeadlineExceeded):
+			status = mcpdomain.CallStatusTimeout
+			errCode = "MCP_TOOL_CALL_TIMEOUT"
+		default:
+			status = mcpdomain.CallStatusFailed
+			errCode = "MCP_TOOL_CALL_FAILED"
+		}
+		errMsg = callErr.Error()
+	}
+
+	triggeredBy := mcpdomain.TriggeredByChat
+	if toolCallID == "" && convID == "" {
+		triggeredBy = mcpdomain.TriggeredByHTTP
+	}
+
+	var inputMap map[string]any
+	_ = json.Unmarshal(args, &inputMap)
+
+	var output any
+	if result != "" {
+		_ = json.Unmarshal([]byte(result), &output)
+		if output == nil {
+			output = result
+		}
+	}
+
+	// V1: ServerStatus doesn't carry server's self-reported version yet
+	// (initialize-response field unexposed in mcpinfra Client); leave
+	// empty until that lands. _ = state keeps the param meaningful.
+	// V1:ServerStatus 暂未携 server 自报 version;mcpinfra Client 暴露后再填。
+	serverVersion := ""
+	_ = state
+
+	row := &mcpdomain.Call{
+		ID:             idgenpkg.New("mcl"),
+		UserID:         uid,
+		Status:         status,
+		TriggeredBy:    triggeredBy,
+		Input:          inputMap,
+		Output:         output,
+		ErrorCode:      errCode,
+		ErrorMessage:   errMsg,
+		ElapsedMs:      endedAt.Sub(startedAt).Milliseconds(),
+		StartedAt:      startedAt,
+		EndedAt:        endedAt,
+		ConversationID: convID,
+		MessageID:      msgID,
+		ToolCallID:     toolCallID,
+		ServerName:     server,
+		ToolName:       tool,
+		ServerVersion:  serverVersion,
+	}
+
+	detached := reqctxpkg.SetUserID(context.Background(), uid)
+	if err := repo.SaveCall(detached, row); err != nil {
+		s.log.Warn("recordCallLog: save failed",
+			zap.String("server", server),
+			zap.String("tool", tool),
+			zap.Error(err))
+	}
 }
 
 // Search returns at most topK ToolDef matching query. When the total
