@@ -323,3 +323,120 @@ Commit 6: 文档全套
 | D-redo-2026-05-12-17 | fix-LLM model | 主 chat scenario,无 env_fix scenario |
 | D-redo-2026-05-12-18 | fix 范围 | 只改 deps |
 | D-redo-2026-05-12-19 | progress | 推 forge_env_attempt + chat progress block |
+| D-redo-2026-05-12-20 | sandbox 不可用 | 硬拒(503 ErrSandboxUnavailable),不建 entity |
+| D-redo-2026-05-12-21 | 内部 LLM 失败 | 与"装失败"同路径,记 1 attempt 后返 envError |
+| D-redo-2026-05-12-22 | edit empty ops | 官方"强制重建 env"语义 |
+| D-redo-2026-05-12-23 | forge payload | 用 Scope struct 嵌套,不平铺 |
+| D-redo-2026-05-12-24 | CLAUDE.md §E1 | "双协议"→"三协议",必须同步更新 |
+
+---
+
+## I. 补漏 — 5 个边角决策(2026-05-12 续)
+
+H 表已覆盖主干,但前面对话里有 5 个边角问题需要正式落档,避免实现期再翻。
+
+### I.1 Sandbox 不可用时的处理路径(D-redo-2026-05-12-20)
+
+**前提**:sandbox 是项目基石,bootstrap 在 `cmd/server/main.go` 启动期就跑,正常情况必成功(mise binary 已 `go:embed`)。**bootstrap 失败 = 项目本身瘫痪**(连 chat 也用不了),不是"个别功能 degrade"。
+
+**决策**:
+- `Service.Create` / `Service.Edit` 调 sandbox 前**先 ping**(轻量 health check)
+- ping 失败 → 直接返 `domain.ErrSandboxUnavailable` sentinel
+- HTTP transport 把该 sentinel 映到 **503 Service Unavailable + code=SANDBOX_UNAVAILABLE**
+- LLM tool 看到 503 → 失败 tool_result,**不创建 entity 行**
+- 不做"先建 Function 行,envStatus=failed 占位"这种"看起来恢复友好"的 graceful degradation —— 这种 path 会污染 DB,后续 list 显示一堆死 entity,UI 还得加"重试装环境"按钮,徒增复杂度
+
+**触发场景**:`backend/internal/infra/sandbox/mise/<goos>-<goarch>/mise` 没拉(用户跑了 `make build` 但忘了 `make resources`)/ mise binary 损坏 / mise data dir 权限错 / 磁盘满到连 venv 都建不了。这些都是**环境异常**,不是业务异常,503 表达更准。
+
+**errmap 影响**:`error-codes.md` 加一行 `ErrSandboxUnavailable | 503 | SANDBOX_UNAVAILABLE`;`transport/httpapi/response/errmap.go::errTable` 加对应项(per §S17)。
+
+### I.2 内部 LLM 调用失败的处理(D-redo-2026-05-12-21)
+
+**场景**:tool 内部 env-fix loop 第 N 轮装失败,准备调主 model 让它 suggest 新 deps,这次 LLM call 本身炸了(网络抖 / DeepSeek 5xx / API key 被吊销)。
+
+**决策**:与"装 env 失败"完全同路径处理。
+- attemptsUsed 记为**本轮失败前的次数**(若 attempt 1 装失败后调 LLM 炸 → attemptsUsed=1)
+- 不对 LLM call 本身做 retry / fallback model
+- 返 `envStatus=failed` + `envError="env-fix LLM call failed: <upstream err>"` + `attemptHistory`
+- 主 chat 看到 tool_result 后自行决定怎么继续(通常会跟用户解释 + 让用户决定重试 / 改 deps / 放弃)
+
+**理由**:维持 tool 内部 loop 的状态机简单 — 一个 attempt 要么完整(装失败 + LLM 改 deps 成功 = 进 attempt+1),要么半途中断(装失败 + LLM 调用失败 = 立刻退出 loop 返失败)。**不引入 LLM call 自身的 retry 机制**(那是 chat 域的事,不是 env-fix loop 的事)。
+
+### I.3 edit 空 ops = 强制重建 env(D-redo-2026-05-12-22)
+
+**前情**:讨论"env 后期突然坏了怎么修"时,我提了"假装编辑 set_meta:{description}"的 hack。用户场景虽然成立,但 hack 味太重 — 让 LLM 必须想"我得改个无关字段触发重装"。
+
+**决策**:`edit_function` / `edit_handler` 显式接受 `ops=[]` 空数组,语义为**强制重建当前 active version 的 env**(不创建 pending,不改任何字段,只销旧 env + 重装)。
+- ApplyOps(empty) → 不写任何字段,**直接进 env sync 流程**
+- 走完整 env-fix loop(maxAttempts=3,LLM 可建议改 deps)
+- 成功 → active version 的 envStatus 回 `ready`;失败 → 同 I.2 处理
+- 不创建新 Version 行,不影响 pending(若有 pending 则同样路径处理 pending 的 env)
+
+**LLM 看到的路径变简单**:
+```
+LLM → get_function(fn_x) → envStatus=failed
+LLM → edit_function({id:"fn_x", ops:[]})  ← 明确语义,不再骗人
+LLM → "我让它重装环境就好了"
+```
+
+**文档落点**:`02-function.md` / `03-handler.md` 工具规约里加一行"`ops=[]` 视为强制重建 env"。
+
+### I.4 forge stream payload 用 Scope struct(D-redo-2026-05-12-23)
+
+**前提**:`domain/eventlog/scope.go` 已经定义了 `Scope{Kind,ID}`,a3b7c59 commit。它本来给 eventlog 用,但 eventlog 后来改成按 user_id 订(D-redo-2)就用不上了。
+
+**决策**:forge stream 的 payload **复用** Scope struct,嵌套形式:
+
+```json
+{
+  "scope": {"kind":"function","id":"fn_x"},
+  "operation": "create",
+  "conversationId": "cv_a",
+  "toolCallId": "tc_1"
+}
+```
+
+而**不是**平铺:
+
+```json
+{
+  "kind":"function",
+  "entityId":"fn_x",
+  "operation":"create",
+  ...
+}
+```
+
+**理由**:
+1. Scope 已在 eventlog 域定义,跨域复用比 forge 域自己再起一套 `{kind,entityId}` 更省心智
+2. JSON 嵌套 + Go struct 嵌套对应直观,前端 TS 类型 `{scope:{kind,id}, operation, ...}` 也清晰
+3. 未来如果 entity 需要 path-like 复合 id(workflow 里 nested step 等),scope.id 是 string,天然可塞 `wf_x/step_3` 这种 — 平铺时只能再加字段
+
+**枚举 kind 限定**:forge stream 中 `scope.kind ∈ {function, handler, workflow}`,**不含** `conversation` / `flowrun`(那俩不锻造)。bridge publish 时校验,非法 kind panic。
+
+### I.5 CLAUDE.md §E1 更新(D-redo-2026-05-12-24)
+
+**当前 §E1**(`/Users/SP14921/Documents/Personal/PersonalCodeBase/Forgify/CLAUDE.md`)写的是**双协议**:
+- 事件日志(per conversation)
+- 通知(global broadcast)
+
+**新现实是三协议**:
+- 事件日志(per user,demux 按 payload.conversationId)
+- 通知(per user)
+- forge 流(per user)
+
+**决策**:Doc commit B 必须同步改 CLAUDE.md §E1,从"双协议"改"三协议",并把"事件日志按 conversationId 订阅"改为"按 user_id 订阅,payload 带 conversationId 客户端 demux"。
+
+这是 CLAUDE.md 唯一一处需要在本轮改的章节(其他 S/D/N/T 规范不动)。
+
+---
+
+## J. 待办执行(从 H/I 同步)
+
+I.1-I.5 5 个边角决策**已纳入 Commit 切分**:
+- Commit 1 含 I.1(env model + sandbox ping 失败硬拒)
+- Commit 2 含 I.2(LLM 调用失败处理)+ I.3(edit empty ops 重建)
+- Commit 4 含 I.4(forge payload 用 Scope)
+- Commit 6 含 I.5(CLAUDE.md §E1) + 其他文档同步
+
+§F 的 29 项 + §G 的 6-commit 切分不需要重排 — I 节是细化,不是新增工作。
