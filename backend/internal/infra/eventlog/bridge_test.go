@@ -8,9 +8,15 @@ import (
 	"time"
 
 	eventlogdomain "github.com/sunweilin/forgify/backend/internal/domain/eventlog"
+	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// helper: make a valid MessageStart for test brevity.
+// msgStart makes a valid MessageStart for test brevity. ConversationID
+// is still carried in the event payload (clients demux on it) but the
+// bridge keys by user_id from ctx (D-redo-2).
+//
+// msgStart 给测试方便造合法 MessageStart;payload 仍带 ConversationID 给
+// client demux,但 bridge 按 ctx user_id key(D-redo-2)。
 func msgStart(convID, msgID string) eventlogdomain.MessageStart {
 	return eventlogdomain.MessageStart{
 		ConversationID: convID,
@@ -19,11 +25,19 @@ func msgStart(convID, msgID string) eventlogdomain.MessageStart {
 	}
 }
 
+// ctxFor returns a ctx with user_id set. The infra Bridge reads user_id
+// via reqctxpkg.RequireUserID.
+//
+// ctxFor 返带 user_id 的 ctx。
+func ctxFor(uid string) context.Context {
+	return reqctxpkg.SetUserID(context.Background(), uid)
+}
+
 func TestPublish_AssignsMonotonicSeq(t *testing.T) {
 	b := NewBridge(nil)
-	ctx := context.Background()
+	ctx := ctxFor("u1")
 	for i := 1; i <= 5; i++ {
-		env, err := b.Publish(ctx, "cv_1", msgStart("cv_1", "m1"))
+		env, err := b.Publish(ctx, msgStart("cv_1", "m1"))
 		if err != nil {
 			t.Fatalf("publish #%d: %v", i, err)
 		}
@@ -33,32 +47,48 @@ func TestPublish_AssignsMonotonicSeq(t *testing.T) {
 	}
 }
 
-func TestPublish_PerConversationSeq(t *testing.T) {
+// TestPublish_PerUserSeq — different users have independent seq counters
+// (D-redo-2). One user's traffic does not bump another user's seq.
+func TestPublish_PerUserSeq(t *testing.T) {
 	b := NewBridge(nil)
-	ctx := context.Background()
-	envA, _ := b.Publish(ctx, "cv_a", msgStart("cv_a", "m1"))
-	envB1, _ := b.Publish(ctx, "cv_b", msgStart("cv_b", "m1"))
-	envA2, _ := b.Publish(ctx, "cv_a", msgStart("cv_a", "m2"))
-	envB2, _ := b.Publish(ctx, "cv_b", msgStart("cv_b", "m2"))
-	if envA.Seq != 1 || envA2.Seq != 2 {
-		t.Errorf("cv_a seq: got %d,%d want 1,2", envA.Seq, envA2.Seq)
+	ctxA := ctxFor("user_a")
+	ctxB := ctxFor("user_b")
+	envA1, _ := b.Publish(ctxA, msgStart("cv_a", "m1"))
+	envB1, _ := b.Publish(ctxB, msgStart("cv_b", "m1"))
+	envA2, _ := b.Publish(ctxA, msgStart("cv_a", "m2"))
+	envB2, _ := b.Publish(ctxB, msgStart("cv_b", "m2"))
+	if envA1.Seq != 1 || envA2.Seq != 2 {
+		t.Errorf("user_a seq: got %d,%d want 1,2", envA1.Seq, envA2.Seq)
 	}
 	if envB1.Seq != 1 || envB2.Seq != 2 {
-		t.Errorf("cv_b seq: got %d,%d want 1,2", envB1.Seq, envB2.Seq)
+		t.Errorf("user_b seq: got %d,%d want 1,2", envB1.Seq, envB2.Seq)
 	}
 }
 
-func TestPublish_RejectsEmptyConvID(t *testing.T) {
+// TestPublish_PerUserSeqAcrossConversations — same user, multiple convs:
+// seq is monotonic across the user's whole stream (not per-conv).
+func TestPublish_PerUserSeqAcrossConversations(t *testing.T) {
 	b := NewBridge(nil)
-	_, err := b.Publish(context.Background(), "", msgStart("x", "m"))
-	if !errors.Is(err, eventlogdomain.ErrInvalidEvent) {
-		t.Errorf("want ErrInvalidEvent, got %v", err)
+	ctx := ctxFor("user_a")
+	env1, _ := b.Publish(ctx, msgStart("cv_a", "m1"))
+	env2, _ := b.Publish(ctx, msgStart("cv_b", "m1"))
+	env3, _ := b.Publish(ctx, msgStart("cv_a", "m2"))
+	if env1.Seq != 1 || env2.Seq != 2 || env3.Seq != 3 {
+		t.Errorf("cross-conv seq: got %d,%d,%d want 1,2,3", env1.Seq, env2.Seq, env3.Seq)
+	}
+}
+
+func TestPublish_RejectsMissingUserID(t *testing.T) {
+	b := NewBridge(nil)
+	_, err := b.Publish(context.Background(), msgStart("cv_1", "m1"))
+	if !errors.Is(err, reqctxpkg.ErrMissingUserID) {
+		t.Errorf("want ErrMissingUserID, got %v", err)
 	}
 }
 
 func TestPublish_RejectsInvalidPayload(t *testing.T) {
 	b := NewBridge(nil)
-	_, err := b.Publish(context.Background(), "cv_1", eventlogdomain.MessageStart{
+	_, err := b.Publish(ctxFor("u1"), eventlogdomain.MessageStart{
 		ConversationID: "cv_1", ID: "", Role: "user",
 	})
 	if !errors.Is(err, eventlogdomain.ErrInvalidEvent) {
@@ -68,17 +98,17 @@ func TestPublish_RejectsInvalidPayload(t *testing.T) {
 
 func TestSubscribe_LiveDelivery(t *testing.T) {
 	b := NewBridge(nil)
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(ctxFor("u1"))
 	defer cancel()
 
-	ch, cancelSub, err := b.Subscribe(ctx, "cv_1", 0)
+	ch, cancelSub, err := b.Subscribe(ctx, 0)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
 	defer cancelSub()
 
 	for i := 0; i < 3; i++ {
-		if _, err := b.Publish(ctx, "cv_1", msgStart("cv_1", "m")); err != nil {
+		if _, err := b.Publish(ctx, msgStart("cv_1", "m")); err != nil {
 			t.Fatalf("publish: %v", err)
 		}
 	}
@@ -97,15 +127,14 @@ func TestSubscribe_LiveDelivery(t *testing.T) {
 
 func TestSubscribe_ReplayFromSeq(t *testing.T) {
 	b := NewBridge(nil)
-	ctx := context.Background()
+	ctx := ctxFor("u1")
 
-	// Publish 5 events before subscribing.
 	for i := 0; i < 5; i++ {
-		b.Publish(ctx, "cv_1", msgStart("cv_1", "m"))
+		b.Publish(ctx, msgStart("cv_1", "m"))
 	}
 
 	// Subscribe asking for replay from seq=2 (so we want seq 3,4,5).
-	ch, cancelSub, err := b.Subscribe(ctx, "cv_1", 2)
+	ch, cancelSub, err := b.Subscribe(ctx, 2)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -123,7 +152,7 @@ func TestSubscribe_ReplayFromSeq(t *testing.T) {
 	}
 
 	// Publish a 6th event live; should arrive after replay.
-	b.Publish(ctx, "cv_1", msgStart("cv_1", "m"))
+	b.Publish(ctx, msgStart("cv_1", "m"))
 	select {
 	case env := <-ch:
 		if env.Seq != 6 {
@@ -136,11 +165,11 @@ func TestSubscribe_ReplayFromSeq(t *testing.T) {
 
 func TestSubscribe_FromSeqZeroSkipsReplay(t *testing.T) {
 	b := NewBridge(nil)
-	ctx := context.Background()
+	ctx := ctxFor("u1")
 	for i := 0; i < 3; i++ {
-		b.Publish(ctx, "cv_1", msgStart("cv_1", "m"))
+		b.Publish(ctx, msgStart("cv_1", "m"))
 	}
-	ch, cancelSub, err := b.Subscribe(ctx, "cv_1", 0)
+	ch, cancelSub, err := b.Subscribe(ctx, 0)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}
@@ -155,23 +184,23 @@ func TestSubscribe_FromSeqZeroSkipsReplay(t *testing.T) {
 
 func TestSubscribe_TooOldReturnsErrSeqTooOld(t *testing.T) {
 	b := NewBridge(nil)
-	ctx := context.Background()
+	ctx := ctxFor("u1")
 
 	// Fill buffer past replayBufferSize so old seqs get evicted.
 	const total = replayBufferSize + 100
 	for i := 0; i < total; i++ {
-		b.Publish(ctx, "cv_1", msgStart("cv_1", "m"))
+		b.Publish(ctx, msgStart("cv_1", "m"))
 	}
 
 	// Ask for replay from seq=10 (long evicted).
-	_, _, err := b.Subscribe(ctx, "cv_1", 10)
+	_, _, err := b.Subscribe(ctx, 10)
 	if !errors.Is(err, eventlogdomain.ErrSeqTooOld) {
 		t.Errorf("want ErrSeqTooOld, got %v", err)
 	}
 
 	// But asking for seq within buffer should succeed.
 	from := int64(total - 50)
-	ch, cancelSub, err := b.Subscribe(ctx, "cv_1", from)
+	ch, cancelSub, err := b.Subscribe(ctx, from)
 	if err != nil {
 		t.Fatalf("subscribe near tail: %v", err)
 	}
@@ -191,15 +220,15 @@ func TestSubscribe_TooOldReturnsErrSeqTooOld(t *testing.T) {
 
 func TestSubscribe_CancelStopsDelivery(t *testing.T) {
 	b := NewBridge(nil)
-	ctx := context.Background()
-	ch, cancelSub, _ := b.Subscribe(ctx, "cv_1", 0)
+	ctx := ctxFor("u1")
+	ch, cancelSub, _ := b.Subscribe(ctx, 0)
 	cancelSub()
 	cancelSub() // idempotent — should not panic
 
 	// Publish after cancel; subscriber should NOT block publisher.
 	done := make(chan struct{})
 	go func() {
-		b.Publish(ctx, "cv_1", msgStart("cv_1", "m"))
+		b.Publish(ctx, msgStart("cv_1", "m"))
 		close(done)
 	}()
 	select {
@@ -218,18 +247,19 @@ func TestSubscribe_CancelStopsDelivery(t *testing.T) {
 
 func TestSubscribe_CtxCancelStopsDelivery(t *testing.T) {
 	b := NewBridge(nil)
-	ctx, cancelCtx := context.WithCancel(context.Background())
-	ch, cancelSub, _ := b.Subscribe(ctx, "cv_1", 0)
+	ctx, cancelCtx := context.WithCancel(ctxFor("u1"))
+	ch, cancelSub, _ := b.Subscribe(ctx, 0)
 	defer cancelSub()
 
 	cancelCtx()
 	// Allow goroutine to see ctx.Done.
 	time.Sleep(10 * time.Millisecond)
 
-	// Publish should not block (sub must have been auto-removed).
+	// Publish should not block (sub must have been auto-removed). Use
+	// a fresh ctx with user_id (the cancelled one would refuse publish).
 	done := make(chan struct{})
 	go func() {
-		b.Publish(context.Background(), "cv_1", msgStart("cv_1", "m"))
+		b.Publish(ctxFor("u1"), msgStart("cv_1", "m"))
 		close(done)
 	}()
 	select {
@@ -247,8 +277,8 @@ func TestSubscribe_CtxCancelStopsDelivery(t *testing.T) {
 
 func TestPublish_BlockOnSlowSubscriber(t *testing.T) {
 	b := NewBridge(nil)
-	ctx := context.Background()
-	_, cancelSub, _ := b.Subscribe(ctx, "cv_1", 0)
+	ctx := ctxFor("u1")
+	_, cancelSub, _ := b.Subscribe(ctx, 0)
 	defer cancelSub()
 	// Don't drain the channel — buffer fills.
 
@@ -256,7 +286,7 @@ func TestPublish_BlockOnSlowSubscriber(t *testing.T) {
 	pubDone := make(chan struct{})
 	go func() {
 		for i := 0; i < subscriberBufferSize+1; i++ {
-			b.Publish(ctx, "cv_1", msgStart("cv_1", "m"))
+			b.Publish(ctx, msgStart("cv_1", "m"))
 		}
 		close(pubDone)
 	}()
@@ -278,7 +308,7 @@ func TestPublish_BlockOnSlowSubscriber(t *testing.T) {
 
 func TestPublish_ConcurrentMonotonicity(t *testing.T) {
 	b := NewBridge(nil)
-	ctx := context.Background()
+	ctx := ctxFor("u1")
 
 	const N = 200
 	var wg sync.WaitGroup
@@ -287,7 +317,7 @@ func TestPublish_ConcurrentMonotonicity(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			env, err := b.Publish(ctx, "cv_1", msgStart("cv_1", "m"))
+			env, err := b.Publish(ctx, msgStart("cv_1", "m"))
 			if err != nil {
 				t.Errorf("publish: %v", err)
 				return

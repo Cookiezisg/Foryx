@@ -17,25 +17,38 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// helper: build ctx with conv + msg + emitter wired up.
+// helper: build ctx with user + conv + msg + emitter wired up.
+// Bridge keys by user_id (D-redo-2); conv + msg sit in payload for client demux.
+//
+// helper:ctx 注 user + conv + msg + emitter。Bridge 按 user_id key
+// (D-redo-2);conv + msg 在 payload 里给 client demux。
 func setupCtx(t *testing.T) (context.Context, *eventloginfra.Bridge, Emitter) {
 	t.Helper()
 	br := eventloginfra.NewBridge(nil)
 	em := New(br, nil, nil)
 	ctx := context.Background()
+	ctx = reqctxpkg.SetUserID(ctx, "u_test")
 	ctx = reqctxpkg.WithConversationID(ctx, "cv_test")
 	ctx = reqctxpkg.WithMessageID(ctx, "msg_test")
 	ctx = With(ctx, em)
 	return ctx, br, em
 }
 
+// subCtxFor returns a context with the same user_id setupCtx uses, suitable
+// for Bridge.Subscribe in tests.
+//
+// subCtxFor 给测试的 Bridge.Subscribe 提供带 user_id 的 ctx。
+func subCtxFor(parent context.Context) context.Context {
+	return reqctxpkg.SetUserID(parent, "u_test")
+}
+
 func TestEmitter_StartBlockReadsParentFromCtx(t *testing.T) {
 	ctx, br, em := setupCtx(t)
 
 	// Subscribe to capture published events.
-	subCtx, cancel := context.WithCancel(context.Background())
+	subCtx, cancel := context.WithCancel(subCtxFor(context.Background()))
 	defer cancel()
-	ch, cancelSub, _ := br.Subscribe(subCtx, "cv_test", 0)
+	ch, cancelSub, _ := br.Subscribe(subCtx, 0)
 	defer cancelSub()
 
 	parentBlockID := "blk_parent"
@@ -61,9 +74,9 @@ func TestEmitter_StartBlockReadsParentFromCtx(t *testing.T) {
 func TestEmitter_StartBlockFallsBackToMessageID(t *testing.T) {
 	ctx, br, em := setupCtx(t) // no WithParent — falls back to messageID
 
-	subCtx, cancel := context.WithCancel(context.Background())
+	subCtx, cancel := context.WithCancel(subCtxFor(context.Background()))
 	defer cancel()
-	ch, cancelSub, _ := br.Subscribe(subCtx, "cv_test", 0)
+	ch, cancelSub, _ := br.Subscribe(subCtx, 0)
 	defer cancelSub()
 
 	blockID := em.StartBlock(ctx, eventlogdomain.BlockTypeText, nil)
@@ -81,9 +94,9 @@ func TestEmitter_StartBlockFallsBackToMessageID(t *testing.T) {
 func TestEmitter_DeltaAndStopBlock(t *testing.T) {
 	ctx, br, em := setupCtx(t)
 
-	subCtx, cancel := context.WithCancel(context.Background())
+	subCtx, cancel := context.WithCancel(subCtxFor(context.Background()))
 	defer cancel()
-	ch, cancelSub, _ := br.Subscribe(subCtx, "cv_test", 0)
+	ch, cancelSub, _ := br.Subscribe(subCtx, 0)
 	defer cancelSub()
 
 	blockID := em.StartBlock(ctx, eventlogdomain.BlockTypeText, nil)
@@ -102,9 +115,9 @@ func TestEmitter_DeltaAndStopBlock(t *testing.T) {
 
 func TestEmitter_StopBlockWithError(t *testing.T) {
 	ctx, br, em := setupCtx(t)
-	subCtx, cancel := context.WithCancel(context.Background())
+	subCtx, cancel := context.WithCancel(subCtxFor(context.Background()))
 	defer cancel()
-	ch, cancelSub, _ := br.Subscribe(subCtx, "cv_test", 0)
+	ch, cancelSub, _ := br.Subscribe(subCtx, 0)
 	defer cancelSub()
 
 	blockID := em.StartBlock(ctx, eventlogdomain.BlockTypeText, nil)
@@ -159,6 +172,7 @@ func setupDBCtx(t *testing.T) (context.Context, *chatstore.Store, Emitter) {
 	br := eventloginfra.NewBridge(nil)
 	em := New(br, repo, nil)
 	ctx := context.Background()
+	ctx = reqctxpkg.SetUserID(ctx, "u_db")
 	ctx = reqctxpkg.WithConversationID(ctx, "cv_db")
 	ctx = reqctxpkg.WithMessageID(ctx, "msg_db")
 	ctx = With(ctx, em)
@@ -282,9 +296,9 @@ func TestProtocolContract_ChatRoundtrip(t *testing.T) {
 	// Need to subscribe to bridge to capture events. setupDBCtx wires a
 	// fresh Bridge inside; we have to recreate state here for clarity.
 	br := em.(*emitter).bridge
-	subCtx, cancel := context.WithCancel(context.Background())
+	subCtx, cancel := context.WithCancel(reqctxpkg.SetUserID(context.Background(), "u_db"))
 	defer cancel()
-	ch, cancelSub, err := br.Subscribe(subCtx, "cv_db", 0)
+	ch, cancelSub, err := br.Subscribe(subCtx, 0)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
 	}

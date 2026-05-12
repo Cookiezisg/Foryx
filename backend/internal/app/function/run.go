@@ -218,7 +218,12 @@ func (s *Service) syncEnvSync(ctx context.Context, v *functiondomain.Version) er
 		v.EnvSyncStage = "failed"
 		v.EnvSyncDetail = ""
 		v.EnvSyncedAt = &now
-		s.publish(ctx, v.FunctionID, "env_failed", map[string]any{"versionId": v.ID, "error": stderr})
+		// env_failed / env_synced notifications were removed in C3 (D-redo-7);
+		// the env terminal state is carried by the LLM tool_result and the
+		// UI fetches via GET /functions/{id}. Keeping notification action
+		// surface lean (D-redo-6 slim payload model).
+		// env_failed / env_synced 通知在 C3 删除(D-redo-7);终态走 LLM
+		// tool_result + UI GET 拉取。
 		return fmt.Errorf("sandbox.Sync: %w", err)
 	}
 
@@ -232,6 +237,5 @@ func (s *Service) syncEnvSync(ctx context.Context, v *functiondomain.Version) er
 	v.EnvSyncStage = "ready"
 	v.EnvSyncDetail = ""
 	v.EnvSyncedAt = &syncedAt
-	s.publish(ctx, v.FunctionID, "env_synced", map[string]any{"versionId": v.ID})
 	return nil
 }

@@ -168,7 +168,12 @@ func (em *emitter) requireConv(ctx context.Context, op string) (string, bool) {
 //
 // log 级别按 err 类分流让 producer bug 显著显形而预期 cancel 保持安静。
 func (em *emitter) publish(ctx context.Context, convID string, e eventlogdomain.Event) (int64, bool) {
-	env, err := em.bridge.Publish(ctx, convID, e)
+	// Bridge reads user_id from ctx (D-redo-2 per-user keying). convID is
+	// retained as a log/diagnostic field — the payload's ConversationID
+	// field is what clients use for panel demux.
+	// Bridge 从 ctx 读 user_id(D-redo-2 per-user keying)。convID 这里
+	// 作日志字段保留 — payload.ConversationID 才是 client demux 字段。
+	env, err := em.bridge.Publish(ctx, e)
 	if err != nil {
 		fields := []zap.Field{
 			zap.String("type", e.EventType()),

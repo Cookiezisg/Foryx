@@ -344,7 +344,8 @@ func (s *Service) syncEnv(ctx context.Context, v *handlerdomain.Version) error {
 		v.EnvSyncStage = "failed"
 		v.EnvSyncDetail = ""
 		v.EnvSyncedAt = &now
-		s.publishHandlerEvent(ctx, v.HandlerID, "env_failed", map[string]any{"versionId": v.ID, "error": stderr})
+		// env_failed / env_synced notifications removed in C3 (D-redo-7);
+		// env terminal state carried by tool_result + UI GET (D-redo-6).
 		return fmt.Errorf("%w: %v", handlerdomain.ErrEnvFailed, err)
 	}
 	syncedAt := time.Now().UTC()
@@ -355,7 +356,6 @@ func (s *Service) syncEnv(ctx context.Context, v *handlerdomain.Version) error {
 	v.EnvSyncStage = "ready"
 	v.EnvSyncDetail = ""
 	v.EnvSyncedAt = &syncedAt
-	s.publishHandlerEvent(ctx, v.HandlerID, "env_synced", map[string]any{"versionId": v.ID})
 	return nil
 }
 

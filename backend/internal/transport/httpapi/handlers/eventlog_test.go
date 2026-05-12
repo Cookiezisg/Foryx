@@ -11,37 +11,41 @@ import (
 
 	eventlogdomain "github.com/sunweilin/forgify/backend/internal/domain/eventlog"
 	eventloginfra "github.com/sunweilin/forgify/backend/internal/infra/eventlog"
+	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
+	middlewarehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/middleware"
 )
 
-// helper: build a server hosting the eventlog SSE endpoint backed by a
-// fresh in-memory bridge.
+// newEventLogServer builds an httptest server hosting the eventlog SSE
+// endpoint wrapped with the InjectUserID middleware. The middleware stamps
+// the default local user_id into request ctx so the bridge's per-user
+// keying (D-redo-2) gets a key.
+//
+// newEventLogServer 建带 InjectUserID 中间件的 httptest server;中间件把
+// 默认本地 user_id 塞进 ctx,Bridge per-user keying(D-redo-2)能拿到 key。
 func newEventLogServer(t *testing.T) (*httptest.Server, *eventloginfra.Bridge) {
 	t.Helper()
 	bridge := eventloginfra.NewBridge(nil)
 	mux := http.NewServeMux()
 	NewEventLogHandler(bridge, nil, nil).Register(mux)
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewServer(middlewarehttpapi.InjectUserID(mux))
 	t.Cleanup(srv.Close)
 	return srv, bridge
 }
 
-func TestEventLog_StreamRequiresConversationID(t *testing.T) {
-	srv, _ := newEventLogServer(t)
-	resp, err := http.Get(srv.URL + "/api/v1/eventlog")
-	if err != nil {
-		t.Fatalf("get: %v", err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("status: got %d, want 400", resp.StatusCode)
-	}
+// publishCtx returns a Background ctx with the default local user_id
+// stamped so test publishers can use Bridge.Publish.
+//
+// publishCtx 返带默认本地 user_id 的 ctx 给测试 publisher 用。
+func publishCtx() context.Context {
+	return reqctxpkg.SetUserID(context.Background(), reqctxpkg.DefaultLocalUserID)
 }
 
 func TestEventLog_StreamDeliversLiveEvents(t *testing.T) {
 	srv, bridge := newEventLogServer(t)
 
-	// Open SSE connection.
-	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/eventlog?conversationId=cv_1", nil)
+	// Open SSE connection — no query parameter required after D-redo-2.
+	// 开 SSE 连接;D-redo-2 后无 query 参。
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/eventlog", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("get: %v", err)
@@ -56,11 +60,10 @@ func TestEventLog_StreamDeliversLiveEvents(t *testing.T) {
 
 	// Subscribe will register; allow it to settle, then publish.
 	time.Sleep(50 * time.Millisecond)
-	bridge.Publish(context.Background(), "cv_1", eventlogdomain.MessageStart{
+	bridge.Publish(publishCtx(), eventlogdomain.MessageStart{
 		ConversationID: "cv_1", ID: "msg_1", Role: "assistant",
 	})
 
-	// Read events from SSE wire.
 	got := readSSE(t, resp.Body, 1, 2*time.Second)
 	if len(got) != 1 {
 		t.Fatalf("want 1 event, got %d", len(got))
@@ -75,20 +78,26 @@ func TestEventLog_StreamDeliversLiveEvents(t *testing.T) {
 	if !strings.Contains(ev.data, `"id":"msg_1"`) {
 		t.Errorf("data missing msg_1: %q", ev.data)
 	}
+	// Per-user stream covers all conversations — payload still carries
+	// conversationId for client-side demux.
+	// per-user 流跨对话;payload 仍带 conversationId 给 client demux。
+	if !strings.Contains(ev.data, `"conversationId":"cv_1"`) {
+		t.Errorf("data missing conversationId payload: %q", ev.data)
+	}
 }
 
 func TestEventLog_LastEventIDReplays(t *testing.T) {
 	srv, bridge := newEventLogServer(t)
 
-	// Pre-publish 3 events.
+	ctx := publishCtx()
 	for i := 0; i < 3; i++ {
-		bridge.Publish(context.Background(), "cv_1", eventlogdomain.MessageStart{
+		bridge.Publish(ctx, eventlogdomain.MessageStart{
 			ConversationID: "cv_1", ID: "msg", Role: "assistant",
 		})
 	}
 
 	// Subscribe with Last-Event-ID: 1 → should receive seq 2 + 3.
-	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/eventlog?conversationId=cv_1", nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/eventlog", nil)
 	req.Header.Set("Last-Event-ID", "1")
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -110,14 +119,15 @@ func TestEventLog_LastEventIDReplays(t *testing.T) {
 func TestEventLog_LastEventIDTooOldReturns410(t *testing.T) {
 	srv, bridge := newEventLogServer(t)
 
+	ctx := publishCtx()
 	// Fill buffer past replay capacity so old seqs evict.
 	for i := 0; i < 4096+50; i++ {
-		bridge.Publish(context.Background(), "cv_1", eventlogdomain.MessageStart{
+		bridge.Publish(ctx, eventlogdomain.MessageStart{
 			ConversationID: "cv_1", ID: "msg", Role: "assistant",
 		})
 	}
 
-	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/eventlog?conversationId=cv_1", nil)
+	req, _ := http.NewRequest("GET", srv.URL+"/api/v1/eventlog", nil)
 	req.Header.Set("Last-Event-ID", "1") // long evicted
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

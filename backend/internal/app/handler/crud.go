@@ -286,7 +286,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*handlerdomain.Ha
 		return nil, nil, fmt.Errorf("handlerapp.Create: SaveVersion: %w", err)
 	}
 
-	s.publishHandlerEvent(ctx, hdID, "created", map[string]any{"handler": h, "version": v})
+	s.publishHandlerEvent(ctx, hdID, "created", map[string]any{"versionId": v.ID, "versionNumber": versionN})
 
 	// Sync env synchronously (D-redo-9). syncEnv mutates v in place + writes DB.
 	// 同步装 env;syncEnv 同时更新 v 内存 + DB 行。
@@ -500,7 +500,7 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*handlerdomain.Versio
 		s.log.Warn("handlerapp.Edit: env sync failed",
 			zap.String("handlerId", in.ID), zap.String("versionId", v.ID), zap.Error(err))
 	}
-	s.publishHandlerEvent(ctx, in.ID, "pending_created", map[string]any{"version": v})
+	s.publishHandlerEvent(ctx, in.ID, "pending_created", map[string]any{"versionId": v.ID})
 	return v, nil
 }
 
@@ -551,7 +551,7 @@ func (s *Service) AcceptPending(ctx context.Context, id string) (*handlerdomain.
 
 	pending.Status = handlerdomain.StatusAccepted
 	pending.Version = &nextN
-	s.publishHandlerEvent(ctx, id, "version_accepted", map[string]any{"version": pending})
+	s.publishHandlerEvent(ctx, id, "version_accepted", map[string]any{"versionId": pending.ID, "versionNumber": nextN})
 	return pending, nil
 }
 
@@ -593,7 +593,11 @@ func (s *Service) Revert(ctx context.Context, id string, targetVersion int) (*ha
 	if err := s.repo.SetActiveVersion(ctx, id, target.ID); err != nil {
 		return nil, fmt.Errorf("handlerapp.Revert: %w", err)
 	}
-	s.publishHandlerEvent(ctx, id, "reverted", map[string]any{"version": target})
+	revertedNum := 0
+	if target.Version != nil {
+		revertedNum = *target.Version
+	}
+	s.publishHandlerEvent(ctx, id, "reverted", map[string]any{"versionId": target.ID, "versionNumber": revertedNum})
 	return target, nil
 }
 
@@ -633,7 +637,8 @@ func (s *Service) UpdateMeta(ctx context.Context, in UpdateMetaInput) (*handlerd
 	if err := s.repo.SaveHandler(ctx, h); err != nil {
 		return nil, fmt.Errorf("handlerapp.UpdateMeta: %w", err)
 	}
-	s.publishHandlerEvent(ctx, h.ID, "updated", map[string]any{"handler": h})
+	// D-redo-6: slim payload — UI does GET to fetch updated meta.
+	s.publishHandlerEvent(ctx, h.ID, "updated", nil)
 	return h, nil
 }
 

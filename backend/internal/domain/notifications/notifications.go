@@ -1,25 +1,30 @@
-// Package notifications defines the global entity-update event bus.
-// One generic envelope (Event) covers all entity types — `Type` is the
-// discriminator string, `Data` carries the entity snapshot. Routed as
-// a single global broadcast (single-user local; per-user routing is a
-// future addition when multi-user lands).
+// Package notifications defines the entity-update event bus. One generic
+// envelope (Event) covers all entity types — `Type` is the discriminator
+// string, `Data` carries the slim payload (per D-redo-6: just action +
+// minimal IDs; UI does GET for full entity details).
 //
-// Distinct from domain/eventlog: that protocol is per-conversation and
-// streams chat content (5 events × 6 block types). This protocol is
-// app-global and pushes whole entity snapshots ("conv X renamed to Y",
-// "todo Z updated"). Both share the same Bridge implementation pattern
-// (per-key seq + replay buffer + Last-Event-ID reconnect).
+// Per D-redo-3 (forge_redesign 2026-05-12) Bridge keys by user_id read
+// from ctx — payload still carries ConversationID for client-side
+// dispatch.
 //
-// See documents/version-1.2/event-log-protocol.md for full design.
+// Distinct from domain/eventlog: that protocol streams chat content
+// (5 events × 6 block types). This protocol pushes entity state changes
+// ("function X created", "todo Z updated"). Both share the same Bridge
+// implementation pattern (per-user seq + replay buffer + Last-Event-ID
+// reconnect) since the D-redo-2 + D-redo-3 unification.
 //
-// Package notifications 定义全局 entity-update 事件总线。1 个通用 envelope
-// （Event）覆盖所有实体类型——`Type` 是判别字符串，`Data` 携 entity 快照。
-// 单全局广播路由（单用户本地；多用户落地时再加 per-user 路由）。
+// See documents/version-1.2/event-log-protocol.md and
+// adhoc-topic-documents/forge_redesign/07-notifications-and-eventlog.md.
 //
-// 与 domain/eventlog 区别：那个协议是 per-conversation 流式 chat 内容
-// （5 events × 6 block types）。本协议 app-global 推完整 entity 快照
-// （"conv X 改名 Y"、"todo Z 更新"）。两者复用同一 Bridge 实现 pattern
-// （per-key seq + replay buffer + Last-Event-ID 重连）。
+// Package notifications 定义 entity-update 事件总线。Event 通用 envelope
+// 覆盖所有实体;Type 判别;Data 瘦身 payload(D-redo-6 仅 action + ID,UI
+// 经 GET 取完整 entity)。
+//
+// 按 D-redo-3(forge_redesign 2026-05-12)Bridge 按 ctx 中 user_id key;
+// payload 仍带 ConversationID 给 client dispatch。
+//
+// 跟 domain/eventlog 区别:那个流 chat 内容(5 events × 6 block);本协议
+// 推 entity 状态变更。两者 D-redo-2 + D-redo-3 后共享 per-user Bridge 模式。
 package notifications
 
 import (
@@ -63,34 +68,36 @@ type Envelope struct {
 	Event Event
 }
 
-// Bridge dispatches notifications to subscribers and assigns each event
-// a global-monotonic sequence number. Implementations MUST be safe for
-// concurrent Publish + Subscribe.
+// Bridge dispatches notifications to per-user subscribers and assigns
+// each event a user-monotonic sequence number. Implementations MUST be
+// safe for concurrent Publish + Subscribe. user_id is read from ctx
+// (reqctxpkg.RequireUserID); bridge stays out of caller signatures so
+// producer / consumer decouple from auth wiring.
 //
-// Single-channel: there is no per-key routing — all subscribers receive
-// every published event (single-user local; multi-user is future).
-// Subscribers filter client-side on Type / ConversationID.
+// Per D-redo-3 (forge_redesign 2026-05-12); subscribers filter client-
+// side on Type / ConversationID within their per-user stream.
 //
-// Bridge 把通知分发给订阅者并分配全局单调 seq。实现必须支持并发
-// Publish + Subscribe。
-//
-// 单 channel：无 per-key 路由——所有订阅者收到每个发布事件（单用户
-// 本地；多用户未来）。订阅方按 Type / ConversationID 客户端过滤。
+// Bridge 把通知分发给 per-user 订阅者,每事件分配 user-monotonic seq;
+// user_id 经 ctx 读(D-redo-3,forge_redesign 2026-05-12)。订阅方按
+// Type / ConversationID 在自家流内 client-side 过滤。
 type Bridge interface {
-	// Publish assigns seq, validates, dispatches. Block-on-slow semantic
-	// (entity snapshots can't be lost — UI relies on seeing every state
-	// change). Returns ErrInvalidEvent for malformed payloads.
+	// Publish reads user_id from ctx, validates, assigns seq, dispatches
+	// to that user's subscribers. Block-on-slow semantic (entity
+	// snapshots can't be lost — UI relies on seeing every state change).
+	// Returns ErrInvalidEvent for malformed payloads or the reqctx
+	// user-id error when ctx is missing user_id.
 	//
-	// Publish 分配 seq、校验、分发。慢订阅者阻塞 publisher（entity
-	// 快照不能丢——UI 靠看到每次状态变化）。payload 形状错误返
-	// ErrInvalidEvent。
+	// Publish 从 ctx 读 user_id,校验、分配 seq、扇出该用户订阅者。
+	// 慢订阅者阻塞 publisher(快照不能丢)。形状错误返 ErrInvalidEvent,
+	// ctx 缺 user_id 返 reqctx 错。
 	Publish(ctx context.Context, e Event) (Envelope, error)
 
-	// Subscribe registers a subscriber. fromSeq>0 replays buffered
-	// envelopes with seq > fromSeq before live; ErrSeqTooOld if too old.
+	// Subscribe reads user_id from ctx, registers a subscriber. fromSeq>0
+	// replays buffered envelopes with seq > fromSeq before live;
+	// ErrSeqTooOld if too old.
 	//
-	// Subscribe 注册订阅者。fromSeq>0 先 replay 缓存中 seq > fromSeq
-	// 再投递实时；过旧返 ErrSeqTooOld。
+	// Subscribe 从 ctx 读 user_id 注册订阅者。fromSeq>0 先 replay 缓存中
+	// seq > fromSeq 再投递实时;过旧返 ErrSeqTooOld。
 	Subscribe(ctx context.Context, fromSeq int64) (<-chan Envelope, func(), error)
 }
 

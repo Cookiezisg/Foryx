@@ -80,21 +80,18 @@ func (h *EventLogHandler) Register(mux *http.ServeMux) {
 	}
 }
 
-// Stream serves GET /api/v1/eventlog?conversationId=xxx.
+// Stream serves GET /api/v1/eventlog. The bridge keys by user_id from
+// ctx (D-redo-2) — no query parameter. Clients receive every event for
+// every conversation this user owns and demux on payload.conversationId.
 //
-// Stream 服务 GET /api/v1/eventlog?conversationId=xxx。
+// Stream 服务 GET /api/v1/eventlog。Bridge 按 ctx 中 user_id 订阅
+// (D-redo-2),无 query 参;客户端按 payload.conversationId 分派 panel。
 func (h *EventLogHandler) Stream(w http.ResponseWriter, r *http.Request) {
-	conversationID := r.URL.Query().Get("conversationId")
-	if conversationID == "" {
-		responsehttpapi.Error(w, http.StatusBadRequest, "INVALID_REQUEST", "conversationId is required", nil)
-		return
-	}
-
 	// Last-Event-ID is the standard SSE reconnect header. Parse to
 	// int64; absent / invalid → 0 (no replay, live only).
 	//
-	// Last-Event-ID 是标准 SSE 重连 header。解析为 int64；缺失/非法
-	// → 0（无 replay 直接实时）。
+	// Last-Event-ID 是标准 SSE 重连 header。解析为 int64;缺失/非法
+	// → 0(无 replay 直接实时)。
 	var fromSeq int64
 	if v := r.Header.Get("Last-Event-ID"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
@@ -102,7 +99,7 @@ func (h *EventLogHandler) Stream(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	ch, cancelSub, err := h.bridge.Subscribe(r.Context(), conversationID, fromSeq)
+	ch, cancelSub, err := h.bridge.Subscribe(r.Context(), fromSeq)
 	if err != nil {
 		if errors.Is(err, eventlogdomain.ErrSeqTooOld) {
 			// 410 Gone signals "buffer evicted; refetch full state".

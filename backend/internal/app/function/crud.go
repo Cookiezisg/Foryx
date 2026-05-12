@@ -292,7 +292,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*functiondomain.F
 		return nil, nil, fmt.Errorf("functionapp.Create: SaveVersion: %w", err)
 	}
 
-	s.publish(ctx, fnID, "created", map[string]any{"function": f, "version": v})
+	s.publish(ctx, fnID, "created", map[string]any{"versionId": v.ID, "versionNumber": versionN})
 
 	// Sync env synchronously (D-redo-9). Failure marks v.EnvStatus=failed +
 	// v.EnvError via syncEnvSync (which writes to DB + mutates v in place);
@@ -522,7 +522,7 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*functiondomain.Versi
 		s.log.Warn("functionapp.Edit: env sync failed",
 			zap.String("functionId", in.ID), zap.String("versionId", v.ID), zap.Error(err))
 	}
-	s.publish(ctx, in.ID, "pending_created", map[string]any{"version": v})
+	s.publish(ctx, in.ID, "pending_created", map[string]any{"versionId": v.ID})
 	return v, nil
 }
 
@@ -574,7 +574,7 @@ func (s *Service) AcceptPending(ctx context.Context, id string) (*functiondomain
 
 	pending.Status = functiondomain.StatusAccepted
 	pending.Version = &nextN
-	s.publish(ctx, id, "version_accepted", map[string]any{"version": pending})
+	s.publish(ctx, id, "version_accepted", map[string]any{"versionId": pending.ID, "versionNumber": nextN})
 	return pending, nil
 }
 
@@ -620,7 +620,11 @@ func (s *Service) Revert(ctx context.Context, id string, targetVersion int) (*fu
 	if err := s.repo.SetActiveVersion(ctx, id, target.ID); err != nil {
 		return nil, fmt.Errorf("functionapp.Revert: %w", err)
 	}
-	s.publish(ctx, id, "reverted", map[string]any{"version": target})
+	revertedNum := 0
+	if target.Version != nil {
+		revertedNum = *target.Version
+	}
+	s.publish(ctx, id, "reverted", map[string]any{"versionId": target.ID, "versionNumber": revertedNum})
 	return target, nil
 }
 
@@ -663,7 +667,8 @@ func (s *Service) UpdateMeta(ctx context.Context, in UpdateMetaInput) (*function
 	if err := s.repo.SaveFunction(ctx, f); err != nil {
 		return nil, fmt.Errorf("functionapp.UpdateMeta: %w", err)
 	}
-	s.publish(ctx, f.ID, "updated", map[string]any{"function": f})
+	// D-redo-6: slim payload — UI does GET to fetch updated meta.
+	s.publish(ctx, f.ID, "updated", nil)
 	return f, nil
 }
 
