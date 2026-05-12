@@ -103,13 +103,36 @@ func (s *Service) SetTools(tools []toolapp.Tool) {
 	s.tools = tools
 }
 
-// filterTools drops SubagentTool itself (recursion defense — structural)
-// and any tools NOT listed in typ.AllowedTools (when AllowedTools is set).
-// AllowedTools=nil means "all tools except Subagent allowed".
+// subagentStrippedTools is the closed deny-list of tool names sub-agents
+// must never see (D21). The recursion-defense Subagent tool is included;
+// workflow mutation + trigger tools are reserved for the main agent so
+// sub-agents can't run a workflow they were spawned to forge a piece of
+// (avoids self-loops + keeps workflow assembly a single-author decision).
+// Read-only workflow tools (search_workflow / get_workflow) stay
+// available so a forger sub can reference existing workflows;
+// call_handler / run_function stay so the forger can self-test the
+// entity it just built.
 //
-// filterTools 过滤掉 SubagentTool 自身（结构防递归）+ 非 typ.AllowedTools
-// 内的工具（AllowedTools 设了时）。AllowedTools=nil 表"除 Subagent 外
-// 全部允许"。
+// subagentStrippedTools 是 sub-agent 不可见的封闭黑名单(D21)。Subagent
+// 自身防递归 + workflow 突变 + 触发 tool 主 agent 独享(防 self-loop +
+// workflow 装配单一作者)。read-only workflow + call_handler/run_function
+// 保留(forger 子 agent 参考 + 自测必需)。
+var subagentStrippedTools = map[string]bool{
+	"Subagent":         true, // 防递归 (D4)
+	"create_workflow":  true, // D21
+	"edit_workflow":    true, // D21
+	"delete_workflow":  true, // D21
+	"revert_workflow":  true, // D21
+	"trigger_workflow": true, // D21 — Plan 05 触发 tool(若未来加)
+}
+
+// filterTools drops sub-agent-stripped tools (D4 Subagent recursion guard
+// + D21 workflow mutation/trigger ops) and any tools NOT listed in
+// typ.AllowedTools (when AllowedTools is set). AllowedTools=nil means
+// "all tools except stripped allowed".
+//
+// filterTools 过滤掉 sub-agent 不可见 tool(D4 Subagent 防递归 + D21
+// workflow 突变/触发 ops)+ 非 typ.AllowedTools 内的工具。
 func (s *Service) filterTools(typ subagentdomain.SubagentType) []toolapp.Tool {
 	if len(s.tools) == 0 {
 		return nil
@@ -123,7 +146,7 @@ func (s *Service) filterTools(typ subagentdomain.SubagentType) []toolapp.Tool {
 	}
 	out := make([]toolapp.Tool, 0, len(s.tools))
 	for _, t := range s.tools {
-		if t.Name() == "Subagent" {
+		if subagentStrippedTools[t.Name()] {
 			continue
 		}
 		if allowed != nil {

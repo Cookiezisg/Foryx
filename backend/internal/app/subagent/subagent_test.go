@@ -174,6 +174,69 @@ func TestFilterTools_EmptyRegistryReturnsNil(t *testing.T) {
 	}
 }
 
+// TestFilterTools_StripsWorkflowMutationOps verifies D21: sub-agents
+// cannot see workflow create/edit/delete/revert/trigger tools. Workflow
+// assembly + execution are the main agent's responsibility; sub-agents
+// forge atoms (Function / Handler) only.
+//
+// TestFilterTools_StripsWorkflowMutationOps 验 D21:sub-agent 看不到
+// workflow 突变 + 触发 tool。workflow 装配 + 执行是主 agent 职责。
+func TestFilterTools_StripsWorkflowMutationOps(t *testing.T) {
+	s := &Service{tools: makeTools(
+		"create_function", "call_handler",
+		"create_workflow", "edit_workflow",
+		"delete_workflow", "revert_workflow", "trigger_workflow",
+		"Subagent",
+	)}
+	out := s.filterTools(subagentdomain.SubagentType{})
+	got := map[string]bool{}
+	for _, tt := range out {
+		got[tt.Name()] = true
+	}
+	for _, banned := range []string{
+		"create_workflow", "edit_workflow", "delete_workflow",
+		"revert_workflow", "trigger_workflow", "Subagent",
+	} {
+		if got[banned] {
+			t.Errorf("D21 violation: %q must be stripped from sub-agent toolset", banned)
+		}
+	}
+	for _, kept := range []string{"create_function", "call_handler"} {
+		if !got[kept] {
+			t.Errorf("forge atoms must stay available: %q stripped", kept)
+		}
+	}
+}
+
+// TestFilterTools_KeepsReadOnlyWorkflowTools — D21 carve-out: search +
+// get for workflow stay (read-only, no side effect; forger sub-agents
+// may reference existing workflow shape when authoring related entities).
+//
+// TestFilterTools_KeepsReadOnlyWorkflowTools D21 例外:read-only workflow
+// tool 留(无副作用;forger 子 agent 可参考现有 workflow 形状)。
+func TestFilterTools_KeepsReadOnlyWorkflowTools(t *testing.T) {
+	s := &Service{tools: makeTools("search_workflow", "get_workflow")}
+	out := s.filterTools(subagentdomain.SubagentType{})
+	if len(out) != 2 {
+		t.Errorf("read-only workflow tools dropped: got %d kept, want 2", len(out))
+	}
+}
+
+// TestFilterTools_KeepsSelfTestTools — call_handler + run_function are
+// how sub-agents test the entity they just forged. Stripping these would
+// force every sub-agent to ship without self-validation, regressing
+// quality.
+//
+// TestFilterTools_KeepsSelfTestTools call_handler/run_function 留 — 子
+// agent 自测 forged entity 必需。
+func TestFilterTools_KeepsSelfTestTools(t *testing.T) {
+	s := &Service{tools: makeTools("call_handler", "run_function")}
+	out := s.filterTools(subagentdomain.SubagentType{})
+	if len(out) != 2 {
+		t.Errorf("self-test tools dropped: got %d kept, want 2", len(out))
+	}
+}
+
 // ── composeSystemPrompt ──────────────────────────────────────────────
 
 func TestComposeSystemPrompt_PreambleAlwaysPresent(t *testing.T) {
