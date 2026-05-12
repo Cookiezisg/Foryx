@@ -51,6 +51,17 @@ var schemaExtraGroups = []extraGroup{
 				WHERE deleted_at IS NULL`,
 		},
 	},
+	{
+		// handlers — same partial UNIQUE pattern (Plan 02 trinity).
+		//
+		// handlers — partial UNIQUE 索引(Plan 02 trinity)。
+		table: "handlers",
+		stmts: []string{
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_handlers_user_name_active
+				ON handlers(user_id, name)
+				WHERE deleted_at IS NULL`,
+		},
+	},
 }
 
 // applySchemaExtras runs each extraGroup whose required table already exists.

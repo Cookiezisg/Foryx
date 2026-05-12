@@ -22,6 +22,7 @@ import (
 // OwnerKindSkill 预留给 skill domain 接 sandbox 时用（暂无生产 producer）。
 const (
 	OwnerKindFunction     = "function"
+	OwnerKindHandler      = "handler"
 	OwnerKindMCP          = "mcp"
 	OwnerKindSkill        = "skill"
 	OwnerKindConversation = "conversation"
@@ -29,6 +30,7 @@ const (
 
 // Owner identifies an Env's owner. ID semantics depend on Kind:
 //   - function:     "<functionID>_<envID>" (per-function envID buffer for revert)
+//   - handler:      "<handlerID>_<envID>" (same shape as function)
 //   - mcp:          server name (e.g. "playwright")
 //   - skill:        skill name
 //   - conversation: "<conv_id>_<runtime_kind>" (use `_`, not `:` —
@@ -86,7 +88,7 @@ const (
 // Path 相对 sandbox envs 根目录。Status="failed" 时 ErrorMsg 存失败文本。
 type Env struct {
 	ID         string    `gorm:"primaryKey;type:text"                                      json:"id"` // se_<16hex>
-	OwnerKind  string    `gorm:"not null;type:text;uniqueIndex:uniq_se_owner,priority:1;index:idx_se_owner,priority:1;check:owner_kind IN ('function','mcp','skill','conversation')" json:"ownerKind"`
+	OwnerKind  string    `gorm:"not null;type:text;uniqueIndex:uniq_se_owner,priority:1;index:idx_se_owner,priority:1;check:owner_kind IN ('function','handler','mcp','skill','conversation')" json:"ownerKind"`
 	OwnerID    string    `gorm:"not null;type:text;uniqueIndex:uniq_se_owner,priority:2;index:idx_se_owner,priority:2" json:"ownerId"`
 	OwnerName  string    `gorm:"type:text"                                                 json:"ownerName,omitempty"`
 	RuntimeID  string    `gorm:"not null;type:text;index"                                  json:"runtimeId"`
