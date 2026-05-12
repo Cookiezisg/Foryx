@@ -2,6 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> ⚠️ **本 Plan 已大幅修订(2026-05-12)**,**下面的原方案不再执行**。新方向见
+> [`../discussions/2026-05-12-env-and-sse-rework.md`](../discussions/2026-05-12-env-and-sse-rework.md)。
+> 关键变化:
+> - **Phase 5 (TLS + HTTP/2 + mkcert) 永久搁置** — Wails 桌面端用 native events 绕开 HTTP,TLS 不需要
+> - **Phase 1-4 (eventlog scope) 重设计** — 不再走 per-entity Scope,改为 **3 条 user_id 流**(chat eventlog / notifications / forge)— 前端 client-side demux
+> - 顺便回头改 Plan 01/02 的 env 模型:同步在 LLM tool 内装环境 + 内部 retry loop
+> - 实际 commit 切分见 discussion 文档 §G
+
+---
+
+## (历史) 原方案 — 不再执行 ↓
+
 **Goal:** 两个相关基础设施改造,为后续 Workflow domain 准备件:
 
 1. **Eventlog scope 泛化(D19)**:`conversationId` 字段升为 `Scope{Kind, ID}`,加 `function:` / `handler:` / `workflow:` / `flowrun:` 4 种 entity-level scope 类型;Bridge 加 multi-scope subscribe;HTTP `?scope=<kind>:<id>` 多参 + backward-compat `?conversationId=`
