@@ -72,6 +72,13 @@ type Service struct {
 	notif       notificationspkg.Publisher
 	log         *zap.Logger
 
+	// execRepo persists D22 skill_executions rows. Optional — nil means
+	// the audit trail is disabled (Activate still works). E11 set the
+	// pattern for mcp_calls; E12 mirrors it here.
+	//
+	// execRepo 持 skill_executions(D22)。nil 时禁日志,Activate 照常 work。
+	execRepo skilldomain.ExecutionRepository
+
 	mu     sync.RWMutex
 	skills map[string]*skilldomain.Skill
 
@@ -133,6 +140,17 @@ func New(
 // SkillsDir 返 Service 在扫描的绝对路径。供测试与需知磁盘根的 handler 用。
 func (s *Service) SkillsDir() string {
 	return s.skillsDir
+}
+
+// SetExecRepo wires the D22 skill_executions Repository. Optional —
+// nil disables the audit trail. E15 main.go calls this after building
+// the GORM-backed Store.
+//
+// SetExecRepo 接 D22 skill_executions Repository。nil 禁日志;E15 装。
+func (s *Service) SetExecRepo(r skilldomain.ExecutionRepository) {
+	s.mu.Lock()
+	s.execRepo = r
+	s.mu.Unlock()
 }
 
 // ── Read APIs ────────────────────────────────────────────────────────

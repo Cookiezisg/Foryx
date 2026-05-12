@@ -50,7 +50,15 @@ const bodyReadRetryDelay = 100 * time.Millisecond
 // prompt spawn subagent 并返回其 last message。§9.5：已在 subagent 里
 // （depth ≥ 1）忽略 fork 指令——已隔离再 fork 是浪费 + 破坏 depth-1
 // 不变量。
-func (s *Service) Activate(ctx context.Context, name string, arguments []string) (string, error) {
+func (s *Service) Activate(ctx context.Context, name string, arguments []string) (result string, err error) {
+	startedAt := time.Now().UTC()
+	defer func() {
+		s.recordExecution(ctx, name, arguments, result, err, startedAt, time.Now().UTC())
+	}()
+	return s.activateInternal(ctx, name, arguments)
+}
+
+func (s *Service) activateInternal(ctx context.Context, name string, arguments []string) (string, error) {
 	// Lookup metadata (cheap; lock held briefly).
 	// 查元数据（廉价；锁短持）。
 	s.mu.RLock()
