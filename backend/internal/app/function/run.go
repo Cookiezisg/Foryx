@@ -36,14 +36,17 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// RunInput is the request shape for Service.RunFunction.
+// RunInput is the request shape for Service.RunFunction. Cancellation is
+// caller-driven only — HTTP client disconnect / LLM tool ctx cancel both
+// propagate through r.Context() to kill the sandbox process tree. No
+// per-call timeout knob (forge_redesign decision 2026-05-12).
 //
-// RunInput 是 Service.RunFunction 的请求形状。
+// RunInput 是 Service.RunFunction 的请求形状。取消只走 caller ctx(HTTP
+// 断连 / LLM 工具 ctx cancel 一路传到 sandbox),无 per-call timeout。
 type RunInput struct {
 	FunctionID  string
 	VersionID   string         // optional;empty = use Function.ActiveVersionID
 	Input       map[string]any // kwargs passed to the user's def
-	Timeout     time.Duration  // 0 = no per-call timeout (sandbox / ctx cancel only)
 	TriggeredBy string         // chat / workflow / http / test;default "http"
 }
 
@@ -83,15 +86,8 @@ func (s *Service) RunFunction(ctx context.Context, in RunInput) (*functiondomain
 		}
 	}
 
-	runCtx := ctx
-	if in.Timeout > 0 {
-		var cancel context.CancelFunc
-		runCtx, cancel = context.WithTimeout(ctx, in.Timeout)
-		defer cancel()
-	}
-
 	startedAt := time.Now().UTC()
-	res, sandboxErr := s.sandbox.Run(runCtx, RunRequest{
+	res, sandboxErr := s.sandbox.Run(ctx, RunRequest{
 		FunctionID: in.FunctionID,
 		VersionID:  versionID,
 		EnvID:      v.EnvID,
@@ -103,7 +99,7 @@ func (s *Service) RunFunction(ctx context.Context, in RunInput) (*functiondomain
 	})
 	endedAt := time.Now().UTC()
 
-	s.recordExecution(ctx, uid, in, v, startedAt, endedAt, res, sandboxErr, runCtx.Err())
+	s.recordExecution(ctx, uid, in, v, startedAt, endedAt, res, sandboxErr, ctx.Err())
 
 	if sandboxErr != nil {
 		return nil, fmt.Errorf("functionapp.RunFunction: %w", sandboxErr)

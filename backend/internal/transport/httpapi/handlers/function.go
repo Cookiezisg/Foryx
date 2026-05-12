@@ -26,7 +26,6 @@ package handlers
 import (
 	"net/http"
 	"strconv"
-	"time"
 
 	"go.uber.org/zap"
 
@@ -198,23 +197,19 @@ func (h *FunctionHandler) postOnFunction(w http.ResponseWriter, r *http.Request)
 
 func (h *FunctionHandler) Run(w http.ResponseWriter, r *http.Request, id string) {
 	var req struct {
-		Args      map[string]any `json:"args"`
-		Version   string         `json:"version"`
-		TimeoutMs int            `json:"timeoutMs"`
+		Args    map[string]any `json:"args"`
+		Version string         `json:"version"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	in := functionapp.RunInput{
+	res, err := h.svc.RunFunction(r.Context(), functionapp.RunInput{
 		FunctionID: id,
 		VersionID:  req.Version,
 		Input:      req.Args,
-	}
-	if req.TimeoutMs > 0 {
-		in.Timeout = time.Duration(req.TimeoutMs) * time.Millisecond
-	}
-	res, err := h.svc.RunFunction(r.Context(), in)
+		TriggeredBy: functiondomain.TriggeredByHTTP,
+	})
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

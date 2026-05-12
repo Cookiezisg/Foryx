@@ -141,7 +141,7 @@ type Error = {
 | GET | `/api/v1/functions/{id}` | 详情(含 pending + active version env 状态镜像字段) |
 | PATCH | `/api/v1/functions/{id}` | 改元数据(name/description/tags;code/deps 走 LLM ops 流) |
 | DELETE | `/api/v1/functions/{id}` | 软删(D20 级联:workflow domain 收到 notification 标 needs_attention) |
-| POST | `/api/v1/functions/{id}:run` | 执行(body `{args, version?, timeoutMs?}`);返 ExecutionResult |
+| POST | `/api/v1/functions/{id}:run` | 执行(body `{args, version?}`);取消走 caller ctx,无 per-call timeout knob |
 | POST | `/api/v1/functions/{id}:resync` | 强制重建 active version 的 venv(后台);幂等 |
 | POST | `/api/v1/functions/{id}:revert` | 回滚到指定 accepted 版本号 |
 | GET | `/api/v1/functions/{id}/versions` | 版本分页(?status= filter) |
