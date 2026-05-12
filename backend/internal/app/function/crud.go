@@ -278,7 +278,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*functiondomain.F
 		ReturnSchema:  draft.ReturnSchema,
 		Dependencies:  draft.Dependencies,
 		PythonVersion: pyVer,
-		EnvID:         versionID, // D-redo-8: EnvID == VersionID (per-version venv)
+		EnvID:         idgenpkg.New("fnenv"), // D-redo-8: each Version owns a venv keyed by a fresh fnenv_ id (decoupled from versionID)
 		EnvStatus:     functiondomain.EnvStatusPending,
 		ChangeReason:  in.ChangeReason,
 		CreatedAt:     now,
@@ -508,7 +508,7 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*functiondomain.Versi
 			ReturnSchema:  draft.ReturnSchema,
 			Dependencies:  draft.Dependencies,
 			PythonVersion: pyVer,
-			EnvID:         versionID, // D-redo-8: EnvID == VersionID
+			EnvID:         idgenpkg.New("fnenv"), // D-redo-8: fresh per-version env id, decoupled from versionID
 			EnvStatus:     functiondomain.EnvStatusPending,
 			ChangeReason:  in.ChangeReason,
 			CreatedAt:     now,

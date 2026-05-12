@@ -1,16 +1,16 @@
 // sandbox_types.go — request value types for the handler.Sandbox port.
 //
-// Per D-redo-8 (forge_redesign 2026-05-12) EnvID = VersionID (1:1 per version,
-// no cross-version sharing) — the prior sha256(deps, python) hash + sharing
-// logic was removed; each HandlerVersion row owns its own venv keyed by
-// Version.ID. SpawnRequest is handler-specific (handler is the first trinity
-// domain that needs long-lived subprocess spawn).
+// Per D-redo-8 (forge_redesign 2026-05-12) each HandlerVersion owns its own
+// venv keyed by a freshly-generated EnvID (`hdenv_<16hex>`), 1:1 with the
+// Version row but **independent from VersionID**. EnvID is handler-local
+// nomenclature; sandbox treats it as opaque. SpawnRequest is handler-specific
+// (handler is the first trinity domain that needs long-lived subprocess spawn).
 //
 // sandbox_types.go —— handler.Sandbox 端口的请求值类型。
 //
-// 按 D-redo-8(forge_redesign 2026-05-12),EnvID = VersionID(每版本独立 venv,
-// 跨版本不共享)——sha256(deps, python) 哈希共享逻辑已删。SpawnRequest 是
-// handler 专属(handler 是第一个需要长跑子进程的 trinity 域)。
+// 按 D-redo-8(forge_redesign 2026-05-12),每个 HandlerVersion 独立持有 venv,
+// EnvID(`hdenv_<16hex>`)在 Version 创建时新生成,跟 VersionID 1:1 但**独立**。
+// EnvID 是 handler 自己的命名空间。
 
 package handler
 

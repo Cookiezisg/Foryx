@@ -102,7 +102,7 @@ def csv_clean(rows, drop_empty=True):
 主键 `fnv_<16hex>`;`status` DB CHECK `IN ('pending','accepted','rejected')`,pending/rejected 时 `version` 为 NULL。
 字段:`function_id` 索引 / `code` / `parameters` JSON / `return_schema` JSON / `dependencies` JSON / `python_version` / `env_id` 索引 / `env_status` / `env_error` / `env_synced_at` / `env_sync_stage` / `env_sync_detail` / `change_reason` / `created_at` / `updated_at`。
 
-`env_id = version_id`(D-redo-8):每 Version 行拥有自己的 venv,跨版本不共享。`ComputeEnvID(deps, python)` 哈希逻辑已删。env_status 字段对当前 version 状态零歧义。AcceptedVersionCap=50/function,超限 HardDeleteOldestAccepted。
+`env_id` 在 Version 创建时**独立生成**(`fnenv_<16hex>`),跟 version_id 1:1 但**解耦**(D-redo-8) — sandbox 是共享基础设施,handler 用 `hdenv_`、mcp / chat tool 等其他消费者用各自前缀,trinity 不应强迫"EnvID == 我的 entity ID"。`ComputeEnvID(deps, python)` 哈希共享逻辑已删,env_status 字段对当前 version 状态零歧义。AcceptedVersionCap=50/function,超限 HardDeleteOldestAccepted。
 
 ### 5.3 `function_executions` (D22)
 
@@ -159,7 +159,7 @@ def csv_clean(rows, drop_empty=True):
 
 `function.Sandbox` port(`app/function/function.go`)定义 6 方法(PythonPath/Sync/Run/WriteCodeFile/Destroy/DestroyEnv)。具体实现 `SandboxAdapter`(`sandbox_adapter.go`)桥接到 `sandboxapp.Service`(统一 PluginSandbox v2 + mise embed)。
 
-Owner.Kind=`function`,Owner.ID=`<versionID>`(D-redo-8 每版本独立 venv)。文件布局:`<dataDir>/functions/<fnID>/versions/<vID>/main.py`(adapter 拥有,sandbox v2 不管布局)。
+Owner.Kind=`function`,Owner.ID=`<functionID>_<envID>`(envID = Version 行的 `fnenv_<16hex>`,D-redo-8 每版本独立 venv + EnvID 与 versionID 解耦)。文件布局:`<dataDir>/functions/<fnID>/versions/<vID>/main.py`(adapter 拥有,sandbox v2 不管布局)。
 
 env_status 状态机:`pending → syncing → ready / failed`(evicted 由 sandbox GC 设;`fixing` 表示 LLM env-fix loop 进行中)。Service.Create/Edit 调 sandbox 前 ping;ping 失败返 `ErrSandboxUnavailable`。装 env 失败时由调用方(LLM tool create_function/edit_function)走内部 env-fix loop(maxAttempts=3,主 chat scenario LLM 改 deps);成功翻 ready,失败终态写 `failed` + envError + attemptsUsed。
 

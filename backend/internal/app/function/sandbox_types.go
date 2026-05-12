@@ -1,14 +1,18 @@
 // sandbox_types.go — request value types for the function.Sandbox port.
 //
-// Per D-redo-8 (forge_redesign 2026-05-12) EnvID = VersionID (1:1 per version,
-// no cross-version sharing) — the prior sha256(deps, python) hash + sharing
-// logic was removed; each Version row now owns its own venv keyed by Version.ID.
+// Per D-redo-8 (forge_redesign 2026-05-12) each FunctionVersion owns its own
+// venv keyed by a freshly-generated EnvID (`fnenv_<16hex>`), 1:1 with the
+// Version row but **independent from VersionID**. EnvID is function-local
+// nomenclature: the sandbox treats it as an opaque string. Other sandbox
+// consumers (handler, chat tool calls, mcp, ...) generate EnvIDs in their
+// own naming spaces — sandbox stays neutral.
 //
 // sandbox_types.go —— function.Sandbox 端口的请求值类型。
 //
-// 按 D-redo-8(forge_redesign 2026-05-12),EnvID = VersionID(每版本独立 venv,
-// 跨版本不共享)——原本 sha256(deps, python) 哈希共享逻辑已删,每个 Version 行
-// 拥有自己的 venv,key 即 Version.ID。
+// 按 D-redo-8(forge_redesign 2026-05-12),每个 FunctionVersion 独立持有一个
+// venv,EnvID(`fnenv_<16hex>`)在 Version 创建时新生成,跟 VersionID 1:1 但
+// **独立**。EnvID 是 function 自己的命名空间;sandbox 当不透明 string,跟其他
+// 消费者(handler / chat tool / mcp ...)的 EnvID 命名互不干扰。
 
 package function
 
@@ -21,7 +25,7 @@ package function
 // OnProgress 报。
 type SyncRequest struct {
 	FunctionID    string
-	VersionID     string // EnvID == VersionID per D-redo-8; kept distinct in the struct for log clarity
+	VersionID     string // log/diagnostic field; EnvID is the venv key, not this
 	EnvID         string
 	Dependencies  []string
 	PythonVersion string

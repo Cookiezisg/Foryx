@@ -142,7 +142,7 @@ UI 拿到通知 → 主动 GET 详情。带宽 + 一致性 + 心智都更好。
 
 ### 决策清单
 
-- **D-redo-2026-05-12-8**:**EnvID = versionID**。每版本独立 venv,删 `ComputeEnvID(deps, python)` 哈希逻辑。代价:多几个 venv 目录(uv global cache 让实际磁盘开销小),收益:envStatus 字段对应当前 version 状态零歧义
+- **D-redo-2026-05-12-8**:**每版本独立 venv,EnvID 在 Version 行内独立生成**(`fnenv_<16hex>` / `hdenv_<16hex>`),跟 versionID 1:1 但**不等同**。删 `ComputeEnvID(deps, python)` 哈希共享逻辑。代价:多几个 venv 目录(uv global cache 让实际磁盘开销小);收益:envStatus 字段对当前 version 状态零歧义 + EnvID 与 versionID 解耦(sandbox 是共享基础设施,handler/chat tool calls/mcp 等其他消费者各自有自己的 EnvID 命名空间,trinity 不应强迫"EnvID == 我的 entity ID"语义)
 - **D-redo-2026-05-12-9**:**env sync 同步发生在 LLM tool 内部**,不再有后台 goroutine。`Service.Create` / `Service.Edit` 调用同步 `syncEnvSync`(blocking),失败时返 envStatus=failed + envError 给调用方
 - **D-redo-2026-05-12-10**:**`Service.AcceptPending` 仅翻 active 指针**(env 已在 edit 阶段装好),瞬时返。修旧 bug
 - **D-redo-2026-05-12-11**:**`Service.Edit` 改 "iterate same pending"**:
@@ -311,7 +311,7 @@ Commit 6: 文档全套
 | D-redo-2026-05-12-5 | SSE 上限 | 3 + 1 dev,永远不再加 |
 | D-redo-2026-05-12-6 | notif payload | 瘦身 — 只送 ID + 小字段 |
 | D-redo-2026-05-12-7 | notif | 删 env_synced + env_failed action |
-| D-redo-2026-05-12-8 | EnvID | = versionID |
+| D-redo-2026-05-12-8 | EnvID | 每版本独立生成(`fnenv_`/`hdenv_`),与 versionID 解耦 |
 | D-redo-2026-05-12-9 | env sync | 同步在 Create/Edit tool 内 |
 | D-redo-2026-05-12-10 | Accept | 仅翻指针,不 sync |
 | D-redo-2026-05-12-11 | Edit | iterate same pending,不创建新行 |

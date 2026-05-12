@@ -65,7 +65,7 @@ Definition 包含:
 6. stdout 读 result JSON
 7. **Subprocess 跑完即销**
 
-**每版本独立 venv**(D-redo-8):`env_id = version_id`,每个 Version 行拥有自己的 venv 目录。**不再按 (deps, python) 哈希共享 venv**。uv global wheel cache 让磁盘开销不放大太多(同包跨版本共享 wheel 二进制层),换取 envStatus 字段对当前 version 状态零歧义 + 销 env 不影响其他版本。
+**每版本独立 venv**(D-redo-8):每个 Version 行**独立生成**自己的 env_id(`fnenv_<16hex>`),跟 version_id 是 1:1 但**不等同** — env_id 是 function 自己的命名空间,sandbox 当不透明 string。**不再按 (deps, python) 哈希共享 venv**。uv global wheel cache 让磁盘开销不放大太多(同包跨版本共享 wheel 二进制层),换取 envStatus 字段对当前 version 状态零歧义 + 销 env 不影响其他版本 + sandbox 跨域复用时 EnvID 命名互不干扰(handler 用 `hdenv_`、mcp / chat tool calls 用各自前缀)。
 
 ---
 
@@ -185,7 +185,7 @@ def markdown_to_pdf(text: str, title: str = "Document") -> dict:
 | return_schema | TEXT (JSON) | JSON Schema object |
 | dependencies | TEXT (JSON) | List[string] PEP 508 |
 | python_version | TEXT | PEP 440(空回退 `>=3.12`) |
-| env_id | TEXT 索引 | **= version_id**(D-redo-8 每版本独立 venv;不再做 deps+python 哈希共享) |
+| env_id | TEXT 索引 | `fnenv_<16hex>`,每 Version 行独立生成(D-redo-8 与 version_id 解耦) |
 | env_status | TEXT | pending / syncing / ready / failed / evicted(白名单 service 层校验) |
 | env_error | TEXT | uv stderr / env-fix loop 末态 error 摘要 |
 | env_synced_at | DATETIME | success 时戳 |
@@ -196,9 +196,10 @@ def markdown_to_pdf(text: str, title: str = "Document") -> dict:
 
 accepted 版本上限 50 条/function,超限硬删最旧(对齐 forge_versions)。
 
-**EnvID = VersionID 的代价 + 收益**(D-redo-8):
+**每 Version 独立 env 的代价 + 收益**(D-redo-8):
 - 代价:venv 目录数 ≈ 总 version 数(每 function 上限 50 + 各家 pending,小尺度);
 - 收益:`env_status` 字段对当前 version 状态零歧义 — 旧设计下多 version 共享 EnvID,一个 version 装包成功 ≠ 另一行的 env_status 翻 ready,UI 在撒谎;
+- 命名空间隔离:EnvID 由 function 自己生成(`fnenv_`),sandbox 当不透明 string;handler 用 `hdenv_`、mcp / chat tool 等其他消费者用各自前缀互不干扰 — sandbox 是共享基础设施,不绑定具体消费者的 entity ID 语义;
 - 磁盘:uv global wheel cache 让同包跨版本共享 wheel 二进制层,实际增量 ≈ 单 venv 的元数据(Python 已 install 的 metadata + 软链),不是完整重装。
 
 ---
@@ -321,7 +322,7 @@ GET    /api/v1/functions/{id}/executions          执行历史(D22;详 [`08-exec
 ## 10. Sandbox 集成
 
 每个 FunctionVersion 绑一个独立 venv(D-redo-8):
-- `env_id = version_id`(1:1),跨 version 不共享 venv;销 env 不影响其他版本
+- `env_id = idgenpkg.New("fnenv")`(每 Version 独立 + 跟 versionID 1:1 但解耦),跨 version 不共享 venv;销 env 不影响其他版本
 - uv global wheel cache 让同包跨 version 共享 wheel 二进制层(磁盘开销主要在元数据)
 - EnvManager=python(sandbox v2 现有)
 - Spawn 时调 `sandboxapp.Service.Spawn(owner, ...)`,owner = `function-call:<callId>`

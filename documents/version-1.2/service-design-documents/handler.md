@@ -195,7 +195,7 @@ spawnInstance(ctx, h, owner):
 
 `handler.Sandbox` port(6 方法):PythonPath / Sync / SpawnLongLived / WriteCodeFile / Destroy / DestroyEnv。具体实现 `SandboxAdapter`(`sandbox_adapter.go`)桥接 `sandboxapp.Service`。
 
-Owner.Kind = `handler`,Owner.ID = `<versionID>`(D-redo-8 每版本独立 venv)。文件布局:`<dataDir>/handlers/<hdID>/versions/<vID>/{user_handler.py,driver.py}`。
+Owner.Kind = `handler`,Owner.ID = `<handlerID>_<envID>`(envID = Version 行的 `hdenv_<16hex>`,D-redo-8 每版本独立 venv + EnvID 与 versionID 解耦)。文件布局:`<dataDir>/handlers/<hdID>/versions/<vID>/{user_handler.py,driver.py}`。
 
 **Env 装配同步发生在 Service.Create / Edit 内**(D-redo-9);失败由 LLM tool(create_handler / edit_handler)走内部 env-fix loop(maxAttempts=3,主 chat scenario LLM 改 deps)。Service.Create / Edit 前置 sandbox ping;失败返 `ErrSandboxUnavailable`(503)硬拒(D-redo-20)。**已删** `SyncEnvForVersion` 异步入口(D-redo-14);**已删** `env_synced` / `env_failed` notification action(D-redo-7)。
 

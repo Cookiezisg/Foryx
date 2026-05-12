@@ -272,7 +272,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*handlerdomain.Ha
 		InitArgsSchema: draft.InitArgsSchema,
 		Dependencies:   draft.Dependencies,
 		PythonVersion:  pyVer,
-		EnvID:          versionID, // D-redo-8: EnvID == VersionID
+		EnvID:          idgenpkg.New("hdenv"), // D-redo-8: fresh per-version env id, decoupled from versionID
 		EnvStatus:      handlerdomain.EnvStatusPending,
 		ChangeReason:   in.ChangeReason,
 		CreatedAt:      now,
@@ -486,7 +486,7 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*handlerdomain.Versio
 			InitArgsSchema: draft.InitArgsSchema,
 			Dependencies:   draft.Dependencies,
 			PythonVersion:  pyVer,
-			EnvID:          versionID, // D-redo-8: EnvID == VersionID
+			EnvID:          idgenpkg.New("hdenv"), // D-redo-8: fresh per-version env id, decoupled from versionID
 			EnvStatus:      handlerdomain.EnvStatusPending,
 			ChangeReason:   in.ChangeReason,
 			CreatedAt:      now,

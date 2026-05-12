@@ -5,7 +5,7 @@
 > Plan 02 的核心交付(domain / app / store / stdio client / 10 LLM tools / 16 HTTP / Handler Config 加密 / D22 handler_calls / pipeline test)全部落地。
 >
 > 但 **env 模型在 2026-05-12 大幅修订**(详见 [`../discussions/2026-05-12-env-and-sse-rework.md`](../discussions/2026-05-12-env-and-sse-rework.md) §D-E),跟 function domain 同模式:
-> - EnvID 改 `= version_id`
+> - EnvID 改为每 Version 独立生成(`hdenv_<16hex>`,跟 version_id 1:1 但解耦)
 > - env sync **同步发生在 LLM tool 内**(create_handler / edit_handler)
 > - AcceptPending 纯指针翻转;RejectPending 销 env + 删行
 > - Edit 改 "iterate same pending",删 ErrPendingConflict

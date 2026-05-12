@@ -5,7 +5,7 @@
 > Plan 01 的核心交付(domain / app / store / 7 LLM tools / 12 HTTP / D22 执行日志 / pipeline test)全部落地;forge 域已删除。
 >
 > 但 **env 模型在 2026-05-12 大幅修订**(详见 [`../discussions/2026-05-12-env-and-sse-rework.md`](../discussions/2026-05-12-env-and-sse-rework.md) §D-E):
-> - EnvID 改 `= version_id`(原本 = sha256(deps, python))
+> - EnvID 改为每 Version 独立生成(`fnenv_<16hex>`,跟 version_id 1:1 但解耦);原本 = sha256(deps, python) 共享逻辑已删
 > - env sync **同步发生在 LLM tool 内**,删 SyncEnvForVersion / Resync 异步路径
 > - AcceptPending **纯指针翻转**(env 已在 edit 阶段装好)
 > - Edit 改 "iterate same pending",删 ErrPendingConflict
