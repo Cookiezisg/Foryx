@@ -1,5 +1,18 @@
 # Subagent Forger + Catalog Extension + E2E Pipeline Plan
 
+> ✅ **COMPLETED 2026-05-13** — 5 commits F1-F5 直推 main(02ccc17 / 21dc15b / 66bab4d / 2eb4f43 + 本 commit)。
+> 见 [`README.md`](../README.md) trinity 完工导航 + [`progress-record.md`](../../../progress-record.md) 2026-05-13 dev log。
+>
+> **Scope 调整** vs 原 plan:
+> - F1 filterTools strip — done(D21 落地 + 3 单测)
+> - F2 主 agent system prompt 教学 — done(放 chat/runner buildSystemPrompt;catalog generator 不动 — generator 是 LLM 生成 catalog summary 的 meta-prompt,不是主 agent 自己的 system prompt)
+> - F3 catalog trinity source verification — done(2 pipeline test)
+> - F4 approval lifecycle E2E — done(3 HTTP 场景;RehydrateOnBoot 由 E10 单测覆盖)
+> - F5 final doc sync + README — done(本 commit)
+> - **跳过原 Task 5 邮件 workflow 全栈 E2E** — 需要 25-turn fake LLM script,长期维护成本太高,效益不如直接 dogfood;主 agent 多 agent 锻造 mechanics 由 subagent unit + filterTools test + system prompt test 覆盖足够
+>
+> Trinity architecture **全交付**:Plan 01-06 全在 main。下一阶段 V1.2 桌面端 Wails 迁移 + Phase 5 智能化。
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Trinity 全栈最后一公里:

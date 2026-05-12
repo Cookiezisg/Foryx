@@ -105,17 +105,17 @@ handler.SendMessage
       → agentRun → client.Stream(Request)       → iter.Seq[StreamEvent] → SSE
 ```
 
-### Phase 3 — 工具锻造能力 + 执行 plane(forge_redesign Plan 01/02/03/04/05 完成)
+### Phase 3 — 工具锻造能力 + 执行 plane + 多 agent 锻造(forge_redesign Plan 01-06 全交付)
 `function` 主 domain(版本 / pending / sandbox 执行 / 执行日志 D22,12 端点)+ `handler` 二条腿(stateful Python class + caller-owns lifetime + Config + handler_calls D22,16 端点)+ `workflow` 三条腿(DAG 锻造 + 13 节点类型 + 9 op + Kahn cycle + CapabilityChecker,11 端点 — Plan 04)+ `app/tool/function/` 9 LLM 工具 + `app/tool/handler/` 10 LLM 工具 + `app/tool/workflow/` 6 LLM 工具 + chat ReAct 多步循环。Python 沙箱通过统一 PluginSandbox v2(mise embed)+ SandboxAdapter。
 
-> Phase 3 历史:(1) 2026-05-02 第一轮 `tool` → `forge` 大重命名;(2) 2026-05-11 forge_redesign Plan 01 把 forge 重设为 trinity 域 Function 部分(13 commits 直推 main,forge 代码路径整批删除);(3) 2026-05-12 Plan 02 handler trinity 第二条腿(11 commits 直推 main);(4) 2026-05-12 Plan 03 eventlog + forge 三流统一(6 commits + 2 doc commits)— env 模型重整(EnvID 每版本独立 + 同步装 + iterate-same-pending + LLM env-fix loop)、SSE 改三流 per-user(eventlog + notifications + 新 forge 流)、删 :resync 端点 + env_synced/env_failed 通知 + ErrPendingConflict;(5) 2026-05-12 **Plan 04 workflow authoring trinity 第三条腿**(9 commits W1-W9 直推 main)— DAG 锻造 + 13 节点类型 + 9 op engine + Kahn cycle 检测 + ProductionCapabilityChecker(function/handler/skill/mcp 跨域)+ Go text/template 表达式 + iterate-same-pending(无 envfix loop;无 env)+ 6 LLM tools + 11 HTTP + WorkflowReader 接口预留 Plan 05。详见 [`adhoc-topic-documents/forge_redesign/`](./adhoc-topic-documents/forge_redesign/) 系列文档 + [`discussions/2026-05-12-env-and-sse-rework.md`](./adhoc-topic-documents/forge_redesign/discussions/2026-05-12-env-and-sse-rework.md) 26 项 D-redo 决策。
+> Phase 3 历史:(1) 2026-05-02 第一轮 `tool` → `forge` 大重命名;(2) 2026-05-11 forge_redesign Plan 01 把 forge 重设为 trinity 域 Function 部分(13 commits);(3) 2026-05-12 Plan 02 handler trinity 第二条腿(11 commits);(4) 2026-05-12 Plan 03 eventlog + forge 三流统一(6 commits + 2 doc commits)— env 模型重整 + SSE 改三流 per-user + 删 :resync/env_synced/env_failed/ErrPendingConflict;(5) 2026-05-12 Plan 04 workflow authoring trinity 第三条腿(9 commits W1-W9);(6) 2026-05-13 **Plan 05 execution plane**(17 commits E1-E17)— scheduler + trigger + flowrun + 13 dispatcher + retry/timeout/onError + pause/resume + RehydrateOnBoot + 4 张新表 D22(mcp_calls / skill_executions / flowruns / flowrun_nodes)+ 6 D22 LLM 工具 + 14 项生产 hardening;(7) 2026-05-13 **Plan 06 trinity 收尾**(5 commits F1-F5)— D21 filterTools strip workflow ops + 主 chat agent multi-agent forging system prompt + trinity catalog 源验证 + approval lifecycle E2E + forge_redesign README。详见 [`adhoc-topic-documents/forge_redesign/README.md`](./adhoc-topic-documents/forge_redesign/README.md) 完工导航 + [`discussions/2026-05-12-env-and-sse-rework.md`](./adhoc-topic-documents/forge_redesign/discussions/2026-05-12-env-and-sse-rework.md) 26 项 D-redo 决策。
 
 **Phase 3 后基础设施优化轮(2026-04-27 起,完工 2026-05-12)**:chat 基础设施重构(移除 Eino + Block 模型)/ chat pipeline.go → runner.go 二次重构 / Brewfile + Makefile setup / Claude Code 内部机制调研(9 份报告)/ SQLite 驱动迁移(mattn → modernc,纯 Go)/ 桌面端 Wails 分发方向定型 / 大规模代码 review 战役 / forge_redesign trinity 重做 + Plan 03 SSE 三流统一。详见 [`progress-record.md`](./progress-record.md) §2。
 
-### Phase 4 — 工作流能力（最大的一块）
-`workflow`（DAG + 状态机）+ `flowrun`（执行实例）+ 5 类节点（LLM / Tool / Trigger / Approval / Variable）+ `scheduler` + `trigger`（cron / fsnotify / HTTP webhook）+ `chat` 再升级支持"对话创建工作流"。执行引擎自实现（不依赖 Eino compose，Eino 已全面移除）。
+### Phase 4 — 工作流能力 ✅(已交付,2026-05-13)
+`workflow`(DAG + 状态机) + `flowrun`(执行实例) + **13 类节点**(trigger / function / handler / mcp / skill / llm / http / condition / loop / parallel / approval / wait / variable)+ `scheduler` + `trigger`(cron / fsnotify / webhook / manual)+ `chat` 已支持"对话创建工作流"(主 agent multi-agent forging system prompt 教学)。执行引擎自实现(不依赖 Eino compose,Eino 已全面移除)。
 
-**焦点实体延伸**：workflow 节点编辑时推 `workflow.node_updated` 事件；右侧面板切换到对应 workflow 展示。
+**实际落地**:forge_redesign Plan 04(authoring) + Plan 05(execution plane)+ Plan 06(收尾)共 31 commits;详 [`adhoc-topic-documents/forge_redesign/README.md`](./adhoc-topic-documents/forge_redesign/README.md)。**焦点实体延伸**:workflow 节点编辑时推 `workflow` entity 通知 + flowrun 状态变更推 `flowrun` entity 通知(slim payload D-redo-6,UI 经 GET 拉详情)。
 
 ### Phase 5 — 智能化
 `knowledge` + `document`（本地 sqlite-vec）+ `intent`（自实现 ReAct Agent，基于 `infra/llm`）+ `skill`（V1 浅版：打标签的工具）+ `chat` 终极版（意图识别 → 工作流推荐 → 自动建草稿）。**注**：mcp 已提前在 V1.2 D5+D6 交付（Phase 4 准备件，官方 `modelcontextprotocol/go-sdk` v1.6），Phase 5 不再单独列。
