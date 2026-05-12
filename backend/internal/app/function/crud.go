@@ -212,17 +212,29 @@ func (s *Service) attachComputed(ctx context.Context, f *functiondomain.Function
 // Create builds a new Function from ops + auto-accepts the resulting version
 // as v1 (first-create auto-accept — aligns with forge's TE-15 pattern).
 //
+// Per D-redo-9 (forge_redesign 2026-05-12) env sync is **synchronous** here;
+// the caller's tool returns only after the venv is built (or terminally
+// failed). Failure does NOT roll back the entity rows — v.EnvStatus is set to
+// `failed` + v.EnvError captured, caller checks the returned Version to
+// decide next step (typically retry via edit_function with new deps, the
+// env-fix loop lives in the LLM tool layer, see C2).
+//
+// Per D-redo-20 a sandbox ping precedes the DB writes: if the sandbox is
+// unavailable (mise binary missing / data dir not writable / etc.) we hard-
+// reject with ErrSandboxUnavailable and create no entity.
+//
 // Create 应用 ops → 持久化 Function + Version1(自动 accept)。
 //
-// Steps:
-//  1. ApplyOps with empty base to produce final draft
-//  2. Duplicate-name check via repo.GetFunctionByName
-//  3. Save Function + Version with Status=accepted, version=1
-//  4. Notify (action: created)
-//  5. Sandbox sync is deferred to Task 12 (env_synced notification after)
+// 按 D-redo-9,env sync 同步在此发生,工具返前必装完(或终态失败);失败
+// **不回滚** entity 行,v.EnvStatus=failed + v.EnvError 写入,调用方检查
+// Version 自行决定下一步(LLM tool env-fix loop 见 C2)。
+// 按 D-redo-20,DB 写入前先 sandbox ping;不可用则硬拒,不建 entity。
 func (s *Service) Create(ctx context.Context, in CreateInput) (*functiondomain.Function, *functiondomain.Version, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
+		return nil, nil, fmt.Errorf("functionapp.Create: %w", err)
+	}
+	if err := s.checkSandbox(); err != nil {
 		return nil, nil, fmt.Errorf("functionapp.Create: %w", err)
 	}
 	draft, _, err := s.ApplyOps(ctx, nil, in.Ops, in.ProgressBlockID)
@@ -245,7 +257,6 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*functiondomain.F
 	if pyVer == "" {
 		pyVer = functiondomain.DefaultPythonVersion
 	}
-	envID := ComputeEnvID(draft.Dependencies, pyVer)
 
 	f := &functiondomain.Function{
 		ID:              fnID,
@@ -267,7 +278,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*functiondomain.F
 		ReturnSchema:  draft.ReturnSchema,
 		Dependencies:  draft.Dependencies,
 		PythonVersion: pyVer,
-		EnvID:         envID,
+		EnvID:         versionID, // D-redo-8: EnvID == VersionID (per-version venv)
 		EnvStatus:     functiondomain.EnvStatusPending,
 		ChangeReason:  in.ChangeReason,
 		CreatedAt:     now,
@@ -282,7 +293,30 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*functiondomain.F
 	}
 
 	s.publish(ctx, fnID, "created", map[string]any{"function": f, "version": v})
+
+	// Sync env synchronously (D-redo-9). Failure marks v.EnvStatus=failed +
+	// v.EnvError via syncEnvSync (which writes to DB + mutates v in place);
+	// entity rows kept. Caller checks v.EnvStatus to react.
+	if err := s.syncEnvSync(ctx, v); err != nil {
+		s.log.Warn("functionapp.Create: env sync failed",
+			zap.String("functionId", fnID), zap.String("versionId", versionID), zap.Error(err))
+	}
+
 	return f, v, nil
+}
+
+// checkSandbox runs a fast availability check against the Sandbox port. It
+// uses PythonPath()=="" as the failure signal (sandbox bootstrap failure
+// leaves the bundled python path empty). D-redo-20: hard-reject Create/Edit
+// before any DB writes when the sandbox is unavailable.
+//
+// checkSandbox 对 Sandbox 端口跑快速可用性 ping;PythonPath()=="" 表示
+// bootstrap 失败(D-redo-20)。Create/Edit 在 DB 写入前先调,失败硬拒。
+func (s *Service) checkSandbox() error {
+	if s.sandbox.PythonPath() == "" {
+		return functiondomain.ErrSandboxUnavailable
+	}
+	return nil
 }
 
 // CreateDirect builds an ops list from a flat definition and delegates to
@@ -356,28 +390,83 @@ func buildOpsFromDirect(in DirectCreateInput) ([]Op, error) {
 	return ops, nil
 }
 
-// Edit writes a new pending version. Errors with ErrPendingConflict if another
-// pending already exists — LLM/UI must Accept or Reject before editing again.
+// Edit produces a pending version under D-redo-11 "iterate same pending"
+// semantics:
+//   - No pending → ApplyOps on top of active → new pending Version row + sync env.
+//   - Pending exists → ApplyOps on top of pending → **rewrite same pending row
+//     in place** (keep ID, destroy old env, sync new env). No ErrPendingConflict.
+//   - ops=[] with no pending → D-redo-22 "force rebuild env": no draft change,
+//     destroy + re-sync the active version's env (returns the active version).
+//   - ops=[] with pending → re-sync the pending row's env (no field change).
 //
-// Edit 写新 pending 版本。已有 pending 时返 ErrPendingConflict——
-// LLM/UI 必须先 accept/reject 才能继续编辑。
+// Per D-redo-9 the env sync is synchronous; failure marks v.EnvStatus=failed +
+// v.EnvError, entity rows kept. Per D-redo-20 a sandbox ping precedes work.
+//
+// Edit 按 D-redo-11 "iterate same pending":
+//   - 无 pending → 在 active 上 ApplyOps → 新建 pending + 装 env
+//   - 有 pending → 在 pending 上 ApplyOps → 重写同 ID pending(销旧 env + 装新 env)
+//   - ops=[] 无 pending → D-redo-22 强制重建 active version 的 env
+//   - ops=[] 有 pending → 重装 pending 的 env(字段不变)
 func (s *Service) Edit(ctx context.Context, in EditInput) (*functiondomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
+		return nil, fmt.Errorf("functionapp.Edit: %w", err)
+	}
+	if err := s.checkSandbox(); err != nil {
 		return nil, fmt.Errorf("functionapp.Edit: %w", err)
 	}
 	f, err := s.repo.GetFunction(ctx, in.ID)
 	if err != nil {
 		return nil, fmt.Errorf("functionapp.Edit: %w", err)
 	}
-	if _, err := s.repo.GetPending(ctx, in.ID); err == nil {
-		return nil, fmt.Errorf("functionapp.Edit: %w", functiondomain.ErrPendingConflict)
-	} else if !errors.Is(err, functiondomain.ErrPendingNotFound) {
-		return nil, fmt.Errorf("functionapp.Edit: pending-check: %w", err)
+
+	pending, perr := s.repo.GetPending(ctx, in.ID)
+	switch {
+	case perr == nil:
+		// pending exists → iterate same row
+	case errors.Is(perr, functiondomain.ErrPendingNotFound):
+		pending = nil
+	default:
+		return nil, fmt.Errorf("functionapp.Edit: pending-check: %w", perr)
 	}
 
-	base, err := s.activeAsDraft(ctx, f)
-	if err != nil {
-		return nil, fmt.Errorf("functionapp.Edit: %w", err)
+	// D-redo-22: ops=[] is the "force rebuild env" path — destroy + re-sync
+	// the existing row (pending if present, else active). No draft change.
+	if len(in.Ops) == 0 {
+		var target *functiondomain.Version
+		if pending != nil {
+			target = pending
+		} else if f.ActiveVersionID != "" {
+			target, err = s.repo.GetVersion(ctx, f.ActiveVersionID)
+			if err != nil {
+				return nil, fmt.Errorf("functionapp.Edit: load active: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("functionapp.Edit: %w", functiondomain.ErrNoActiveVersion)
+		}
+		_ = s.sandbox.DestroyEnv(ctx, in.ID, target.EnvID)
+		target.EnvStatus = functiondomain.EnvStatusPending
+		target.EnvError = ""
+		target.EnvSyncedAt = nil
+		target.EnvSyncStage = ""
+		target.EnvSyncDetail = ""
+		target.UpdatedAt = time.Now().UTC()
+		if err := s.syncEnvSync(ctx, target); err != nil {
+			s.log.Warn("functionapp.Edit: rebuild env failed",
+				zap.String("functionId", in.ID), zap.String("versionId", target.ID), zap.Error(err))
+		}
+		s.publish(ctx, in.ID, "env_rebuilt", map[string]any{"versionId": target.ID})
+		return target, nil
+	}
+
+	// ApplyOps on top of pending (if any) else active.
+	var base *VersionDraft
+	if pending != nil {
+		base = versionToDraft(f, pending)
+	} else {
+		base, err = s.activeAsDraft(ctx, f)
+		if err != nil {
+			return nil, fmt.Errorf("functionapp.Edit: %w", err)
+		}
 	}
 	draft, _, err := s.ApplyOps(ctx, base, in.Ops, in.ProgressBlockID)
 	if err != nil {
@@ -385,33 +474,73 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*functiondomain.Versi
 	}
 
 	now := time.Now().UTC()
-	versionID := idgenpkg.New("fnv")
 	pyVer := draft.PythonVersion
 	if pyVer == "" {
 		pyVer = functiondomain.DefaultPythonVersion
 	}
-	envID := ComputeEnvID(draft.Dependencies, pyVer)
 
-	v := &functiondomain.Version{
-		ID:            versionID,
-		FunctionID:    in.ID,
-		Status:        functiondomain.StatusPending,
-		Code:          draft.Code,
-		Parameters:    draft.Parameters,
-		ReturnSchema:  draft.ReturnSchema,
-		Dependencies:  draft.Dependencies,
-		PythonVersion: pyVer,
-		EnvID:         envID,
-		EnvStatus:     functiondomain.EnvStatusPending,
-		ChangeReason:  in.ChangeReason,
-		CreatedAt:     now,
-		UpdatedAt:     now,
+	var v *functiondomain.Version
+	if pending != nil {
+		// Rewrite same pending row (keep ID + EnvID == ID). Destroy old venv
+		// since deps/python may have changed; re-sync below.
+		_ = s.sandbox.DestroyEnv(ctx, in.ID, pending.EnvID)
+		pending.Code = draft.Code
+		pending.Parameters = draft.Parameters
+		pending.ReturnSchema = draft.ReturnSchema
+		pending.Dependencies = draft.Dependencies
+		pending.PythonVersion = pyVer
+		pending.EnvStatus = functiondomain.EnvStatusPending
+		pending.EnvError = ""
+		pending.EnvSyncedAt = nil
+		pending.EnvSyncStage = ""
+		pending.EnvSyncDetail = ""
+		pending.ChangeReason = in.ChangeReason
+		pending.UpdatedAt = now
+		v = pending
+	} else {
+		versionID := idgenpkg.New("fnv")
+		v = &functiondomain.Version{
+			ID:            versionID,
+			FunctionID:    in.ID,
+			Status:        functiondomain.StatusPending,
+			Code:          draft.Code,
+			Parameters:    draft.Parameters,
+			ReturnSchema:  draft.ReturnSchema,
+			Dependencies:  draft.Dependencies,
+			PythonVersion: pyVer,
+			EnvID:         versionID, // D-redo-8: EnvID == VersionID
+			EnvStatus:     functiondomain.EnvStatusPending,
+			ChangeReason:  in.ChangeReason,
+			CreatedAt:     now,
+			UpdatedAt:     now,
+		}
 	}
 	if err := s.repo.SaveVersion(ctx, v); err != nil {
 		return nil, fmt.Errorf("functionapp.Edit: SaveVersion: %w", err)
 	}
+	if err := s.syncEnvSync(ctx, v); err != nil {
+		s.log.Warn("functionapp.Edit: env sync failed",
+			zap.String("functionId", in.ID), zap.String("versionId", v.ID), zap.Error(err))
+	}
 	s.publish(ctx, in.ID, "pending_created", map[string]any{"version": v})
 	return v, nil
+}
+
+// versionToDraft converts an existing Version row to a VersionDraft (base for
+// ApplyOps when iterating a pending row).
+//
+// versionToDraft 把已有 Version 行转 VersionDraft(iterate pending 时作 ApplyOps 起点)。
+func versionToDraft(f *functiondomain.Function, v *functiondomain.Version) *VersionDraft {
+	return &VersionDraft{
+		Name:          f.Name,
+		Description:   f.Description,
+		Tags:          append([]string(nil), f.Tags...),
+		Code:          v.Code,
+		Parameters:    append([]functiondomain.ParameterSpec(nil), v.Parameters...),
+		ReturnSchema:  v.ReturnSchema,
+		Dependencies:  append([]string(nil), v.Dependencies...),
+		PythonVersion: v.PythonVersion,
+	}
 }
 
 // AcceptPending turns the active pending into a numbered accepted version and
@@ -449,10 +578,12 @@ func (s *Service) AcceptPending(ctx context.Context, id string) (*functiondomain
 	return pending, nil
 }
 
-// RejectPending marks the active pending as rejected (no state change to
-// ActiveVersion). UI/LLM can then create a new pending via Edit.
+// RejectPending destroys the pending venv and hard-deletes the pending Version
+// row (per D-redo-12). UI/LLM can immediately Edit again to create a fresh
+// pending. No state change to ActiveVersion.
 //
-// RejectPending 把活动 pending 标 rejected(不动 ActiveVersion);可继续 Edit。
+// RejectPending 销 pending 的 venv + 物理删 Version 行(D-redo-12);
+// 不动 ActiveVersion;UI/LLM 可立即重新 Edit。
 func (s *Service) RejectPending(ctx context.Context, id string) error {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return fmt.Errorf("functionapp.RejectPending: %w", err)
@@ -461,7 +592,13 @@ func (s *Service) RejectPending(ctx context.Context, id string) error {
 	if err != nil {
 		return fmt.Errorf("functionapp.RejectPending: %w", err)
 	}
-	if err := s.repo.UpdateVersionStatus(ctx, pending.ID, functiondomain.StatusRejected, nil); err != nil {
+	if err := s.sandbox.DestroyEnv(ctx, id, pending.EnvID); err != nil {
+		// best-effort; venv cleanup failure shouldn't block the reject decision
+		// 尽力清理 venv;失败仅 log,不阻 reject
+		s.log.Warn("functionapp.RejectPending: DestroyEnv failed (best-effort)",
+			zap.String("functionId", id), zap.String("versionId", pending.ID), zap.Error(err))
+	}
+	if err := s.repo.HardDeleteVersion(ctx, pending.ID); err != nil {
 		return fmt.Errorf("functionapp.RejectPending: %w", err)
 	}
 	s.publish(ctx, id, "pending_rejected", map[string]any{"versionId": pending.ID})
@@ -528,27 +665,6 @@ func (s *Service) UpdateMeta(ctx context.Context, in UpdateMetaInput) (*function
 	}
 	s.publish(ctx, f.ID, "updated", map[string]any{"function": f})
 	return f, nil
-}
-
-// Resync forces re-materialization of the active version's venv (e.g. user
-// manually clearing a stuck "failed" state). Idempotent — if env is already
-// ready, returns immediately.
-//
-// Resync 强制重建活跃版本 venv(如用户手动清 stuck "failed" 态)。已 ready
-// 时立即返(幂等)。
-func (s *Service) Resync(ctx context.Context, functionID string) error {
-	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
-		return fmt.Errorf("functionapp.Resync: %w", err)
-	}
-	f, err := s.repo.GetFunction(ctx, functionID)
-	if err != nil {
-		return fmt.Errorf("functionapp.Resync: %w", err)
-	}
-	if f.ActiveVersionID == "" {
-		return fmt.Errorf("functionapp.Resync: %w", functiondomain.ErrNoActiveVersion)
-	}
-	s.SyncEnvForVersion(ctx, f.ActiveVersionID)
-	return nil
 }
 
 // ListVersions returns a paginated page of versions for one function.

@@ -113,8 +113,9 @@ func (h *FunctionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	// Kick off env sync in background.
-	h.svc.SyncEnvForVersion(r.Context(), v.ID)
+	// Env sync is synchronous inside Service.Create (D-redo-9). v.EnvStatus
+	// is already terminal when we return — callers see ready/failed via the
+	// response body.
 	responsehttpapi.Created(w, map[string]any{"function": f, "version": v})
 }
 
@@ -172,11 +173,13 @@ func (h *FunctionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.NoContent(w)
 }
 
-// postOnFunction dispatches POST /api/v1/functions/{id}:<action>. Currently
-// supports :run, :resync, :revert.
+// postOnFunction dispatches POST /api/v1/functions/{id}:<action>. Supports
+// :run and :revert. The legacy :resync action was removed in 2026-05-12
+// (D-redo-14) — to rebuild a stuck venv the LLM uses edit_function with
+// empty ops (D-redo-22).
 //
-// postOnFunction 派发 POST /api/v1/functions/{id}:<action>。支持 :run / :resync /
-// :revert。
+// postOnFunction 派发 POST /api/v1/functions/{id}:<action>。支持 :run / :revert。
+// :resync 已删(D-redo-14),重建 env 走 edit_function({ops:[]})(D-redo-22)。
 func (h *FunctionHandler) postOnFunction(w http.ResponseWriter, r *http.Request) {
 	id, action, ok := idAndAction(r, "idAction")
 	if !ok {
@@ -186,8 +189,6 @@ func (h *FunctionHandler) postOnFunction(w http.ResponseWriter, r *http.Request)
 	switch action {
 	case "run":
 		h.Run(w, r, id)
-	case "resync":
-		h.Resync(w, r, id)
 	case "revert":
 		h.Revert(w, r, id)
 	default:
@@ -215,14 +216,6 @@ func (h *FunctionHandler) Run(w http.ResponseWriter, r *http.Request, id string)
 		return
 	}
 	responsehttpapi.Success(w, http.StatusOK, res)
-}
-
-func (h *FunctionHandler) Resync(w http.ResponseWriter, r *http.Request, id string) {
-	if err := h.svc.Resync(r.Context(), id); err != nil {
-		responsehttpapi.FromDomainError(w, h.log, err)
-		return
-	}
-	responsehttpapi.Success(w, http.StatusAccepted, map[string]any{"resyncing": true})
 }
 
 func (h *FunctionHandler) Revert(w http.ResponseWriter, r *http.Request, id string) {

@@ -1,19 +1,18 @@
 // sandbox_types.go — request value types for the handler.Sandbox port.
 //
-// Mirrors function.SyncRequest shape; SpawnRequest is new (handler is the
-// first trinity domain that needs long-lived subprocess spawn).
+// Per D-redo-8 (forge_redesign 2026-05-12) EnvID = VersionID (1:1 per version,
+// no cross-version sharing) — the prior sha256(deps, python) hash + sharing
+// logic was removed; each HandlerVersion row owns its own venv keyed by
+// Version.ID. SpawnRequest is handler-specific (handler is the first trinity
+// domain that needs long-lived subprocess spawn).
 //
-// sandbox_types.go — handler.Sandbox 端口的请求值类型。SyncRequest 跟 function
-// 同形;SpawnRequest 是 handler 新加(第一个要长跑子进程的 trinity 域)。
+// sandbox_types.go —— handler.Sandbox 端口的请求值类型。
+//
+// 按 D-redo-8(forge_redesign 2026-05-12),EnvID = VersionID(每版本独立 venv,
+// 跨版本不共享)——sha256(deps, python) 哈希共享逻辑已删。SpawnRequest 是
+// handler 专属(handler 是第一个需要长跑子进程的 trinity 域)。
 
 package handler
-
-import (
-	"crypto/sha256"
-	"encoding/hex"
-	"sort"
-	"strings"
-)
 
 // SyncRequest is one materialize-this-EnvID order. Same shape as function's.
 //
@@ -55,40 +54,3 @@ type SyncError struct {
 
 func (e *SyncError) Error() string { return e.Stderr }
 func (e *SyncError) Unwrap() error { return e.Cause }
-
-// ComputeEnvID derives a stable EnvID from (deps, pythonVersion). Same algorithm
-// as function.ComputeEnvID — see that file for the normalization rules
-// rationale (D5 says each trinity owns its own copy; here we copy).
-//
-// ComputeEnvID 从 (deps, pythonVersion) 派生稳定 EnvID。算法跟 function 同
-// (D5 各 trinity 自维护一份;此处复制)。
-func ComputeEnvID(deps []string, pythonVersion string) string {
-	normalized := make([]string, 0, len(deps))
-	for _, d := range deps {
-		if n := normalizeSpecifier(d); n != "" {
-			normalized = append(normalized, n)
-		}
-	}
-	sort.Strings(normalized)
-	payload := strings.Join(normalized, "\n") + "\n" + strings.TrimSpace(pythonVersion)
-	h := sha256.Sum256([]byte(payload))
-	return "env_" + hex.EncodeToString(h[:6])
-}
-
-func normalizeSpecifier(spec string) string {
-	spec = strings.TrimSpace(spec)
-	if spec == "" {
-		return ""
-	}
-	i := 0
-	for i < len(spec) {
-		c := spec[i]
-		if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-			(c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.' {
-			i++
-			continue
-		}
-		break
-	}
-	return strings.ToLower(spec[:i]) + spec[i:]
-}

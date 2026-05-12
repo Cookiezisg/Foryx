@@ -62,6 +62,13 @@ type Repository interface {
 	UpdateVersionEnv(ctx context.Context, versionID, envStatus, envError, envSyncStage, envSyncDetail string, syncedAt *time.Time) error
 	HardDeleteOldestAccepted(ctx context.Context, handlerID string, keep int) error
 
+	// HardDeleteVersion physically deletes one Version row by ID. Called by
+	// Service.RejectPending after destroying the venv (per D-redo-12).
+	//
+	// HardDeleteVersion 按 ID 物理删一行 Version。Service.RejectPending 销 venv
+	// 后调用。
+	HardDeleteVersion(ctx context.Context, versionID string) error
+
 	// ── Config (D-handler — AES-GCM ciphertext blob) ──────────────────────
 
 	// UpdateConfigEncrypted writes the AES-GCM ciphertext blob covering all

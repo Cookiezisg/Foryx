@@ -80,8 +80,11 @@ func (t *CreateHandler) Execute(ctx context.Context, argsJSON string) (string, e
 
 	out := map[string]any{
 		"id":         h.ID,
+		"versionId":  v.ID,
 		"version":    v.Version,
 		"status":     v.Status,
+		"envStatus":  v.EnvStatus,
+		"envError":   v.EnvError,
 		"opsApplied": len(ops),
 		"note":       "Use update_handler_config to set init_args before call_handler.",
 	}

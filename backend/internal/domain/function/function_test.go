@@ -14,12 +14,12 @@ import (
 func TestSentinels_Unique(t *testing.T) {
 	all := []error{
 		ErrNotFound, ErrDuplicateName, ErrVersionNotFound, ErrPendingNotFound,
-		ErrPendingConflict, ErrRunFailed, ErrASTParseError, ErrNoActiveVersion,
+		ErrRunFailed, ErrASTParseError, ErrNoActiveVersion,
 		ErrEnvNotReady, ErrEnvFailed, ErrDependencyResolution, ErrSandboxUnavailable,
 		ErrOpInvalid,
 	}
-	if len(all) != 13 {
-		t.Errorf("expected 13 sentinels per spec, got %d", len(all))
+	if len(all) != 12 {
+		t.Errorf("expected 12 sentinels per spec, got %d", len(all))
 	}
 	seen := map[string]bool{}
 	for _, e := range all {

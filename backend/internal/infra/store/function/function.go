@@ -418,6 +418,19 @@ func (s *Store) UpdateVersionEnv(ctx context.Context, versionID, envStatus, envE
 	return nil
 }
 
+// HardDeleteVersion physically deletes one Version row by ID. function_versions
+// has no soft-delete column so this is an unconditional DELETE.
+//
+// HardDeleteVersion 按 ID 物理删 Version 行(function_versions 无软删列)。
+func (s *Store) HardDeleteVersion(ctx context.Context, versionID string) error {
+	if err := s.db.WithContext(ctx).
+		Where("id = ?", versionID).
+		Delete(&functiondomain.Version{}).Error; err != nil {
+		return fmt.Errorf("functionstore.HardDeleteVersion: %w", err)
+	}
+	return nil
+}
+
 // HardDeleteOldestAccepted keeps `keep` newest accepted versions per function
 // and HARD-deletes the rest (Version table has no soft-delete column). Called
 // from service layer after each new accept.

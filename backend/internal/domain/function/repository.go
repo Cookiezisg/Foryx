@@ -146,6 +146,14 @@ type Repository interface {
 	// HardDeleteOldestAccepted 强制单 function accepted 版本数上限(默认 50)。
 	HardDeleteOldestAccepted(ctx context.Context, functionID string, keep int) error
 
+	// HardDeleteVersion physically deletes one Version row by ID (no soft-
+	// delete on function_versions). Called by Service.RejectPending after
+	// destroying the venv — pending row is gone from DB.
+	//
+	// HardDeleteVersion 按 ID 物理删一行 Version(function_versions 无软删)。
+	// Service.RejectPending 在销毁 venv 后调,从 DB 抹掉 pending 行。
+	HardDeleteVersion(ctx context.Context, versionID string) error
+
 	// Execution-log methods (D22) — embedded so Service.repo has both core
 	// CRUD and execution history methods without a second repo field.
 	//

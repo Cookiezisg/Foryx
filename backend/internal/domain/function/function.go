@@ -68,7 +68,6 @@ var (
 	ErrDuplicateName        = errors.New("function: duplicate name")
 	ErrVersionNotFound      = errors.New("function: version not found")
 	ErrPendingNotFound      = errors.New("function: pending not found")
-	ErrPendingConflict      = errors.New("function: pending conflict")
 	ErrRunFailed            = errors.New("function: run failed")
 	ErrASTParseError        = errors.New("function: AST parse error")
 	ErrNoActiveVersion      = errors.New("function: no active version")

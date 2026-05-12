@@ -85,15 +85,17 @@ func (t *CreateFunction) Execute(ctx context.Context, argsJSON string) (string, 
 		return "", fmt.Errorf("create_function: %w", err)
 	}
 
-	// Kick off env sync in background — user sees progress on the v1 row.
-	// 后台起 env sync——用户在 v1 行看进度。
-	t.svc.SyncEnvForVersion(ctx, v.ID)
-
+	// Env sync is synchronous inside Service.Create (D-redo-9). v.EnvStatus
+	// is already terminal here. C2 will wrap this with the env-fix loop;
+	// for C1 the tool just surfaces the final env state to the LLM.
 	out := map[string]any{
-		"id":          f.ID,
-		"version":     v.Version,
-		"status":      v.Status,
-		"opsApplied":  len(ops),
+		"id":         f.ID,
+		"versionId":  v.ID,
+		"version":    v.Version,
+		"status":     v.Status,
+		"envStatus":  v.EnvStatus,
+		"envError":   v.EnvError,
+		"opsApplied": len(ops),
 	}
 	b, _ := json.Marshal(out)
 	return string(b), nil

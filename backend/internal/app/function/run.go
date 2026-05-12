@@ -1,25 +1,22 @@
-// run.go — Service.RunFunction + SyncEnv helpers (Task 12).
+// run.go — Service.RunFunction + syncEnvSync helper.
 //
-// Two responsibilities:
+// Per D-redo-9 (forge_redesign 2026-05-12) there is no async env sync path —
+// env materialization happens synchronously inside Service.Create / Edit (and
+// in-flight here in RunFunction when an evicted version is invoked). The
+// prior SyncEnvForVersion fire-and-forget goroutine + Service.Resync entry
+// have been removed; rebuild-env is now done via Edit with empty ops.
 //
-//  1. SyncEnvForVersion — fire-and-forget background job that materializes the
-//     venv for a FunctionVersion, streams stage progress to UpdateVersionEnv,
-//     publishes env_synced / env_failed notifications.
+// RunFunction is the synchronous "execute version X with inputs Y" entry
+// called by the run_function LLM tool and HTTP :run endpoint. It ensures the
+// env is ready (in-flight sync if the version's env was evicted between
+// accept and run) then delegates to Sandbox.Run. Every call writes one
+// terminal Execution row (D22).
 //
-//  2. RunFunction — synchronous "execute version X with inputs Y" entry called
-//     by the run_function LLM tool and HTTP :run endpoint. Ensures the env is
-//     ready first (synchronous Sync if not), then delegates to Sandbox.Run.
+// EnvStatus state machine: pending → syncing → ready / failed.
+// `evicted` is set by Sandbox GC (not here); in-flight sync re-builds it.
 //
-// EnvStatus state machine (per spec):
-//   pending → syncing → ready
-//                    → failed
-//                    → evicted (set by Sandbox GC, not here)
-//
-// run.go —— Service.RunFunction + SyncEnv helpers(Task 12)。
-//
-// 1) SyncEnvForVersion 后台 fire-and-forget,物化版本 venv,流式回写 env 字段
-//    + 推 env_synced / env_failed 通知。
-// 2) RunFunction 同步入口,先确保 env ready(否则就地 sync)再委托 Sandbox.Run。
+// run.go —— Service.RunFunction + syncEnvSync。env sync 同步发生(D-redo-9),
+// 无后台 goroutine。RunFunction 调时若版本 env 被 evict,这里 in-flight 重建。
 
 package function
 
@@ -181,49 +178,19 @@ func (s *Service) recordExecution(
 	}
 }
 
-// SyncEnvForVersion kicks off a background goroutine that materializes the
-// venv for a FunctionVersion. Returns immediately. Intended for the post-
-// accept hook (HTTP handler / LLM tool calls this after CreatePending /
-// AcceptPending so the user sees progress streaming without blocking the
-// API response).
+// syncEnvSync runs the venv materialization synchronously, writes terminal
+// EnvStatus to DB, mutates v in place so the caller sees the latest state
+// without re-reading. Publishes env_synced / env_failed notifications on
+// completion (the notification slim-payload migration is C3; for now we
+// retain the wire actions so consumers stay green).
 //
-// Uses a detached context (per §S9) so the caller's request ctx cancellation
-// does not abort the sync — the env materialization should outlive the
-// request that initiated it.
-//
-// SyncEnvForVersion 后台起 goroutine 物化版本 venv,立即返。给 accept 后钩用
-// (HTTP handler / LLM tool 调用后用户看进度不阻塞 API 响应)。用 detached
-// context(per §S9)让 caller request cancel 不杀同步——env 物化应活过发起
-// 请求。
-func (s *Service) SyncEnvForVersion(ctx context.Context, versionID string) {
-	uid, err := reqctxpkg.RequireUserID(ctx)
-	if err != nil {
-		s.log.Warn("functionapp.SyncEnvForVersion: no user id in ctx", zap.String("versionId", versionID))
-		return
-	}
-	v, err := s.repo.GetVersion(ctx, versionID)
-	if err != nil {
-		s.log.Warn("functionapp.SyncEnvForVersion: GetVersion failed", zap.String("versionId", versionID), zap.Error(err))
-		return
-	}
-	go func() {
-		detached := reqctxpkg.SetUserID(context.Background(), uid)
-		if err := s.syncEnvSync(detached, v); err != nil {
-			s.log.Warn("functionapp.SyncEnvForVersion: sync failed", zap.String("versionId", versionID), zap.Error(err))
-		}
-	}()
-}
-
-// syncEnvSync runs the venv materialization synchronously and writes terminal
-// EnvStatus + publishes env_synced / env_failed notification on completion.
-// Stage progress is streamed via OnProgress → UpdateVersionEnv.
-//
-// syncEnvSync 同步跑 venv 物化,终态写 EnvStatus + 推通知;stage 进度经
-// OnProgress 写 UpdateVersionEnv。
+// syncEnvSync 同步物化 venv,终态写 DB + 镜像到 v(调用方不必 re-read);
+// 完成推 env_synced / env_failed 通知(通知瘦身留 C3 一次性改)。
 func (s *Service) syncEnvSync(ctx context.Context, v *functiondomain.Version) error {
 	now := time.Now().UTC()
 	_ = s.repo.UpdateVersionEnv(ctx, v.ID,
 		functiondomain.EnvStatusSyncing, "", "starting", "", nil)
+	v.EnvStatus = functiondomain.EnvStatusSyncing
 
 	onProgress := func(stage, detail string) {
 		_ = s.repo.UpdateVersionEnv(ctx, v.ID,
@@ -246,6 +213,11 @@ func (s *Service) syncEnvSync(ctx context.Context, v *functiondomain.Version) er
 		}
 		_ = s.repo.UpdateVersionEnv(ctx, v.ID,
 			functiondomain.EnvStatusFailed, stderr, "failed", "", &now)
+		v.EnvStatus = functiondomain.EnvStatusFailed
+		v.EnvError = stderr
+		v.EnvSyncStage = "failed"
+		v.EnvSyncDetail = ""
+		v.EnvSyncedAt = &now
 		s.publish(ctx, v.FunctionID, "env_failed", map[string]any{"versionId": v.ID, "error": stderr})
 		return fmt.Errorf("sandbox.Sync: %w", err)
 	}
@@ -256,6 +228,9 @@ func (s *Service) syncEnvSync(ctx context.Context, v *functiondomain.Version) er
 		return fmt.Errorf("UpdateVersionEnv ready: %w", err)
 	}
 	v.EnvStatus = functiondomain.EnvStatusReady
+	v.EnvError = ""
+	v.EnvSyncStage = "ready"
+	v.EnvSyncDetail = ""
 	v.EnvSyncedAt = &syncedAt
 	s.publish(ctx, v.FunctionID, "env_synced", map[string]any{"versionId": v.ID})
 	return nil

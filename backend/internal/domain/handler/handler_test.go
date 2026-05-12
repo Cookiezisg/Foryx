@@ -16,10 +16,10 @@ import (
 func TestSentinels_Unique(t *testing.T) {
 	all := []error{
 		ErrNotFound, ErrDuplicateName, ErrMethodNotFound, ErrVersionNotFound,
-		ErrPendingNotFound, ErrPendingConflict, ErrInstanceSpawnFailed,
+		ErrPendingNotFound, ErrInstanceSpawnFailed,
 		ErrInstanceCrashed, ErrInstanceRPCTimeout, ErrInstanceNotFound,
-		ErrNoActiveVersion, ErrEnvNotReady, ErrEnvFailed, ErrOpInvalid,
-		ErrASTParseError, ErrConfigIncomplete, ErrConfigInvalid,
+		ErrNoActiveVersion, ErrEnvNotReady, ErrEnvFailed, ErrSandboxUnavailable,
+		ErrOpInvalid, ErrASTParseError, ErrConfigIncomplete, ErrConfigInvalid,
 		ErrConfigDecryptFailed,
 	}
 	if len(all) != 18 {

@@ -122,6 +122,9 @@ func (r *fakeRepo) UpdateVersionEnv(context.Context, string, string, string, str
 func (r *fakeRepo) HardDeleteOldestAccepted(context.Context, string, int) error {
 	panic("not implemented")
 }
+func (r *fakeRepo) HardDeleteVersion(context.Context, string) error {
+	panic("not implemented")
+}
 
 // Call-log methods (D22) — config tests never hit these.
 func (r *fakeRepo) SaveCall(context.Context, *handlerdomain.Call) error { panic("not implemented") }

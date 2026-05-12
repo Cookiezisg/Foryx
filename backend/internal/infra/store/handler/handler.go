@@ -409,6 +409,19 @@ func (s *Store) UpdateVersionEnv(ctx context.Context, versionID, envStatus, envE
 	return nil
 }
 
+// HardDeleteVersion physically deletes one Version row by ID. handler_versions
+// has no soft-delete column.
+//
+// HardDeleteVersion 按 ID 物理删 Version 行(handler_versions 无软删列)。
+func (s *Store) HardDeleteVersion(ctx context.Context, versionID string) error {
+	if err := s.db.WithContext(ctx).
+		Where("id = ?", versionID).
+		Delete(&handlerdomain.Version{}).Error; err != nil {
+		return fmt.Errorf("handlerstore.HardDeleteVersion: %w", err)
+	}
+	return nil
+}
+
 // HardDeleteOldestAccepted keeps `keep` newest accepted versions per handler
 // and HARD-deletes the rest (Version has no soft-delete).
 //
