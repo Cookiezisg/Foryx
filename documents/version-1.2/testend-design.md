@@ -174,11 +174,14 @@ Response: { "output": "...", "ok": true, "elapsedMs": 342 }
 - API Keys CRUD + connectivity test
 - Chat scenario 的 Model 配置（PUT `/api/v1/model-configs/chat`）
 
-### SSE
-- **Stream 视图**（默认）：按 `messageId` 聚合事件为 timeline `items[]`（thinking / text / tool 按到达顺序追加，tool_result 后自动开新 text 段），蓝左边框块展示
-- **Raw 视图**：逐条 pretty-print JSON，[Stream][Raw] 切换按钮
-- 支持的事件：`chat.token` / `chat.reasoning_token` / `chat.tool_call_start` / `chat.tool_call` / `chat.tool_result` / `chat.done` / `chat.error` / `conversation.title_updated` / 各 tool.* 事件
-- 切换对话时自动重新订阅 `/api/v1/events?conversationId=xxx`，Clear 按钮同时清空两个视图
+### SSE(2026-05-08 重构后:递归事件日志协议 + 2026-05-12 三流统一)
+- **三流模型**(C3/C4):
+  - `/api/v1/eventlog`(per-user)— 5 events × 6 block types,chat 内容
+  - `/api/v1/notifications`(per-user)— entity 状态变更(瘦身 payload)
+  - `/api/v1/forge`(per-user)— 4 events × 3 kinds,trinity 锻造进度
+- testend 经共享 Alpine store(chatBus / notifBus / forgeBus)单 SSE 连接 fanout 给多 tab
+- chat panel 改订 chatBus + 客户端按 `payload.conversationId` demux(D-redo-2);不再 `?conversationId=` query
+- Forge tab(C5)显示 4 类锻造事件 + kind/type 过滤
 
 ### Logs
 - 连接 `GET /dev/logs` EventSource

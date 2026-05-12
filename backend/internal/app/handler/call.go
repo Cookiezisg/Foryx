@@ -308,11 +308,13 @@ func activeToVersionDraft(v *handlerdomain.Version) *VersionDraft {
 
 // syncEnv runs Sync synchronously, writes terminal env_status to DB, mutates
 // v in place so the caller sees the terminal state without re-reading.
-// Publishes env_synced / env_failed notifications (slim-payload migration is
-// C3; for now the wire actions stay to keep consumers green).
+// Env terminal state surfaces via v.EnvStatus / v.EnvError + the LLM tool
+// result; D-redo-7 removed env_synced / env_failed notification actions
+// (UI fetches via GET).
 //
 // syncEnv 同步跑 Sync + 写 DB 终态 + 镜像到 v(调用方不必 re-read);
-// 完成推 env_synced / env_failed 通知(瘦身留 C3 一次性改)。
+// 终态信息走 v.EnvStatus/EnvError + LLM tool_result(D-redo-7 删 env_synced/
+// env_failed 通知)。
 func (s *Service) syncEnv(ctx context.Context, v *handlerdomain.Version) error {
 	now := time.Now().UTC()
 	_ = s.repo.UpdateVersionEnv(ctx, v.ID,

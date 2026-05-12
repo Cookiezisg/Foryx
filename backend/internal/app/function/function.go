@@ -85,19 +85,22 @@ type Service struct {
 // NewService wires Service dependencies. Panics on nil logger.
 //
 // Notifications: Service publishes `function` entity events (created /
-// updated / deleted / version_accepted / env_synced / env_failed) via
-// notif.Publish — global broadcast, conversationID == "".
+// updated / deleted / pending_created / version_accepted / pending_rejected /
+// reverted / env_rebuilt) via notif.Publish — per-user routing (D-redo-3
+// post-2026-05-12) with slim payloads (D-redo-6 — UI does GET for full
+// entity).
 //
-// Function Service itself does NOT push eventlog SSE streams; the tools that
-// wrap function operations (create_function / edit_function / run_function /
-// etc.) emit progress / tool_result blocks via pkg/eventlog.Emitter under
-// their tool_call block (per CLAUDE.md §S18).
+// Function Service itself does NOT push eventlog or forge SSE streams;
+// the tools that wrap function operations (create_function / edit_function /
+// run_function / etc.) emit eventlog progress / tool_result blocks via
+// pkg/eventlog.Emitter, and forge_started / forge_env_attempt / forge_completed
+// via pkg/forge.Publisher (per CLAUDE.md §S18 + §E1).
 //
 // NewService 装配 Service 依赖。nil logger panic。
 //
-// 通知:Service 经 notif.Publish 推 `function` entity 事件(全局广播,
-// conversationID == "")。Service 不推 eventlog;包装 function 操作的 tool
-// 在 tool_call block 下推 progress / tool_result(per §S18)。
+// 通知:Service 经 notif.Publish 推 `function` entity 事件(per-user 路由,
+// D-redo-3;瘦身 payload D-redo-6)。Service 不推 eventlog / forge SSE;包装
+// function 操作的 tool 经 pkg/eventlog + pkg/forge 推(§S18 + §E1)。
 func NewService(
 	repo functiondomain.Repository,
 	sandbox Sandbox,

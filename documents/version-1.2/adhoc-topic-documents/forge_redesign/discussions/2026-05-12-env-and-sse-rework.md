@@ -221,7 +221,7 @@ LLM → user:"我让它重装环境就好了,review 一下点接受。"
 
 待 commit:
 
-1.  EnvID = versionID,删 ComputeEnvID hash 逻辑                       [domain + sandbox_types]
+1.  EnvID 每版本独立生成(`fnenv_`/`hdenv_`,与 versionID 解耦);删 ComputeEnvID hash 逻辑(C1.1 修订原 D8 措辞)  [domain + sandbox_types]
 2.  Service.Create 内置同步 syncEnvSync(替 fire-and-forget)             [function + handler]
 3.  Service.Edit 改 "iterate same pending":
     - 无 pending → 创建新 pending,装 env

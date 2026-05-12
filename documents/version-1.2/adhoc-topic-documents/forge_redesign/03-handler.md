@@ -734,7 +734,7 @@ LLM 看 catalog summary 时一眼分清"可立调 / 需先 setup",`call_handler`
 
 Plan 02 主体已 merge(2026-05-12,11 commits);env 模型重整作为 2026-05-12 redesign 的一部分,后续 commit 改动点(跟 function 同模式):
 
-1. **domain/sandbox_types** — 删 `ComputeEnvID(deps, python)` 哈希函数(若 handler 自有);改 `EnvID = versionID`
+1. **domain/sandbox_types** — 删 `ComputeEnvID(deps, python)` 哈希函数(若 handler 自有);Version 创建时 `EnvID = idgenpkg.New("hdenv")` 独立生成(C1.1 与 versionID 解耦)
 2. **app/handler/apply.go** — Create / Edit 改同步装 env(走 fix loop);AcceptPending 纯指针;RejectPending 销 env + 删行
 3. **app/tool/handler/{create.go,edit.go}** — 加内部 env-fix loop(maxAttempts=3,主 chat scenario LLM,只改 deps);edit `ops=[]` 显式语义重建 env
 4. **app/handler** — Service.Create/Edit 前置 sandbox ping;失败返 `ErrSandboxUnavailable`

@@ -403,7 +403,7 @@ main.go 装配:`catalogService.RegisterSource(functionService.AsCatalogSource())
 
 Plan 01 主体已 merge(2026-05-11,13 commits);env 模型重整作为 2026-05-12 redesign 的一部分,后续 commit 改动点:
 
-1. **domain/sandbox_types** — 删 `ComputeEnvID(deps, python)` 哈希函数,改 `EnvID = versionID`
+1. **domain/sandbox_types** — 删 `ComputeEnvID(deps, python)` 哈希函数;Version 创建时 `EnvID = idgenpkg.New("fnenv")` 独立生成(C1.1 与 versionID 解耦)
 2. **app/function/apply.go** — Create / Edit 改同步装 env(走 fix loop);删 `SyncEnvForVersion` / `Resync` 入口
 3. **app/function/apply.go** — AcceptPending 改纯指针翻转;RejectPending 改销 env + 删行;Revert 翻指针 + evicted in-flight 重建
 4. **app/tool/function/{create.go,edit.go}** — 加内部 env-fix loop(maxAttempts=3,主 chat scenario LLM,只改 deps);edit `ops=[]` 显式语义重建 env

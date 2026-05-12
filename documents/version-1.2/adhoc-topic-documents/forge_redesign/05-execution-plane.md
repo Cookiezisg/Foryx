@@ -1,11 +1,15 @@
 # Execution Plane — Scheduler + Trigger + FlowRun
 
+> ⚠️ **本文档 Phase 4 范围,部分 SSE 协议章节已被 Plan 03 redesign 取代**
+>
+> 本文档的 scheduler / trigger / flowrun / 14 项生产级 V1 主体仍然有效(workflow Plan 04+ 实施时使用)。但其中"**eventlog 协议泛化**"(per-entity scope `?conversationId=` 向后兼容)章节描述的是原 Plan 03 D19 方案,**已被 2026-05-12 redesign 取代** — 现行 SSE 模型是三流 per-user(eventlog + notifications + forge),无 query 参,client 按 payload demux。详 [`discussions/2026-05-12-env-and-sse-rework.md`](./discussions/2026-05-12-env-and-sse-rework.md) §B + [`07-notifications-and-eventlog.md`](./07-notifications-and-eventlog.md)。
+
 **关联**:
 - [`00-overview.md`](./00-overview.md) — 顶层愿景
 - [`04-workflow.md`](./04-workflow.md) — Authoring plane(workflow domain)
 - [`01-shared-tool-interface.md`](./01-shared-tool-interface.md) — 工具接口形态
 
-**本文档范围**:执行那一面 — 三个 sibling domain (scheduler / trigger / flowrun) 的职责、4 种触发器、scheduler 执行模型、FlowRun 持久化、eventlog 协议泛化、**14 项生产级 V1 必做项**、HTTP API、错误码。
+**本文档范围**:执行那一面 — 三个 sibling domain (scheduler / trigger / flowrun) 的职责、4 种触发器、scheduler 执行模型、FlowRun 持久化、~~eventlog 协议泛化~~(已被 Plan 03 redesign 取代)、**14 项生产级 V1 必做项**、HTTP API、错误码。
 
 ---
 

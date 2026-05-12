@@ -105,12 +105,12 @@ handler.SendMessage
       → agentRun → client.Stream(Request)       → iter.Seq[StreamEvent] → SSE
 ```
 
-### Phase 3 — 工具锻造能力（已完成,forge_redesign Plan 01 重构为 function trinity）
-`function` 主 domain（版本 / pending / sandbox 执行 / 执行日志 D22,13 端点）+ `app/tool/function/`（9 个 LLM 工具:search/get/create/edit/revert/delete/run + search_function_executions/get_function_execution）+ chat ReAct 多步循环。Python 沙箱通过统一 PluginSandbox v2(mise embed)+ SandboxAdapter。
+### Phase 3 — 工具锻造能力(forge_redesign Plan 01/02/03 trinity 完成)
+`function` 主 domain(版本 / pending / sandbox 执行 / 执行日志 D22,12 端点)+ `handler` 二条腿(stateful Python class + caller-owns lifetime + Config + handler_calls D22)+ `app/tool/function/` 9 LLM 工具 + `app/tool/handler/` 10 LLM 工具 + chat ReAct 多步循环。Python 沙箱通过统一 PluginSandbox v2(mise embed)+ SandboxAdapter。
 
-> Phase 3 历史:(1) 2026-05-02 第一轮 `tool` → `forge` 大重命名;(2) 2026-05-11 forge_redesign Plan 01 — 把 forge 重新设计为 trinity 域(Function / Handler / Workflow)的 Function 部分;forge 代码路径(domain/forge / app/forge / app/tool/forge / infra/store/forge / handlers/forge.go)整批删除;function trinity 一致替代(平铺包结构 + 7 CRUD/exec LLM 工具 + 2 D22 execution log 工具 + 11 HTTP endpoints + sentinel-correct errmap + 端到端 pipeline test)。详见 [`adhoc-topic-documents/forge_redesign/`](./adhoc-topic-documents/forge_redesign/) 系列文档(00-overview 决策 D1-D22 / 02-function spec / 08-executions D22 schema / plans/01-function-domain.md 详细任务)。
+> Phase 3 历史:(1) 2026-05-02 第一轮 `tool` → `forge` 大重命名;(2) 2026-05-11 forge_redesign Plan 01 把 forge 重设为 trinity 域 Function 部分(13 commits 直推 main,forge 代码路径整批删除);(3) 2026-05-12 Plan 02 handler trinity 第二条腿(11 commits 直推 main);(4) 2026-05-12 Plan 03 eventlog + forge 三流统一(6 commits + 2 doc commits)— env 模型重整(EnvID 每版本独立 + 同步装 + iterate-same-pending + LLM env-fix loop)、SSE 改三流 per-user(eventlog + notifications + 新 forge 流)、删 :resync 端点 + env_synced/env_failed 通知 + ErrPendingConflict。详见 [`adhoc-topic-documents/forge_redesign/`](./adhoc-topic-documents/forge_redesign/) 系列文档 + [`discussions/2026-05-12-env-and-sse-rework.md`](./adhoc-topic-documents/forge_redesign/discussions/2026-05-12-env-and-sse-rework.md) 26 项 D-redo 决策。
 
-**Phase 3 后基础设施优化轮（2026-04-27 起，进行中）**：chat 基础设施重构（移除 Eino + Block 模型）/ chat pipeline.go → runner.go 二次重构 / Brewfile + Makefile setup / Claude Code 内部机制调研（9 份报告）/ SQLite 驱动迁移（mattn → modernc，纯 Go） / 桌面端 Wails 分发方向定型 / 大规模代码 review 战役（staticcheck / 死代码 / 跨域重复 / errmap 完整性等）。详见 [`progress-record.md`](./progress-record.md) §2。
+**Phase 3 后基础设施优化轮(2026-04-27 起,完工 2026-05-12)**:chat 基础设施重构(移除 Eino + Block 模型)/ chat pipeline.go → runner.go 二次重构 / Brewfile + Makefile setup / Claude Code 内部机制调研(9 份报告)/ SQLite 驱动迁移(mattn → modernc,纯 Go)/ 桌面端 Wails 分发方向定型 / 大规模代码 review 战役 / forge_redesign trinity 重做 + Plan 03 SSE 三流统一。详见 [`progress-record.md`](./progress-record.md) §2。
 
 ### Phase 4 — 工作流能力（最大的一块）
 `workflow`（DAG + 状态机）+ `flowrun`（执行实例）+ 5 类节点（LLM / Tool / Trigger / Approval / Variable）+ `scheduler` + `trigger`（cron / fsnotify / HTTP webhook）+ `chat` 再升级支持"对话创建工作流"。执行引擎自实现（不依赖 Eino compose，Eino 已全面移除）。

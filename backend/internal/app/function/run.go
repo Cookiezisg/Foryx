@@ -180,12 +180,13 @@ func (s *Service) recordExecution(
 
 // syncEnvSync runs the venv materialization synchronously, writes terminal
 // EnvStatus to DB, mutates v in place so the caller sees the latest state
-// without re-reading. Publishes env_synced / env_failed notifications on
-// completion (the notification slim-payload migration is C3; for now we
-// retain the wire actions so consumers stay green).
+// without re-reading. Env terminal state is surfaced via the returned
+// v.EnvStatus / v.EnvError + the LLM tool's tool_result (D-redo-7 removed
+// env_synced / env_failed notification actions — UI fetches via GET).
 //
 // syncEnvSync 同步物化 venv,终态写 DB + 镜像到 v(调用方不必 re-read);
-// 完成推 env_synced / env_failed 通知(通知瘦身留 C3 一次性改)。
+// 终态信息走 v.EnvStatus/EnvError + LLM tool_result(D-redo-7 删 env_synced/
+// env_failed 通知,UI 经 GET 拉)。
 func (s *Service) syncEnvSync(ctx context.Context, v *functiondomain.Version) error {
 	now := time.Now().UTC()
 	_ = s.repo.UpdateVersionEnv(ctx, v.ID,
