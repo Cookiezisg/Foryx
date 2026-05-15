@@ -22,7 +22,6 @@ package eventlog
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -218,26 +217,11 @@ func (em *emitter) saveBlockRow(ctx context.Context, convID, id, parentID, messa
 	if parentID != messageID {
 		parentBlock = parentID
 	}
-	attrsJSON := ""
-	if len(attrs) > 0 {
-		b, err := json.Marshal(attrs)
-		if err != nil {
-			// Producer bug: attrs contained non-JSON-marshalable value. Log
-			// loud + continue with empty attrs (block row still gets written
-			// so history replay sees the block, just with attrs lost). Forge
-			// attrs are always plain map[string]any of strings/numbers/bools
-			// — a marshal fail here means upstream wired a func/chan/etc.
-			//
-			// Producer bug：attrs 含不可 JSON 化的值。Loud log + 用空 attrs
-			// 续（block 行仍写入让 history replay 看见，只 attrs 丢）。Forge
-			// attrs 历来是 map[string]any of string/number/bool——marshal
-			// 失败说明上游接进了 func/chan/etc。
-			em.log.Error("attrs json.Marshal failed (producer bug); writing block with empty attrs",
-				zap.String("blockId", id), zap.Error(err))
-		} else {
-			attrsJSON = string(b)
-		}
-	}
+	// 2026-05: attrs goes into Block.Attrs as map[string]any directly —
+	// GORM serializer:json handles the column marshal at storage boundary.
+	// Producer bug marshal-check that used to live here is moot (json.Marshal
+	// failure now happens in GORM and surfaces as a SaveBlock error).
+	// 2026-05: attrs 直接进 Block.Attrs (map[string]any),GORM serializer 处理列存。
 	now := time.Now().UTC()
 	if err := em.repo.SaveBlock(ctx, &chatdomain.Block{
 		ID:             id,
@@ -246,7 +230,7 @@ func (em *emitter) saveBlockRow(ctx context.Context, convID, id, parentID, messa
 		ParentBlockID:  parentBlock,
 		Seq:            seq,
 		Type:           blockType,
-		Attrs:          attrsJSON,
+		Attrs:          attrs,
 		Status:         eventlogdomain.StatusStreaming,
 		CreatedAt:      now,
 		UpdatedAt:      now,

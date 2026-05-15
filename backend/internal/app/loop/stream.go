@@ -227,17 +227,15 @@ func assembleBlocks(text, reasoning string, accums map[int]*toolAccum) []chatdom
 	for _, i := range indices {
 		a := accums[i]
 		_, args := parseToolArgs(a.args.String())
-		// args / attrs are basic-type maps built in-process; Marshal
-		// cannot fail at runtime — discard err.
-		// args / attrs 是 in-process 构造的基本类型 map，Marshal 运行时
-		// 不可能失败——忽略 err。
+		// args is JSON-marshaled into Block.Content (a string column). attrs
+		// goes directly as map (GORM serializer:json handles column store).
+		// 2026-05: Attrs 改 map[string]any,无需再外层 Marshal。
 		argsJSON, _ := json.Marshal(args)
-		attrsJSON, _ := json.Marshal(map[string]any{"tool": a.name})
 		blocks = append(blocks, chatdomain.Block{
 			ID:      a.id, // LLM tc_id reused as block id
 			Type:    eventlogdomain.BlockTypeToolCall,
 			Content: string(argsJSON),
-			Attrs:   string(attrsJSON),
+			Attrs:   map[string]any{"tool": a.name},
 		})
 	}
 	return blocks

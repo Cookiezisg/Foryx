@@ -25,7 +25,6 @@
 package loop
 
 import (
-	"encoding/json"
 
 	"go.uber.org/zap"
 
@@ -83,21 +82,12 @@ func BlocksToAssistantLLM(log *zap.Logger, blocks []chatdomain.Block) ([]llminfr
 			// Tool name 在 Block.Attrs JSON {tool: name}；args 是
 			// Block.Content 裸 JSON 字符串。Block.ID 是 LLM tool-call ID
 			// （直接复用作 block id）。
+			// Attrs is now map[string]any (2026-05 serializer refactor) —
+			// direct lookup, no JSON parse needed.
+			// Attrs 2026-05 改 map[string]any,直接取键即可。
 			toolName := ""
-			if b.Attrs != "" {
-				var attrs map[string]any
-				if err := json.Unmarshal([]byte(b.Attrs), &attrs); err != nil {
-					// Block.Attrs JSON shape drift — toolName stays
-					// blank, LLM gets unnamed tool_call which is an
-					// upstream-correctness issue. Log so storage-drift
-					// symptoms are debuggable.
-					//
-					// Block.Attrs JSON shape 漂移——toolName 留空，LLM
-					// 收到没名字的 tool_call 是上游正确性问题。Log 让
-					// 存储漂移症状可追。
-					log.Warn("loop.BlocksToAssistantLLM: malformed tool_call Block.Attrs; toolName blank in LLM history",
-						zap.String("block_id", b.ID), zap.Error(err))
-				} else if v, ok := attrs["tool"].(string); ok {
+			if b.Attrs != nil {
+				if v, ok := b.Attrs["tool"].(string); ok {
 					toolName = v
 				}
 			}

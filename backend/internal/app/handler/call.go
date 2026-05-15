@@ -38,6 +38,7 @@ import (
 	"go.uber.org/zap"
 
 	handlerdomain "github.com/sunweilin/forgify/backend/internal/domain/handler"
+	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -248,12 +249,29 @@ func (s *Service) spawnInstance(ctx context.Context, h *handlerdomain.Handler, o
 		return nil, fmt.Errorf("write code: %w", err)
 	}
 
-	// Spawn subprocess.
-	handle, err := s.sandbox.SpawnLongLived(ctx, SpawnRequest{
+	// Spawn subprocess. #15: if env was destroyed externally (admin :destroy /
+	// disk wipe) between accept and call, env row is gone but active.EnvStatus
+	// still says "ready". Rebuild from stored spec + retry once. Persistent
+	// failure after rebuild surfaces normally so we don't loop.
+	// #15: 外部销毁后 active.EnvStatus 仍 ready 但 env 行没了;按 spec 重建
+	// 重试一次。
+	spawnReq := SpawnRequest{
 		HandlerID: h.ID,
 		VersionID: active.ID,
 		EnvID:     active.EnvID,
-	})
+	}
+	handle, err := s.sandbox.SpawnLongLived(ctx, spawnReq)
+	if err != nil && errors.Is(err, sandboxdomain.ErrEnvNotFound) {
+		s.log.Info("handler env evicted externally; rebuilding then retrying call",
+			zap.String("handlerId", h.ID),
+			zap.String("versionId", active.ID),
+			zap.String("envId", active.EnvID))
+		if syncErr := s.syncEnv(ctx, active); syncErr != nil {
+			return nil, fmt.Errorf("rebuild after evict: %w", syncErr)
+		}
+		spawnReq.EnvID = active.EnvID
+		handle, err = s.sandbox.SpawnLongLived(ctx, spawnReq)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", handlerdomain.ErrInstanceSpawnFailed, err)
 	}

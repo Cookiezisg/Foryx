@@ -15,7 +15,6 @@ package chat
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -313,10 +312,10 @@ func (s *Store) ReplayEventsAfter(ctx context.Context, conversationID string, fr
 
 	out := make([]chatdomain.ReplayEnvelope, 0, len(rows)*3)
 	for _, b := range rows {
-		var attrs map[string]any
-		if b.Attrs != "" {
-			_ = json.Unmarshal([]byte(b.Attrs), &attrs)
-		}
+		// Attrs is already a map[string]any after the 2026-05 serializer
+		// refactor — GORM unmarshalled it from the text column on read.
+		// Attrs 2026-05 重构后是 map[string]any (GORM 读列时已 unmarshal)。
+		attrs := b.Attrs
 
 		// Reconstruct wire ParentID: empty parent_block_id in DB means
 		// "top-level block of the message" → wire ParentID = MessageID.

@@ -130,9 +130,13 @@ func (g *LLMGenerator) Generate(ctx context.Context, items []catalogdomain.Item,
 		return nil, fmt.Errorf("%w: no JSON in response", catalogdomain.ErrGenerationFailed)
 	}
 
+	// 2026-05 #13 fix: LLM only generates Summary text; Coverage is computed
+	// from the raw items list by source name (function/handler/workflow/mcp/skill).
+	// Stable for the frontend, doesn't rely on LLM-decided semantic categories.
+	// 2026-05 #13: LLM 只生成 summary 文本;coverage 由 backend 按 source 名
+	// 直接从 items 拼装,稳定可消费。
 	var parsed struct {
-		Summary  string              `json:"summary"`
-		Coverage map[string][]string `json:"coverage"`
+		Summary string `json:"summary"`
 	}
 	if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
 		g.log.Warn("catalog generation: JSON parse failed; falling back to mechanical", zap.Error(err))
@@ -146,9 +150,32 @@ func (g *LLMGenerator) Generate(ctx context.Context, items []catalogdomain.Item,
 
 	return &catalogdomain.Catalog{
 		Summary:     parsed.Summary,
-		Coverage:    parsed.Coverage,
+		Coverage:    computeCoverage(items),
 		GeneratedBy: "llm",
 	}, nil
+}
+
+// computeCoverage groups items by their Source field into the coverage
+// map. Source values come straight from each CatalogSource.Name() (e.g.
+// "function" / "handler" / "workflow" / "mcp" / "skill") — frontend
+// and tests can index by these stable keys, no LLM semantic ambiguity.
+//
+// computeCoverage 按 Source 字段把 items 分组成 coverage map;Source 直接
+// 来自 CatalogSource.Name(),稳定可消费。
+func computeCoverage(items []catalogdomain.Item) map[string][]string {
+	out := make(map[string][]string)
+	for _, it := range items {
+		if it.Source == "" {
+			continue
+		}
+		out[it.Source] = append(out[it.Source], it.ID)
+	}
+	// Sort each source's IDs for stable output (so fingerprint doesn't churn).
+	// 每个 source 的 ID 排序保 fingerprint 稳定。
+	for k := range out {
+		sort.Strings(out[k])
+	}
+	return out
 }
 
 // ── prompt + parsing helpers ─────────────────────────────────────────
@@ -157,23 +184,24 @@ const generatorPromptTemplate = `You are generating a "Capability Catalog" summa
 The summary tells the other LLM what high-level capability categories are available, when to use each, and how to discover details.
 
 CONSTRAINTS — ALL MANDATORY:
-1. Coverage: every item below MUST be represented (directly named or grouped).
-   You MUST output a "coverage" field listing every source ID you grouped/named.
+1. Coverage: every item below MUST be referenced (directly named or grouped). Don't lose items.
 2. Brevity: total summary <= 600 tokens. Prefer "5 file-processing tools" over listing 5 names.
 3. Granularity rules:
-   - source granularity=PerItem (forge, skill): grouping/merging allowed
+   - source granularity=PerItem (function, handler, workflow, skill): grouping/merging allowed
    - source granularity=PerServer (mcp): one mention per server, do NOT merge
 4. Detect overlap and write routing observations inline: If two items in different
-   sources serve similar purposes (e.g., a forge that calls GitHub API + a github MCP server),
-   add a "Notes on choosing" section to the summary telling the LLM which to prefer and why.
+   sources serve similar purposes (e.g., a forged function that calls GitHub API + a github MCP server),
+   add a "Notes on choosing" section telling the LLM which to prefer and why.
    Inferences should come from the item descriptions provided below.
 5. End with: "If a task could fit multiple categories, you MAY call multiple search tools in parallel."
 
-OUTPUT JSON only (no surrounding prose, no markdown fences):
+OUTPUT JSON only (no surrounding prose, no markdown fences). Just one field:
 {
-  "summary": "...",
-  "coverage": { "forge": [<all forge IDs>], "skill": [...], "mcp": [...] }
+  "summary": "<markdown text>"
 }
+
+(The system will compute a coverage map mechanically by source name —
+function/handler/workflow/mcp/skill — so you don't need to output one.)
 
 ITEMS:
 %s`

@@ -39,6 +39,18 @@ type RuntimeInstaller interface {
 	//
 	// ResolveDefault 返该 kind 默认版本（EnvSpec.Runtime.Version 为空时用）。
 	ResolveDefault(ctx context.Context) (string, error)
+
+	// NormalizeVersion canonicalizes a version spec into the concrete form
+	// stored in sandbox_runtimes.version. Used to dedupe rows that would
+	// otherwise differ only in spec syntax (e.g. mise: `>=3.12` and `3.12`
+	// both install python 3.12.x — same install, should share one row).
+	// Default impl can return version unchanged when no normalization is
+	// needed.
+	//
+	// NormalizeVersion 把 version 规范化为存进 sandbox_runtimes.version 的
+	// 具体形态。用于去重——`>=3.12` 与 `3.12` 在 mise 都装同一份 python,
+	// 不该建两行。无需归一化时直接返原值即可。
+	NormalizeVersion(version string) string
 }
 
 // EnvManager is the per-owner env build contract for one runtime kind.

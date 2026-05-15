@@ -94,17 +94,38 @@ func (h *SandboxHandler) ListRuntimes(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, rows)
 }
 
+// validOwnerKinds is the 5-value whitelist for OwnerKind inputs at HTTP
+// boundary. Returning 400 on unknown values (instead of silently filtering
+// to []) saves admin/curl users from a "where's my data" debugging loop.
+//
+// validOwnerKinds 是 OwnerKind 输入的 5 值白名单。非法值返 400 而不静默
+// 空 list,避免 admin/curl 调试时困惑"为什么没数据"。
+var validOwnerKinds = map[string]bool{
+	sandboxdomain.OwnerKindFunction:     true,
+	sandboxdomain.OwnerKindHandler:      true,
+	sandboxdomain.OwnerKindMCP:          true,
+	sandboxdomain.OwnerKindSkill:        true,
+	sandboxdomain.OwnerKindConversation: true,
+}
+
 // ListEnvs: GET /api/v1/sandbox/envs?ownerKind=mcp → 200 [{...}].
 // Empty ownerKind returns 400 — caller must scope the query (otherwise
-// the response is unbounded across all owner kinds).
+// the response is unbounded across all owner kinds). Unknown ownerKind
+// also returns 400 (#16 fix) so silent empty-list isn't mistaken for "no data".
 //
 // ListEnvs: GET /api/v1/sandbox/envs?ownerKind=mcp → 200。空 ownerKind
-// 返 400——调用方必须 scope 查询（否则跨所有 owner kind 无界）。
+// 返 400——调用方必须 scope 查询(否则跨所有 owner kind 无界)。非白名单
+// 值同样 400(#16 修),避免空 list 被误读成"没数据"。
 func (h *SandboxHandler) ListEnvs(w http.ResponseWriter, r *http.Request) {
 	ownerKind := r.URL.Query().Get("ownerKind")
 	if ownerKind == "" {
 		responsehttpapi.Error(w, http.StatusBadRequest, "OWNER_KIND_REQUIRED",
 			"ownerKind query parameter is required", nil)
+		return
+	}
+	if !validOwnerKinds[ownerKind] {
+		responsehttpapi.Error(w, http.StatusBadRequest, "INVALID_OWNER_KIND",
+			"ownerKind must be one of: function, handler, mcp, skill, conversation", nil)
 		return
 	}
 	rows, err := h.svc.ListEnvs(r.Context(), ownerKind)

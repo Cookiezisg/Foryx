@@ -26,6 +26,7 @@ import (
 	subagentdomain "github.com/sunweilin/forgify/backend/internal/domain/subagent"
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
+	handlerinfra "github.com/sunweilin/forgify/backend/internal/infra/handler"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -109,6 +110,21 @@ var errTable = map[error]errMapping{
 	handlerdomain.ErrConfigInvalid:       {http.StatusBadRequest, "HANDLER_CONFIG_INVALID"},
 	handlerdomain.ErrConfigDecryptFailed: {http.StatusInternalServerError, "HANDLER_CONFIG_DECRYPT_FAILED"},
 	handlerdomain.ErrCallNotFound:        {http.StatusNotFound, "HANDLER_CALL_NOT_FOUND"},
+
+	// handler infra subprocess errors (cross-layer per §S17). User-forged
+	// Python raising an exception → ErrCallFailed; subprocess crash →
+	// ErrCrashed; protocol mismatch → ErrProtocol; init failure (e.g.
+	// missing init_args, broken init() body) → ErrInitFailed. All 422 — the
+	// REQUEST was well-formed; the handler's USER CODE was broken / threw.
+	//
+	// 用户锻造的 Python 抛异常 → ErrCallFailed;子进程崩 → ErrCrashed;
+	// 协议错位 → ErrProtocol;init 失败(漏 init_arg、init 体本身炸) →
+	// ErrInitFailed。都 422 (请求合法,handler 用户代码错)。
+	handlerinfra.ErrCallFailed:     {http.StatusUnprocessableEntity, "HANDLER_CALL_FAILED"},
+	handlerinfra.ErrInitFailed:     {http.StatusUnprocessableEntity, "HANDLER_INIT_FAILED"},
+	handlerinfra.ErrCrashed:        {http.StatusUnprocessableEntity, "HANDLER_INSTANCE_CRASHED_INFRA"},
+	handlerinfra.ErrProtocol:       {http.StatusInternalServerError, "HANDLER_PROTOCOL_ERROR"},
+	handlerinfra.ErrShutdownAlready: {http.StatusUnprocessableEntity, "HANDLER_SHUTDOWN_ALREADY"},
 
 	// flowrun + trigger + scheduler domains (Plan 05 execution plane).
 	// flowrun + trigger + scheduler domain(Plan 05 执行 plane)。

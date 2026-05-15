@@ -163,6 +163,8 @@ Owner.Kind=`function`,Owner.ID=`<functionID>_<envID>`(envID = Version 行的 `fn
 
 env_status 状态机:`pending → syncing → ready / failed`(evicted 由 sandbox GC 设;`fixing` 表示 LLM env-fix loop 进行中)。Service.Create/Edit 调 sandbox 前 ping;ping 失败返 `ErrSandboxUnavailable`。装 env 失败时由调用方(LLM tool create_function/edit_function)走内部 env-fix loop(maxAttempts=3,主 chat scenario LLM 改 deps);成功翻 ready,失败终态写 `failed` + envError + attemptsUsed。
 
+**#15 lazy rebuild(2026-05)**:`RunFunction` 调 `Sandbox.Run`;若返 `ErrEnvNotFound`(env 被 admin `:destroy` 或外部清盘),按 `v.PythonVersion + v.Dependencies` 走 `syncEnvSync` 重建后**重试一次**;再失败上抛真错避免死循环。EnvID 不变(owner=(`function`, `<fnID>_<envID>`) 唯一索引)。日志 INFO 级别记 evicted-then-rebuild,UI 看不到中断。
+
 **已删除**:`SyncEnvForVersion` fire-and-forget 异步路径 + `Resync` 后台入口(D-redo-14);`env_synced` / `env_failed` notification action(D-redo-7)— env 终态信息走 LLM tool_result 返,UI 经 GET 拉取。
 
 ---

@@ -153,7 +153,12 @@ func TestResumeApproval_EndToEnd_FinishesRun(t *testing.T) {
 		},
 		[]workflowdomain.EdgeSpec{
 			edge("trig", "approval"),
-			workflowdomain.EdgeSpec{ID: "e1", From: "approval.approved", To: "after"},
+			// Approval is a branching node; FromPort selects which downstream
+			// path this edge consumes ("approved" vs "rejected"). Without it
+			// the scheduler parks the edge → after-node never runs.
+			// approval 是分叉节点;FromPort 选 approved/rejected 分支,缺则
+			// scheduler park 该边,下游永不跑。
+			{ID: "e1", From: "approval", FromPort: "approved", To: "after"},
 		},
 	)
 	reader := &fakeWorkflowReader{

@@ -158,3 +158,32 @@ func TestMiseInstaller_ResolveDefault_ReturnsConstructionVersion(t *testing.T) {
 		}
 	}
 }
+
+// TestMiseInstaller_NormalizeVersion_StripsRangePrefixes verifies #17 dedup:
+// `>=3.12` and `3.12` collapse to the same key so sandbox_runtimes upsert
+// only ever sees one canonical version per concrete install.
+//
+// TestMiseInstaller_NormalizeVersion_StripsRangePrefixes 验 #17 去重:
+// `>=3.12` / `3.12` 归一化后等价。
+func TestMiseInstaller_NormalizeVersion_StripsRangePrefixes(t *testing.T) {
+	mi := NewMiseInstaller("/tmp/mise", "python", "3.12")
+	cases := map[string]string{
+		"3.12":    "3.12",
+		">=3.12":  "3.12",
+		"<=3.12":  "3.12",
+		"~=3.12":  "3.12",
+		"==3.12":  "3.12",
+		">3.12":   "3.12",
+		"<3.12":   "3.12",
+		"~3.12":   "3.12",
+		"^3.12":   "3.12",
+		">= 3.12": "3.12", // LLM-style whitespace
+		"3.12.5":  "3.12.5",
+		"":        "",
+	}
+	for input, want := range cases {
+		if got := mi.NormalizeVersion(input); got != want {
+			t.Errorf("NormalizeVersion(%q) = %q, want %q", input, got, want)
+		}
+	}
+}

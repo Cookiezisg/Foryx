@@ -66,7 +66,12 @@ func (s *Service) Create(ctx context.Context, title string) (*convdomain.Convers
 	s.log.Info("conversation created",
 		zap.String("conversation_id", c.ID),
 		zap.String("user_id", uid))
-	s.notif.Publish(ctx, "conversation", c.ID, c, c.ID)
+	// Slim payload per D-redo-22: action + minimal fields only; client GETs
+	// full entity. Title included so sidebar can render without GET round-trip.
+	// 瘦身 payload (D-redo-22): 只 action + 必要小字段; UI 拿全 entity 走 GET。
+	// title 塞入让侧栏首次展示不用先 GET。
+	s.notif.Publish(ctx, "conversation", c.ID,
+		map[string]any{"action": "created", "title": c.Title}, c.ID)
 	return c, nil
 }
 
@@ -114,7 +119,13 @@ func (s *Service) Update(ctx context.Context, id string, title, systemPrompt *st
 	if err := s.repo.Save(ctx, c); err != nil {
 		return nil, err
 	}
-	s.notif.Publish(ctx, "conversation", c.ID, c, c.ID)
+	// Slim payload (D-redo-22). title included so sidebar reflects rename
+	// without GET; systemPrompt change isn't sent here (it's not displayed
+	// in sidebar — UI re-GETs detail page if user opens it).
+	// 瘦身 payload。title 塞入让侧栏 rename 即时;systemPrompt 改不送(侧栏
+	// 不显,详情页打开时再 GET)。
+	s.notif.Publish(ctx, "conversation", c.ID,
+		map[string]any{"action": "updated", "title": c.Title}, c.ID)
 	return c, nil
 }
 
@@ -125,8 +136,10 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if err := s.repo.Delete(ctx, id); err != nil {
 		return err
 	}
+	// Slim payload (D-redo-22): action only — UI removes from list on receipt.
+	// 瘦身: 只 action,UI 收到即从列表删除。
 	s.notif.Publish(ctx, "conversation", id,
-		map[string]any{"id": id, "deleted": true}, id)
+		map[string]any{"action": "deleted"}, id)
 	return nil
 }
 

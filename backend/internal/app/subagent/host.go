@@ -21,7 +21,6 @@ package subagent
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"go.uber.org/zap"
@@ -86,13 +85,13 @@ func (h *subagentHost) WriteFinalize(ctx context.Context, blocks []chatdomain.Bl
 		saveCtx = reqctxpkg.SetUserID(saveCtx, h.uid)
 	}
 
+	// 2026-05: Attrs is map[string]any (GORM serializer:json) — no marshal.
 	attrs := map[string]any{
 		"kind":     "subagent_run",
 		"type":     h.typeName,
 		"runId":    h.subMsgID,
 		"maxTurns": h.maxTurns,
 	}
-	attrsJSON, _ := json.Marshal(attrs)
 
 	msg := &chatdomain.Message{
 		ID:             h.subMsgID,
@@ -106,7 +105,7 @@ func (h *subagentHost) WriteFinalize(ctx context.Context, blocks []chatdomain.Bl
 		ErrorMessage:   errMsg,
 		InputTokens:    in,
 		OutputTokens:   out,
-		Attrs:          string(attrsJSON),
+		Attrs:          attrs,
 		UpdatedAt:      time.Now().UTC(),
 	}
 	if err := h.svc.chatRepo.SaveMessage(saveCtx, msg); err != nil {

@@ -259,6 +259,36 @@ func NewMiseInstaller(miseBin, kind, defaultVersion string) *MiseInstaller {
 // Kind 报告本 installer 包装的 mise plugin 名。
 func (m *MiseInstaller) Kind() string { return m.kind }
 
+// normalizeVersionForMise strips PEP 440 / semver range prefixes (`>=`, `~=`,
+// `>`, `<=`, `<`, `==`) so the remaining concrete version is something mise
+// accepts. mise's `install python@>=3.12` falls back to python-build (pyenv
+// source compile, broken on this developer's mac); `install python@3.12`
+// uses precompiled cpython artifacts and just works. Domain layer keeps
+// LLM-emitted PEP 440 specs verbatim (audit / display), but the boundary
+// to mise gets a concrete version.
+//
+// normalizeVersionForMise 剥掉 PEP 440 / semver 范围前缀(`>=`、`~=`、`>` 等)
+// 留下具体版本号给 mise。mise `install python@>=3.12` 会退到 python-build 走
+// 源码编译(在本机 mac 上挂了);`install python@3.12` 走预编译 cpython,稳。
+// domain 层保留 LLM 写的 PEP 440 原文(审计/显示),只在 mise 边界做转换。
+func normalizeVersionForMise(version string) string {
+	v := version
+	// Order matters: try longer prefixes first.
+	// 优先匹配更长前缀。
+	for _, prefix := range []string{">=", "<=", "~=", "==", ">", "<", "~", "^"} {
+		if len(v) > len(prefix) && v[:len(prefix)] == prefix {
+			v = v[len(prefix):]
+			break
+		}
+	}
+	// Trim surrounding whitespace LLM occasionally leaves in (`>= 3.12`).
+	// 去 LLM 偶尔留的空白(`>= 3.12`)。
+	for len(v) > 0 && (v[0] == ' ' || v[0] == '\t') {
+		v = v[1:]
+	}
+	return v
+}
+
 // Install runs `mise install <kind>@<version>` against the shared
 // MISE_DATA_DIR (<sandboxRoot>/mise-data/). After mise reports success,
 // `mise where` resolves the actual install directory (handles partial
@@ -276,7 +306,8 @@ func (m *MiseInstaller) Install(ctx context.Context, version, sandboxRoot string
 		return "", fmt.Errorf("sandbox.MiseInstaller.Install: mkdir mise data: %w", err)
 	}
 
-	cmd := exec.CommandContext(ctx, m.miseBin, "install", "-y", m.kind+"@"+version)
+	miseVersion := normalizeVersionForMise(version)
+	cmd := exec.CommandContext(ctx, m.miseBin, "install", "-y", m.kind+"@"+miseVersion)
 	cmd.Env = append(os.Environ(),
 		"MISE_DATA_DIR="+dataDir,
 		"MISE_YES=1",   // skip interactive prompts
@@ -299,10 +330,11 @@ func (m *MiseInstaller) Install(ctx context.Context, version, sandboxRoot string
 
 	// Resolve actual install dir — mise may have expanded a partial spec
 	// (e.g. "3.12" → "3.12.5"). Use absolute path then derive relPath.
+	// Use the normalized version (matches what we actually installed above).
 	//
 	// 解析实际 install 目录——mise 可能展开了部分约束（如 "3.12" → "3.12.5"）。
-	// 用绝对路径再算 relPath。
-	actual, err := m.where(ctx, dataDir, version)
+	// 用绝对路径再算 relPath。用归一化后的版本(匹配上面的实际安装)。
+	actual, err := m.where(ctx, dataDir, miseVersion)
 	if err != nil {
 		return "", fmt.Errorf("sandbox.MiseInstaller.Install: locate after install: %w", err)
 	}
@@ -335,7 +367,10 @@ func (m *MiseInstaller) Install(ctx context.Context, version, sandboxRoot string
 // 版本，版本钉死 install 不在其中。
 func (m *MiseInstaller) Locate(version, sandboxRoot string) (string, error) {
 	dataDir := filepath.Join(sandboxRoot, miseDataSubdir)
-	installDir, err := m.where(context.Background(), dataDir, version)
+	// Normalize PEP 440 / semver prefixes before talking to mise; the install
+	// happened under the normalized version so `mise where` must match.
+	// 归一化版本号(与 Install 同步),否则 `mise where` 找不到。
+	installDir, err := m.where(context.Background(), dataDir, normalizeVersionForMise(version))
 	if err != nil {
 		return "", fmt.Errorf("sandbox.MiseInstaller.Locate: %w", err)
 	}
@@ -450,4 +485,17 @@ func (m *MiseInstaller) where(ctx context.Context, dataDir, version string) (str
 // mise 装机时解析到该 minor 最新 patch。
 func (m *MiseInstaller) ResolveDefault(ctx context.Context) (string, error) {
 	return m.defaultVersion, nil
+}
+
+// NormalizeVersion strips PEP 440 / semver range prefixes so two requests
+// for the same install (e.g. `>=3.12` and `3.12`) share one runtime row
+// (#17 fix). Mirrors the in-flight normalization Install / Locate already
+// apply at the mise CLI boundary; doing the same at the registry-row layer
+// makes sandbox_runtimes.version reflect the concrete installed version.
+//
+// NormalizeVersion 剥范围前缀,让 `>=3.12` / `3.12` 同 install 共用 runtime
+// 行(#17 修)。与 Install/Locate 在 mise CLI 边界做的归一化同源,这里把
+// 归一化拉到注册行层面,让 sandbox_runtimes.version 反映实装版本。
+func (m *MiseInstaller) NormalizeVersion(version string) string {
+	return normalizeVersionForMise(version)
 }

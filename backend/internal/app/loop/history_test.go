@@ -48,7 +48,7 @@ func reasoningBlock(id, content string) chatdomain.Block {
 func toolCallBlock(id, name, argsJSON string) chatdomain.Block {
 	return chatdomain.Block{
 		ID: id, Type: eventlogdomain.BlockTypeToolCall, Content: argsJSON,
-		Attrs:  `{"tool":"` + name + `"}`,
+		Attrs:  map[string]any{"tool": name},
 		Status: eventlogdomain.StatusCompleted,
 	}
 }

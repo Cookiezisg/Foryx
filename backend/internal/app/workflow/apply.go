@@ -388,20 +388,13 @@ func findEdge(g *workflowdomain.Graph, id string) int {
 }
 
 // edgeRefsNode reports whether edge e references node id on either side.
-// Strings are "<nodeId>.<port>" — split on first '.' to extract nodeId.
+// Post-port-refactor (2026-05), From / To are plain node IDs — no dot
+// parsing needed.
 //
-// edgeRefsNode 报告 edge 是否引用某节点(任一端)。
+// edgeRefsNode 报告 edge 是否引用某节点(任一端)。port 重构后 From/To 是
+// 纯 node ID,不再走点分隔。
 func edgeRefsNode(e workflowdomain.EdgeSpec, nodeID string) bool {
-	return nodeIDOf(e.From) == nodeID || nodeIDOf(e.To) == nodeID
-}
-
-func nodeIDOf(portRef string) string {
-	for i := 0; i < len(portRef); i++ {
-		if portRef[i] == '.' {
-			return portRef[:i]
-		}
-	}
-	return portRef
+	return e.From == nodeID || e.To == nodeID
 }
 
 // mergeNodePatch applies a JSON Merge Patch (RFC 7396) to one NodeSpec.

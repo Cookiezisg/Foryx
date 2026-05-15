@@ -473,7 +473,7 @@ type Message struct {
     ErrorMessage   string         `gorm:"type:text;default:''" json:"errorMessage,omitempty"`
     InputTokens    int            `gorm:"default:0" json:"inputTokens,omitempty"`
     OutputTokens   int            `gorm:"default:0" json:"outputTokens,omitempty"`
-    Attrs          string         `gorm:"type:text" json:"attrs,omitempty"`         // JSON 自由稀疏 map
+    Attrs          map[string]any `gorm:"type:text;serializer:json" json:"attrs,omitempty"` // 自由稀疏 map(GORM serializer 透明序列化为 TEXT)
     CreatedAt      time.Time      `json:"createdAt"`
     UpdatedAt      time.Time      `json:"updatedAt"`
     DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
@@ -504,7 +504,7 @@ type Block struct {
     ParentBlockID  string    `gorm:"type:text;index" json:"parentBlockId,omitempty"`
     Seq            int64     `gorm:"not null;uniqueIndex:idx_blocks_conv_seq,priority:2" json:"seq"`
     Type           string    `gorm:"not null;type:text;check:type IN ('text','reasoning','tool_call','tool_result','progress','message')" json:"type"`
-    Attrs          string    `gorm:"type:text" json:"attrs,omitempty"`           // JSON 元数据
+    Attrs          map[string]any `gorm:"type:text;serializer:json" json:"attrs,omitempty"` // 元数据 map(GORM serializer 透明 ↔ TEXT)
     Content        string    `gorm:"not null;type:text;default:''" json:"content"` // 累积内容，AppendDelta 走 SQL `content || ?` 原子拼
     Status         string    `gorm:"not null;type:text;check:status IN ('streaming','completed','error','cancelled')" json:"status"`
     Error          string    `gorm:"type:text" json:"error,omitempty"`           // block_stop 时填
@@ -521,6 +521,8 @@ type Block struct {
 **CHECK 约束（GORM tag 声明）**：
 - `type IN ('text','reasoning','tool_call','tool_result','progress','message')` — 6 类穷举
 - `status IN ('streaming','completed','error','cancelled')` — 4 终态枚举
+
+**Attrs 字段语义（2026-05 #4 修）**：DB 列形态是 `TEXT`，但 Go 侧用 `map[string]any` + `gorm:"serializer:json"`——GORM 自动 marshal/unmarshal。**对外 wire 形态**：JSON 响应里 `attrs` 是 object（如 `{"toolName":"Read","executionGroup":1}`），**不再是 JSON-encoded string**。修前 store 自己 `json.Marshal` 成 string 存进 string 列，handler/SSE 透传那个 string，前端拿到的是 `"attrs":"{...}"` 字符串——每个消费者都得多解一次。改 serializer 后 service / store / SSE / handler 全用 map 直接传，前端 `attrs.toolName` 即可访问。
 
 **Block 类型与内容形态**（与 [`event-log-protocol.md` §2](../event-log-protocol.md) 1:1）：
 

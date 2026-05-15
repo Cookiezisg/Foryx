@@ -68,6 +68,7 @@ import (
 	eventlogpkg "github.com/sunweilin/forgify/backend/internal/pkg/eventlog"
 	forgepkg "github.com/sunweilin/forgify/backend/internal/pkg/forge"
 	notificationspkg "github.com/sunweilin/forgify/backend/internal/pkg/notifications"
+	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	loggerinfra "github.com/sunweilin/forgify/backend/internal/infra/logger"
 	mcpinfra     "github.com/sunweilin/forgify/backend/internal/infra/mcp"
@@ -152,14 +153,16 @@ func main() {
 		&chatdomain.Attachment{},
 		&functiondomain.Function{},
 		&functiondomain.Version{},
+		&functiondomain.Execution{}, // D22 function_executions
 		&handlerdomain.Handler{},
 		&handlerdomain.Version{},
+		&handlerdomain.Call{}, // D22 handler_calls
 		&workflowdomain.Workflow{},
 		&workflowdomain.Version{},
 		&flowrundomain.FlowRun{},
-		&flowrundomain.Node{},
-		&mcpdomain.Call{},
-		&skilldomain.Execution{},
+		&flowrundomain.Node{}, // D22 flowrun_nodes
+		&mcpdomain.Call{},     // D22 mcp_calls
+		&skilldomain.Execution{}, // D22 skill_executions
 		&sandboxdomain.Runtime{},
 		&sandboxdomain.Env{},
 		&tododomain.Todo{},
@@ -385,7 +388,10 @@ func main() {
 	// MCP Start：加载 ~/.forgify/mcp.json + 并发 Connect 所有 server（30s 握手
 	// 超时；per-server 失败记到 ServerStatus，不挡 boot）。Service struct 在
 	// 上方已构造（让 WebSearch 能见 SearchRouter）；tool 切片装配中跑 Start。
-	if err := mcpService.Start(context.Background()); err != nil {
+	// 注入 DefaultLocalUserID 让 boot 期 publishStatus 通知能写出去(§S9 detached
+	// context 模式;否则 WARN: "missing user id in context")。
+	mcpBootCtx := reqctxpkg.SetUserID(context.Background(), reqctxpkg.DefaultLocalUserID)
+	if err := mcpService.Start(mcpBootCtx); err != nil {
 		log.Warn("mcp start partial failure (some servers may be unreachable)", zap.Error(err))
 	}
 	tools = append(tools, mcptool.MCPTools(mcpService)...)
@@ -397,7 +403,8 @@ func main() {
 	//
 	// Skill：扫 ~/.forgify/skills/ 把已装 Agent Skill 元数据缓存好 + 启
 	// 1s 轮询让用户编辑时实时重扫。同 MCP 不挡 boot 纪律——首次启动 skills
-	// 目录通常为空。
+	// 目录通常为空。注入 DefaultLocalUserID 让 boot 期 publish 通知能写出去
+	// (跟 mcpBootCtx 同理)。
 	skillService := skillapp.New(
 		filepath.Join(homeRoot, "skills"),
 		subagentService,
@@ -407,7 +414,8 @@ func main() {
 		notificationsPub,
 		log,
 	)
-	if err := skillService.Start(context.Background()); err != nil {
+	skillBootCtx := reqctxpkg.SetUserID(context.Background(), reqctxpkg.DefaultLocalUserID)
+	if err := skillService.Start(skillBootCtx); err != nil {
 		log.Warn("skill start failed (continuing with empty cache)", zap.Error(err))
 	}
 	tools = append(tools, skilltool.SkillTools(skillService)...)

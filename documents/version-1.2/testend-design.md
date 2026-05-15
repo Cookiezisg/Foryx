@@ -1,18 +1,87 @@
 # Testend Dev Console — 设计文档
 
-**关联**：[`backend-design.md`](./backend-design.md) / [`progress-record.md`](./progress-record.md)
+**关联**：[`backend-design.md`](./backend-design.md) / [`progress-record.md`](./progress-record.md) / [`testend-rewrite-backend-issues.md`](./testend-rewrite-backend-issues.md)
 
 ---
 
-## 概述
+## V2 当前形态(2026-05 重写完工)
 
-`testend/` 是面向开发者的本地调试面板。在项目根目录 `make testend` 一键启动后端（dev 模式）+ 浏览器自动打开调试 UI：配置凭证、真实聊天、观察流式响应、查后端日志、查数据库、跑系统工具、跑测试集合。
+V2 是 Vue 3 + Vite + TypeScript + Pinia + vue-router(hash) 的多 view SPA, 取代了 v1 单文件 Alpine.js 控制台。Plan 04-06 后端 trinity 重构后,v1 几乎完全失效;V2 全面对齐当前 90+ HTTP 路由 + 3 SSE 流的现实形态。
 
-**不是前端应用，不进生产——纯 dev 工具。**
+**布局**:**4 列固定栏 + 顶栏**(用户指定)
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│ TopBar: build · port · catalog · 3 SSE pills (EL/NF/FG) · ⌘K · expand │
+├──────────────┬─────────────────────┬──────────────┬─────────────────────┤
+│ Col1 conv    │ Col2 chat panel     │ Col3 tab nav │ Col4 tab content    │
+│ list         │ ─────────────       │ 6 sections × │ <RouterView />      │
+│ + filter     │ messages + blocks   │ ~32 items    │ (33 个 view 路由)   │
+│ + new btn    │ recursive BlockView │ collapsible  │                     │
+│ + context    │ Composer (drag drop │              │                     │
+│   menu       │ + Enter to send)    │              │                     │
+└──────────────┴─────────────────────┴──────────────┴─────────────────────┘
+```
+三栏宽度均可拖拽(ResizableSplit),lokastorage 持久化;⌘K 切换 CommandPalette;expand 模式把 col1/3 折叠成 40px 图标栏让 col4 内容铺开。
+
+**技术栈**:
+- Vue 3.5 + `<script setup>` Composition API
+- Pinia stores (UI / conv / chat / notifications / forge / catalog)
+- vue-router 4 hash mode (`/dev/#/...`, 单页路由不与后端 SPA fallback 冲突)
+- vanilla CSS + CSS 变量(`--bg-0..3` / `--fg-1..3` / `--accent` / `--status-*`),自动 dark/light(`prefers-color-scheme`)
+- JetBrains Mono + Inter 字体
+- cytoscape.js 3.30 用于 workflow DAG 渲染(只在 WorkflowDetail 路由 lazy chunk)
+- 完整 typecheck (`vue-tsc --noEmit`),生产 build 通过 `npm run build`
+
+**目录结构**(v2):
+```
+testend/
+├── package.json / vite.config.ts / tsconfig.json
+├── src/
+│   ├── main.ts / App.vue / router.ts / style.css
+│   ├── types/{api,domain}.ts            ← 镜像 backend Go struct
+│   ├── api/                             ← 每个 domain 一个 client 文件
+│   │   ├── client.ts                    ← request<T>/envelope unwrap/pagination
+│   │   ├── sse.ts                       ← 3 stream fan-out subscribe()
+│   │   ├── conversations / functions / handlers / workflows / flowruns
+│   │   ├── resources                    ← apikey / model / skill / mcp / sandbox / catalog
+│   │   ├── dev                          ← /dev/* endpoints
+│   │   └── misc                         ← attachments
+│   ├── stores/                          ← Pinia
+│   │   ├── ui                           ← col widths / expanded / toasts / palette
+│   │   ├── conv / chat / notifications / forge / catalog
+│   ├── components/
+│   │   ├── layout/                      ← TopBar / ConvSidebar / ChatPanel / TabNav / ResizableSplit
+│   │   ├── chat/                        ← MessageView / BlockView(recursive) / Composer / SystemPromptEditor
+│   │   ├── forge/                       ← GraphView(cytoscape)
+│   │   └── common/                      ← Pill / RawJsonModal / ToastTray / CommandPalette / SubTabBar / ViewHeader / EmptyView
+│   ├── views/
+│   │   ├── current/    (8 view: WireTrace, EventlogRaw, Notifications, SubAgents, ToolCalls, Todos, AsksPending, Attachments)
+│   │   ├── forge/      (8 view: Functions+Detail, Handlers+Detail, Workflows+Detail, ToolsRegistry, TestCollections)
+│   │   ├── execute/    (5 view: Triggers, FlowRuns+Detail, ApprovalsQueue, Executions)
+│   │   ├── observe/    (4 view: LiveSSE, NotificationHistory, Catalog, MockLLM)
+│   │   ├── config/     (5 view: ApiKeys, ModelConfigs, Skills, MCPServers, Sandbox)
+│   │   └── dev/        (7 view: SQL, Info, Routes, BackendLogs, Processes, Metrics, Errors)
+│   └── utils/format.ts                  ← timeAgo/timestamp/bytes/duration/shortID/pretty/truncate/statusClass
+└── dist/                                ← Vite 产物, /dev/static/ 服务
+```
+
+**SSE 订阅模式**:`api/sse.ts` 提供 3 个 channel 的 fan-out `subscribe()`,App.vue 在 mount 时启动 eventlog / notifications / forge 三条流,所有 view 共享同一个 `EventSource`(浏览器 per-origin 6 连接预算稀有);单一 store 累积事件,各 view 经 computed 筛选(by convId / type / scope.kind)。`Last-Event-ID` 自动重连由浏览器 EventSource 处理;手动 close+reopen 时接受小 gap(view 主动 REST refetch)。
+
+**约定**:
+- 所有 API 通过 `request<T>` 的 envelope 解包,不绕过去裸 `fetch`
+- 所有 toast 走 `useUIStore().toast(...)`,无 `alert()`
+- 所有 raw JSON 调试走 `useUIStore().showRaw(title, obj)`(顶层 modal)
+- 列表分页一律 `getPage<T>(path, query)` cursor 模式
+
+**已知契约**:每个 view 头部 doc 注释列出 source endpoint + 数据依赖的 store。开发新 view 时,先在 `dev/routes` 验证后端真有这个路由,再写 client + view。
 
 ---
 
-## 目录结构
+## V1 历史 (2025-Q1, 已淘汰)
+
+> 以下章节描述的 v1 testend(单文件 Alpine.js 控制台)在 V2 重写后已废弃。v1 文件 (`testend/tester.html` / `testend/js/*` / `testend/style.css`) 已删除;v1 collections (`testend/collections/`) 暂保留作 dev 测试集合参考,可由 v2 的 Forge › Test collections view 加载。
+
+V1 的目录结构(已删):
 
 ```
 testend/

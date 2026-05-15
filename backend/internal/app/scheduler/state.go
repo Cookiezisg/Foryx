@@ -12,7 +12,6 @@ package scheduler
 import (
 	"context"
 	"fmt"
-	"strings"
 	"sync"
 	"time"
 
@@ -89,29 +88,10 @@ func buildTopo(graph *workflowdomain.Graph) *topoState {
 		}
 	}
 	for _, e := range graph.Edges {
-		toNode := splitNodePort(e.To).node
-		fromNode := splitNodePort(e.From).node
-		t.inDegree[toNode]++
-		t.downstream[fromNode] = append(t.downstream[fromNode], e)
+		t.inDegree[e.To]++
+		t.downstream[e.From] = append(t.downstream[e.From], e)
 	}
 	return t
-}
-
-// nodePort splits a "nodeId" or "nodeId.port" string into its parts.
-// Empty port → default ("out" for outgoing, "in" for incoming — consumer
-// decides which empty default applies).
-//
-// nodePort 拆 "nodeId" / "nodeId.port";空 port 由消费方决定默认。
-type nodePort struct {
-	node string
-	port string
-}
-
-func splitNodePort(s string) nodePort {
-	if i := strings.IndexByte(s, '.'); i >= 0 {
-		return nodePort{node: s[:i], port: s[i+1:]}
-	}
-	return nodePort{node: s}
 }
 
 // initialReady returns nodes with in-degree 0 (entry points — should be
@@ -130,55 +110,34 @@ func (t *topoState) initialReady() []string {
 }
 
 // advance decrements downstream in-degrees of done and returns the new
-// ready set. condition/approval's NextPort filter selects which downstream
-// edges to follow (other-branch edges stay parked → those To-nodes never
-// become ready → never run, never block).
+// ready set. The dispatcher-chosen nextPort selects which downstream
+// edges to follow on branching nodes (approval/condition/loop). Edges
+// from non-branching nodes always pass (their FromPort is required to
+// be empty by validate). Unmatched branch edges are parked (in-degree
+// dropped without enqueuing) so the unselected branch never runs.
 //
-// nextPort empty means "follow edges whose From-port is also empty or
-// 'out'" (the default linear path).
-//
-// advance 减下游 in-degree;返新 ready;condition/approval 的 NextPort
-// 过滤走哪条边(其他分支永不 ready,也永不 run/block)。
+// advance 减下游 in-degree 返新 ready;dispatcher 给的 nextPort 过滤
+// 分叉节点的出边。非分叉节点的出边 FromPort 强制为空(validate 保证),
+// 总是通过。不匹配的分叉边 park 掉(in-degree 减但不 enqueue),不选的
+// 分支永不跑。
 func (t *topoState) advance(done string, nextPort string) []string {
 	ready := make([]string, 0)
+	doneNode := t.byID[done]
+	branching := workflowdomain.IsBranchingNode(doneNode.Type)
 	for _, e := range t.downstream[done] {
-		fromPort := splitNodePort(e.From).port
-		if !portMatches(fromPort, nextPort) {
-			// Edge's from-port doesn't match chosen branch — decrement
-			// the To-node's in-degree anyway so it can never be ready
-			// (parks the unselected branch). This is the same effect as
-			// pruning the edge entirely from the topo for this run.
-			// 边的 from-port 不匹配 → 把目标 in-degree 减成不会归零的负数
-			// (= 永不 ready,等价剪掉这条边)。
-			toNode := splitNodePort(e.To).node
-			t.inDegree[toNode]--
-			if t.inDegree[toNode] == 0 {
-				// shouldn't happen unless graph is degenerate;guard log
-				// at caller (executeRun does nothing special here).
-				// 不该出现;degenerate 图才会;caller 自然忽略。
-			}
+		t.inDegree[e.To]--
+		if branching && e.FromPort != nextPort {
+			// Branching node + this edge's fromPort doesn't match chosen
+			// branch — parked. (in-degree already decremented above so
+			// the To-node stays blocked even if other edges feed it.)
+			// 分叉节点 + fromPort 不匹配 → park 这条边。
 			continue
 		}
-		toNode := splitNodePort(e.To).node
-		t.inDegree[toNode]--
-		if t.inDegree[toNode] == 0 {
-			ready = append(ready, toNode)
+		if t.inDegree[e.To] == 0 {
+			ready = append(ready, e.To)
 		}
 	}
 	return ready
-}
-
-// portMatches returns true when an edge's from-port matches the
-// dispatcher-chosen NextPort. Empty NextPort matches "" or "out"
-// (the default linear port name).
-//
-// portMatches 边的 from-port 跟 dispatcher 选的 NextPort 是否匹配;
-// 空 NextPort 匹配 "" 或 "out"(默认线性 port 名)。
-func portMatches(fromPort, nextPort string) bool {
-	if nextPort == "" {
-		return fromPort == "" || fromPort == "out"
-	}
-	return fromPort == nextPort
 }
 
 // executeRun is the real Service.ExecuteFn (set by NewService). Builds

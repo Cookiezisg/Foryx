@@ -109,8 +109,8 @@ func TestApply_DeleteNode_CascadesEdges(t *testing.T) {
 		{"op":"add_node","node":{"id":"a","type":"trigger"}},
 		{"op":"add_node","node":{"id":"b","type":"function","config":{"functionId":"fn"}}},
 		{"op":"add_node","node":{"id":"c","type":"function","config":{"functionId":"fn"}}},
-		{"op":"add_edge","edge":{"from":"a.next","to":"b.input"}},
-		{"op":"add_edge","edge":{"from":"b.output","to":"c.input"}},
+		{"op":"add_edge","edge":{"from": "a","to": "b"}},
+		{"op":"add_edge","edge":{"from": "b","to": "c"}},
 		{"op":"delete_node","id":"b"}
 	]`)
 	g, err := ApplyOps(context.Background(), nil, ops, "")
@@ -131,7 +131,7 @@ func TestApply_AddEdge_AutoID(t *testing.T) {
 	ops := opsFromJSON(t, `[
 		{"op":"add_node","node":{"id":"a","type":"trigger"}},
 		{"op":"add_node","node":{"id":"b","type":"function","config":{"functionId":"fn"}}},
-		{"op":"add_edge","edge":{"from":"a.next","to":"b.input"}}
+		{"op":"add_edge","edge":{"from": "a","to": "b"}}
 	]`)
 	g, err := ApplyOps(context.Background(), nil, ops, "")
 	if err != nil {
@@ -146,8 +146,8 @@ func TestApply_AddEdge_DuplicateFromTo(t *testing.T) {
 	ops := opsFromJSON(t, `[
 		{"op":"add_node","node":{"id":"a","type":"trigger"}},
 		{"op":"add_node","node":{"id":"b","type":"function","config":{"functionId":"fn"}}},
-		{"op":"add_edge","edge":{"from":"a.next","to":"b.input"}},
-		{"op":"add_edge","edge":{"from":"a.next","to":"b.input"}}
+		{"op":"add_edge","edge":{"from": "a","to": "b"}},
+		{"op":"add_edge","edge":{"from": "a","to": "b"}}
 	]`)
 	_, err := ApplyOps(context.Background(), nil, ops, "")
 	if !errors.Is(err, workflowdomain.ErrOpInvalid) {
@@ -159,7 +159,7 @@ func TestApply_DeleteEdge(t *testing.T) {
 	ops := opsFromJSON(t, `[
 		{"op":"add_node","node":{"id":"a","type":"trigger"}},
 		{"op":"add_node","node":{"id":"b","type":"function","config":{"functionId":"fn"}}},
-		{"op":"add_edge","edge":{"id":"e1","from":"a.next","to":"b.input"}},
+		{"op":"add_edge","edge":{"id":"e1","from": "a","to": "b"}},
 		{"op":"delete_edge","edgeId":"e1"}
 	]`)
 	g, _ := ApplyOps(context.Background(), nil, ops, "")

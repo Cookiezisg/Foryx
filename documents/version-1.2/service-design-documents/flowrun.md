@@ -47,6 +47,8 @@ FlowRun 是**一次 workflow execution 的记录**。每个 trigger fire (cron /
 
 通用 16 字段 (spec 08 §2) + flowrun-specific 4 字段 (`flowrun_id` 索引 / `node_id` / `node_type` / `attempts`)。每 dispatch 终态写一行 (cron/manual/webhook 等触发都同样)。
 
+**写入规则**:`scheduler/pause.go::driveLoop` 在每个非 approval 节点 dispatch 完成后调 `recordNode()` 写一行;approval 节点**不**写行(只是 pause gate,resume 后下游节点正常写)。所以一个 3-节点的 trigger → approval → function workflow 完成后 `flowrun_nodes` 表里有 2 行(t1 trigger + f1 function),`approval` 节点不在表里。
+
 **Cross-table linking** (spec 08 §4.5):capability 节点 (function/handler/mcp/skill) dispatch 时**同时写两条** — 一条到 `flowrun_nodes` (workflow 视角) + 一条到对应 entity 表 (function_executions / handler_calls / mcp_calls / skill_executions),经 `flowrun_node_id` 字段交叉引用。
 
 ### 2.3 PausedState (JSON,持久化在 `flowruns.paused_state` 列)

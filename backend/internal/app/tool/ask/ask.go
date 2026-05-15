@@ -38,12 +38,16 @@ import (
 
 const (
 	// defaultTimeout is the wall-clock the tool blocks waiting for an
-	// answer before giving up. 5 minutes lets the user step away briefly
-	// without the agent loop hanging forever.
+	// answer. 2026-05 #6 redesign: 7 days as a "basically forever" zombie
+	// guard. Chat UX should NOT depend on this firing — user might step
+	// away for hours / overnight, that's fine. The frontend's Composer
+	// state machine (Wails / V2 testend) handles "show pending awareness"
+	// + smart-route incoming messages as answers.
 	//
-	// defaultTimeout 是工具等答案的墙钟。5 分钟让用户短暂离开也不会让
-	// agent 循环永挂。
-	defaultTimeout = 5 * time.Minute
+	// 2026-05 #6 重构:超时 5min → 7 天(基本=不限,只防 zombie 进程)。
+	// 真用户 UX 不该依赖超时——用户可能离屏过夜。前端 Composer 状态机
+	// 负责"等答题"提示 + 自动 route 新消息当答案。
+	defaultTimeout = 7 * 24 * time.Hour
 )
 
 // ── Validation sentinels ──────────────────────────────────────────────────────
@@ -56,7 +60,15 @@ var (
 
 // ── Description & schema ──────────────────────────────────────────────────────
 
-const askDescription = `Pause the agent loop and ask the user a question. Returns the user's answer as free-form text. ` + "`options`" + ` is a non-binding list of suggested answers — the user may type anything. The tool blocks for up to 5 minutes; if no answer arrives, the result reports a timeout.`
+const askDescription = `Pause the agent loop and ask the user a question. Returns the user's answer as free-form text.
+
+WHEN TO USE:
+- Use when you genuinely need user input that you can't infer.
+- For open-ended questions (e.g. "what's your account name?"), leave ` + "`options`" + ` empty — the UI shows a free-form input.
+- For structured choice (e.g. "which DB are you using?"), provide ` + "`options`" + ` as quick-pick buttons. Users may still type a free-form answer instead.
+- If the user "skips" (clicks the skip button on the frontend), you'll get the literal string "(user skipped)" back — treat it as "user wants you to continue with reasonable defaults".
+
+The tool blocks until the user responds (no practical timeout — backend uses 7 days as a zombie guard, not a UX deadline).`
 
 var askSchema = json.RawMessage(`{
 	"type": "object",
@@ -64,12 +76,12 @@ var askSchema = json.RawMessage(`{
 	"properties": {
 		"question": {
 			"type": "string",
-			"description": "The question text shown to the user."
+			"description": "The question text shown to the user. Be concise — one short paragraph."
 		},
 		"options": {
 			"type": "array",
 			"items": {"type": "string"},
-			"description": "Optional list of suggested answers. The user is not restricted to these; they may type any reply."
+			"description": "OPTIONAL. List of suggested quick-pick answers. Leave empty / omit for open-ended questions where you want a free-form reply. The user is never restricted to these — they may type any reply or click 'skip'."
 		}
 	}
 }`)

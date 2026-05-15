@@ -35,12 +35,53 @@ func TestValidate_HappyPath(t *testing.T) {
 			nodeFn("fn1", "fn_x"),
 		},
 		Edges: []workflowdomain.EdgeSpec{
-			edge("e1", "trig.next", "fn1.input"),
+			edge("e1", "trig", "fn1"),
 		},
 	}
 	if err := ValidateGraph(context.Background(), g, NopChecker()); err != nil {
 		t.Errorf("valid graph rejected: %v", err)
 	}
+}
+
+// TestValidate_PseudoTerminalNodeType_TeachesLLM verifies #11: when an LLM
+// adds an "end" / "output" / "finish" node, the error message explains
+// implicit DAG termination instead of a generic "unknown type".
+//
+// TestValidate_PseudoTerminalNodeType_TeachesLLM 验 #11:LLM 加伪 terminal
+// 节点时,错误消息教学 DAG 隐式结束。
+func TestValidate_PseudoTerminalNodeType_TeachesLLM(t *testing.T) {
+	for _, badType := range []string{"end", "output", "finish", "terminate", "exit"} {
+		t.Run(badType, func(t *testing.T) {
+			g := &workflowdomain.Graph{
+				Nodes: []workflowdomain.NodeSpec{
+					nodeT("trig", workflowdomain.NodeTypeTrigger),
+					nodeFn("fn1", "fn_x"),
+					nodeT("term", badType),
+				},
+				Edges: []workflowdomain.EdgeSpec{
+					edge("e1", "trig", "fn1"),
+					edge("e2", "fn1", "term"),
+				},
+			}
+			err := ValidateGraph(context.Background(), g, NopChecker())
+			if !errors.Is(err, workflowdomain.ErrOpInvalid) {
+				t.Fatalf("want ErrOpInvalid, got %v", err)
+			}
+			msg := err.Error()
+			if !contains(msg, "no terminal node") || !contains(msg, "DAG ends implicitly") {
+				t.Errorf("error message should teach implicit termination; got: %s", msg)
+			}
+		})
+	}
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
 }
 
 func TestValidate_NoTrigger(t *testing.T) {
@@ -69,7 +110,7 @@ func TestValidate_DuplicateNodeID(t *testing.T) {
 func TestValidate_EdgeRefMissingNode(t *testing.T) {
 	g := &workflowdomain.Graph{
 		Nodes: []workflowdomain.NodeSpec{nodeT("trig", workflowdomain.NodeTypeTrigger)},
-		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig.next", "ghost.input")},
+		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig", "ghost")},
 	}
 	err := ValidateGraph(context.Background(), g, NopChecker())
 	if !errors.Is(err, workflowdomain.ErrInvalidReference) {
@@ -84,8 +125,8 @@ func TestValidate_SelfLoop(t *testing.T) {
 			nodeFn("fn1", "fn_x"),
 		},
 		Edges: []workflowdomain.EdgeSpec{
-			edge("e1", "trig.next", "fn1.input"),
-			edge("e2", "fn1.output", "fn1.input"),
+			edge("e1", "trig", "fn1"),
+			edge("e2", "fn1", "fn1"),
 		},
 	}
 	err := ValidateGraph(context.Background(), g, NopChecker())
@@ -103,10 +144,10 @@ func TestValidate_Cycle(t *testing.T) {
 			nodeFn("c", "fn_c"),
 		},
 		Edges: []workflowdomain.EdgeSpec{
-			edge("e0", "trig.next", "a.input"),
-			edge("e1", "a.output", "b.input"),
-			edge("e2", "b.output", "c.input"),
-			edge("e3", "c.output", "a.input"),
+			edge("e0", "trig", "a"),
+			edge("e1", "a", "b"),
+			edge("e2", "b", "c"),
+			edge("e3", "c", "a"),
 		},
 	}
 	err := ValidateGraph(context.Background(), g, NopChecker())
@@ -136,7 +177,7 @@ func TestValidate_CapabilityNotFound(t *testing.T) {
 			nodeT("trig", workflowdomain.NodeTypeTrigger),
 			nodeFn("fn1", "fn_missing"),
 		},
-		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig.next", "fn1.input")},
+		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig", "fn1")},
 	}
 	err := ValidateGraph(context.Background(), g, fakeChecker{functions: map[string]bool{"fn_x": true}})
 	if !errors.Is(err, workflowdomain.ErrCapabilityNotFound) {
@@ -150,7 +191,7 @@ func TestValidate_MCPServerNotInstalled(t *testing.T) {
 			nodeT("trig", workflowdomain.NodeTypeTrigger),
 			{ID: "mcp1", Type: workflowdomain.NodeTypeMCP, Config: map[string]any{"serverName": "filesystem", "toolName": "Read"}},
 		},
-		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig.next", "mcp1.input")},
+		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig", "mcp1")},
 	}
 	err := ValidateGraph(context.Background(), g, fakeChecker{mcpServers: map[string]bool{}})
 	if !errors.Is(err, workflowdomain.ErrMCPServerNotInstalled) {
@@ -167,7 +208,7 @@ func TestValidate_UndeclaredVariableRef(t *testing.T) {
 				"params":     "{{ vars.notDeclared }}",
 			}},
 		},
-		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig.next", "fn1.input")},
+		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig", "fn1")},
 	}
 	err := ValidateGraph(context.Background(), g, NopChecker())
 	if !errors.Is(err, workflowdomain.ErrInvalidReference) {
@@ -187,7 +228,7 @@ func TestValidate_DeclaredVariableRefPasses(t *testing.T) {
 				"params":     "{{ vars.lastSeen }}",
 			}},
 		},
-		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig.next", "fn1.input")},
+		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig", "fn1")},
 	}
 	if err := ValidateGraph(context.Background(), g, NopChecker()); err != nil {
 		t.Errorf("declared var ref should pass: %v", err)
@@ -206,13 +247,13 @@ func TestValidate_RecursiveBody_CycleInLoopBody(t *testing.T) {
 						map[string]any{"id": "b", "type": "function", "config": map[string]any{"functionId": "fn"}},
 					},
 					"edges": []any{
-						map[string]any{"id": "be1", "from": "a.output", "to": "b.input"},
-						map[string]any{"id": "be2", "from": "b.output", "to": "a.input"},
+						map[string]any{"id": "be1", "from": "a", "to": "b"},
+						map[string]any{"id": "be2", "from": "b", "to": "a"},
 					},
 				},
 			}},
 		},
-		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig.next", "loop1.input")},
+		Edges: []workflowdomain.EdgeSpec{edge("e1", "trig", "loop1")},
 	}
 	err := ValidateGraph(context.Background(), g, NopChecker())
 	if !errors.Is(err, workflowdomain.ErrDAGCycle) {
@@ -231,5 +272,116 @@ func TestValidate_DuplicateVariable(t *testing.T) {
 	err := ValidateGraph(context.Background(), g, NopChecker())
 	if !errors.Is(err, workflowdomain.ErrOpInvalid) {
 		t.Errorf("expected ErrOpInvalid for dup var name, got %v", err)
+	}
+}
+
+// ── Port routing contract (B-05 fix, 2026-05) ────────────────────────────────
+//
+// Branching nodes (approval/condition/loop) MUST have edges with FromPort
+// declared and valid; non-branching nodes MUST leave FromPort empty.
+// Reject at validate time so degenerate graphs never reach the scheduler.
+
+func TestValidate_ApprovalEdgeRequiresFromPort(t *testing.T) {
+	g := &workflowdomain.Graph{
+		Nodes: []workflowdomain.NodeSpec{
+			nodeT("trig", workflowdomain.NodeTypeTrigger),
+			nodeT("a1", workflowdomain.NodeTypeApproval),
+			nodeFn("fn1", "fn_x"),
+		},
+		Edges: []workflowdomain.EdgeSpec{
+			edge("e1", "trig", "a1"),
+			edge("e2", "a1", "fn1"), // ❌ missing FromPort on approval edge
+		},
+	}
+	err := ValidateGraph(context.Background(), g, NopChecker())
+	if !errors.Is(err, workflowdomain.ErrOpInvalid) {
+		t.Errorf("expected ErrOpInvalid for missing FromPort on approval, got %v", err)
+	}
+}
+
+func TestValidate_ApprovalEdgeInvalidPort(t *testing.T) {
+	g := &workflowdomain.Graph{
+		Nodes: []workflowdomain.NodeSpec{
+			nodeT("trig", workflowdomain.NodeTypeTrigger),
+			nodeT("a1", workflowdomain.NodeTypeApproval),
+			nodeFn("fn1", "fn_x"),
+		},
+		Edges: []workflowdomain.EdgeSpec{
+			edge("e1", "trig", "a1"),
+			{ID: "e2", From: "a1", FromPort: "maybe", To: "fn1"}, // ❌ "maybe" not in {approved, rejected}
+		},
+	}
+	err := ValidateGraph(context.Background(), g, NopChecker())
+	if !errors.Is(err, workflowdomain.ErrOpInvalid) {
+		t.Errorf("expected ErrOpInvalid for invalid FromPort, got %v", err)
+	}
+}
+
+func TestValidate_ApprovalEdgeApprovedPasses(t *testing.T) {
+	g := &workflowdomain.Graph{
+		Nodes: []workflowdomain.NodeSpec{
+			nodeT("trig", workflowdomain.NodeTypeTrigger),
+			nodeT("a1", workflowdomain.NodeTypeApproval),
+			nodeFn("fn1", "fn_x"),
+		},
+		Edges: []workflowdomain.EdgeSpec{
+			edge("e1", "trig", "a1"),
+			{ID: "e2", From: "a1", FromPort: "approved", To: "fn1"},
+		},
+	}
+	if err := ValidateGraph(context.Background(), g, NopChecker()); err != nil {
+		t.Errorf("approved-port edge should pass, got %v", err)
+	}
+}
+
+func TestValidate_SingleOutputNodeRejectsFromPort(t *testing.T) {
+	g := &workflowdomain.Graph{
+		Nodes: []workflowdomain.NodeSpec{
+			nodeT("trig", workflowdomain.NodeTypeTrigger),
+			nodeFn("fn1", "fn_x"),
+		},
+		Edges: []workflowdomain.EdgeSpec{
+			{ID: "e1", From: "trig", FromPort: "output", To: "fn1"}, // ❌ trigger is single-output
+		},
+	}
+	err := ValidateGraph(context.Background(), g, NopChecker())
+	if !errors.Is(err, workflowdomain.ErrOpInvalid) {
+		t.Errorf("expected ErrOpInvalid for fromPort on single-output node, got %v", err)
+	}
+}
+
+func TestValidate_LegacyDottedSyntaxRejected(t *testing.T) {
+	g := &workflowdomain.Graph{
+		Nodes: []workflowdomain.NodeSpec{
+			nodeT("trig", workflowdomain.NodeTypeTrigger),
+			nodeFn("fn1", "fn_x"),
+		},
+		Edges: []workflowdomain.EdgeSpec{
+			{ID: "e1", From: "trig.next", To: "fn1.input"}, // ❌ legacy syntax
+		},
+	}
+	err := ValidateGraph(context.Background(), g, NopChecker())
+	if !errors.Is(err, workflowdomain.ErrOpInvalid) {
+		t.Errorf("expected ErrOpInvalid for legacy dotted syntax, got %v", err)
+	}
+}
+
+func TestValidate_ConditionEdgeRequiresValidCase(t *testing.T) {
+	g := &workflowdomain.Graph{
+		Nodes: []workflowdomain.NodeSpec{
+			nodeT("trig", workflowdomain.NodeTypeTrigger),
+			{ID: "c1", Type: workflowdomain.NodeTypeCondition, Config: map[string]any{
+				"cases": []any{"x_gt_5", "default"},
+			}},
+			nodeFn("fn1", "fn_x"),
+		},
+		Edges: []workflowdomain.EdgeSpec{
+			edge("e1", "trig", "c1"),
+			{ID: "e2", From: "c1", FromPort: "notACase", To: "fn1"}, // ❌ not in declared cases
+		},
+	}
+	err := ValidateGraph(context.Background(), g, NopChecker())
+	if !errors.Is(err, workflowdomain.ErrOpInvalid) {
+		t.Errorf("expected ErrOpInvalid for invalid condition case, got %v", err)
 	}
 }

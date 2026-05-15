@@ -29,6 +29,7 @@ import (
 	"go.uber.org/zap"
 
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
+	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -83,8 +84,7 @@ func (s *Service) RunFunction(ctx context.Context, in RunInput) (*functiondomain
 		}
 	}
 
-	startedAt := time.Now().UTC()
-	res, sandboxErr := s.sandbox.Run(ctx, RunRequest{
+	runRequest := RunRequest{
 		FunctionID: in.FunctionID,
 		VersionID:  versionID,
 		EnvID:      v.EnvID,
@@ -93,7 +93,26 @@ func (s *Service) RunFunction(ctx context.Context, in RunInput) (*functiondomain
 		// from the code; the function's user-facing Name (kebab-case allowed)
 		// doesn't have to equal the Python identifier.
 		Input: in.Input,
-	})
+	}
+	startedAt := time.Now().UTC()
+	res, sandboxErr := s.sandbox.Run(ctx, runRequest)
+	// #15 lazy rebuild: if env was destroyed externally (admin :destroy or
+	// disk wipe), v.EnvStatus is still "ready" in DB but Spawn finds no row.
+	// Rebuild from stored spec and retry once. Repeat NOT_FOUND after rebuild
+	// is a real bug — let it surface so we don't loop forever.
+	// #15 lazy rebuild: 外部销毁(admin :destroy / 磁盘清)后 v.EnvStatus
+	// 仍记 ready,Spawn 找不到行;按存档 spec 重建并重试一次。
+	if sandboxErr != nil && errors.Is(sandboxErr, sandboxdomain.ErrEnvNotFound) {
+		s.log.Info("function env evicted externally; rebuilding then retrying run",
+			zap.String("functionId", in.FunctionID),
+			zap.String("versionId", versionID),
+			zap.String("envId", v.EnvID))
+		if err := s.syncEnvSync(ctx, v); err != nil {
+			return nil, fmt.Errorf("functionapp.RunFunction: rebuild after evict: %w", err)
+		}
+		runRequest.EnvID = v.EnvID
+		res, sandboxErr = s.sandbox.Run(ctx, runRequest)
+	}
 	endedAt := time.Now().UTC()
 
 	s.recordExecution(ctx, uid, in, v, startedAt, endedAt, res, sandboxErr, ctx.Err())

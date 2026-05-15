@@ -61,22 +61,34 @@ Handler 是 trinity 第二条腿 — **有状态 Python class**。一个 Handler
 
 ### 5.1 系统拼装模板(`app/handler/rpc.go::AssembleClass`)
 
+**2026-05 #8 重构**:`__init__` 和 method 都用 **exploded named params**(从 InitArgsSchema / method.Args 展开),body 写裸名 — 跟 function 框架对齐,LLM 写自然 Python 而非 dict 访问。
+
 ```python
 # Auto-assembled by Forgify from ops; do not edit by hand.
 <Imports>
 
 class HandlerImpl:
-    def __init__(self, **init_args):
-        <InitBody>            # default: pass
+    def __init__(self, <p1>: <type1>, <p2>: <type2> = None, ...):
+        <InitBody>            # uses bare names: self.x = p1
+                              # default: pass
 
     def shutdown(self):
         <ShutdownBody>        # default: pass
 
-    def <m1.Name>(self, **args):
-        <m1.Body>             # streaming = method body uses yield → progress
+    def <m1.Name>(self, <a1>: <typeA>, <a2>: <typeB> = None, ...):
+        <m1.Body>             # uses bare names: do_something(a1, a2)
+                              # streaming = method body uses yield → progress
 
     # ... per method
 ```
+
+**Type 注解映射**(JSON Schema → Python):`string→str` / `integer→int` / `number→float` / `boolean→bool` / `object→dict` / `array→list`。
+
+**Optional 参数**:`Required=false` 自动 `= None`(或 `= <Default>` if Default 给了);`Required=true` 无默认。
+
+**Identifier 严格校验**:method 名 / arg 名 / init_arg 名必须是合法 Python 标识符(`[a-zA-Z_][a-zA-Z0-9_]*`),且**不能是 Python 关键字**(`class` / `def` / `return` / `for` / 等)。违反 → `ErrOpInvalid`。
+
+**历史**:V1 早期(Plan 02)用 `**init_args` / `**args` kwargs blob,LLM 写 body 必须 `init_args["x"]` / `args["key"]` 访问。Burn-in #8 撞到双重不一致(function vs handler + init vs method 各两种写法),2026-05 重构为 exploded,跟 function 框架完全对齐。LLM tool description 同步重写。
 
 ### 5.2 Driver 模板(`app/handler/rpc.go::DriverScript`)
 
@@ -105,6 +117,7 @@ spawnInstance(ctx, h, owner):
    3. syncEnv 若 env_status != ready(in-flight,UI 在等)
    4. AssembleClass + WriteCodeFile(user_handler.py + driver.py)
    5. SpawnLongLived → handlerinfra.New(stdin, stdout) → Init(config)
+      若返 ErrEnvNotFound(env 被 admin 销毁)→ syncEnv 重建 → 重试一次(#15)
    6. captureStderr goroutine → 256KB ring + zap log per line
    返 Instance{ID, Client, Kill}
 ```

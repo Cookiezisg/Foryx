@@ -109,6 +109,14 @@ func validateSubgraph(
 		}
 		seen[n.ID] = true
 		if !workflowdomain.IsValidNodeType(n.Type) {
+			// #11: LLMs trained on n8n/Zapier/StepFunctions often try to add
+			// an explicit terminal node. Catch the common attempts and tell
+			// them why it's wrong instead of a generic "unknown type".
+			// #11: LLM 习惯加显式 terminal,catch 常见尝试并告知原因。
+			if isPseudoTerminalType(n.Type) {
+				return fmt.Errorf("%w: node %q uses type %q — workflows have no terminal node; the DAG ends implicitly when no edges remain. Remove this node and let the last real node be the leaf",
+					workflowdomain.ErrOpInvalid, n.ID, n.Type)
+			}
 			return fmt.Errorf("%w: node %q has unknown type %q", workflowdomain.ErrOpInvalid, n.ID, n.Type)
 		}
 		if n.Type == workflowdomain.NodeTypeTrigger {
@@ -141,23 +149,53 @@ func validateSubgraph(
 		}
 	}
 
-	// 4. Each edge references an existing node (port-suffix optional). Both
-	// endpoints must exist; same node twice (self-loop) is rejected as a
-	// trivial cycle.
+	// 4. Each edge references an existing node + port consistency. From / To
+	// are plain node IDs; FromPort selects an output port on branching
+	// nodes (approval / condition / loop). Single-output nodes must have
+	// empty FromPort. Self-loop is rejected as trivial cycle.
+	nodeByID := make(map[string]workflowdomain.NodeSpec, len(nodes))
+	for _, n := range nodes {
+		nodeByID[n.ID] = n
+	}
 	for _, e := range edges {
 		if e.ID == "" {
 			return fmt.Errorf("%w: edge has empty id", workflowdomain.ErrOpInvalid)
 		}
-		fromNode := nodeIDOf(e.From)
-		toNode := nodeIDOf(e.To)
-		if !seen[fromNode] {
-			return fmt.Errorf("%w: edge %q from references missing node %q", workflowdomain.ErrInvalidReference, e.ID, fromNode)
+		if strings.Contains(e.From, ".") || strings.Contains(e.To, ".") {
+			return fmt.Errorf("%w: edge %q uses legacy dotted node ID; from/to must be plain node ID, use fromPort/toPort for port routing",
+				workflowdomain.ErrOpInvalid, e.ID)
 		}
-		if !seen[toNode] {
-			return fmt.Errorf("%w: edge %q to references missing node %q", workflowdomain.ErrInvalidReference, e.ID, toNode)
+		if !seen[e.From] {
+			return fmt.Errorf("%w: edge %q from references missing node %q", workflowdomain.ErrInvalidReference, e.ID, e.From)
 		}
-		if fromNode == toNode {
-			return fmt.Errorf("%w: edge %q is a self-loop on node %q", workflowdomain.ErrDAGCycle, e.ID, fromNode)
+		if !seen[e.To] {
+			return fmt.Errorf("%w: edge %q to references missing node %q", workflowdomain.ErrInvalidReference, e.ID, e.To)
+		}
+		if e.From == e.To {
+			return fmt.Errorf("%w: edge %q is a self-loop on node %q", workflowdomain.ErrDAGCycle, e.ID, e.From)
+		}
+		// Port consistency: branching node ⇒ FromPort required + must be
+		// one of the declared ports; single-output node ⇒ FromPort must
+		// be empty. Approval/loop ports are static; condition reads from
+		// node.Config["cases"].
+		fromNode := nodeByID[e.From]
+		if workflowdomain.IsBranchingNode(fromNode.Type) {
+			if e.FromPort == "" {
+				return fmt.Errorf("%w: edge %q: source node %q is %s (branching); fromPort required",
+					workflowdomain.ErrOpInvalid, e.ID, e.From, fromNode.Type)
+			}
+			cases := extractConditionCases(fromNode)
+			if !workflowdomain.IsValidBranchPort(fromNode.Type, e.FromPort, cases) {
+				valid := workflowdomain.BranchOutputPorts[fromNode.Type]
+				if fromNode.Type == workflowdomain.NodeTypeCondition {
+					valid = cases
+				}
+				return fmt.Errorf("%w: edge %q: fromPort %q invalid for %s node; valid ports: %v",
+					workflowdomain.ErrOpInvalid, e.ID, e.FromPort, fromNode.Type, valid)
+			}
+		} else if e.FromPort != "" {
+			return fmt.Errorf("%w: edge %q: source node %q is %s (single-output); fromPort must be empty (got %q)",
+				workflowdomain.ErrOpInvalid, e.ID, e.From, fromNode.Type, e.FromPort)
 		}
 	}
 
@@ -204,10 +242,8 @@ func detectCycle(nodes []workflowdomain.NodeSpec, edges []workflowdomain.EdgeSpe
 		inDegree[n.ID] = 0
 	}
 	for _, e := range edges {
-		from := nodeIDOf(e.From)
-		to := nodeIDOf(e.To)
-		adj[from] = append(adj[from], to)
-		inDegree[to]++
+		adj[e.From] = append(adj[e.From], e.To)
+		inDegree[e.To]++
 	}
 	queue := make([]string, 0, len(nodes))
 	for id, d := range inDegree {
@@ -460,8 +496,56 @@ func decodeSubgraphEdges(body map[string]any) ([]workflowdomain.EdgeSpec, error)
 		var e workflowdomain.EdgeSpec
 		e.ID, _ = m["id"].(string)
 		e.From, _ = m["from"].(string)
+		e.FromPort, _ = m["fromPort"].(string)
 		e.To, _ = m["to"].(string)
+		e.ToPort, _ = m["toPort"].(string)
 		out = append(out, e)
 	}
 	return out, nil
+}
+
+// extractConditionCases reads a condition node's declared case names from
+// its Config["cases"] entry. Returns nil if not a condition node or no
+// cases declared. Each case entry can be either a plain string (case
+// name) or an object with a "name" field.
+//
+// isPseudoTerminalType reports whether a node type is one of the common
+// "terminal sink" names LLMs invent (n8n/Zapier/StepFunctions habit) but
+// that Forgify does not have. Used to surface a teachable error instead
+// of a bare "unknown type" (#11 fix).
+//
+// isPseudoTerminalType 判断是否常见的"伪 terminal"类型(LLM 从 n8n/Zapier
+// 习惯带来),让错误消息有教学性而非裸"unknown type"(#11 修)。
+func isPseudoTerminalType(t string) bool {
+	switch t {
+	case "end", "output", "finish", "terminate", "stop", "return", "exit":
+		return true
+	}
+	return false
+}
+
+// extractConditionCases 读 condition 节点的 case 名;非 condition 或未声明
+// 返 nil。
+func extractConditionCases(n workflowdomain.NodeSpec) []string {
+	if n.Type != workflowdomain.NodeTypeCondition {
+		return nil
+	}
+	rawCases, ok := n.Config["cases"].([]any)
+	if !ok {
+		return nil
+	}
+	out := make([]string, 0, len(rawCases))
+	for _, c := range rawCases {
+		switch x := c.(type) {
+		case string:
+			if x != "" {
+				out = append(out, x)
+			}
+		case map[string]any:
+			if name, ok := x["name"].(string); ok && name != "" {
+				out = append(out, name)
+			}
+		}
+	}
+	return out
 }

@@ -77,8 +77,8 @@ func TestAssemble_ToolCallOnly(t *testing.T) {
 	if blocks[0].ID != "call_1" {
 		t.Errorf("id = %q, want call_1", blocks[0].ID)
 	}
-	if !strings.Contains(blocks[0].Attrs, `"tool":"get_weather"`) {
-		t.Errorf("attrs missing tool name: %q", blocks[0].Attrs)
+	if got, _ := blocks[0].Attrs["tool"].(string); got != "get_weather" {
+		t.Errorf("attrs.tool = %q, want get_weather (full attrs: %#v)", got, blocks[0].Attrs)
 	}
 	// Args JSON in Content should not include the standard fields.
 	if strings.Contains(blocks[0].Content, `"summary"`) {

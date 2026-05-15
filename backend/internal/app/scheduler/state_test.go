@@ -284,3 +284,75 @@ func TestExecuteRun_WritesFlowrunNodeRow(t *testing.T) {
 		t.Errorf("run count = %d, want 1", count)
 	}
 }
+
+// TestAdvance_BranchingRoutesByFromPort — the core fix for B-05 (2026-05).
+// With EdgeSpec.FromPort declared, advance() must route to the edge whose
+// FromPort matches the dispatcher's NextPort and park the others.
+//
+// 2026-05 B-05 修复核心:advance() 应按 EdgeSpec.FromPort 路由,匹配的
+// 走,不匹配的 park。
+func TestAdvance_BranchingRoutesByFromPort(t *testing.T) {
+	graph := mkGraph(
+		[]workflowdomain.NodeSpec{
+			node("trig", workflowdomain.NodeTypeTrigger),
+			node("a1", workflowdomain.NodeTypeApproval),
+			node("on_approve", workflowdomain.NodeTypeFunction),
+			node("on_reject", workflowdomain.NodeTypeFunction),
+		},
+		[]workflowdomain.EdgeSpec{
+			edge("trig", "a1"),
+			{ID: "e_app", From: "a1", FromPort: "approved", To: "on_approve"},
+			{ID: "e_rej", From: "a1", FromPort: "rejected", To: "on_reject"},
+		},
+	)
+	topo := buildTopo(graph)
+	// Initial ready = [trig].
+	if r := topo.initialReady(); len(r) != 1 || r[0] != "trig" {
+		t.Fatalf("initial ready = %v, want [trig]", r)
+	}
+	// trig → a1 (no port, single-output).
+	ready := topo.advance("trig", "")
+	if len(ready) != 1 || ready[0] != "a1" {
+		t.Fatalf("after trig advance, ready = %v, want [a1]", ready)
+	}
+	// Approval picks "approved" → on_approve becomes ready, on_reject NOT.
+	// The parked edge (e_rej) decrements on_reject's in-degree but never
+	// adds it to ready — net effect: on_reject never runs.
+	ready = topo.advance("a1", "approved")
+	if len(ready) != 1 || ready[0] != "on_approve" {
+		t.Fatalf("after approve advance, ready = %v, want [on_approve]", ready)
+	}
+	// And critically — on_reject is NOT in ready set even though its in-
+	// degree just hit 0 (the parked-edge decrement should not enqueue).
+	for _, id := range ready {
+		if id == "on_reject" {
+			t.Errorf("on_reject must not be ready when approved branch taken")
+		}
+	}
+}
+
+// TestAdvance_BranchingRejectPath — symmetric: choosing "rejected" routes
+// to on_reject + parks on_approve.
+//
+// 反向对称测试。
+func TestAdvance_BranchingRejectPath(t *testing.T) {
+	graph := mkGraph(
+		[]workflowdomain.NodeSpec{
+			node("trig", workflowdomain.NodeTypeTrigger),
+			node("a1", workflowdomain.NodeTypeApproval),
+			node("on_approve", workflowdomain.NodeTypeFunction),
+			node("on_reject", workflowdomain.NodeTypeFunction),
+		},
+		[]workflowdomain.EdgeSpec{
+			edge("trig", "a1"),
+			{ID: "e_app", From: "a1", FromPort: "approved", To: "on_approve"},
+			{ID: "e_rej", From: "a1", FromPort: "rejected", To: "on_reject"},
+		},
+	)
+	topo := buildTopo(graph)
+	topo.advance("trig", "")
+	ready := topo.advance("a1", "rejected")
+	if len(ready) != 1 || ready[0] != "on_reject" {
+		t.Fatalf("after reject advance, ready = %v, want [on_reject]", ready)
+	}
+}

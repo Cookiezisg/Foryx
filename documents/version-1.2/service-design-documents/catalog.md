@@ -403,23 +403,20 @@ You are generating a "Capability Catalog" summary that will be inserted into ano
 The summary tells the other LLM what high-level capability categories are available, when to use each, and how to discover details.
 
 CONSTRAINTS — ALL MANDATORY:
-1. Coverage: every item below MUST be represented (directly named or grouped).
-   You MUST output a "coverage" field listing every source ID you grouped/named.
-2. Brevity: total summary <= 600 tokens. Prefer "5 file-processing tools" over listing 5 names.
-3. Granularity rules:
+1. Brevity: total summary <= 600 tokens. Prefer "5 file-processing tools" over listing 5 names.
+2. Granularity rules:
    - source granularity=PerItem (forge, skill): grouping/merging allowed
    - source granularity=PerServer (mcp): one mention per server, do NOT merge
    - source granularity=PerCollection: one mention per collection
-4. **Detect overlap and write routing observations inline**: If two items in different
+3. **Detect overlap and write routing observations inline**: If two items in different
    sources serve similar purposes (e.g., a forge that calls GitHub API + a github MCP server),
    add a "Notes on choosing" section to the summary telling the LLM which to prefer and why.
    Inferences should come from the item descriptions provided below.
-5. End with: "If a task could fit multiple categories, you MAY call multiple search tools in parallel."
+4. End with: "If a task could fit multiple categories, you MAY call multiple search tools in parallel."
 
 OUTPUT JSON:
 {
-  "summary": "...",  // includes "Notes on choosing" section when overlap detected
-  "coverage": { "forge": [<all forge IDs>], "skill": [...], "mcp": [...] }
+  "summary": "..."   // includes "Notes on choosing" section when overlap detected
 }
 
 ITEMS:
@@ -427,7 +424,9 @@ ITEMS:
 `
 ```
 
-**关键设计**：路由提示**不是用户单独写的文件**，而是 generator 看着所有 item description**自动推断生成**的"Notes on choosing"段落，就在 summary 里。用户想影响路由 → 编辑 forge/skill/mcp 各自的 description（source 是 truth），下次 regen 自动 reflect。
+**关键设计**：
+- 路由提示**不是用户单独写的文件**，而是 generator 看着所有 item description**自动推断生成**的"Notes on choosing"段落，就在 summary 里。用户想影响路由 → 编辑 forge/skill/mcp 各自的 description（source 是 truth），下次 regen 自动 reflect。
+- **LLM 只输出 `summary`，不输出 `coverage`**（2026-05 #13 修）：coverage 是机械"item 按 source name 分组"的派生数据——让 LLM 输出它纯属浪费 token + 还可能漏。改成**后端 `computeCoverage(items)` 按 `item.Source` 名字 group**生成，100% 完整 + 永不漏。LLM 专心写 summary 这件它擅长的事。
 
 ### 单次 attempt + mechanical fallback（屎山拯救计划 #7，2026-05-08）
 
@@ -457,8 +456,7 @@ func (g *LLMGenerator) Generate(ctx context.Context, items []Item, gMap map[stri
     if !ok { return nil, fmt.Errorf("%w: no JSON", ErrGenerationFailed) }
     
     var parsed struct {
-        Summary  string              `json:"summary"`
-        Coverage map[string][]string `json:"coverage"`
+        Summary string `json:"summary"`
     }
     if err := json.Unmarshal([]byte(jsonStr), &parsed); err != nil {
         return nil, fmt.Errorf("%w: parse JSON: %v", ErrGenerationFailed, err)
@@ -466,11 +464,29 @@ func (g *LLMGenerator) Generate(ctx context.Context, items []Item, gMap map[stri
     if strings.TrimSpace(parsed.Summary) == "" {
         return nil, fmt.Errorf("%w: empty Summary", ErrGenerationFailed)
     }
-    return &Catalog{Summary: parsed.Summary, Coverage: parsed.Coverage, GeneratedBy: "llm"}, nil
+    coverage := computeCoverage(items)  // 后端按 item.Source 名字 group,100% 完整
+    return &Catalog{Summary: parsed.Summary, Coverage: coverage, GeneratedBy: "llm"}, nil
+}
+
+// computeCoverage groups items by their Source name. Replaces the
+// previous LLM-output coverage (2026-05 #13): mechanical grouping is
+// 100% complete and never drops items, freeing the LLM to focus on
+// the summary text.
+//
+// computeCoverage 按 item.Source 名字分组,2026-05 #13 替代 LLM 输出的
+// coverage:机械 group 永不漏 + 释放 LLM token 给 summary 本身。
+func computeCoverage(items []Item) map[string][]string {
+    out := make(map[string][]string)
+    for _, it := range items {
+        if it.Source == "" { continue }
+        out[it.Source] = append(out[it.Source], it.ID)
+    }
+    for k := range out { sort.Strings(out[k]) }
+    return out
 }
 ```
 
-任何错误 → ErrGenerationFailed → Service.Refresh 切 mechanicalFallback。Coverage 字段从 LLM 透传不校验（LLM 可能漏 1-2 个 item，无伤大雅）。
+任何错误 → ErrGenerationFailed → Service.Refresh 切 mechanicalFallback。**Coverage 不再依赖 LLM 输出**——`computeCoverage` 是确定性 source-name keyed group，永不漏 item。
 
 **已删的旧代码**（屎山拯救计划 #7，保留作历史记录）：
 

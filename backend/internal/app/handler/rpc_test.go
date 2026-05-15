@@ -8,35 +8,65 @@ import (
 )
 
 // TestAssembleClass_FullShape covers imports + init + shutdown + 2 methods.
+// 2026-05 refactor: assembled class uses exploded named params from
+// InitArgsSchema / method.Args (not **kwargs blobs).
 //
-// TestAssembleClass_FullShape 覆盖 imports + init + shutdown + 2 methods。
+// TestAssembleClass_FullShape 覆盖 imports + init + shutdown + 2 methods;
+// 2026-05 重构后用 exploded named params。
 func TestAssembleClass_FullShape(t *testing.T) {
 	d := &VersionDraft{
-		Imports:      "import psycopg2",
-		InitBody:     "self.conn = psycopg2.connect(**init_args)",
+		Imports: "import psycopg2",
+		InitArgsSchema: []handlerdomain.InitArgSpec{
+			{Name: "dsn", Type: "string", Required: true},
+		},
+		InitBody:     "self.conn = psycopg2.connect(dsn)",
 		ShutdownBody: "self.conn.close()",
 		Methods: []handlerdomain.MethodSpec{
-			{Name: "query", Body: "return self.conn.cursor().execute(args[\"sql\"]).fetchall()"},
-			{Name: "exec", Body: "self.conn.cursor().execute(args[\"sql\"])\nself.conn.commit()"},
+			{Name: "query", Args: []handlerdomain.ArgSpec{{Name: "sql", Type: "string", Required: true}},
+				Body: "return self.conn.cursor().execute(sql).fetchall()"},
+			{Name: "exec", Args: []handlerdomain.ArgSpec{{Name: "sql", Type: "string", Required: true}},
+				Body: "self.conn.cursor().execute(sql)\nself.conn.commit()"},
 		},
 	}
 	out := AssembleClass(d)
 	for _, want := range []string{
 		"import psycopg2",
 		"class HandlerImpl:",
-		"    def __init__(self, **init_args):",
-		"        self.conn = psycopg2.connect(**init_args)",
+		"    def __init__(self, dsn: str):",
+		"        self.conn = psycopg2.connect(dsn)",
 		"    def shutdown(self):",
 		"        self.conn.close()",
-		"    def query(self, **args):",
+		"    def query(self, sql: str):",
 		"        return self.conn.cursor()",
-		"    def exec(self, **args):",
-		"        self.conn.cursor().execute(args[\"sql\"])",
+		"    def exec(self, sql: str):",
+		"        self.conn.cursor().execute(sql)",
 		"        self.conn.commit()",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("expected %q in:\n%s", want, out)
 		}
+	}
+}
+
+// TestAssembleClass_OptionalArgsGetDefaults — optional arg without explicit
+// Default gets `= None`; with Default uses Python-rendered literal.
+//
+// 可选参数无 Default → `= None`;有 Default → 渲染成 Python 字面量。
+func TestAssembleClass_OptionalArgsGetDefaults(t *testing.T) {
+	d := &VersionDraft{
+		InitArgsSchema: []handlerdomain.InitArgSpec{
+			{Name: "host", Type: "string", Required: true},
+			{Name: "port", Type: "integer", Required: false, Default: float64(5432)},
+			{Name: "ssl", Type: "boolean", Required: false},
+			{Name: "label", Type: "string", Required: false, Default: "prod"},
+		},
+		InitBody: "self.x = host",
+		Methods:  []handlerdomain.MethodSpec{{Name: "ping", Body: "return None"}},
+	}
+	out := AssembleClass(d)
+	want := `    def __init__(self, host: str, port: int = 5432, ssl: bool = None, label: str = "prod"):`
+	if !strings.Contains(out, want) {
+		t.Errorf("expected %q in:\n%s", want, out)
 	}
 }
 

@@ -3,7 +3,6 @@ package eventlog
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -271,8 +270,8 @@ func TestEmitter_AttrsJSONMarshalled(t *testing.T) {
 		map[string]any{"tool": "Read", "summary": "fetching"})
 
 	got, _ := repo.GetBlock(ctx, "blk_t1")
-	if !strings.Contains(got.Attrs, `"tool":"Read"`) {
-		t.Errorf("attrs missing tool: %q", got.Attrs)
+	if tool, _ := got.Attrs["tool"].(string); tool != "Read" {
+		t.Errorf("attrs.tool = %q, want Read (full attrs: %#v)", tool, got.Attrs)
 	}
 }
 
@@ -426,8 +425,8 @@ func TestProtocolContract_ChatRoundtrip(t *testing.T) {
 	if tcRow.Content != `{"path":"/etc/hosts"}` {
 		t.Errorf("tool_call content: got %q, want JSON args", tcRow.Content)
 	}
-	if !strings.Contains(tcRow.Attrs, `"tool":"Read"`) {
-		t.Errorf("tool_call attrs missing tool name: %q", tcRow.Attrs)
+	if tool, _ := tcRow.Attrs["tool"].(string); tool != "Read" {
+		t.Errorf("tool_call attrs.tool = %q, want Read (full: %#v)", tool, tcRow.Attrs)
 	}
 
 	resultRow, _ := repo.GetBlock(ctx, resultID)

@@ -944,7 +944,7 @@ err := installprogresspkg.Run(ctx, "Installing MCP server", func(progressFn Prog
 | Method + Path | 用途 |
 |---|---|
 | `GET /api/v1/sandbox/runtimes` | 列所有已装 runtime（kind/version/size/谁在用） |
-| `GET /api/v1/sandbox/envs?ownerKind=mcp` | 列指定 owner kind 的所有 env |
+| `GET /api/v1/sandbox/envs?ownerKind=mcp` | 列指定 owner kind 的所有 env。**强制 ownerKind**(避免无界响应),缺 → 400 OWNER_KIND_REQUIRED;非白名单(`function`/`handler`/`mcp`/`skill`/`conversation`)→ 400 INVALID_OWNER_KIND(#16,2026-05) |
 | `GET /api/v1/sandbox/envs/{id}` | 单 env 详情 |
 | `GET /api/v1/sandbox/disk-usage` | 总磁盘占用 + 按类目分 |
 | `POST /api/v1/sandbox/envs/{id}:destroy` | 强制删某 env（debug 用，正常通过 plugin 卸载触发） |

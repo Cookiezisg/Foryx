@@ -407,6 +407,13 @@ func (s *Service) EnsureRuntime(ctx context.Context, spec sandboxdomain.RuntimeS
 		}
 		version = v
 	}
+	// Normalize at the registry boundary so `>=3.12` and `3.12` collapse
+	// to one row (#17 fix). The original LLM-emitted spec is preserved on
+	// the env-side RuntimeSpec for audit; only the persisted runtime row
+	// uses the concrete version.
+	// 归一化让 `>=3.12`/`3.12` 共用一行(#17 修)。LLM 原 spec 留在 env 侧
+	// RuntimeSpec 作审计,只 runtime 注册行用具体版本。
+	version = installer.NormalizeVersion(version)
 
 	// First check (no lock): hot path for already-installed runtimes.
 	// 第一次检查（无锁）：已装 runtime 的热路径。
@@ -653,31 +660,29 @@ func (s *Service) markEnvFailed(ctx context.Context, env *sandboxdomain.Env, cau
 // （创建/installing → ready/failed → 销毁）。nil notifier（测试 harness）
 // → no-op。订阅方按 type=sandbox_env 派发刷 UI。
 //
-// data 带 env 完整快照让订阅方不必 refetch；销毁事件无 env 行可读，
-// 用 deleted=true 哨兵。
+// Slim payload per D-redo-22: action + minimal fields (status / ownerKind /
+// ownerId enough for UI to filter+refresh-row). UI does GET /sandbox/envs/{id}
+// for full detail. errorMsg included only on failure.
+//
+// 瘦身 payload (D-redo-22):只 action + 必要小字段(status / ownerKind / ownerId
+// 让 UI 能过滤+刷新该行)。完整数据 UI 走 GET /sandbox/envs/{id}。errorMsg 仅
+// 失败态送。
 func (s *Service) publishEnv(ctx context.Context, env *sandboxdomain.Env) {
-	s.notif.Publish(ctx, "sandbox_env", env.ID, map[string]any{
-		"id":           env.ID,
-		"ownerKind":    env.OwnerKind,
-		"ownerId":      env.OwnerID,
-		"ownerName":    env.OwnerName,
-		"runtimeId":    env.RuntimeID,
-		"runtimeKind":  envRuntimeKind(env, s),
-		"path":         env.Path,
-		"status":       env.Status,
-		"errorMsg":     env.ErrorMsg,
-		"sizeBytes":    env.SizeBytes,
-		"createdAt":    env.CreatedAt,
-		"lastUsedAt":   env.LastUsedAt,
-		"updatedAt":    env.UpdatedAt,
-	}, "")
+	data := map[string]any{
+		"action":    "status_changed",
+		"status":    env.Status,
+		"ownerKind": env.OwnerKind,
+		"ownerId":   env.OwnerID,
+	}
+	if env.ErrorMsg != "" {
+		data["errorMsg"] = env.ErrorMsg
+	}
+	s.notif.Publish(ctx, "sandbox_env", env.ID, data, "")
 }
 
 func (s *Service) publishEnvDeleted(ctx context.Context, envID string) {
-	s.notif.Publish(ctx, "sandbox_env", envID, map[string]any{
-		"id":      envID,
-		"deleted": true,
-	}, "")
+	s.notif.Publish(ctx, "sandbox_env", envID,
+		map[string]any{"action": "deleted"}, "")
 }
 
 // envRuntimeKind looks up the runtime kind for env.RuntimeID via the

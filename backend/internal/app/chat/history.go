@@ -123,29 +123,31 @@ func (s *Service) buildUserLLMMessage(ctx context.Context, m *chatdomain.Message
 		}
 	}
 
-	// Attachments from Message.Attrs JSON ({"attachments": [...]}).
-	// Parse failure means DB row corruption / schema drift / writer
-	// version mismatch — log loudly so the symptom (attachments missing
-	// from LLM context but message saved fine) is debuggable.
-	//
-	// Attachments 从 Message.Attrs JSON 取。解析失败意味 DB row 损坏 /
-	// schema 漂移 / writer 版本错配——高声 log，让症状（消息正常但
-	// 附件不进 LLM 上下文）可追。
-	if m.Attrs != "" {
-		var attrs struct {
-			Attachments []chatdomain.AttachmentRef `json:"attachments"`
-		}
-		if err := json.Unmarshal([]byte(m.Attrs), &attrs); err != nil {
-			s.log.Warn("chat.Service.buildUserLLMMessage: malformed Message.Attrs JSON; attachments dropped from LLM context",
-				zap.String("message_id", m.ID), zap.Error(err))
-		} else {
-			for _, ref := range attrs.Attachments {
-				part, err := s.attachmentToPart(ctx, ref)
-				if err != nil {
-					s.log.Warn("skipping attachment in LLM history", zap.Error(err))
-					continue
+	// Attachments from Message.Attrs (2026-05 changed from string to
+	// map[string]any via GORM serializer:json). Read attachments slice
+	// directly via map lookup + type-assert helper roundtrip.
+	// 2026-05 Attrs 变 map[string]any (GORM serializer);先按 map 取键 +
+	// json 中转一次转 typed slice。
+	if len(m.Attrs) > 0 {
+		if rawAttachments, ok := m.Attrs["attachments"]; ok {
+			// Round-trip via JSON to convert []any → []AttachmentRef cleanly.
+			// 走一遍 JSON 把 []any 转 []AttachmentRef。
+			raw, err := json.Marshal(rawAttachments)
+			if err == nil {
+				var refs []chatdomain.AttachmentRef
+				if err := json.Unmarshal(raw, &refs); err != nil {
+					s.log.Warn("chat.Service.buildUserLLMMessage: malformed Message.Attrs attachments; dropped from LLM context",
+						zap.String("message_id", m.ID), zap.Error(err))
+				} else {
+					for _, ref := range refs {
+						part, err := s.attachmentToPart(ctx, ref)
+						if err != nil {
+							s.log.Warn("skipping attachment in LLM history", zap.Error(err))
+							continue
+						}
+						parts = append(parts, *part)
+					}
 				}
-				parts = append(parts, *part)
 			}
 		}
 	}

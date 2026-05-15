@@ -77,9 +77,35 @@ type Graph struct {
     Nodes       []NodeSpec     `json:"nodes"`
     Edges       []EdgeSpec     `json:"edges"`
 }
+
+type EdgeSpec struct {
+    ID       string `json:"id"`                  // 系统生成 edge_N
+    From     string `json:"from"`                // 纯 node ID
+    FromPort string `json:"fromPort,omitempty"`  // 分叉节点选出口;单输出节点必空
+    To       string `json:"to"`                  // 纯 node ID
+    ToPort   string `json:"toPort,omitempty"`    // 预留 V1.5,V1 单输入,留空
+}
 ```
 
 整图作为 JSON 整存 `workflow_versions.graph` TEXT 列;Service 层 `attachGraph` 在 GET 时解为 `*Graph` 填到 `Version.GraphParsed`(`gorm:"-"`)。
+
+### 3.1 Edge port 路由(2026-05 重构)
+
+**From/To 是纯 node ID,port 信息走独立字段**(不再用 `"<node>.<port>"` 字符串编码,跟 n8n / NiFi / Step Functions 等成熟工具对齐)。
+
+分叉节点(emit multi-port at runtime)及其合法 FromPort 值:
+
+| Node type | FromPort 必填 | 合法值 |
+|---|---|---|
+| `approval` | ✓ | `"approved"` / `"rejected"` |
+| `loop` | ✓ | `"iterate"` / `"done"` |
+| `condition` | ✓ | 节点 config.cases 里声明的 case 名 |
+
+**单输出节点**(trigger / function / handler / mcp / skill / llm / http / wait / variable / parallel):FromPort **必须为空**。
+
+ValidateGraph 在 Service.Create / Edit 时强制以上规则,违反返 `ErrOpInvalid`。Scheduler `topo.advance` 按 dispatcher 选的 `NextPort` 跟 edge.FromPort 精确匹配选下游,不匹配的边 park(in-degree 减但不 enqueue)。
+
+> **历史**:V1 早期 EdgeSpec 用 `From: "<nodeId>.<port>"` 字符串编码 port,因 stringly-typed 隐含字段导致 LLM/手写 workflow 易踩坑(approval 后流程静默没跑通,run 假成功)。2026-05 重构为显式字段。Legacy 字符串格式在 validate 阶段被显式拒绝(`"...uses legacy dotted node ID..."`)。
 
 ---
 
@@ -102,6 +128,8 @@ type Graph struct {
 | `variable` | 命名变量 | `name`, `value`(表达式)|
 
 枚举封闭(`Const NodeType...`);校验时未知 type 返 `ErrOpInvalid`。
+
+**故意没有 terminal/end 节点**:DAG 跑完所有节点(无 outgoing edge 的节点都是 leaf)自动结束。LLM 从 n8n/Zapier/StepFunctions 带习惯尝试加 `end`/`output`/`finish`/`terminate`/`stop`/`return`/`exit` 类型时,`validate.go::isPseudoTerminalType` 拦截并返**教学型错误**:`"workflows have no terminal node; the DAG ends implicitly when no edges remain"`(#11,2026-05)。`create_workflow` tool description 同步加 MINIMAL COMPLETE EXAMPLE + "DO NOT add 'end' node" 提示。
 
 ---
 
@@ -128,10 +156,14 @@ LLM 发 `[{op:"set_meta",name:"...",...}, {op:"add_node",node:{...}}, ...]`,`wor
 1. **至少 1 个 trigger** — 否则 `ErrNoTrigger`
 2. **DAG cycle 检测** — Kahn 拓扑排序(in-degree 算法);存 cycle → `ErrDAGCycle`
 3. **节点 ID 唯一** — duplicate id → `ErrOpInvalid: "add_node: duplicate id"`(在 apply 阶段就抓)
-4. **Edge 引用合法** — from/to 必须指向已知节点 ID
-5. **CapabilityChecker** — function/handler/mcp/skill 节点的引用必须在对应 service 找得到(`HasFunction(id)` / `HasHandler(name)` / `HasSkill(name)` / `HasMCPServer(name)`)
-6. **Variable refs** — `{{ vars.NAME }}` 引用扫描;未定义变量 → `ErrInvalidReference`
-7. **Container body subgraph 递归校验** — condition/loop/parallel 的 body 子图递归套同样的校验链,**depth ≤ 3** 防 runaway 嵌套
+4. **Edge 引用合法** — from/to 必须指向已知节点 ID;**禁用 legacy `"<node>.<port>"` 字符串编码**(报 `ErrOpInvalid`)
+5. **Edge port 一致性**(2026-05 加):
+   - 分叉节点(`approval` / `loop` / `condition`)出边必带 `FromPort`,且必须在 `BranchOutputPorts[type]` 里(condition 动态读 `config.cases`)
+   - 单输出节点出边 `FromPort` 必须为空
+   - 任一违反 → `ErrOpInvalid` + 清楚错误信息
+6. **CapabilityChecker** — function/handler/mcp/skill 节点的引用必须在对应 service 找得到(`HasFunction(id)` / `HasHandler(name)` / `HasSkill(name)` / `HasMCPServer(name)`)
+7. **Variable refs** — `{{ vars.NAME }}` 引用扫描;未定义变量 → `ErrInvalidReference`
+8. **Container body subgraph 递归校验** — condition/loop/parallel 的 body 子图递归套同样的校验链,**depth ≤ 3** 防 runaway 嵌套
 
 `CapabilityChecker` 是 interface;生产 `ProductionChecker` 装 function/handler/skill/mcp 四个 service(允许任一 nil 让对应 check 全过,测试用);单测默认 `NopChecker()`(全过)。
 

@@ -199,7 +199,7 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 | `WORKFLOW_DAG_CYCLE`               | 422 | `workflowdomain.ErrDAGCycle`              | Kahn 拓扑排序检出 cycle(Edit/Create 期 strict 校验)| ✅ |
 | `WORKFLOW_INVALID_REFERENCE`       | 422 | `workflowdomain.ErrInvalidReference`      | edge 引用未知 node ID;variable expression 引用未定义 vars | ✅ |
 | `WORKFLOW_NO_TRIGGER`              | 422 | `workflowdomain.ErrNoTrigger`             | 图无 ≥1 trigger 节点 | ✅ |
-| `WORKFLOW_OP_INVALID`              | 400 | `workflowdomain.ErrOpInvalid`             | 单 op apply 失败(未知 op 类型 / payload 形状错 / Edit 收 `ops=[]` 等) | ✅ |
+| `WORKFLOW_OP_INVALID`              | 400 | `workflowdomain.ErrOpInvalid`             | 单 op apply 失败(未知 op 类型 / payload 形状错 / Edit 收 `ops=[]` / **legacy `<node>.<port>` 字符串语法** / **edge.fromPort 在分叉节点上缺失** / **edge.fromPort 在单输出节点上非空** / **fromPort 不在合法 port 集合中** 等) | ✅ |
 | `WORKFLOW_CAPABILITY_NOT_FOUND`    | 422 | `workflowdomain.ErrCapabilityNotFound`    | function/handler/skill 节点引用,CapabilityChecker 返"不存在" | ✅ |
 | `WORKFLOW_MCP_SERVER_NOT_INSTALLED`| 422 | `workflowdomain.ErrMCPServerNotInstalled` | mcp 节点引用未装 server | ✅ |
 
@@ -342,6 +342,8 @@ AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 
 | `SANDBOX_SPAWN_TIMEOUT` | 504 | `sandboxdomain.ErrSpawnTimeout` | once-spawn 超时 | ✅ |
 | `SANDBOX_ENV_IN_USE` | 409 | `sandboxdomain.ErrEnvInUse` | Destroy 时 env 还在跑 | ✅ |
 | `SANDBOX_INVALID_OWNER_ID` | 400 | `sandboxdomain.ErrInvalidOwnerID` | ownerID 格式不合法（D2 收紧）| ✅ |
+| `OWNER_KIND_REQUIRED` | 400 | (handler-layer) | `GET /sandbox/envs` 缺 `?ownerKind=` query | ✅ |
+| `INVALID_OWNER_KIND` | 400 | (handler-layer) | `?ownerKind=` 非白名单值(#16,2026-05) | ✅ |
 | `SANDBOX_CMD_REQUIRED` | 400 | `sandboxdomain.ErrCmdRequired` | spawn 命令 cmd 字段必填 | ✅ |
 | `SANDBOX_DOCKER_NOT_INSTALLED` | 422 | `sandboxdomain.ErrDockerNotInstalled` | docker CLI 不在 PATH；Forgify 不替用户装 Docker（系统服务）| ✅ |
 | `SANDBOX_DOCKER_DAEMON_DOWN` | 503 | `sandboxdomain.ErrDockerDaemonDown` | docker CLI 在但 daemon 不响应（Mac/Win 没启 Docker Desktop / Linux dockerd inactive）| ✅ |

@@ -112,6 +112,61 @@ func IsCapabilityNode(t string) bool {
 	return false
 }
 
+// BranchOutputPorts maps each branching NodeType to its valid output
+// ports. Edges leaving these nodes MUST set EdgeSpec.FromPort to one of
+// these values; edges from any other (single-output) node MUST leave
+// FromPort empty. Validated at workflow create/edit time.
+//
+// condition's case names are dynamic (declared in node.Config.cases) —
+// it's listed here as a sentinel value (nil slice) so the validator
+// knows "this is branching but ports come from config" and defers to a
+// runtime port-name check.
+//
+// BranchOutputPorts 分叉节点 → 合法输出口名。条件节点 cases 动态(在
+// node.Config 里声明),用 nil slice 标"分叉但 port 来自 config"。
+var BranchOutputPorts = map[string][]string{
+	NodeTypeApproval:  {"approved", "rejected"},
+	NodeTypeLoop:      {"iterate", "done"},
+	NodeTypeCondition: nil, // dynamic — read from node.Config["cases"]
+}
+
+// IsBranchingNode reports whether t emits multiple named output ports
+// at runtime (and therefore edges from it must declare FromPort).
+//
+// IsBranchingNode 报告 t 是否运行时有多个命名输出口(其出边必带 FromPort)。
+func IsBranchingNode(t string) bool {
+	_, ok := BranchOutputPorts[t]
+	return ok
+}
+
+// IsValidBranchPort reports whether port is a valid output port for a
+// node of type nodeType. For condition nodes (dynamic), declaredCases
+// is the slice of case names extracted from node.Config["cases"]; pass
+// nil for non-condition types.
+//
+// IsValidBranchPort 报告 port 是否 nodeType 的合法输出口。condition 节点
+// 动态,declaredCases 是 config["cases"] 里的 case 名;其他类型传 nil。
+func IsValidBranchPort(nodeType, port string, declaredCases []string) bool {
+	ports, ok := BranchOutputPorts[nodeType]
+	if !ok {
+		return false
+	}
+	if nodeType == NodeTypeCondition {
+		for _, c := range declaredCases {
+			if c == port {
+				return true
+			}
+		}
+		return false
+	}
+	for _, p := range ports {
+		if p == port {
+			return true
+		}
+	}
+	return false
+}
+
 // OnError values for capability nodes. stop fails the whole run;
 // continue lets execution flow past with nil output; branch sends to
 // the node's "error" output port (only valid when an edge exists from

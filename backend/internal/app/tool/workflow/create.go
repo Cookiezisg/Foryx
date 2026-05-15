@@ -32,11 +32,45 @@ type CreateWorkflow struct {
 func (t *CreateWorkflow) Name() string { return "create_workflow" }
 
 func (t *CreateWorkflow) Description() string {
-	return "Create a new workflow by applying a sequence of ops. The ops must " +
-		"build a valid DAG with at least one trigger node and reference only " +
-		"existing capabilities (functions / handlers / mcp servers / skills). " +
-		"V1 auto-accepts the created workflow as v1. Use set_meta first to give " +
-		"it a name + description, then add_node / add_edge to build the graph."
+	return `Create a new workflow by applying a sequence of ops. V1 auto-accepts the created workflow as v1.
+
+MINIMAL COMPLETE EXAMPLE — manual trigger → one function → done:
+  ops = [
+    {"op":"set_meta", "name":"daily_report", "description":"Generate and email"},
+    {"op":"add_node", "node":{"id":"t1", "type":"trigger", "config":{"kind":"manual"}}},
+    {"op":"add_node", "node":{"id":"f1", "type":"function", "config":{"functionId":"fn_xxx"}}},
+    {"op":"add_edge", "edge":{"from":"t1", "to":"f1"}}
+  ]
+DAG terminates implicitly after f1 — DO NOT add an "end" / "output" / "finish"
+node, those types do not exist. trigger node has no incoming edges; any node
+with no outgoing edge is a leaf.
+
+OP CHEATSHEET (write each op as a JSON object with the listed shape):
+
+  {"op":"set_meta", "name":"...", "description":"...", "tags":[...]}
+  {"op":"add_node", "node":{"id":"n1", "type":"trigger|function|handler|mcp|skill|llm|http|condition|loop|parallel|approval|wait|variable", "config":{...}}}
+  {"op":"add_edge", "edge":{"from":"<sourceNodeId>", "to":"<targetNodeId>", "fromPort":"<port>"}}
+  {"op":"set_variable", "variable":{"name":"...", "type":"...", "default":...}}
+
+WORKFLOW GRAPH RULES:
+  - Need at least one trigger node. Workflow ENDS when the DAG runs out of edges (no "end" node type — don't add one).
+  - Plain capability nodes (function/handler/mcp/skill/llm/http) reference existing entities via config.functionId / handlerName / serverName / skillName.
+  - Edges connect node IDs directly (no dots, no port-in-id).
+
+BRANCHING NODES (require fromPort on outgoing edges):
+  - approval node → fromPort must be "approved" or "rejected"
+  - loop node    → fromPort must be "iterate" or "done"
+  - condition node → fromPort must be one of the case names declared in the node's config.cases
+
+  Example approval routing:
+    {"op":"add_node", "node":{"id":"a1", "type":"approval", "config":{"prompt":"OK to proceed?"}}}
+    {"op":"add_edge", "edge":{"from":"a1", "to":"on_ok",     "fromPort":"approved"}}
+    {"op":"add_edge", "edge":{"from":"a1", "to":"on_cancel", "fromPort":"rejected"}}
+
+SINGLE-OUTPUT NODES (trigger / function / handler / mcp / skill / llm / http / wait / variable / parallel):
+  - fromPort must be empty/omitted on their outgoing edges.
+
+The schema rejects mismatches at create time — if your edge violates these rules you'll get WORKFLOW_OP_INVALID with the specific reason.`
 }
 
 func (t *CreateWorkflow) Parameters() json.RawMessage {
@@ -45,10 +79,10 @@ func (t *CreateWorkflow) Parameters() json.RawMessage {
 		"properties": {
 			"ops": {
 				"type": "array",
-				"description": "Sequence of ops (set_meta / add_node / add_edge / set_variable / ...)",
+				"description": "Sequence of ops. Each op is one of: set_meta / add_node / add_edge / set_variable / update_node / update_edge / delete_node / delete_edge / unset_variable. See tool description for exact shapes.",
 				"items": {"type": "object"}
 			},
-			"changeReason": {"type": "string", "description": "One-line reason"}
+			"changeReason": {"type": "string", "description": "One-line reason for this workflow creation"}
 		},
 		"required": ["ops"]
 	}`)

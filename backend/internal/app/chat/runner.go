@@ -265,7 +265,12 @@ func (s *Service) autoTitle(ctx context.Context, conv *convdomain.Conversation, 
 		s.log.Warn("auto-title save failed", zap.Error(err))
 		return
 	}
-	s.notifications.Publish(titleCtx, "conversation", conv.ID, conv, conv.ID)
+	// Slim payload (D-redo-22): action + new title + autoTitled flag so
+	// the sidebar can re-render the title cell without a GET round-trip.
+	// 瘦身 payload;侧栏看到新 title + autoTitled 标记即可,不用 GET。
+	s.notifications.Publish(titleCtx, "conversation", conv.ID,
+		map[string]any{"action": "auto_titled", "title": conv.Title, "autoTitled": true},
+		conv.ID)
 	s.log.Info("auto-title generated",
 		zap.String("conversation_id", conv.ID), zap.String("title", conv.Title))
 }

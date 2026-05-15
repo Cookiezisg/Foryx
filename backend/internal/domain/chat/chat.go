@@ -59,7 +59,12 @@ type Message struct {
 	ErrorMessage   string         `gorm:"type:text;default:''" json:"errorMessage,omitempty"`
 	InputTokens    int            `gorm:"default:0" json:"inputTokens,omitempty"`
 	OutputTokens   int            `gorm:"default:0" json:"outputTokens,omitempty"`
-	Attrs          string         `gorm:"type:text" json:"attrs,omitempty"` // JSON
+	// Attrs is JSON metadata (see godoc above for typical keys). GORM
+	// `serializer:json` handles marshal/unmarshal at the storage boundary
+	// so callers always see a typed map (matching the SSE wire shape).
+	// 2026-05 重构:从 `string` 改 `map[string]any`,GORM serializer 透明处理
+	// 列读写,REST 出口跟 SSE 一致都是对象(原来 REST 是 JSON string)。
+	Attrs          map[string]any `gorm:"type:text;serializer:json" json:"attrs,omitempty"`
 	CreatedAt      time.Time      `json:"createdAt"`
 	UpdatedAt      time.Time      `json:"updatedAt"`
 	DeletedAt      gorm.DeletedAt `gorm:"index" json:"-"`
@@ -114,7 +119,10 @@ type Block struct {
 	ParentBlockID  string    `gorm:"type:text;index" json:"parentBlockId,omitempty"`
 	Seq            int64     `gorm:"not null;uniqueIndex:idx_blocks_conv_seq,priority:2" json:"seq"`
 	Type           string    `gorm:"not null;type:text;check:type IN ('text','reasoning','tool_call','tool_result','progress','message')" json:"type"`
-	Attrs          string    `gorm:"type:text" json:"attrs,omitempty"` // JSON
+	// Attrs is JSON metadata. GORM serializer:json transparently handles
+	// the text column ↔ map conversion so REST output matches the SSE wire
+	// shape (both: object). 2026-05 重构。
+	Attrs          map[string]any `gorm:"type:text;serializer:json" json:"attrs,omitempty"`
 	Content        string    `gorm:"not null;type:text;default:''" json:"content"`
 	Status         string    `gorm:"not null;type:text;check:status IN ('streaming','completed','error','cancelled')" json:"status"`
 	Error          string    `gorm:"type:text" json:"error,omitempty"`

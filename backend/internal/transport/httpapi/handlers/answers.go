@@ -48,26 +48,38 @@ func (h *AnswerHandler) Register(mux *http.ServeMux) {
 }
 
 // answerRequest is the POST body shape. ConversationID is taken from
-// the URL path; the body only carries the tool_call_id the answer is
-// for and the answer text itself.
+// the URL path; the body carries the tool_call_id the answer is for,
+// the answer text, and an optional `skipped` flag (2026-05 #6: user
+// explicitly chose to skip — backend substitutes a sentinel answer so
+// the agent can decide its own default behaviour).
 //
-// answerRequest 是 POST 体形态。ConversationID 从 URL 取；body 只带要
-// 答的 tool_call_id 与答案文本。
+// answerRequest POST 体。conversationID 从 URL;body 带 toolCallId + answer
+// + skipped 标志(2026-05 #6:用户显式 skip;backend 用哨兵答案让 agent 自决)。
 type answerRequest struct {
 	ToolCallID string `json:"toolCallId"`
 	Answer     string `json:"answer"`
+	Skipped    bool   `json:"skipped,omitempty"`
 }
 
+// skippedAnswer is the sentinel string fed to the agent when the user
+// clicks "skip" on the frontend. The agent's tool_result will see this
+// literal text and decide a reasonable default. Documented in the
+// AskUserQuestion tool's Description so the LLM knows to interpret it.
+//
+// skippedAnswer 用户 skip 时塞给 agent 的哨兵字符串。Tool description 已
+// 说明,LLM 看到这串就走"用合理 default 继续"。
+const skippedAnswer = "(user skipped)"
+
 // Submit: POST /api/v1/conversations/{id}/answers → 204.
-// Body: {"toolCallId": "...", "answer": "..."}.
+// Body: {"toolCallId": "...", "answer": "..."} or {"toolCallId": "...", "skipped": true}.
 //
 // Errors:
-//   - 400 INVALID_REQUEST — body missing toolCallId or answer
+//   - 400 INVALID_REQUEST — body missing toolCallId
 //   - 404 ASK_NO_PENDING_QUESTION — toolCallId not waiting (or already answered)
 //
-// Submit：POST /api/v1/conversations/{id}/answers → 204。
+// Submit:POST /api/v1/conversations/{id}/answers → 204。
 //
-// 错误：400 缺字段；404 toolCallId 无 pending（或已答）。
+// 错误:400 缺字段;404 toolCallId 无 pending(或已答)。
 func (h *AnswerHandler) Submit(w http.ResponseWriter, r *http.Request) {
 	var req answerRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -79,7 +91,14 @@ func (h *AnswerHandler) Submit(w http.ResponseWriter, r *http.Request) {
 			"toolCallId is required", nil)
 		return
 	}
-	if err := h.svc.Resolve(req.ToolCallID, req.Answer); err != nil {
+	// If skipped: substitute sentinel so the agent sees a meaningful tool_result
+	// (instead of an empty answer, which is indistinguishable from "user typed nothing").
+	// skipped: 用哨兵替空 answer,让 agent 知道是"主动 skip"而非"空答"。
+	answer := req.Answer
+	if req.Skipped {
+		answer = skippedAnswer
+	}
+	if err := h.svc.Resolve(req.ToolCallID, answer); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}

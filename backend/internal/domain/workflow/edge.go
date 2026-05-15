@@ -4,21 +4,30 @@
 
 package workflow
 
-// EdgeSpec is one directed graph edge connecting two node ports. From /
-// To are dotted "<nodeId>.<portName>" strings; the port half is
-// optional (defaults to "output" for from, "input" for to). ID is
-// system-generated (edge_<random>) — the LLM never supplies it.
+// EdgeSpec is one directed graph edge connecting two nodes. From / To are
+// plain node IDs (no port suffix). For branching nodes (approval /
+// condition / loop) that emit different outputs depending on runtime
+// decision, FromPort selects which output port the edge consumes:
 //
-// V1 behaviour (per 04-workflow.md §5):
-//   - data flows verbatim from upstream output to downstream input
-//   - each input port at most 1 edge; each output port can fan out
-//   - no inline transform / filter on the edge itself — semantics on the node
+//   - approval node:  FromPort = "approved" | "rejected"
+//   - condition node: FromPort = case name from node config
+//   - loop node:      FromPort = "iterate" | "done"
 //
-// EdgeSpec 一条有向图边连接两个节点端口。From/To "<nodeId>.<portName>";
-// port 部分可省(from 默认 "output",to 默认 "input")。ID 系统生成
-// (`edge_<random>`),LLM 不传。
+// Single-output nodes (trigger / function / handler / mcp / skill / llm /
+// http / wait / variable / parallel) leave FromPort empty.
+//
+// ToPort is reserved for V1.5 when a node may have multiple input ports.
+// V1 nodes accept all incoming edges on a single implicit input.
+//
+// ID is system-generated (`edge_<random>`) — the LLM never supplies it.
+//
+// EdgeSpec 是有向边。From/To 纯 node ID(不带 port 后缀)。分叉节点
+// (approval/condition/loop)需 FromPort 选输出口;单输出节点 FromPort 空。
+// ToPort 留 V1.5,V1 单输入。ID 系统生成。
 type EdgeSpec struct {
-	ID   string `json:"id"`
-	From string `json:"from"`
-	To   string `json:"to"`
+	ID       string `json:"id"`
+	From     string `json:"from"`
+	FromPort string `json:"fromPort,omitempty"`
+	To       string `json:"to"`
+	ToPort   string `json:"toPort,omitempty"`
 }

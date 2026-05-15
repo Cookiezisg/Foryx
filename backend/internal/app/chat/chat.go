@@ -24,7 +24,6 @@ package chat
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -295,24 +294,13 @@ func (s *Service) Send(ctx context.Context, conversationID string, in SendInput)
 		}
 		attrs["attachments"] = refs
 	}
-	attrsJSON := ""
+	// 2026-05: Attrs is map[string]any (GORM serializer:json handles storage)
+	// — pass the map directly without intermediate JSON marshal here.
+	// 2026-05: Attrs 直接是 map[string]any (GORM serializer 处理列存),不再
+	// 手动 marshal。
+	var attrsField map[string]any
 	if len(attrs) > 0 {
-		b, err := json.Marshal(attrs)
-		if err != nil {
-			// attachments come from the prior validate/upload stage with
-			// well-formed primitive types — Marshal failing here would
-			// mean a programmer added a non-marshalable type to attrs.
-			// Log loudly so we see it; don't fail the user's send (they'd
-			// lose their message text), just lose the attachments tag.
-			//
-			// attrs 的来源在前面验证/上传阶段都是规范基本类型——Marshal
-			// 失败意味程序员加了不可序列化类型。高声 log，但不让用户的
-			// send 失败（消息文本会丢）；只丢 attachments 标。
-			s.log.Error("chat.Service.Send: marshal attrs failed; attachments tag dropped from message",
-				zap.String("conversation_id", conv.ID), zap.Error(err))
-		} else {
-			attrsJSON = string(b)
-		}
+		attrsField = attrs
 	}
 
 	// Build single text block (or empty Blocks if user sent attachments only).
@@ -339,7 +327,7 @@ func (s *Service) Send(ctx context.Context, conversationID string, in SendInput)
 		UserID:         uid,
 		Role:           chatdomain.RoleUser,
 		Status:         chatdomain.StatusCompleted,
-		Attrs:          attrsJSON,
+		Attrs:          attrsField,
 		Blocks:         blocks,
 	}
 	if err := s.repo.SaveMessage(ctx, userMsg); err != nil {
