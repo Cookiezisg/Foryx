@@ -129,16 +129,24 @@ func (h *DevHandler) Register(mux *http.ServeMux) {
 
 // ── GET /dev/ ─────────────────────────────────────────────────────────────────
 
-// ServeIndex serves tester.html for all /dev/* paths not matched by a more
-// specific route. We read manually instead of http.ServeFile to avoid the
-// trailing-slash redirect that ServeFile triggers when the URL ends with "/".
+// ServeIndex serves the testend HTML entry for all /dev/* paths not matched
+// by a more specific route. Tries index.html (v2 Vite SPA) first, falls back
+// to tester.html (v1 Alpine.js) for backwards compat. We read manually
+// instead of http.ServeFile to avoid the trailing-slash redirect.
 //
-// ServeIndex 为所有未被更具体路由匹配的 /dev/* 路径提供 tester.html。
-// 手动读取而非 http.ServeFile，避免 URL 以 "/" 结尾时 ServeFile 触发的重定向。
+// ServeIndex 为所有未匹配 /dev/* 路由提供 testend 入口 HTML。先试 index.html
+// (v2 Vite SPA),回退 tester.html(v1 Alpine.js)。手动读取避免 ServeFile 的尾斜杠重定向。
 func (h *DevHandler) ServeIndex(w http.ResponseWriter, r *http.Request) {
-	data, err := os.ReadFile(filepath.Join(h.integrationDir, "tester.html"))
+	var data []byte
+	var err error
+	for _, name := range []string{"index.html", "tester.html"} {
+		data, err = os.ReadFile(filepath.Join(h.integrationDir, name))
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
-		http.Error(w, "tester.html not found — check --integration-dir", http.StatusNotFound)
+		http.Error(w, "testend not built — run `make build-testend`", http.StatusNotFound)
 		return
 	}
 	// Cache-buster: substitute __BUILD__ in the HTML with this server's

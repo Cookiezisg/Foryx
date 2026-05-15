@@ -76,14 +76,36 @@ environment:
 # Code changes require manual restart (Ctrl+C, re-run).
 # Auto-wraps in devbox shell if invoked from outer shell.
 # test-console——前台跑 dev backend + 自动开浏览器；改代码要手动重启（Ctrl+C 再跑一次）。
+# 新 testend(v2 Vue+Vite SPA):build 产物在 testend/dist/,backend 经
+# --integration-dir 服务静态文件;如果 dist/ 不存在,自动 build 一次。
 test-console:
 	$(AUTO_DEVBOX)
+	@if [ ! -f testend/dist/index.html ]; then \
+	  echo "==> testend/dist not found, building..."; \
+	  cd testend && (test -d node_modules || npm install) && npm run build:nocheck; \
+	fi
 	@lsof -ti :$(PORT) 2>/dev/null | xargs kill 2>/dev/null || true
 	@sleep 0.3
 	@( while ! curl -sf http://localhost:$(PORT)/api/v1/health >/dev/null 2>&1; do sleep 0.5; done; \
 	   echo ""; echo "✓ http://localhost:$(PORT)/dev/ ready"; \
 	   open http://localhost:$(PORT)/dev/ 2>/dev/null || true ) &
-	@$(LOAD_ENV) cd backend && go run ./cmd/server --dev --port $(PORT) --data-dir $(BACKEND_DATA_DIR) --collections-dir ../testend/collections --integration-dir ../testend
+	@$(LOAD_ENV) cd backend && go run ./cmd/server --dev --port $(PORT) --data-dir $(BACKEND_DATA_DIR) --collections-dir ../testend/collections --integration-dir ../testend/dist
+
+# test-console-dev — 前端 hot-reload:启 vite dev server (5173) + backend (5174).
+# 改 testend UI 时用,看着代码刷,不用每次 rebuild。
+# 浏览器开 http://localhost:5173/  (它会 proxy /api + /dev 到 backend)
+test-console-dev:
+	$(AUTO_DEVBOX)
+	@lsof -ti :$(PORT) 2>/dev/null | xargs kill 2>/dev/null || true
+	@lsof -ti :5173 2>/dev/null | xargs kill 2>/dev/null || true
+	@sleep 0.3
+	@( while ! curl -sf http://localhost:$(PORT)/api/v1/health >/dev/null 2>&1; do sleep 0.5; done; \
+	   cd testend && BACKEND_PORT=$(PORT) npm run dev ) &
+	@$(LOAD_ENV) cd backend && go run ./cmd/server --dev --port $(PORT) --data-dir $(BACKEND_DATA_DIR) --collections-dir ../testend/collections --integration-dir ../testend/dist
+
+# build-testend — explicit testend rebuild (npm install + vite build)
+build-testend:
+	@cd testend && (test -d node_modules || npm install) && npm run build:nocheck
 
 # test-unit — pure-function / in-memory SQLite suite.
 # test-unit——纯函数 / 内存 SQLite 套件。
@@ -202,4 +224,4 @@ check-cross:
 	@echo ""
 	@echo "✓ vet + build clean across darwin/linux/windows × amd64/arm64"
 
-.PHONY: help environment test-console test-unit test-pipeline stop clear check-cross
+.PHONY: help environment test-console test-console-dev build-testend test-unit test-pipeline stop clear check-cross

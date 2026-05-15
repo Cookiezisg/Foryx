@@ -64,6 +64,24 @@ func Open(cfg Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("gorm open: %w", err)
 	}
 
+	// In-memory DSN (":memory:") creates a *fresh* database per Go SQL
+	// connection — concurrent goroutines that grab different pool slots
+	// will each see an empty schema. Pin to one connection so the whole
+	// process shares state. File-backed DSNs are unaffected (the file is
+	// the shared state); keep their pool default for parallelism.
+	//
+	// :memory: DSN 每条 Go sql conn 一个独立 DB — 并发 goroutine 拿不同 slot
+	// 就各看一个空 schema。锁 1 连接让全进程共享状态。文件 DSN 不受影响
+	// (文件本身共享状态),保留默认池。
+	if cfg.DataDir == "" {
+		sqlDB, err := db.DB()
+		if err != nil {
+			_ = Close(db)
+			return nil, fmt.Errorf("gorm.DB(): %w", err)
+		}
+		sqlDB.SetMaxOpenConns(1)
+	}
+
 	if err := verifyPragmas(db); err != nil {
 		_ = Close(db)
 		return nil, err

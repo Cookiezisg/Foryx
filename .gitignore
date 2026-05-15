@@ -212,3 +212,11 @@ composer.lock   # 如为库项目，取消注释此行
 # Playwright MCP server 在 cwd 写 trace/screenshot dir。
 # Curated marketplace pipeline 测试默认 cwd 是 backend/test/mcp/。
 .playwright-mcp/
+# ============================================================
+# Backend runtime sandbox data
+# ============================================================
+# Created when running 'go run ./cmd/server' from backend/ (default
+# data-dir resolves under cwd). Contains the local mise install +
+# downloaded runtimes — large (~100MB+), regenerable, never commit.
+backend/sandbox/
+

@@ -30,77 +30,117 @@ type devRoute struct {
 
 // devRoutes mirrors mux.HandleFunc registrations across all handlers in
 // this package. Sorted by HTTP method then path within each handler group.
+// Verify with:
+//
+//	grep -rEh 'mux\.HandleFunc\("' backend/internal/transport/httpapi/handlers/*.go \
+//	  | grep -v _test
 //
 // devRoutes 镜像本包所有 mux.HandleFunc 注册。按 method 然后 path 排序。
 var devRoutes = []devRoute{
+	// ── health + providers (always wired)
+	{"GET", "/api/v1/health", "health.Get"},
+	{"GET", "/api/v1/providers", "providers.List"},
+
 	// ── apikey
 	{"POST", "/api/v1/api-keys", "apikey.Create"},
 	{"GET", "/api/v1/api-keys", "apikey.List"},
 	{"PATCH", "/api/v1/api-keys/{id}", "apikey.Update"},
 	{"DELETE", "/api/v1/api-keys/{id}", "apikey.Delete"},
-	{"POST", "/api/v1/api-keys/{id}:test", "apikey.Test"},
+	{"POST", "/api/v1/api-keys/{id}:test", "apikey.postOnID dispatch → :test"},
 
-	// ── attachments + chat
-	{"POST", "/api/v1/attachments", "chat.UploadAttachment"},
-	{"POST", "/api/v1/conversations/{id}/messages", "chat.SendMessage"},
-	{"DELETE", "/api/v1/conversations/{id}/stream", "chat.CancelStream"},
-	{"GET", "/api/v1/conversations/{id}/messages", "chat.ListMessages"},
+	// ── model-configs
+	{"GET", "/api/v1/model-configs", "model.List"},
+	{"PUT", "/api/v1/model-configs/{scenario}", "model.Upsert"},
 
-	// ── eventlog + notifications (SSE)
-	{"GET", "/api/v1/eventlog", "eventlog.Stream"},
-	{"GET", "/api/v1/conversations/{id}/eventlog", "eventlog.History"},
-	{"GET", "/api/v1/notifications", "notifications.Stream"},
-
-	// ── conversations
+	// ── conversations + chat + attachments
 	{"POST", "/api/v1/conversations", "conversation.Create"},
 	{"GET", "/api/v1/conversations", "conversation.List"},
 	{"GET", "/api/v1/conversations/{id}", "conversation.Get"},
 	{"PATCH", "/api/v1/conversations/{id}", "conversation.Rename"},
 	{"DELETE", "/api/v1/conversations/{id}", "conversation.Delete"},
+	{"POST", "/api/v1/conversations/{id}/messages", "chat.SendMessage"},
+	{"GET", "/api/v1/conversations/{id}/messages", "chat.ListMessages"},
+	{"DELETE", "/api/v1/conversations/{id}/stream", "chat.CancelStream"},
 	{"POST", "/api/v1/conversations/{id}/answers", "ask.SubmitAnswer"},
+	{"POST", "/api/v1/attachments", "chat.UploadAttachment"},
+
+	// ── SSE streams (3 per E1)
+	{"GET", "/api/v1/eventlog", "eventlog.Stream (per-user)"},
+	{"GET", "/api/v1/conversations/{id}/eventlog", "eventlog.History (replay)"},
+	{"GET", "/api/v1/notifications", "notifications.Stream (per-user)"},
+	{"GET", "/api/v1/forge", "forge.Stream (per-user)"},
+
+	// ── functions (trinity)
+	{"POST", "/api/v1/functions", "function.Create"},
+	{"GET", "/api/v1/functions", "function.List"},
+	{"GET", "/api/v1/functions/{id}", "function.Get"},
+	{"PATCH", "/api/v1/functions/{id}", "function.UpdateMeta"},
+	{"DELETE", "/api/v1/functions/{id}", "function.Delete"},
+	{"POST", "/api/v1/functions/{id}:run", "function.postOnFunction → :run"},
+	{"POST", "/api/v1/functions/{id}:revert", "function.postOnFunction → :revert"},
+	{"GET", "/api/v1/functions/{id}/versions", "function.ListVersions"},
+	{"GET", "/api/v1/functions/{id}/versions/{version}", "function.GetVersion"},
+	{"GET", "/api/v1/functions/{id}/pending", "function.GetPending"},
+	{"POST", "/api/v1/functions/{id}/pending:accept", "function.AcceptPending"},
+	{"POST", "/api/v1/functions/{id}/pending:reject", "function.RejectPending"},
+	{"GET", "/api/v1/functions/{id}/executions", "function.ListExecutions (D22)"},
+	{"GET", "/api/v1/function-executions/{execId}", "function.GetExecution (D22)"},
+
+	// ── handlers (trinity)
+	{"POST", "/api/v1/handlers", "handler.Create"},
+	{"GET", "/api/v1/handlers", "handler.List"},
+	{"GET", "/api/v1/handlers/{id}", "handler.Get"},
+	{"PATCH", "/api/v1/handlers/{id}", "handler.UpdateMeta"},
+	{"DELETE", "/api/v1/handlers/{id}", "handler.Delete"},
+	{"POST", "/api/v1/handlers/{id}:call", "handler.postOnHandler → :call"},
+	{"POST", "/api/v1/handlers/{id}:revert", "handler.postOnHandler → :revert"},
+	{"GET", "/api/v1/handlers/{id}/versions", "handler.ListVersions"},
+	{"GET", "/api/v1/handlers/{id}/versions/{version}", "handler.GetVersion"},
+	{"GET", "/api/v1/handlers/{id}/pending", "handler.GetPending"},
+	{"POST", "/api/v1/handlers/{id}/pending:accept", "handler.AcceptPending"},
+	{"POST", "/api/v1/handlers/{id}/pending:reject", "handler.RejectPending"},
+	{"GET", "/api/v1/handlers/{id}/config", "handler.GetConfig"},
+	{"POST", "/api/v1/handlers/{id}/config", "handler.UpdateConfig"},
+	{"DELETE", "/api/v1/handlers/{id}/config", "handler.ClearConfig"},
+	{"GET", "/api/v1/handlers/{id}/calls", "handler.ListCalls (D22)"},
+	{"GET", "/api/v1/handler-calls/{callId}", "handler.GetCall (D22)"},
+
+	// ── workflows (trinity)
+	{"POST", "/api/v1/workflows", "workflow.Create"},
+	{"GET", "/api/v1/workflows", "workflow.List"},
+	{"GET", "/api/v1/workflows/{id}", "workflow.Get"},
+	{"PATCH", "/api/v1/workflows/{id}", "workflow.UpdateMeta"},
+	{"DELETE", "/api/v1/workflows/{id}", "workflow.Delete"},
+	{"POST", "/api/v1/workflows/{id}:trigger", "workflow.postOnWorkflow → :trigger"},
+	{"POST", "/api/v1/workflows/{id}:revert", "workflow.postOnWorkflow → :revert"},
+	{"GET", "/api/v1/workflows/{id}/triggers", "workflow.GetTriggers"},
+	{"GET", "/api/v1/workflows/{id}/versions", "workflow.ListVersions"},
+	{"GET", "/api/v1/workflows/{id}/versions/{version}", "workflow.GetVersion"},
+	{"GET", "/api/v1/workflows/{id}/pending", "workflow.GetPending"},
+	{"POST", "/api/v1/workflows/{id}/pending:accept", "workflow.AcceptPending"},
+	{"POST", "/api/v1/workflows/{id}/pending:reject", "workflow.RejectPending"},
+
+	// ── flowruns (Plan 05 execution plane)
+	{"GET", "/api/v1/flowruns", "flowrun.List"},
+	{"GET", "/api/v1/flowruns/{id}", "flowrun.Get"},
+	{"GET", "/api/v1/flowruns/{id}/nodes", "flowrun.ListNodes"},
+	{"DELETE", "/api/v1/flowruns/{id}", "flowrun.Cancel"},
+	{"POST", "/api/v1/flowruns/{id}/approvals/{nodeId}", "flowrun.Approve"},
 
 	// ── catalog
 	{"GET", "/api/v1/catalog", "catalog.Get"},
 	{"POST", "/api/v1/catalog:refresh", "catalog.Refresh"},
 
-	// ── forge
-	{"POST", "/api/v1/forges", "forge.Create"},
-	{"GET", "/api/v1/forges", "forge.List"},
-	{"POST", "/api/v1/forges:import", "forge.Import"},
-	{"GET", "/api/v1/forges/{id}", "forge.Get"},
-	{"PATCH", "/api/v1/forges/{id}", "forge.Update"},
-	{"DELETE", "/api/v1/forges/{id}", "forge.Delete"},
-	{"POST", "/api/v1/forges/{id}:run", "forge.Run"},
-	{"POST", "/api/v1/forges/{id}:test", "forge.RunTests"},
-	{"POST", "/api/v1/forges/{id}:export", "forge.Export"},
-	{"GET", "/api/v1/forges/{id}/versions", "forge.ListVersions"},
-	{"GET", "/api/v1/forges/{id}/versions/{version}", "forge.GetVersion"},
-	{"GET", "/api/v1/forges/{id}/pending", "forge.GetPending"},
-	{"POST", "/api/v1/forges/{id}/pending:accept", "forge.AcceptPending"},
-	{"POST", "/api/v1/forges/{id}/pending:reject", "forge.RejectPending"},
-	{"GET", "/api/v1/forges/{id}/test-cases", "forge.ListTestCases"},
-	{"POST", "/api/v1/forges/{id}/test-cases", "forge.CreateTestCase"},
-	{"DELETE", "/api/v1/forges/{id}/test-cases/{tcId}", "forge.DeleteTestCase"},
-	{"POST", "/api/v1/forges/{id}/test-cases/{tcId}:run", "forge.RunTestCase"},
-	{"GET", "/api/v1/forges/{id}/executions", "forge.ListExecutions"},
-
-	// ── health
-	{"GET", "/api/v1/health", "health.Get"},
-
-	// ── model
-	{"GET", "/api/v1/model-configs", "model.List"},
-	{"PUT", "/api/v1/model-configs/{scenario}", "model.Upsert"},
-
 	// ── skills
-	{"POST", "/api/v1/skills:import", "skills.Import"},
-	{"POST", "/api/v1/skills:refresh", "skills.Refresh"},
 	{"GET", "/api/v1/skills", "skills.List"},
 	{"POST", "/api/v1/skills", "skills.Create"},
 	{"GET", "/api/v1/skills/{name}", "skills.Get"},
 	{"GET", "/api/v1/skills/{name}/body", "skills.GetBody"},
 	{"PUT", "/api/v1/skills/{name}", "skills.Replace"},
 	{"DELETE", "/api/v1/skills/{name}", "skills.Delete"},
-	{"POST", "/api/v1/skills/{name}:invoke", "skills.Invoke"},
+	{"POST", "/api/v1/skills/{name}:invoke", "skills.NameAction → :invoke"},
+	{"POST", "/api/v1/skills:import", "skills.Import"},
+	{"POST", "/api/v1/skills:refresh", "skills.Refresh"},
 
 	// ── mcp
 	{"GET", "/api/v1/mcp-servers", "mcp.ListServers"},
@@ -108,21 +148,12 @@ var devRoutes = []devRoute{
 	{"GET", "/api/v1/mcp-servers/{name}/stderr", "mcp.GetServerStderr"},
 	{"PUT", "/api/v1/mcp-servers/{name}", "mcp.PutServer"},
 	{"DELETE", "/api/v1/mcp-servers/{name}", "mcp.DeleteServer"},
-	{"POST", "/api/v1/mcp-servers/{name}:reconnect", "mcp.Reconnect"},
-	{"POST", "/api/v1/mcp-servers/{name}:health-check", "mcp.HealthCheck"},
+	{"POST", "/api/v1/mcp-servers/{name}:reconnect", "mcp.serverNameAction → :reconnect"},
+	{"POST", "/api/v1/mcp-servers/{name}:health-check", "mcp.serverNameAction → :health-check"},
 	{"POST", "/api/v1/mcp-servers:import", "mcp.ImportServers"},
-	{"GET", "/api/v1/mcp-registry", "mcp.ListRegistry (V3: curated 21 entries)"},
+	{"GET", "/api/v1/mcp-registry", "mcp.ListRegistry"},
 	{"GET", "/api/v1/mcp-registry/{name}", "mcp.GetRegistryEntry"},
-	{"POST", "/api/v1/mcp-registry/{name}:install", "mcp.InstallFromRegistry"},
-
-	// ── subagent
-	// No HTTP surface — sub-runs are unified Message rows
-	// (attrs.kind=subagent_run) since the schema unification, and the
-	// type registry is consumed in-process by the Subagent system tool.
-	// Frontend reads sub-run state via /api/v1/conversations/{id}/messages.
-	// sub-run schema 统一后是 messages 行（attrs.kind=subagent_run）；
-	// type registry 由 Subagent 系统工具进程内消费。前端经
-	// /api/v1/conversations/{id}/messages 读 sub-run 状态。
+	{"POST", "/api/v1/mcp-registry/{name}:install", "mcp.registryNameAction → :install"},
 
 	// ── sandbox
 	{"GET", "/api/v1/sandbox/runtimes", "sandbox.ListRuntimes"},
@@ -131,13 +162,13 @@ var devRoutes = []devRoute{
 	{"GET", "/api/v1/sandbox/disk-usage", "sandbox.DiskUsage"},
 	{"GET", "/api/v1/sandbox/bootstrap-status", "sandbox.BootstrapStatus"},
 	{"GET", "/api/v1/conversations/{id}/sandbox-envs", "sandbox.ListConvEnvs"},
-	{"POST", "/api/v1/sandbox/envs/{id}:destroy", "sandbox.DestroyEnv"},
-	{"POST", "/api/v1/sandbox/runtimes/{id}:destroy", "sandbox.DestroyRuntime"},
-	{"POST", "/api/v1/sandbox/{action}", "sandbox.Action (gc/retry-bootstrap)"},
-	{"POST", "/api/v1/conversations/{id}/sandbox-envs/{kind}:reset", "sandbox.ResetConvEnv"},
-	{"POST", "/api/v1/conversations/{id}/sandbox-envs:reset-all", "sandbox.ResetAllConvEnvs"},
+	{"POST", "/api/v1/sandbox/envs/{id}:destroy", "sandbox.envAction → :destroy"},
+	{"POST", "/api/v1/sandbox/runtimes/{id}:destroy", "sandbox.runtimeAction → :destroy"},
+	{"POST", "/api/v1/sandbox/{action}", "sandbox.Action (gc / retry-bootstrap)"},
+	{"POST", "/api/v1/conversations/{id}/sandbox-envs/{kind}:reset", "sandbox.convEnvKindAction"},
+	{"POST", "/api/v1/conversations/{id}/sandbox-envs:reset-all", "sandbox.convEnvsAction"},
 
-	// ── dev (only when --dev) — listed so the Routes tab shows the full surface
+	// ── dev (only when --dev)
 	{"GET", "/dev/", "dev.ServeIndex (testend HTML)"},
 	{"GET", "/dev/logs", "dev.StreamLogs (SSE)"},
 	{"POST", "/dev/sql", "dev.QuerySQL"},
