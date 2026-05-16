@@ -182,13 +182,13 @@
 
 **背景**：D1-D2 全交付（mise embed + 11 EnvManager + 3 层 leak 防御）。但 burn-in #15-17 + D2 遗留有几个真 bug。
 
-- ☐ **§11.1 env destroy 后 function lazy-rebuild**（burn-in #15）—— 当前 env destroy 后 next RunFunction 报错而不是自动重建。**Done when**：RunFunction 探测 env not ready 时自动 Sync；测试覆盖。
+- ☑ **§11.1 env destroy 后 function lazy-rebuild**（burn-in #15）✅ 2026-05-15 —— P3 batch 已修：`app/function/run.go::RunFunction` 在 `sandbox.Run` 返 `ErrEnvNotFound` 时按 stored spec 走 `syncEnvSync` 重建并重试一次。**tracker 滞后,2026-05-17 审计补上 ☑**。
 - ☑ **§11.2 ownerKind 非白名单显式拒**（burn-in #16）✅ 2026-05-15 —— P3 batch 顺手修：`validOwnerKinds` 5 值白名单 + 400 `INVALID_OWNER_KIND`，告别"空 list 当无数据"误读。
-- ☐ **§11.3 runtime 表 `3.12` vs `>=3.12` dedup**（burn-in #17）—— 两个版本说同一件事，但是 DB UNIQUE 让它们各占一行。**Done when**：Install 时解析 PEP 440 specifier → 取实际 install 版本（mise where）作 UNIQUE key；旧行迁移。
-- ☐ **§11.4 Ruby / PHP EnvManager 修 bundler / composer**（D2 遗留）—— bundler / composer 不在 mise registry，Ruby/PHP EnvManager 调 EnsureTool 会失败。**Done when**：直接静态装 bundler / composer（github release 二进制）；EnvManager 用之；测试。
-- ☐ **§11.5 env corruption 自动重装** —— `.venv/bin/python` 缺失（mise upgrade 把 install dir 改了）→ 自动 Sync 重建。**Done when**：Spawn 前 check 关键 binary 存在 → 不在则 Sync；测试。
-- ☐ **§11.6 Docker runtime support** —— sandbox.md §4 提过留待 v1.5。**Done when**：`infra/sandbox/docker.go` Installer + EnvManager；mcp 等可选 docker runtime；ErrDockerNotInstalled / ErrDockerDaemonDown 已有 sentinel。
-- ☐ **§11.7 Disk usage warn** —— sandbox 共享 cache 长跑后磁盘膨胀。`TotalSizeBytes > 5GB` 时 testend warn + 提示 `:gc`。**Done when**：可视化 + 阈值通知。
+- ☑ **§11.3 runtime 表 `3.12` vs `>=3.12` dedup**（burn-in #17）✅ 2026-05-15 —— P3 batch 已修：`RuntimeInstaller` 接口加 `NormalizeVersion(version) string`，`MiseInstaller` 复用 B-01 的 `normalizeVersionForMise`；`EnsureRuntime` lookup/insert 前归一化让 `>=3.12` / `3.12` 共用一行。**tracker 滞后,2026-05-17 审计补上 ☑**。
+- ~~§11.4 Ruby / PHP EnvManager~~ ❌ **2026-05-17 删除——前提不成立**。`sandbox.md` §1 写明 Marketplace V3 collapse(2026-05-08)已删 Ruby/PHP/Rust/Go/Java EnvManager(无消费方)。当前 `cmd/server/main.go::registerSandboxStack` 只注册 python+node+uv 3 runtime + Python/Node 2 EnvManager。此 sweep 项是 bitrot,基于已删除的 EnvManager 矩阵写的。**若未来真有 Ruby/PHP plugin 需求,重做 Ruby/PHP EnvManager 再处理 bundler/composer，远期不规划**。
+- ☑ **§11.5 env corruption 自动重装** ✅ 2026-05-17 —— `infra/sandbox/spawn.go::SpawnOnce` + `SpawnLongLived` 在 exec 前对绝对路径 `opts.Cmd` 走 `os.Stat`,缺失则返 `ErrEnvNotFound`,复用 §11.1 lazy rebuild 路径(零额外代码路径)。**Done**:dangling symlink 单测覆盖；生产 mise 升级后第一次 run 不再炸 cryptic ENOENT,自动重建 venv 重试。
+- ⏸ **§11.6 Docker runtime support** —— Marketplace V3 collapse 已删 Docker installer；当前生产无 docker runtime/EnvManager 装配。**V1.5 真 defer**：要做就等真撞需求(mcp / function 需要 docker 隔离),sentinel `ErrDockerNotInstalled` / `ErrDockerDaemonDown` 保留为前瞻位。
+- ❌ **§11.7 Disk usage warn** —— **2026-05-17 用户判定不做**。`/api/v1/sandbox/disk-usage` 已返 `totalBytes`,用户主动看就够；threshold warn + testend banner 是非开发用户场景的 polish,当前 dogfood 阶段不优先。**重开条件**：撞到磁盘满 / sandbox 缓存过大影响 dev 时再加。
 
 ---
 
@@ -381,7 +381,7 @@ V1.2 ship 标准（前端 Wails 之外）：
 | §8 | Subagent 高阶 | 0 / 5 | ⬜ 未起 | |
 | §9 | Catalog 高阶 | 0 / 5 | ⬜ 未起 | |
 | §10 | UX 工具完善 | 0 / 7 | ⬜ 未起 | §10.1 Checkpoint/Undo 是 ship gate "用户敢用"关键 |
-| §11 | Sandbox 收尾 + 修复 | 1 / 7 | 🟡 起步 | §11.2 已修；§11.1 / §11.3-7 待 |
+| §11 | Sandbox 收尾 + 修复 | 5 / 6 | 🟢 主体完工 | §11.1+11.2+11.3+11.5 ☑（最后一件 §11.5 2026-05-17）；§11.4 删除(bitrot,Marketplace V3 collapse 已删 Ruby/PHP installer 前提不存在)；§11.6 Docker V1.5 真 defer；§11.7 用户判定不做。剩 §11.6 (defer) 不计入活跃 sweep |
 | §12 | HTTP / API 收尾 | 2 / 4 | 🟢 主体完工 | §12.3 + §12.4 留下次 |
 | §13 | 可靠性 / 故障恢复 | 2 / 5 | 🟢 主体完工 | retry + timeout 两件核心已完；failover / SearXNG health / BackgroundCtx 留 |
 | §14 | Phase 5 真正没做的 | 5 / 7 | 🟢 主体完工 | 愿景核心；§14.1-§14.5 全交付（4 层 + HTTP + 7 tools + catalog + workflow llm/agent + Conv attach + testend UI；~85 测试全绿）；剩 §14.6 intent routing / §14.7 chat 终极版（multi-agent forging 早已在 F2 教过，二者偏 polish 而非 ship gate）。详 [`service-design-documents/document.md`](./service-design-documents/document.md) |

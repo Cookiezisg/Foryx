@@ -6,11 +6,38 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"time"
 
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 )
+
+// checkBinaryExists guards against env corruption — dangling symlinks left
+// behind by mise runtime upgrades (mise relocates `runtimes/python/3.12.5/`
+// to 3.12.6 and venvs become dangling). os.Stat follows symlinks so a
+// dangling link returns ENOENT here. Returning ErrEnvNotFound surfaces
+// the §11.1 lazy-rebuild path in app/function/run.go (rebuild + retry).
+// Non-absolute commands rely on PATH resolution — let exec handle those.
+//
+// checkBinaryExists 防 env 腐坏(mise 升级后留下的 dangling symlink)。
+// os.Stat 跟 link,dangling 返 ENOENT。返 ErrEnvNotFound 让 §11.1 的
+// app 层 lazy rebuild 接管(rebuild + retry once)。非绝对路径走 PATH 解析
+// 由 exec 处理,不在这里 stat。
+func checkBinaryExists(cmd string) error {
+	if cmd == "" || !filepath.IsAbs(cmd) {
+		return nil
+	}
+	if _, err := os.Stat(cmd); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("sandbox: binary missing at %s (dangling symlink? runtime relocated?): %w",
+				cmd, sandboxdomain.ErrEnvNotFound)
+		}
+		return fmt.Errorf("sandbox: stat binary %s: %v: %w", cmd, err, sandboxdomain.ErrSpawnFailed)
+	}
+	return nil
+}
 
 // SpawnOptions carries fully resolved inputs to SpawnOnce / SpawnLongLived.
 //
@@ -27,6 +54,9 @@ type SpawnOptions struct {
 //
 // SpawnOnce 跑命令到结束；非零退出返 Ok=false，基础设施失败才返 Go error。
 func SpawnOnce(ctx context.Context, opts SpawnOptions) (*sandboxdomain.ExecutionResult, error) {
+	if err := checkBinaryExists(opts.Cmd); err != nil {
+		return nil, fmt.Errorf("sandbox.SpawnOnce: %w", err)
+	}
 	cmd := exec.CommandContext(ctx, opts.Cmd, opts.Args...)
 	cmd.Dir = opts.Cwd
 	if len(opts.Env) > 0 {
@@ -75,6 +105,9 @@ func SpawnOnce(ctx context.Context, opts SpawnOptions) (*sandboxdomain.Execution
 //
 // SpawnLongLived 启动命令并布 stdio 管道，返 handle；调用方必须 Wait 或 Kill。
 func SpawnLongLived(ctx context.Context, opts SpawnOptions) (sandboxdomain.LongLivedHandle, error) {
+	if err := checkBinaryExists(opts.Cmd); err != nil {
+		return nil, fmt.Errorf("sandbox.SpawnLongLived: %w", err)
+	}
 	cmd := exec.CommandContext(ctx, opts.Cmd, opts.Args...)
 	cmd.Dir = opts.Cwd
 	if len(opts.Env) > 0 {

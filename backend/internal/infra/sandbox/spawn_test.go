@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"os"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -65,18 +66,25 @@ func TestSpawnOnce_NonZeroExit_ReturnsOkFalseNotError(t *testing.T) {
 	}
 }
 
-func TestSpawnOnce_StartFailure_WrapsErrSpawnFailed(t *testing.T) {
+func TestSpawnOnce_StartFailure_AbsoluteMissingWrapsErrEnvNotFound(t *testing.T) {
+	// §11.5 pre-§14: absolute nonexistent → ErrSpawnFailed (cmd.Start ENOENT).
+	// §11.5 post: absolute nonexistent → ErrEnvNotFound (pre-check) so app
+	// layer can lazy-rebuild. Result is nil pre-spawn (didn't reach exec).
+	//
+	// §11.5 之前:绝对路径不存在 → cmd.Start ENOENT → ErrSpawnFailed。
+	// §11.5 之后:预检拦下,返 ErrEnvNotFound 给 app 层 lazy rebuild。
+	// 此时 result=nil(还没到 exec)。
 	res, err := SpawnOnce(context.Background(), SpawnOptions{
 		Cmd: "/nonexistent/binary/path",
 	})
 	if err == nil {
 		t.Fatal("want error for nonexistent binary, got nil")
 	}
-	if !errors.Is(err, sandboxdomain.ErrSpawnFailed) {
-		t.Errorf("err must wrap ErrSpawnFailed, got %v", err)
+	if !errors.Is(err, sandboxdomain.ErrEnvNotFound) {
+		t.Errorf("err must wrap ErrEnvNotFound (§11.5 pre-check), got %v", err)
 	}
-	if res == nil {
-		t.Error("result should be non-nil even on infrastructure failure")
+	if res != nil {
+		t.Errorf("result should be nil when pre-check fails before exec; got %+v", res)
 	}
 }
 
@@ -194,13 +202,58 @@ func TestSpawnLongLived_KillTerminates(t *testing.T) {
 }
 
 func TestSpawnLongLived_StartFailure(t *testing.T) {
+	// §11.5: absolute path pre-check classifies missing binary as
+	// ErrEnvNotFound (lazy-rebuild trigger) — was ErrSpawnFailed pre-§11.5.
+	//
+	// §11.5:绝对路径预检把缺失 binary 归为 ErrEnvNotFound(触发 lazy rebuild),
+	// §11.5 之前是 ErrSpawnFailed。
 	_, err := SpawnLongLived(context.Background(), SpawnOptions{
 		Cmd: "/nonexistent/binary/path",
 	})
 	if err == nil {
 		t.Fatal("want error for nonexistent binary, got nil")
 	}
-	if !errors.Is(err, sandboxdomain.ErrSpawnFailed) {
-		t.Errorf("err must wrap ErrSpawnFailed, got %v", err)
+	if !errors.Is(err, sandboxdomain.ErrEnvNotFound) {
+		t.Errorf("err must wrap ErrEnvNotFound (§11.5 pre-check), got %v", err)
+	}
+}
+
+// TestSpawnOnce_DanglingSymlink — §11.5 core scenario: venv .venv/bin/python
+// is a symlink to a runtime that mise relocated. os.Stat follows the link
+// and returns ENOENT; pre-check surfaces ErrEnvNotFound so the app-layer
+// lazy rebuild kicks in.
+//
+// TestSpawnOnce_DanglingSymlink —— §11.5 核心场景:venv 内 python 是
+// 指向已被 mise 重定位的 runtime 的 symlink。os.Stat 跟 link 返 ENOENT,
+// 预检上抛 ErrEnvNotFound 让 app 层 lazy rebuild 接管。
+func TestSpawnOnce_DanglingSymlink(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink semantics differ on Windows; production lazy rebuild path covered by integration tests")
+	}
+	tmp := t.TempDir()
+	link := tmp + "/dangling-python"
+	if err := os.Symlink("/does/not/exist/python", link); err != nil {
+		t.Fatalf("create dangling symlink: %v", err)
+	}
+
+	_, err := SpawnOnce(context.Background(), SpawnOptions{Cmd: link})
+	if err == nil {
+		t.Fatal("expected error spawning via dangling symlink, got nil")
+	}
+	if !errors.Is(err, sandboxdomain.ErrEnvNotFound) {
+		t.Errorf("dangling symlink should wrap ErrEnvNotFound (§11.5), got %v", err)
+	}
+}
+
+// TestCheckBinaryExists_PathResolvedSkipped — bare command names go through
+// $PATH lookup; pre-check skips them so they reach exec normally.
+//
+// TestCheckBinaryExists_PathResolvedSkipped —— 裸命令走 $PATH 解析,
+// 预检跳过让 exec 正常处理。
+func TestCheckBinaryExists_PathResolvedSkipped(t *testing.T) {
+	for _, cmd := range []string{"", "echo", "./script.sh", "../relative"} {
+		if err := checkBinaryExists(cmd); err != nil {
+			t.Errorf("checkBinaryExists(%q) should pass through, got %v", cmd, err)
+		}
 	}
 }
