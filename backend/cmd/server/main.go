@@ -368,6 +368,7 @@ func main() {
 	catalogService.RegisterSource(handlerService.AsCatalogSource())
 	catalogService.RegisterSource(skillService.AsCatalogSource())
 	catalogService.RegisterSource(mcpService.AsCatalogSource())
+	catalogService.RegisterSource(documentService.AsCatalogSource())
 	if err := catalogService.Start(context.Background()); err != nil {
 		log.Warn("catalog start failed (continuing without catalog injection)", zap.Error(err))
 	}

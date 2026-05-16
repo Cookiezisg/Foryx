@@ -440,6 +440,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 	catalogService.RegisterSource(handlerService.AsCatalogSource())
 	catalogService.RegisterSource(skillService.AsCatalogSource())
 	catalogService.RegisterSource(mcpService.AsCatalogSource())
+	catalogService.RegisterSource(documentService.AsCatalogSource())
 	if err := catalogService.Start(context.Background()); err != nil {
 		t.Logf("catalog start: %v", err)
 	}
