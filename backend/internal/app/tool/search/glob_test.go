@@ -1,9 +1,3 @@
-// glob_test.go — unit tests for the Glob system tool. Covers schema /
-// validation / pattern matching (single + double-star) / type+size+mtime
-// reporting / sorting / limit / PathGuard.
-//
-// glob_test.go — Glob 系统工具单测：覆盖 schema / validation / 单星双星
-// 匹配 / type+size+mtime / 排序 / limit / PathGuard。
 package search
 
 import (
@@ -78,7 +72,6 @@ func runGlob(t *testing.T, g *Glob, args globArgs) globResult {
 	return res
 }
 
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestGlob_ValidateInput_RequiresPattern(t *testing.T) {
 	g := newTestGlob()
@@ -112,7 +105,6 @@ func TestGlob_ValidateInput_AcceptsValidArgs(t *testing.T) {
 	}
 }
 
-// ── normalize ─────────────────────────────────────────────────────────────────
 
 func TestGlobArgs_NormalizeFillsDefaults(t *testing.T) {
 	a := globArgs{}
@@ -133,7 +125,6 @@ func TestGlobArgs_NormalizeCapsHardLimit(t *testing.T) {
 	}
 }
 
-// ── Pattern matching ──────────────────────────────────────────────────────────
 
 func TestGlob_StarMatchesImmediateChildren(t *testing.T) {
 	g := newTestGlob()
@@ -195,7 +186,6 @@ func TestGlob_StarLikeLS_ListsAllChildren(t *testing.T) {
 	}
 }
 
-// ── Enriched fields ───────────────────────────────────────────────────────────
 
 func TestGlob_TypeField_DistinguishesFileAndDir(t *testing.T) {
 	g := newTestGlob()
@@ -246,7 +236,6 @@ func TestGlob_SizeAndMTime_Populated(t *testing.T) {
 	}
 }
 
-// ── Sorting ───────────────────────────────────────────────────────────────────
 
 func TestGlob_SortedByMTimeDescending(t *testing.T) {
 	g := newTestGlob()
@@ -268,7 +257,6 @@ func TestGlob_SortedByMTimeDescending(t *testing.T) {
 	}
 }
 
-// ── Limit / truncation ────────────────────────────────────────────────────────
 
 func TestGlob_LimitTruncatesAndFlagsTrue(t *testing.T) {
 	g := newTestGlob()
@@ -294,7 +282,6 @@ func TestGlob_NoTruncationWhenUnderLimit(t *testing.T) {
 	}
 }
 
-// ── PathGuard / error paths ───────────────────────────────────────────────────
 
 func TestGlob_PathGuard_DeniesSensitivePath(t *testing.T) {
 	g := newTestGlob()
@@ -358,7 +345,6 @@ func TestGlob_NoMatches_EmptyMatchesAndTotalZero(t *testing.T) {
 	}
 }
 
-// ── Identity / metadata / schema ──────────────────────────────────────────────
 
 func TestGlob_IdentityMethods(t *testing.T) {
 	g := newTestGlob()

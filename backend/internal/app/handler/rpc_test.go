@@ -7,12 +7,6 @@ import (
 	handlerdomain "github.com/sunweilin/forgify/backend/internal/domain/handler"
 )
 
-// TestAssembleClass_FullShape covers imports + init + shutdown + 2 methods.
-// 2026-05 refactor: assembled class uses exploded named params from
-// InitArgsSchema / method.Args (not **kwargs blobs).
-//
-// TestAssembleClass_FullShape 覆盖 imports + init + shutdown + 2 methods;
-// 2026-05 重构后用 exploded named params。
 func TestAssembleClass_FullShape(t *testing.T) {
 	d := &VersionDraft{
 		Imports: "import psycopg2",
@@ -48,10 +42,6 @@ func TestAssembleClass_FullShape(t *testing.T) {
 	}
 }
 
-// TestAssembleClass_OptionalArgsGetDefaults — optional arg without explicit
-// Default gets `= None`; with Default uses Python-rendered literal.
-//
-// 可选参数无 Default → `= None`;有 Default → 渲染成 Python 字面量。
 func TestAssembleClass_OptionalArgsGetDefaults(t *testing.T) {
 	d := &VersionDraft{
 		InitArgsSchema: []handlerdomain.InitArgSpec{
@@ -70,10 +60,6 @@ func TestAssembleClass_OptionalArgsGetDefaults(t *testing.T) {
 	}
 }
 
-// TestAssembleClass_NoShutdownDefaultsToPass verifies missing shutdown body
-// becomes `pass`.
-//
-// TestAssembleClass_NoShutdownDefaultsToPass 验证未填 shutdown 时回落 pass。
 func TestAssembleClass_NoShutdownDefaultsToPass(t *testing.T) {
 	d := &VersionDraft{
 		Methods: []handlerdomain.MethodSpec{{Name: "noop", Body: "return None"}},
@@ -84,10 +70,6 @@ func TestAssembleClass_NoShutdownDefaultsToPass(t *testing.T) {
 	}
 }
 
-// TestAssembleClass_BlankLinesPreserved checks indented multiline bodies
-// keep blank lines (whitespace-only lines become empty, not "        \n").
-//
-// TestAssembleClass_BlankLinesPreserved 多行 body 保空行,不写 trailing 空白。
 func TestAssembleClass_BlankLinesPreserved(t *testing.T) {
 	d := &VersionDraft{
 		Methods: []handlerdomain.MethodSpec{{
@@ -114,8 +96,6 @@ func TestDriverScript_ContainsKeyPatterns(t *testing.T) {
 		"progress",
 	} {
 		if !strings.Contains(DriverScript, want) {
-			// "yield" isn't actually in the driver, just "generator" detection
-			// via __iter__. Skip the yield-specific check if not literally present.
 			if want == "yield" {
 				continue
 			}

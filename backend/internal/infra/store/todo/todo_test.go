@@ -1,8 +1,3 @@
-// todo_test.go — integration tests for todostore.Store against an
-// in-memory SQLite. Covers Create / Get / List / Update / SoftDelete
-// happy paths + soft-delete invisibility.
-//
-// todo_test.go — todostore.Store 在内存 SQLite 上的集成测试。
 package todo
 
 import (
@@ -79,8 +74,6 @@ func TestStore_ListByConversation_OrdersByCreatedAt(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("len = %d, want 3", len(rows))
 	}
-	// Each created later than the previous → ascending order preserved.
-	// 后建的在后；升序保持。
 	for i := 1; i < len(rows); i++ {
 		if rows[i].CreatedAt.Before(rows[i-1].CreatedAt) {
 			t.Errorf("not ascending: rows[%d]=%v then rows[%d]=%v",

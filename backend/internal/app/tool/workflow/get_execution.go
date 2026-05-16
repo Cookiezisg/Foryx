@@ -1,6 +1,3 @@
-// get_execution.go — get_workflow_execution system tool (D22).
-// Fetches one flowrun_nodes row by id with full input/output.
-
 package workflow
 
 import (

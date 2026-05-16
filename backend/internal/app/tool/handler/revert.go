@@ -1,5 +1,3 @@
-// revert.go — revert_handler system tool.
-
 package handler
 
 import (

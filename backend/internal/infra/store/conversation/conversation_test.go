@@ -1,6 +1,3 @@
-// conversation_test.go — integration tests for Store using in-memory SQLite.
-//
-// conversation_test.go — Store 的集成测试（内存 SQLite）。
 package conversation
 
 import (

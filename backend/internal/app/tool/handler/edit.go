@@ -1,17 +1,3 @@
-// edit.go — edit_handler system tool: applies method-level ops on top of the
-// current pending (or active, when no pending) version. Iterate-same-pending
-// semantics (D-redo-11) — a second edit while a pending exists rewrites the
-// same row.
-//
-// On env install failure, enters the C2 env-fix loop: up to 3 attempts where
-// the main-chat LLM revises the dependency list. Unlike create_handler the
-// tool does NOT auto-accept on success — Edit's contract is "leave a pending
-// for the user to review".
-//
-// edit.go —— edit_handler 工具:method-level ops 应用到 pending(或 active);
-// iterate-same-pending(D-redo-11)。env 装失败时跑 env-fix loop;不 auto-accept
-// (Edit 契约是留 pending 给用户)。
-
 package handler
 
 import (

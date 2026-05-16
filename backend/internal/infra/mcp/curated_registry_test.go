@@ -9,24 +9,12 @@ import (
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
 )
 
-// TestCurated_ListCount asserts the curated catalog stays at the
-// expected size — adding/removing entries should be a deliberate change
-// reflected here, not a silent edit.
-//
-// TestCurated_ListCount 守 curated 数量 — 增删条目需显式改这测试，
-// 防止悄悄改清单。
 func TestCurated_ListCount(t *testing.T) {
 	if got := len(curatedEntries); got != 21 {
 		t.Errorf("curatedEntries count = %d, want 21 — update both the catalog and this guard if changing intentionally", got)
 	}
 }
 
-// TestCurated_AllEntriesValid runs minimal sanity checks per entry:
-// required fields populated, runtime is one of node/python, install
-// command non-empty, Tier >= 1 entries declare a SetupURL, etc.
-//
-// TestCurated_AllEntriesValid 逐条最小合法性：必填非空、runtime 是
-// node/python、install cmd 非空、Tier >= 1 必带 SetupURL 等。
 func TestCurated_AllEntriesValid(t *testing.T) {
 	seen := map[string]bool{}
 	validRuntime := map[string]bool{"node": true, "python": true}
@@ -59,10 +47,6 @@ func TestCurated_AllEntriesValid(t *testing.T) {
 		if e.Tier < 0 || e.Tier > 3 {
 			t.Errorf("%s: Tier %d out of range [0,3]", e.Name, e.Tier)
 		}
-		// Tier >= 1 entries that declare RequiredEnv must each include a
-		// SetupURL — the marketplace UI relies on it for the "where to get
-		// this key" link.
-		// Tier >= 1 的 RequiredEnv 必须每条带 SetupURL — UI 拿来"在哪拿 key"。
 		for _, env := range e.RequiredEnv {
 			if env.Name == "" {
 				t.Errorf("%s: RequiredEnv has empty Name", e.Name)
@@ -74,20 +58,12 @@ func TestCurated_AllEntriesValid(t *testing.T) {
 				t.Errorf("%s: Tier %d but RequiredEnv %s lacks SetupURL", e.Name, e.Tier, env.Name)
 			}
 		}
-		// Tier 2 (OAuth device code) needs explicit Notes — user must know
-		// to watch stderr for the login URL.
-		// Tier 2 (OAuth) 必带 Notes — 用户要知道看 stderr 找登录 URL。
 		if e.Tier == 2 && len(e.RequiredEnv) == 0 && e.Notes == "" {
 			t.Errorf("%s: OAuth-tier entry lacks Notes describing the auth flow", e.Name)
 		}
 	}
 }
 
-// TestCurated_RuntimeMix asserts the catalog stays node + python only
-// (the whole point of curating is to let us drop other sandbox runtimes).
-//
-// TestCurated_RuntimeMix 守 catalog 只有 node + python — 这是砍 sandbox
-// 多语种依据。
 func TestCurated_RuntimeMix(t *testing.T) {
 	for _, e := range curatedEntries {
 		if e.Runtime != "node" && e.Runtime != "python" {
@@ -96,10 +72,6 @@ func TestCurated_RuntimeMix(t *testing.T) {
 	}
 }
 
-// TestCurated_NewSourceWiresAllEntries checks the constructor populates
-// both lookup maps and that they're consistent.
-//
-// TestCurated_NewSourceWiresAllEntries 验构造器把两个 lookup 装齐 + 一致。
 func TestCurated_NewSourceWiresAllEntries(t *testing.T) {
 	src := NewCuratedRegistrySource()
 	if got := len(src.all); got != len(curatedEntries) {
@@ -115,10 +87,6 @@ func TestCurated_NewSourceWiresAllEntries(t *testing.T) {
 	}
 }
 
-// TestCurated_List_AllEntriesReturned asserts List returns every
-// curated entry exactly once.
-//
-// TestCurated_List_AllEntriesReturned List 返每条精确一次。
 func TestCurated_List_AllEntriesReturned(t *testing.T) {
 	src := NewCuratedRegistrySource()
 	got, err := src.List(context.Background())
@@ -139,10 +107,6 @@ func TestCurated_List_AllEntriesReturned(t *testing.T) {
 	}
 }
 
-// TestCurated_List_SortedByTierThenName guards the documented ordering
-// contract: easiest-to-use (tier 0) first, alphabetical within tier.
-//
-// TestCurated_List_SortedByTierThenName 守住"tier asc + name asc"排序契约。
 func TestCurated_List_SortedByTierThenName(t *testing.T) {
 	src := NewCuratedRegistrySource()
 	got, _ := src.List(context.Background())
@@ -159,10 +123,6 @@ func TestCurated_List_SortedByTierThenName(t *testing.T) {
 	}
 }
 
-// TestCurated_List_ReturnsCopy ensures callers can't mutate internal
-// state by editing the returned slice.
-//
-// TestCurated_List_ReturnsCopy 返切片不允许穿透 mutate 内部。
 func TestCurated_List_ReturnsCopy(t *testing.T) {
 	src := NewCuratedRegistrySource()
 	got, _ := src.List(context.Background())
@@ -177,9 +137,6 @@ func TestCurated_List_ReturnsCopy(t *testing.T) {
 	}
 }
 
-// TestCurated_Get_KnownAndUnknown verifies Get hits and misses correctly.
-//
-// TestCurated_Get_KnownAndUnknown 验 Get 命中与不命中。
 func TestCurated_Get_KnownAndUnknown(t *testing.T) {
 	src := NewCuratedRegistrySource()
 	e, err := src.Get(context.Background(), "playwright")
@@ -196,11 +153,6 @@ func TestCurated_Get_KnownAndUnknown(t *testing.T) {
 	}
 }
 
-// TestCurated_NotesPresentForGotchas spot-checks that entries with
-// known first-run gotchas (Playwright chromium download, Chrome attach,
-// Notion share-with-integration ritual) surface those notes.
-//
-// TestCurated_NotesPresentForGotchas 抽检几条已知"陷阱"必带 Notes。
 func TestCurated_NotesPresentForGotchas(t *testing.T) {
 	src := NewCuratedRegistrySource()
 	mustContain := map[string]string{

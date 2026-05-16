@@ -1,15 +1,3 @@
-// forge.go — SSE handler for the trinity forge stream
-// (forge_started / forge_op_applied / forge_env_attempt / forge_completed).
-// Per-user keying, Last-Event-ID reconnect, 410 Gone on evicted seq.
-//
-// Wire format per event:
-//
-//	event: <type>          ← forge_started | forge_op_applied | ...
-//	id: <seq>              ← per-user monotonic (bridge-assigned)
-//	data: <JSON of event>  ← payload struct; scope nested {kind, id} (D-redo-23)
-//
-// forge.go ——trinity 锻造流 SSE handler。per-user keying;Last-Event-ID
-// 重连;evicted 返 410。payload scope 嵌套(D-redo-23)。
 package handlers
 
 import (
@@ -26,8 +14,7 @@ import (
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
-// ForgeHandler exposes /api/v1/forge as an SSE stream backed by the
-// forge Bridge.
+// ForgeHandler exposes /api/v1/forge SSE backed by the forge Bridge.
 //
 // ForgeHandler 把 /api/v1/forge 暴露为 forge Bridge 支撑的 SSE 流。
 type ForgeHandler struct {
@@ -35,9 +22,6 @@ type ForgeHandler struct {
 	log    *zap.Logger
 }
 
-// NewForgeHandler wires the handler dependencies.
-//
-// NewForgeHandler 装配 handler 依赖。
 func NewForgeHandler(bridge forgedomain.Bridge, log *zap.Logger) *ForgeHandler {
 	if log == nil {
 		log = zap.NewNop()
@@ -45,16 +29,13 @@ func NewForgeHandler(bridge forgedomain.Bridge, log *zap.Logger) *ForgeHandler {
 	return &ForgeHandler{bridge: bridge, log: log.Named("forge.handler")}
 }
 
-// Register attaches the SSE route.
-//
-// Register 挂 SSE 路由。
 func (h *ForgeHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/forge", h.Stream)
 }
 
-// Stream serves GET /api/v1/forge. Per-user; no query parameter.
+// Stream serves GET /api/v1/forge per-user (ctx user_id keying).
 //
-// Stream 服务 GET /api/v1/forge。per-user;无 query 参。
+// Stream 服务 GET /api/v1/forge,按 ctx user_id 订阅。
 func (h *ForgeHandler) Stream(w http.ResponseWriter, r *http.Request) {
 	var fromSeq int64
 	if v := r.Header.Get("Last-Event-ID"); v != "" {

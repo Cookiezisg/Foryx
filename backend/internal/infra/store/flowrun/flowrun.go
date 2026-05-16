@@ -1,13 +1,6 @@
-// Package flowrun (infra/store/flowrun) is the GORM-backed implementation
-// of the domain flowrun Repository port. All methods scope by ctx userID —
-// callers MUST run InjectUserID middleware first.
+// Package flowrun is the GORM-backed flowrundomain.Repository, scoped by ctx userID.
 //
-// Shares its name with domain/flowrun by design; importers alias as
-// `flowrunstore`.
-//
-// Package flowrun(infra/store/flowrun)是 domain flowrun Repository 的
-// GORM 实现。所有方法按 ctx userID 过滤;调用方先跑 InjectUserID 中间件。
-// 包名跟 domain/flowrun 同名是刻意的;外部 import 起别名 flowrunstore。
+// Package flowrun 是 flowrundomain.Repository 的 GORM 实现，按 ctx userID 过滤。
 package flowrun
 
 import (
@@ -38,9 +31,6 @@ func New(db *gorm.DB) *Store {
 	return &Store{db: db}
 }
 
-// Compile-time interface assertion.
-//
-// 编译期接口兼容性断言。
 var _ flowrundomain.Repository = (*Store)(nil)
 
 // AutoMigrateModels returns the GORM models to register in db.AutoMigrate.
@@ -52,8 +42,6 @@ func AutoMigrateModels() []interface{} {
 		&flowrundomain.Node{},
 	}
 }
-
-// ── FlowRun CRUD ──────────────────────────────────────────────────────────────
 
 // Create persists a fresh FlowRun row.
 //
@@ -67,7 +55,7 @@ func (s *Store) Create(ctx context.Context, run *flowrundomain.FlowRun) error {
 
 // Get fetches by id, scoped to caller.
 //
-// Get 按 id 查;按调用者过滤。
+// Get 按 id 查，按调用者过滤。
 func (s *Store) Get(ctx context.Context, id string) (*flowrundomain.FlowRun, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -84,9 +72,9 @@ func (s *Store) Get(ctx context.Context, id string) (*flowrundomain.FlowRun, err
 	return &run, nil
 }
 
-// List paginates by filter. Order: started_at DESC, id DESC.
+// List paginates by filter; order started_at DESC, id DESC.
 //
-// List 按 filter 分页;按 started_at DESC + id DESC 排序。
+// List 按 filter 分页；started_at DESC + id DESC 排序。
 func (s *Store) List(ctx context.Context, filter flowrundomain.ListFilter) ([]*flowrundomain.FlowRun, string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -137,11 +125,9 @@ func (s *Store) List(ctx context.Context, filter flowrundomain.ListFilter) ([]*f
 	return out, next, nil
 }
 
-// UpdateStatus transitions a FlowRun's status atomically, optionally
-// writing terminal fields (ended_at / elapsed_ms / output / error).
+// UpdateStatus transitions status atomically; writes ended_at/elapsed_ms/output/error on terminal.
 //
-// UpdateStatus 原子状态机转换;转终态时同时写 ended_at + elapsed_ms +
-// output + error。
+// UpdateStatus 原子状态机转换；转终态时同时写 ended_at/elapsed_ms/output/error。
 func (s *Store) UpdateStatus(ctx context.Context, runID, status string, output any, errCode, errMsg string, endedAt *time.Time, elapsedMs int64) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -155,9 +141,8 @@ func (s *Store) UpdateStatus(ctx context.Context, runID, status string, output a
 		updates["elapsed_ms"] = elapsedMs
 	}
 	if output != nil {
-		// GORM Updates(map) bypasses serializer:json tag — marshal manually
-		// so the JSON column gets a string instead of a Go map.
-		// GORM Updates(map) 不走 serializer:json,自己 marshal 成字符串。
+		// GORM Updates(map) bypasses serializer:json — marshal manually so the column gets a string.
+		// GORM Updates(map) 不走 serializer:json，手动 marshal 成 string。
 		b, mErr := json.Marshal(output)
 		if mErr != nil {
 			return fmt.Errorf("flowrunstore.UpdateStatus: marshal output: %w", mErr)
@@ -181,11 +166,9 @@ func (s *Store) UpdateStatus(ctx context.Context, runID, status string, output a
 	return nil
 }
 
-// SetPausedState writes paused_state JSON blob. Marshal manually (Update
-// bypasses serializer:json tag — needs a string in the SQL bind args).
+// SetPausedState writes paused_state JSON blob (marshal manually since Update bypasses serializer).
 //
-// SetPausedState 写 paused_state JSON;手动 marshal(Update 不走 serializer
-// tag,bind args 要 string)。
+// SetPausedState 写 paused_state JSON（手动 marshal，Update 不走 serializer）。
 func (s *Store) SetPausedState(ctx context.Context, runID string, ps *flowrundomain.PausedState) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -227,10 +210,9 @@ func (s *Store) ClearPausedState(ctx context.Context, runID string) error {
 	return nil
 }
 
-// ListPaused returns all paused FlowRuns for current user. Boot-time
-// rehydrate entry point (Plan 05 §6.1).
+// ListPaused returns all paused FlowRuns for current user (boot rehydrate entry point).
 //
-// ListPaused 返当前用户所有 paused FlowRun;boot 时 rehydrate 入口。
+// ListPaused 返当前用户所有 paused FlowRun（boot rehydrate 入口）。
 func (s *Store) ListPaused(ctx context.Context) ([]*flowrundomain.FlowRun, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -249,10 +231,9 @@ func (s *Store) ListPaused(ctx context.Context) ([]*flowrundomain.FlowRun, error
 	return out, nil
 }
 
-// CountRunning returns the number of running FlowRuns for a workflow.
-// Used by Scheduler.StartRun's serial-concurrency check (Plan 05 §6.3).
+// CountRunning returns the running FlowRun count for a workflow (serial concurrency check).
 //
-// CountRunning 返某 workflow 当前 running FlowRun 数;serial 并发检查用。
+// CountRunning 返 workflow 的 running FlowRun 数（serial 并发检查用）。
 func (s *Store) CountRunning(ctx context.Context, workflowID string) (int, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -268,10 +249,9 @@ func (s *Store) CountRunning(ctx context.Context, workflowID string) (int, error
 	return int(count), nil
 }
 
-// HardDeleteOldest keeps `keep` newest FlowRuns per workflow and physically
-// deletes the rest. Called from Service.Finalize after each run (Plan 05 §6.7).
+// HardDeleteOldest keeps `keep` newest FlowRuns per workflow and physically deletes the rest.
 //
-// HardDeleteOldest 保留 keep 个最新,物理删其余(§6.7 保留策略)。
+// HardDeleteOldest 保留 keep 个最新，物理删其余。
 func (s *Store) HardDeleteOldest(ctx context.Context, workflowID string, keep int) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -300,11 +280,9 @@ func (s *Store) HardDeleteOldest(ctx context.Context, workflowID string, keep in
 	return nil
 }
 
-// ── Node CRUD ─────────────────────────────────────────────────────────────────
-
 // CreateNode persists a Node row (terminal write).
 //
-// CreateNode 写 Node 行(终态写)。
+// CreateNode 写 Node 行（终态写）。
 func (s *Store) CreateNode(ctx context.Context, node *flowrundomain.Node) error {
 	if err := s.db.WithContext(ctx).Create(node).Error; err != nil {
 		return fmt.Errorf("flowrunstore.CreateNode: %w", err)
@@ -331,9 +309,9 @@ func (s *Store) GetNode(ctx context.Context, id string) (*flowrundomain.Node, er
 	return &node, nil
 }
 
-// ListNodes paginates Nodes by filter. Order: started_at ASC (chronological).
+// ListNodes paginates Nodes by filter; order started_at ASC (chronological).
 //
-// ListNodes 按 filter 分页;按 started_at ASC 排序(时间顺序)。
+// ListNodes 按 filter 分页；started_at ASC 排序（时间顺序）。
 func (s *Store) ListNodes(ctx context.Context, filter flowrundomain.NodeFilter) ([]*flowrundomain.Node, string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {

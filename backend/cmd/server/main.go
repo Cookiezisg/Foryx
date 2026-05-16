@@ -1,7 +1,6 @@
-// Command server boots the Forgify backend: logger, DB, HTTP router with
-// middleware chain, and graceful shutdown.
+// Command server boots the Forgify backend: logger, DB, HTTP router, and graceful shutdown.
 //
-// Command server 启动 Forgify 后端：logger、DB、带中间件链的 HTTP 路由、优雅关闭。
+// Command server 启动 Forgify 后端：logger、DB、HTTP 路由、优雅关闭。
 package main
 
 import (
@@ -27,6 +26,7 @@ import (
 	functionapp "github.com/sunweilin/forgify/backend/internal/app/function"
 	handlerapp "github.com/sunweilin/forgify/backend/internal/app/handler"
 	mcpapp "github.com/sunweilin/forgify/backend/internal/app/mcp"
+	memoryapp "github.com/sunweilin/forgify/backend/internal/app/memory"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
 	skillapp "github.com/sunweilin/forgify/backend/internal/app/skill"
@@ -36,11 +36,13 @@ import (
 	schedulerapp "github.com/sunweilin/forgify/backend/internal/app/scheduler"
 	triggerapp "github.com/sunweilin/forgify/backend/internal/app/trigger"
 	catalogapp "github.com/sunweilin/forgify/backend/internal/app/catalog"
+	contextmgrapp "github.com/sunweilin/forgify/backend/internal/app/contextmgr"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
 	functiontool "github.com/sunweilin/forgify/backend/internal/app/tool/function"
 	handlertool "github.com/sunweilin/forgify/backend/internal/app/tool/handler"
 	mcptool "github.com/sunweilin/forgify/backend/internal/app/tool/mcp"
+	memorytool "github.com/sunweilin/forgify/backend/internal/app/tool/memory"
 	searchtool "github.com/sunweilin/forgify/backend/internal/app/tool/search"
 	shelltool "github.com/sunweilin/forgify/backend/internal/app/tool/shell"
 	skilltool "github.com/sunweilin/forgify/backend/internal/app/tool/skill"
@@ -59,6 +61,7 @@ import (
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
+	memorydomain "github.com/sunweilin/forgify/backend/internal/domain/memory"
 	skilldomain "github.com/sunweilin/forgify/backend/internal/domain/skill"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
@@ -78,6 +81,7 @@ import (
 	convstore "github.com/sunweilin/forgify/backend/internal/infra/store/conversation"
 	functionstore "github.com/sunweilin/forgify/backend/internal/infra/store/function"
 	handlerstore "github.com/sunweilin/forgify/backend/internal/infra/store/handler"
+	memorystore "github.com/sunweilin/forgify/backend/internal/infra/store/memory"
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
@@ -85,6 +89,7 @@ import (
 	flowrunstore "github.com/sunweilin/forgify/backend/internal/infra/store/flowrun"
 	mcpcallstore "github.com/sunweilin/forgify/backend/internal/infra/store/mcpcalls"
 	skillexecstore "github.com/sunweilin/forgify/backend/internal/infra/store/skillexec"
+	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	routerhttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/router"
 )
@@ -100,14 +105,7 @@ func main() {
 			"Default: <data-dir>/.forgify in --dev mode, ~/.forgify otherwise.")
 	flag.Parse()
 
-	// Resolve forgifyHome. In dev mode we root it under data-dir so
-	// `make clear` (which rm -rf's data-dir) wipes mcp.json + skills +
-	// catalog cache too — dev sessions stay isolated from the user's
-	// real ~/.forgify/ install. Prod / Wails use real ~/.forgify/.
-	//
-	// 解析 forgifyHome。dev 模式下根到 data-dir 让 `make clear`（rm -rf
-	// data-dir）连带清 mcp.json + skills + catalog cache——dev session 与
-	// 真用户 ~/.forgify/ 隔离。Prod / Wails 走真 ~/.forgify/。
+	// Dev mode roots forgifyHome under data-dir so `make clear` wipes mcp.json/skills/catalog cache.
 	homeRoot := *forgifyHome
 	if homeRoot == "" {
 		if *dev && *dataDir != "" {
@@ -115,7 +113,7 @@ func main() {
 		} else if h, err := os.UserHomeDir(); err == nil && h != "" {
 			homeRoot = filepath.Join(h, ".forgify")
 		} else {
-			homeRoot = ".forgify" // working-dir fallback
+			homeRoot = ".forgify"
 		}
 	}
 
@@ -149,23 +147,24 @@ func main() {
 		&modeldomain.ModelConfig{},
 		&convdomain.Conversation{},
 		&chatdomain.Message{},
-		&chatdomain.Block{}, // message_blocks table (event-log协议 unified shape)
+		&chatdomain.Block{},
 		&chatdomain.Attachment{},
 		&functiondomain.Function{},
 		&functiondomain.Version{},
-		&functiondomain.Execution{}, // D22 function_executions
+		&functiondomain.Execution{},
 		&handlerdomain.Handler{},
 		&handlerdomain.Version{},
-		&handlerdomain.Call{}, // D22 handler_calls
+		&handlerdomain.Call{},
 		&workflowdomain.Workflow{},
 		&workflowdomain.Version{},
 		&flowrundomain.FlowRun{},
-		&flowrundomain.Node{}, // D22 flowrun_nodes
-		&mcpdomain.Call{},     // D22 mcp_calls
-		&skilldomain.Execution{}, // D22 skill_executions
+		&flowrundomain.Node{},
+		&mcpdomain.Call{},
+		&skilldomain.Execution{},
 		&sandboxdomain.Runtime{},
 		&sandboxdomain.Env{},
 		&tododomain.Todo{},
+		&memorydomain.Memory{},
 	); err != nil {
 		log.Error("migrate db", zap.Error(err))
 		os.Exit(1)
@@ -192,14 +191,7 @@ func main() {
 
 	llmFactory := llminfra.NewFactory()
 
-	// TE-5a: in --dev mode, enable LLM call tracing so testend's Wire
-	// tab can replay every Stream() call (request + emitted events
-	// + final text + elapsed). Production unchanged — tracer stays
-	// nil so Build returns the raw provider client unwrapped.
-	//
-	// TE-5a：--dev 模式启 LLM 调用 tracing 让 testend Wire tab 能 replay
-	// 每个 Stream() 调用（请求 + 发出的 events + 最终文字 + 耗时）。生产
-	// 不动——tracer 保持 nil 让 Build 返不带包装的原 provider client。
+	// Dev mode enables LLM call tracing for testend's Wire tab replay.
 	if *dev {
 		llmFactory.SetTracer(llminfra.NewTraceRecorder())
 		log.Info("LLM trace recorder enabled (--dev) — testend Wire tab will replay every Stream call")
@@ -212,14 +204,7 @@ func main() {
 	forgePub := forgepkg.New(forgeBridge, log)
 	convService := convapp.NewService(convstore.New(gdb), notificationsPub, log)
 
-	// PluginSandbox v2 — unified runtime/env service. Bootstrap extracts
-	// the embedded mise binary; failure flips degraded mode (chat-only
-	// path stays alive) but is non-fatal. After Bootstrap we register
-	// installers + env managers covering all v1 supported runtimes.
-	//
-	// PluginSandbox v2 ——统一 runtime/env 服务。Bootstrap 解 embed mise；
-	// 失败翻 degraded mode（chat-only 路径保活）但不致命。Bootstrap 后注册
-	// 覆盖所有 v1 支持 runtime 的 installer + env manager。
+	// PluginSandbox v2 bootstrap: extract embedded mise binary; failure flips degraded mode (non-fatal).
 	sandboxRepo := sandboxstore.New(gdb)
 	sandboxSvc := sandboxapp.New(sandboxRepo, *dataDir, notificationsPub, log)
 	if err := sandboxSvc.Bootstrap(context.Background()); err != nil {
@@ -235,11 +220,6 @@ func main() {
 		log,
 	)
 
-	// Handler service (Plan 02 trinity second leg). Shares the same sandbox v2
-	// + encryptor as function;own store + tool factory + registry.
-	//
-	// Handler service(Plan 02 trinity 第二条腿)。复用 sandbox v2 + encryptor;
-	// 自己的 store + tool factory + registry。
 	handlerService := handlerapp.NewService(
 		handlerstore.New(gdb),
 		handlerapp.NewSandboxAdapter(sandboxSvc, *dataDir),
@@ -249,18 +229,10 @@ func main() {
 		log,
 	)
 
-	// Workflow service (Plan 04 trinity third leg). DAG authoring: CRUD,
-	// versions, ops engine, validation. CapabilityChecker is wired after
-	// MCP + Skill services are constructed below (closure over the four
-	// services so it stays in sync if they're nil during init).
-	//
-	// Workflow service(Plan 04 trinity 第三条腿)。DAG 锻造:CRUD、版本、ops、
-	// 校验。CapabilityChecker 在下方 MCP/Skill 构造后再装(闭包持四服务引用)。
+	// workflowChecker.Skill / .MCP are filled below once those services exist.
 	workflowChecker := &workflowapp.ProductionChecker{
 		Function: functionService,
 		Handler:  handlerService,
-		// Skill / MCP filled below after their services are constructed.
-		// Skill / MCP 在下方各自 service 构造后回填。
 	}
 	workflowService := workflowapp.NewService(
 		workflowstore.New(gdb),
@@ -283,35 +255,10 @@ func main() {
 		log,
 	)
 
-	// PathGuard for filesystem tools — denies a curated list of sensitive
-	// paths (~/.ssh / ~/.aws / ~/.gnupg / ~/.netrc / ~/.config/git-credentials
-	// / ~/.forgify/ / system paths). See pkg/pathguard for the full list and
-	// 02-tools-deep/03-shell.md decision D5 for why we use a thin deny-list
-	// rather than OS-level sandboxing.
-	//
-	// 文件系统 tool 的 PathGuard——拒绝精选的敏感路径清单。详见 pkg/pathguard
-	// 与 02-tools-deep/03-shell.md 决策 D5。
 	pathGuard := pathguardpkg.NewDefault()
 
-	// MCP Service constructed here (before WebTools) so the
-	// WebSearch tool can route through the duckduckgo-search MCP server
-	// when installed. mcpService.Start is called later (right after the
-	// tool slice is finalized) — the SearchRouter wrapper checks server
-	// status at call time, so pre-Start invocations safely fall through
-	// to Bing CN.
-	//
-	// MCP Service 构造提前到 WebTools 之前，让 WebSearch 在 duckduckgo-search
-	// MCP server 已装时能路由过去。mcpService.Start 留在 tool 切片定稿后调
-	// ——SearchRouter 在调用时查 server 状态，pre-Start 调用安全降级到 Bing CN。
+	// MCP Service constructed before WebTools so WebSearch can route through duckduckgo-search MCP.
 	mcpConfigPath := filepath.Join(homeRoot, "mcp.json")
-	// Marketplace V3 (2026-05-08, post-curation): the upstream
-	// registry.modelcontextprotocol.io has 5000+ entries of mixed quality
-	// (mostly broken, abandoned, or API-key-required). We replaced it with
-	// a hardcoded curated catalog of 21 high-value MCP servers verified to
-	// install + run out of the box. No HTTP, no flakiness, predictable list.
-	//
-	// Marketplace V3：上游 registry 5000+ 条多数不可用，换成 21 条精选
-	// hardcoded 目录，每条都验证过装上即可用。无 HTTP / 无抖动 / 列表稳定。
 	mcpRegistrySource := mcpinfra.NewCuratedRegistrySource()
 	mcpService := mcpapp.New(
 		mcpConfigPath,
@@ -349,7 +296,7 @@ func main() {
 	tools = append(tools, searchtool.SearchTools(pathGuard, log)...)
 	tools = append(tools, webtool.WebTools(modelService, apikeyService, llmFactory, mcpapp.NewSearchRouter(mcpService), log)...)
 	shells := shelltool.NewShellTools(sandboxSvc)
-	defer shells.Manager.Stop() // graceful shutdown: kill any background children
+	defer shells.Manager.Stop()
 	tools = append(tools, shells.Tools...)
 
 	todoService := todoapp.NewService(todostore.New(gdb), notificationsPub, log)
@@ -357,17 +304,10 @@ func main() {
 	askService := askapp.NewService()
 	tools = append(tools, asktool.AskTools(askService)...)
 
-	// Subagent: Service holds back-refs to the global tool list, so it's
-	// constructed before the SubagentTool is appended; tools.SetTools is
-	// called after the slice is finalized so Service.filterTools sees
-	// every other tool. The structural recursion defense in Service
-	// .filterTools strips the SubagentTool itself before passing the
-	// list to a sub-runner — the sub-LLM physically can't see "Subagent".
-	//
-	// Subagent：Service 持全局 tool 列表反向引用——构造在 SubagentTool 加入
-	// 之前；slice 终稿后再 SetTools 让 filterTools 看到所有其他 tool。
-	// Service.filterTools 的结构性防递归会在传给 sub-runner 前剥掉 SubagentTool
-	// 自身——sub-LLM 物理看不到 "Subagent"。
+	memoryService := memoryapp.New(memorystore.New(gdb), notificationsPub, log)
+	tools = append(tools, memorytool.MemoryTools(memoryService)...)
+
+	// SubagentTool is appended after Service construction; SetTools runs after the slice is finalized.
 	subagentService := subagentapp.New(
 		chatRepo,
 		subagentapp.NewRegistry(),
@@ -379,32 +319,13 @@ func main() {
 	tools = append(tools, subagenttool.SubagentTools(subagentService)...)
 	subagentService.SetTools(tools)
 
-	// MCP Start: load ~/.forgify/mcp.json + parallel-Connect all configured
-	// servers (30s per-server handshake timeout; per-server failures captured
-	// in ServerStatus, don't block boot). Service struct itself was constructed
-	// above (so WebSearch could see the SearchRouter); Start runs here once
-	// the full tool slice is being assembled.
-	//
-	// MCP Start：加载 ~/.forgify/mcp.json + 并发 Connect 所有 server（30s 握手
-	// 超时；per-server 失败记到 ServerStatus，不挡 boot）。Service struct 在
-	// 上方已构造（让 WebSearch 能见 SearchRouter）；tool 切片装配中跑 Start。
-	// 注入 DefaultLocalUserID 让 boot 期 publishStatus 通知能写出去(§S9 detached
-	// context 模式;否则 WARN: "missing user id in context")。
+	// §S9 detached ctx: inject DefaultLocalUserID so boot publishStatus can write.
 	mcpBootCtx := reqctxpkg.SetUserID(context.Background(), reqctxpkg.DefaultLocalUserID)
 	if err := mcpService.Start(mcpBootCtx); err != nil {
 		log.Warn("mcp start partial failure (some servers may be unreachable)", zap.Error(err))
 	}
 	tools = append(tools, mcptool.MCPTools(mcpService)...)
 
-	// Skill: scan ~/.forgify/skills/ for any installed Anthropic Agent
-	// Skills + start the 1s polling loop for live rescan on user edits.
-	// Same boot-don't-block discipline as MCP — empty skills dir is the
-	// typical first-launch case.
-	//
-	// Skill：扫 ~/.forgify/skills/ 把已装 Agent Skill 元数据缓存好 + 启
-	// 1s 轮询让用户编辑时实时重扫。同 MCP 不挡 boot 纪律——首次启动 skills
-	// 目录通常为空。注入 DefaultLocalUserID 让 boot 期 publish 通知能写出去
-	// (跟 mcpBootCtx 同理)。
 	skillService := skillapp.New(
 		filepath.Join(homeRoot, "skills"),
 		subagentService,
@@ -420,18 +341,6 @@ func main() {
 	}
 	tools = append(tools, skilltool.SkillTools(skillService)...)
 
-	// Capability Catalog: subscribes to function / skill / mcp via the
-	// CatalogSource port, polls every 1s with fingerprint short-circuit,
-	// regenerates the system-prompt summary via LLM (3-attempt retry +
-	// mechanical fallback) when descriptions change. The summary is
-	// what teaches the LLM "what categories of capabilities you have +
-	// when to prefer one over another". subagent NOT registered — its
-	// own tool description already enumerates subagent types
-	// (catalog.md §1).
-	//
-	// Catalog 订阅 function / skill / mcp 经 CatalogSource 接口，每 1s
-	// 轮询 fingerprint 短路，description 变时经 LLM regen system-prompt
-	// summary（3 attempt + mechanical fallback）。subagent 不注册。
 	catalogService := catalogapp.New(filepath.Join(homeRoot, ".catalog.json"), notificationsPub, log)
 	catalogService.SetGenerator(catalogapp.NewLLMGenerator(modelService, apikeyService, llmFactory, log))
 	catalogService.RegisterSource(functionService.AsCatalogSource())
@@ -442,36 +351,29 @@ func main() {
 		log.Warn("catalog start failed (continuing without catalog injection)", zap.Error(err))
 	}
 	chatService.SetSystemPromptProvider(catalogService)
+	chatService.SetMemoryProvider(memoryService)
 
-	// Fill in workflow CapabilityChecker now that MCP + Skill services exist.
-	// The Service holds the *ProductionChecker pointer, so mutating fields
-	// here is observed on every subsequent validation call.
-	//
-	// 此时 MCP + Skill 已构造,回填 workflow CapabilityChecker。Service 持
-	// *ProductionChecker 指针,后续校验都看得到。
+	cheapLLMResolver := func(ctx context.Context) (llminfra.Client, string, string, string, error) {
+		bundle, err := llmclientpkg.ResolveForWebSummary(ctx, modelService, apikeyService, llmFactory)
+		if err != nil {
+			return nil, "", "", "", err
+		}
+		return bundle.Client, bundle.ModelID, bundle.Key, bundle.BaseURL, nil
+	}
+	contextManager := contextmgrapp.New(
+		chatRepo, convstore.New(gdb), chatEmitter, notificationsPub, cheapLLMResolver, log)
+	chatService.SetContextCompactor(contextManager)
+
 	workflowChecker.Skill = skillService
 	workflowChecker.MCP = mcpService
 
-	// Plan 05 execution plane wire-up — flowrun + trigger + scheduler.
-	// Order:
-	//  1. flowrun + D22 stores (mcpcalls + skillexec) construct
-	//  2. trigger Service (needs mux; webhook listener attaches sub-paths)
-	//  3. scheduler Service (needs flowrun repo + workflow reader + notif)
-	//  4. trigger.SetScheduler (breaks ctor cycle)
-	//  5. Register 13 dispatchers on scheduler Router
-	//  6. RehydrateOnBoot (re-attach cancel handles for paused runs)
-	//  7. Append D22 LLM tools (workflow / mcp / skill × search+get)
-	//
-	// Plan 05 执行 plane 装配。
 	flowrunRepo := flowrunstore.New(gdb)
 	mcpCallRepo := mcpcallstore.New(gdb)
 	skillExecRepo := skillexecstore.New(gdb)
 	mcpService.SetCallRepo(mcpCallRepo)
 	skillService.SetExecRepo(skillExecRepo)
 
-	// Build the mux up-front so trigger.webhook can register its sub-path
-	// listener on the same ServeMux the main router serves.
-	// mux 提前建,让 trigger.webhook 跟主 router 同 ServeMux。
+	// Build mux up-front so trigger.webhook can register sub-paths on the same ServeMux.
 	httpMux := http.NewServeMux()
 	triggerService := triggerapp.New(httpMux, log)
 	schedulerService := schedulerapp.NewService(
@@ -488,7 +390,7 @@ func main() {
 	router.Set(workflowdomain.NodeTypeHandler, schedulerapp.NewHandlerDispatcher(handlerService))
 	router.Set(workflowdomain.NodeTypeMCP, schedulerapp.NewMCPDispatcher(mcpService))
 	router.Set(workflowdomain.NodeTypeSkill, schedulerapp.NewSkillDispatcher(skillService))
-	router.Set(workflowdomain.NodeTypeLLM, schedulerapp.NewLLMDispatcher(nil)) // E15: LLMCaller adapter pending
+	router.Set(workflowdomain.NodeTypeLLM, schedulerapp.NewLLMDispatcher(nil)) // TODO: E15 LLMCaller adapter
 	router.Set(workflowdomain.NodeTypeHTTP, schedulerapp.NewHTTPDispatcher(nil))
 	router.Set(workflowdomain.NodeTypeCondition, schedulerapp.NewConditionDispatcher())
 	router.Set(workflowdomain.NodeTypeLoop, schedulerapp.NewLoopDispatcher())
@@ -502,7 +404,6 @@ func main() {
 		log.Warn("scheduler rehydrate failed (paused runs may need manual resume)", zap.Error(err))
 	}
 
-	// D22 LLM tools — workflow / mcp / skill × search + get (6 tools).
 	tools = append(tools, workflowtool.WorkflowExecutionTools(flowrunRepo)...)
 	tools = append(tools, mcptool.MCPCallLogTools(mcpCallRepo)...)
 	tools = append(tools, skilltool.SkillExecutionTools(skillExecRepo)...)
@@ -517,7 +418,6 @@ func main() {
 	actualPort := listener.Addr().(*net.TCPAddr).Port
 
 	// Electron reads this line from stdout to discover the port.
-	// Electron 从 stdout 读取此行发现端口。
 	fmt.Printf("BACKEND_PORT=%d\n", actualPort)
 
 	handler := routerhttpapi.New(routerhttpapi.Deps{
@@ -543,6 +443,7 @@ func main() {
 		MCPService:          mcpService,
 		SkillService:        skillService,
 		CatalogService:      catalogService,
+		MemoryService:       memoryService,
 		Dev:                 *dev,
 		Tools:               tools,
 		LLMFactory:          llmFactory,
@@ -555,16 +456,7 @@ func main() {
 		Port:                actualPort,
 	})
 
-	// srvBaseCtx is the ancestor of every request's r.Context(). On Ctrl+C
-	// we cancel it BEFORE srv.Shutdown so SSE handlers (eventlog /
-	// notifications) selecting on r.Context().Done() unblock instantly —
-	// otherwise srv.Shutdown waits until the 5s timeout because stdlib
-	// doesn't cancel request contexts on Shutdown.
-	//
-	// srvBaseCtx 是所有 r.Context() 的祖先。Ctrl+C 时在 srv.Shutdown 前
-	// 先 cancel 它，让 SSE handler（eventlog/notifications）的 select
-	// 立刻解开——否则 stdlib 不会因 Shutdown 主动 cancel request ctx，
-	// 长连接 SSE 会撑满 5 秒超时。
+	// srvBaseCtx ancestors every r.Context(); cancel before srv.Shutdown to unblock SSE handlers.
 	srvBaseCtx, cancelBase := context.WithCancel(context.Background())
 	defer cancelBase()
 
@@ -572,7 +464,6 @@ func main() {
 		Handler:     handler,
 		ReadTimeout: 15 * time.Second,
 		// WriteTimeout=0: SSE streams may run for minutes.
-		// WriteTimeout=0：SSE 流可能持续几分钟。
 		IdleTimeout: 60 * time.Second,
 		BaseContext: func(_ net.Listener) context.Context { return srvBaseCtx },
 	}
@@ -591,12 +482,6 @@ func main() {
 	<-ctx.Done()
 	log.Info("shutdown requested")
 
-	// Unblock SSE handlers first, then graceful Shutdown waits idle
-	// connections to drain. Without cancelBase() Shutdown burns the
-	// full 5s every Ctrl+C.
-	//
-	// 先解开 SSE handler，再 graceful Shutdown 等空闲连接 drain。
-	// 不 cancelBase() 的话每次 Ctrl+C 都吃满 5s 超时。
 	cancelBase()
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -605,42 +490,18 @@ func main() {
 		log.Error("shutdown", zap.Error(err))
 	}
 
-	// Tear down handler instance registry — any live Python subprocesses get
-	// graceful shutdown messages then Kill. Bounded by their internal 500ms
-	// per-shutdown send timeout.
-	//
-	// 关停 handler instance registry——活的 Python 子进程发 shutdown 再 Kill。
 	handlerService.Shutdown(shutdownCtx)
 }
 
-// registerSandboxStack wires the v1 PluginSandbox runtime/env matrix —
-// 4 installer kinds + 11 env managers — onto the freshly-bootstrapped
-// service. Order doesn't matter; idempotent re-registration is fine.
+// registerSandboxStack registers Marketplace V3 runtimes (python/node/uv) and env managers.
 //
-// Kept as a top-level helper rather than inlined in main() so the
-// service-construction block stays scannable and the registry table
-// reads as one coherent block.
-//
-// registerSandboxStack 把 curated marketplace 用到的 runtime/env 挂到 service。
-// 砍剩 python + node + uv（Marketplace V3 = npm + pypi only），其他语言 / docker /
-// playwright 已删除（curated 21 条目都是 npx / uvx 起的纯 stdio server）。
-//
-// 提为顶层 helper 让 service 构造段易读。
+// registerSandboxStack 注册 Marketplace V3 用到的 runtime（python/node/uv）和 env manager。
+// uv pinned to 0.11.4 (0.11.9 lacks GitHub artifact attestation mise verifies).
 func registerSandboxStack(svc *sandboxapp.Service, _ *zap.Logger) {
 	miseBin := svc.MiseBin()
 	if miseBin == "" {
-		// Bootstrap failed — nothing to register that depends on mise.
-		// Bootstrap 失败——依赖 mise 的不注册。
 		return
 	}
-
-	// Mise-managed runtimes — npm + pypi only (Marketplace V3).
-	// uv pin: 0.11.9 ships without the GitHub artifact attestation mise
-	// verifies — install fails on "expected workflow .../release.yml,
-	// found certificate: None". 0.11.4 is last known-good.
-	//
-	// Mise 管的 runtime——curated marketplace 仅 npm + pypi。uv 钉 0.11.4：
-	// 0.11.9 缺 mise 校验的 GitHub attestation。
 	for kind, defaultVer := range map[string]string{
 		"python": "3.12",
 		"node":   "22",
@@ -648,9 +509,6 @@ func registerSandboxStack(svc *sandboxapp.Service, _ *zap.Logger) {
 	} {
 		svc.RegisterInstaller(sandboxinfra.NewMiseInstaller(miseBin, kind, defaultVer))
 	}
-
-	// Env managers — only python + node (Marketplace V3 runtimes).
-	// Env manager——仅 python + node。
 	svc.RegisterEnvManager(sandboxinfra.NewPythonEnvManager(svc))
 	svc.RegisterEnvManager(sandboxinfra.NewNodeEnvManager())
 }

@@ -1,6 +1,3 @@
-// logger_test.go — unit tests for the RequestLogger middleware.
-//
-// logger_test.go — RequestLogger 中间件的单元测试。
 package middleware
 
 import (
@@ -41,11 +38,6 @@ func TestRequestLogger_NormalRequestLogs200(t *testing.T) {
 }
 
 func TestRequestLogger_ImplicitStatus200(t *testing.T) {
-	// Handler only calls Write, never WriteHeader. Go implicitly sends 200.
-	// The recorder must report 200 as well.
-	//
-	// Handler 只调 Write 不调 WriteHeader。Go 会隐式发送 200，recorder
-	// 也应该记录 200。
 	log, obs := newObservedLogger(t)
 	handler := RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("implicit"))
@@ -76,9 +68,6 @@ func TestRequestLogger_404Status(t *testing.T) {
 }
 
 func TestRequestLogger_BytesAccumulate(t *testing.T) {
-	// Handler makes multiple Write calls; recorder must sum the bytes.
-	//
-	// Handler 多次 Write；recorder 应累加字节数。
 	log, obs := newObservedLogger(t)
 	handler := RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte("hello "))
@@ -95,11 +84,6 @@ func TestRequestLogger_BytesAccumulate(t *testing.T) {
 }
 
 func TestRequestLogger_ElapsedIsNonNegative(t *testing.T) {
-	// elapsed_ms should be >= 0, never negative. We deliberately sleep a bit
-	// to also make sure a positive elapsed is actually measured.
-	//
-	// elapsed_ms 应 >= 0，绝不为负。我们故意 sleep 一下，顺便验证正值
-	// 能被测量到。
 	log, obs := newObservedLogger(t)
 	handler := RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		time.Sleep(2 * time.Millisecond)
@@ -123,15 +107,10 @@ func TestRequestLogger_ElapsedIsNonNegative(t *testing.T) {
 }
 
 func TestRequestLogger_DoubleWriteHeaderRecordsFirst(t *testing.T) {
-	// Calling WriteHeader twice is an app bug but shouldn't crash.
-	// Recorder must report the FIRST status and ignore the second.
-	//
-	// 两次调 WriteHeader 是 bug 但不应 crash。recorder 应只记录**第一次**，
-	// 忽略后续。
 	log, obs := newObservedLogger(t)
 	handler := RequestLogger(log)(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusAccepted)   // 202
-		w.WriteHeader(http.StatusBadRequest) // 400 (ignored)
+		w.WriteHeader(http.StatusAccepted)
+		w.WriteHeader(http.StatusBadRequest)
 	}))
 
 	rec := httptest.NewRecorder()

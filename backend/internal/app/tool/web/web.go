@@ -1,21 +1,6 @@
-// Package web provides the network-facing system tools the LLM uses to
-// browse the open web: WebFetch (single-URL retrieval + LLM summarisation)
-// and WebSearch (BYOK → MCP routing). Imported as `webtool` per §S13
-// nested sub-package alias rule.
+// Package web provides network-facing system tools (WebFetch + WebSearch) sharing an SSRF guard.
 //
-// Both tools share an SSRF guard (no private/loopback/link-local hosts)
-// and a 30-second per-request timeout. WebFetch routes content through
-// the user's web_summary model scenario (with transparent fallback to
-// the chat scenario when web_summary is unconfigured) so users never
-// have to set anything up to get a useful summary.
-//
-// Package web 提供 LLM 用于上网的 system tool：WebFetch（抓 URL + LLM
-// 摘要）与 WebSearch（BYOK → MCP 路由）。按 §S13 嵌套子包别名规则导入为
-// `webtool`。
-//
-// 两者共用 SSRF 守卫（拒私网/loopback/link-local）+ 30s 单次请求超时。
-// WebFetch 走用户 web_summary 模型场景（未配置时透明 fallback 到 chat
-// 场景），开箱即用无需配置。
+// Package web 提供网络相关 system tool（WebFetch + WebSearch），共用 SSRF 守卫。
 package web
 
 import (
@@ -29,12 +14,9 @@ import (
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 )
 
-// WebTools constructs the web system tools wired with their dependencies.
-// mcpRouter is optional (nil means "no MCP routing tier"); keys + log
-// are required for the WebSearch BYOK + structured-log paths.
+// WebTools constructs the web system tools; mcpRouter is optional (nil disables MCP routing).
 //
-// WebTools 构造装配好依赖的 web system tool。mcpRouter 可空（nil = 无 MCP 路
-// 由层）；keys + log 是 WebSearch BYOK + 结构化日志路径的必填。
+// WebTools 构造 web system tool；mcpRouter 可空（nil 关闭 MCP 路由）。
 func WebTools(
 	picker modeldomain.ModelPicker,
 	keys apikeydomain.KeyProvider,
@@ -48,9 +30,6 @@ func WebTools(
 	}
 }
 
-// newWebFetch constructs a WebFetch with the default HTTP client.
-//
-// newWebFetch 用默认 HTTP 客户端构造 WebFetch。
 func newWebFetch(
 	picker modeldomain.ModelPicker,
 	keys apikeydomain.KeyProvider,
@@ -63,12 +42,6 @@ func newWebFetch(
 	}
 }
 
-// newWebSearch constructs a WebSearch with a 10s-timeout client. mcpRouter
-// may be nil to disable the MCP tier (e.g. tests that only want the BYOK
-// path).
-//
-// newWebSearch 构造 WebSearch + 10s 超时 client。mcpRouter 可空以禁用 MCP 层
-// （如只测 BYOK 路径的单测）。
 func newWebSearch(keys apikeydomain.KeyProvider, mcpRouter MCPSearchRouter, log *zap.Logger) *WebSearch {
 	return &WebSearch{
 		httpClient: &http.Client{Timeout: searchTimeout},

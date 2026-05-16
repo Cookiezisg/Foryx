@@ -1,7 +1,3 @@
-// cron_test.go — Listener tests. Uses Go's fake scheduling by registering
-// fast-firing exprs ("@every 1s" or sub-second equivalent) and waiting
-// briefly. parse-error tests are pure logic, no waiting.
-
 package cron
 
 import (

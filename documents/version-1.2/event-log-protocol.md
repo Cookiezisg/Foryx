@@ -1,7 +1,7 @@
 # Event Log Protocol — Forgify SSE 龙骨设计文档
 
 > **状态**:✅ 已落地 + 2026-05-12 订阅模型修订
-> **类型**:递归事件日志 SSE 协议(5 events × 6 block types)
+> **类型**:递归事件日志 SSE 协议(5 events × 7 block types,V1.2 §1 final-sweep 起 6→7)
 > **当前现实**:本文 §0-§6 关于事件 schema / block 类型 / 嵌套 / DB 持久化的设计仍然成立(已实施)。**§3-§4 中 Bridge "per-conversation" 订阅模型已改为 per-user**(D-redo-2,2026-05-12 SSE 三流统一)。订阅端不再传 `?conversationId=`,后端 Bridge 按 user_id key,payload 仍带 `conversationId`,client 按 payload 字段 demux。详 [`adhoc-topic-documents/forge_redesign/discussions/2026-05-12-env-and-sse-rework.md`](./adhoc-topic-documents/forge_redesign/discussions/2026-05-12-env-and-sse-rework.md) §B。
 
 **关联文档**:
@@ -160,7 +160,7 @@ Conversation
 | MessageID | string (`msg_<16hex>`) | 顶层归属 message |
 | **ParentBlockID** | string (`blk_<16hex>` 可空) | **★ 新加** — 递归嵌套指针，可空表示顶层 block |
 | **Seq** | int64 | **★ 改语义** — per-conversation 全局单调（事件序号） |
-| Type | string | 6 种 block 类型枚举之一（含 CHECK 约束） |
+| Type | string | **7 种** block 类型枚举之一（含 CHECK 约束；V1.2 §1 final-sweep 加 `compaction`） |
 | **Attrs** | JSON | **★ 改名（原 data）** — 仅 type 元数据 |
 | **Content** | string | **★ 新加** — 累积流式内容 |
 | **Status** | string | **★ 新加** — `streaming` / `completed` / `error` / `cancelled` |

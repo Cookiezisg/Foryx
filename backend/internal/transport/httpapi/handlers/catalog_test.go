@@ -1,14 +1,3 @@
-// catalog_test.go — E2E contract tests for the /api/v1/catalog and
-// /api/v1/catalog:refresh routes. Real httptest server backed by an
-// app/catalog.Service rooted at a per-test tempdir; no LLM Generator
-// wired so Refresh exercises the mechanical-fallback path (D8-2's
-// nil-generator default behavior). LLM-driven Generator coverage is
-// in the pipeline suite (D8-7) where FakeLLM can be wired.
-//
-// catalog_test.go ——/api/v1/catalog + /api/v1/catalog:refresh 端到端
-// 契约测试。真 httptest server 后端 app/catalog.Service（per-test tempdir）；
-// 不接 LLM Generator 让 Refresh 走 mechanical-fallback 路径（D8-2 nil
-// generator 默认行为）。LLM-driven Generator 覆盖在 pipeline 套件（D8-7）。
 package handlers
 
 import (
@@ -26,12 +15,6 @@ import (
 	middlewarehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/middleware"
 )
 
-// stubCatalogSource implements catalogdomain.CatalogSource for endpoint
-// tests. Tests configure the items it returns + drive Refresh through
-// the HTTP route.
-//
-// stubCatalogSource 实现 catalogdomain.CatalogSource 给端点测试。测试
-// 配它返的 items + 经 HTTP 路由驱动 Refresh。
 type stubCatalogSource struct {
 	name  string
 	gran  catalogdomain.Granularity
@@ -139,11 +122,6 @@ func TestCatalog_GetAfterRefresh_ReturnsCachedSnapshot(t *testing.T) {
 }
 
 func TestCatalog_Refresh_ShortCircuitsWhenFingerprintUnchanged(t *testing.T) {
-	// Two consecutive Refresh calls with identical source data should
-	// keep Version at 1 (the second tick's fingerprint matches the first
-	// → short-circuit, no new write).
-	// 同 source 数据连 2 Refresh 应保持 Version=1（第二 tick fingerprint
-	// 同首次→短路，不新写）。
 	h := newCatalogTestServer(t)
 	h.svc.RegisterSource(&stubCatalogSource{
 		name: "forge",

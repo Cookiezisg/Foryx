@@ -1,14 +1,3 @@
-// envmanager_node_test.go — pure-function unit tests for NodeEnvManager.
-//
-// Real CreateEnv writes a small package.json so we cover that path against
-// a TempDir; npm shellouts (real InstallDeps) belong in the curated
-// pipeline suite — `npm install` downloads network bytes.
-//
-// envmanager_node_test.go ——NodeEnvManager pure-function 单测。
-//
-// 真 CreateEnv 写小 package.json 所以走 TempDir 测；npm shellout（真
-// InstallDeps）归 curated pipeline 套——`npm install` 下网络字节。
-
 package sandbox
 
 import (

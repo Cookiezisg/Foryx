@@ -20,6 +20,11 @@ export interface Conversation {
   title: string;
   autoTitled?: boolean;
   systemPrompt?: string;
+  /** V1.2 §1 final-sweep — running compaction summary; empty when no
+   *  compaction has run yet. */
+  summary?: string;
+  /** seq of the last block covered by `summary`; 0 if never compacted. */
+  summaryCoversUpToSeq?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,7 +51,10 @@ export type BlockType =
   | 'tool_call'
   | 'tool_result'
   | 'progress'
-  | 'message';
+  | 'message'
+  | 'compaction';
+
+export type ContextRole = 'hot' | 'warm' | 'cold' | 'archived';
 
 export interface Block {
   id: ID<'blk'>;
@@ -55,6 +63,9 @@ export interface Block {
   type: BlockType;
   status: 'streaming' | 'completed' | 'error' | 'cancelled';
   content: string;
+  /** Projection role decided by app/contextmgr (V1.2 §1 final-sweep).
+   *  Defaults to 'hot' on fresh blocks; demote/archive as conversation grows. */
+  contextRole?: ContextRole;
   attrs?: Record<string, unknown> & {
     toolName?: string;
     toolCallId?: string;
@@ -64,6 +75,11 @@ export interface Block {
     elapsedMs?: number;
     stage?: string;
     error?: string;
+    /* compaction block payload */
+    coversFromSeq?: number;
+    coversToSeq?: number;
+    blocksArchived?: number;
+    generatedBy?: string;
   };
   error?: string;
   seq: number;
@@ -526,4 +542,28 @@ export interface Attachment {
   mimeType: string;
   sizeBytes: number;
   createdAt: string;
+}
+
+/* ──────────────── Memory ────────────────
+ * Cross-conversation long-term facts (V1.2 §2 final-sweep).
+ * type: user / feedback / project / reference.
+ * source: "user" (created in UI) / "ai" (written by write_memory tool).
+ *
+ * Memory ——跨对话长期事实（V1.2 §2 final-sweep）。
+ * type：user / feedback / project / reference。source：UI 创建 / AI 工具写。
+ */
+
+export interface Memory {
+  id: ID<'mem'>;
+  name: string;
+  type: 'user' | 'feedback' | 'project' | 'reference';
+  description: string;
+  content: string;
+  pinned: boolean;
+  source: 'user' | 'ai';
+  metadata?: Record<string, unknown>;
+  accessedAt?: string;
+  accessCount?: number;
+  createdAt: string;
+  updatedAt: string;
 }

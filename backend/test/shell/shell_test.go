@@ -1,23 +1,8 @@
 //go:build pipeline
 
-// shell_test.go — pipeline tests for the shell system tools (Bash /
-// BashOutput / KillShell) driving the full chat ReAct loop with a fake
-// LLM. Scenarios stay deterministic by avoiding background processes
-// whose dynamic bash_id the fake LLM cannot read; background lifecycle
-// (spawn + poll + kill) is covered by the in-package unit tests.
+// Package shell_test runs pipeline tests for shell system tools (Bash/BashOutput/KillShell).
 //
-// Scenarios:
-//  1. BashEchoForeground — fake LLM scripts `echo`; verify stdout +
-//     [exit code: 0] footer reach tool_result.
-//  2. BashCDStateMachinePersists — round 1 `cd <tmp>`, round 2 `pwd`;
-//     verify the second call sees the cwd updated by the first.
-//  3. BashOutputAndKillShellHandleUnknownID — both tools must surface a
-//     friendly "not found" rather than failing when the LLM passes an
-//     unknown bash_id (verifies they're registered + reach Execute).
-//
-// shell_test.go — shell 系统工具 pipeline 测试（Bash / BashOutput /
-// KillShell）。背景进程的 bash_id 是动态的，fake LLM 读不到，故 pipeline
-// 不测后台生命周期；那部分由包内单测覆盖。
+// Package shell_test 跑 shell 系统工具（Bash/BashOutput/KillShell）pipeline 测试。
 package shell_test
 
 import (
@@ -30,8 +15,6 @@ import (
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	th "github.com/sunweilin/forgify/backend/test/harness"
 )
-
-// ── 1. Foreground echo round-trips through the chat layer ────────────────────
 
 func TestShell_BashEchoForeground(t *testing.T) {
 	fake := th.NewFakeLLMServer(t)
@@ -74,8 +57,6 @@ func TestShell_BashEchoForeground(t *testing.T) {
 	}
 }
 
-// ── 2. cd state machine persists across two Bash calls ───────────────────────
-
 func TestShell_CdStateMachinePersistsAcrossCalls(t *testing.T) {
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	if err != nil {
@@ -83,14 +64,10 @@ func TestShell_CdStateMachinePersistsAcrossCalls(t *testing.T) {
 	}
 
 	fake := th.NewFakeLLMServer(t)
-	// Round 1: cd into the temp dir.
-	// Round 1：cd 进 temp dir。
 	fake.PushScript(th.ScriptSingleToolCall(
 		"Bash", "call_fake_bash_cd",
 		fmt.Sprintf(`{"summary":"cd to tmp","command":"cd %s"}`, dir),
 	))
-	// Round 2: run pwd; should echo the temp dir from round 1.
-	// Round 2：跑 pwd；应回 round 1 cd 的 dir。
 	fake.PushScript(th.ScriptSingleToolCall(
 		"Bash", "call_fake_bash_pwd",
 		`{"summary":"verify cwd","command":"pwd"}`,
@@ -109,9 +86,6 @@ func TestShell_CdStateMachinePersistsAcrossCalls(t *testing.T) {
 		t.Fatalf("status=%q\nraw:\n%s", final.Status, sub.FormatRawEvents())
 	}
 
-	// Look up both tool_results by their explicit call_ids — we scripted
-	// distinct IDs in PushScript so each is addressable.
-	// 按显式 call_id 查两个 tool_result——PushScript 给的 ID 各异，可分别取。
 	cdRes, ok := th.ExtractToolResultByCallID(final.Blocks, "call_fake_bash_cd")
 	if !ok {
 		t.Fatalf("no Bash tool_result for cd call\nraw:\n%s", sub.FormatRawEvents())
@@ -130,8 +104,6 @@ func TestShell_CdStateMachinePersistsAcrossCalls(t *testing.T) {
 		t.Errorf("second Bash result (pwd) should contain %q, got: %q", dir, pwdText)
 	}
 }
-
-// ── 3. BashOutput + KillShell handle unknown IDs friendly (wiring sanity) ────
 
 func TestShell_BashOutputAndKillShellHandleUnknownID(t *testing.T) {
 	fake := th.NewFakeLLMServer(t)

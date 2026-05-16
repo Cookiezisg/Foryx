@@ -1,12 +1,6 @@
-// Package mcpcalls (infra/store/mcpcalls) is the GORM-backed implementation
-// of mcpdomain.CallRepository. Separate package from infra/store/mcp would
-// be — but mcp's existing infra (configfile-backed mcp.json) isn't under
-// infra/store. Putting D22 call log alone here is the cleanest split.
+// Package mcpcalls is the GORM-backed mcpdomain.CallRepository.
 //
-// Importers alias as `mcpcallstore`.
-//
-// Package mcpcalls(infra/store/mcpcalls)是 mcp_calls 表的 GORM 实现。
-// MCP 现有 infra 走配置文件,call log 单独 GORM 表放此包。
+// Package mcpcalls 是 mcpdomain.CallRepository 的 GORM 实现。
 package mcpcalls
 
 import (
@@ -32,21 +26,18 @@ type Store struct{ db *gorm.DB }
 // New 构造 Store。
 func New(db *gorm.DB) *Store { return &Store{db: db} }
 
-// Compile-time interface assertion.
-//
-// 编译期断言。
 var _ mcpdomain.CallRepository = (*Store)(nil)
 
 // AutoMigrateModels returns the GORM models to register.
 //
-// AutoMigrateModels 返回 AutoMigrate 用的 model。
+// AutoMigrateModels 返 AutoMigrate 用的 model。
 func AutoMigrateModels() []interface{} {
 	return []interface{}{&mcpdomain.Call{}}
 }
 
 // SaveCall inserts one Call row (terminal write).
 //
-// SaveCall 写一行 Call(终态)。
+// SaveCall 写一行 Call（终态）。
 func (s *Store) SaveCall(ctx context.Context, c *mcpdomain.Call) error {
 	if err := s.db.WithContext(ctx).Create(c).Error; err != nil {
 		return fmt.Errorf("mcpcallstore.SaveCall: %w", err)
@@ -54,9 +45,9 @@ func (s *Store) SaveCall(ctx context.Context, c *mcpdomain.Call) error {
 	return nil
 }
 
-// GetCallByID returns one call, user-scoped. ErrCallNotFound on miss.
+// GetCallByID returns one call by id; ErrCallNotFound on miss.
 //
-// GetCallByID 按 id 取,过滤当前用户;未命中返 ErrCallNotFound。
+// GetCallByID 按 id 取；未命中返 ErrCallNotFound。
 func (s *Store) GetCallByID(ctx context.Context, id string) (*mcpdomain.Call, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -75,7 +66,7 @@ func (s *Store) GetCallByID(ctx context.Context, id string) (*mcpdomain.Call, er
 
 // ListCalls returns cursor-paginated calls newest-first.
 //
-// ListCalls 返 filter 过滤的 cursor 分页(新→旧)。
+// ListCalls 返按 filter 过滤的分页（新→旧）。
 func (s *Store) ListCalls(ctx context.Context, filter mcpdomain.CallFilter) ([]*mcpdomain.Call, string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -116,8 +107,7 @@ func (s *Store) ListCalls(ctx context.Context, filter mcpdomain.CallFilter) ([]*
 	return rows, next, nil
 }
 
-// ComputeAggregates returns the standard 4-status counts + avg/p95
-// elapsed for the filter.
+// ComputeAggregates returns 4-status counts + avg/p95 elapsed.
 //
 // ComputeAggregates 返 4 状态 count + avg/p95 elapsed。
 func (s *Store) ComputeAggregates(ctx context.Context, filter mcpdomain.CallFilter) (mcpdomain.CallAggregates, error) {

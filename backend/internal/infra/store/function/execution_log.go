@@ -1,11 +1,3 @@
-// execution_log.go — GORM impl of functiondomain.ExecutionRepository.
-//
-// Cursor encoding mirrors function.go's (created_at, id) tuple. Aggregates
-// are computed in-DB with a single aggregate query for the matching filter
-// (no fetch+roll-up in Go — keeps the response payload tight for the LLM).
-//
-// execution_log.go —— functiondomain.ExecutionRepository 的 GORM 实现。
-
 package function
 
 import (
@@ -31,10 +23,9 @@ func (s *Store) SaveExecution(ctx context.Context, e *functiondomain.Execution) 
 	return nil
 }
 
-// GetExecutionByID returns one execution by id, scoped to current user. Returns
-// ErrExecutionNotFound if absent.
+// GetExecutionByID returns one execution by id; ErrExecutionNotFound if absent.
 //
-// GetExecutionByID 按 id 取 execution(过滤当前用户);未命中返 ErrExecutionNotFound。
+// GetExecutionByID 按 id 取 execution；未命中返 ErrExecutionNotFound。
 func (s *Store) GetExecutionByID(ctx context.Context, id string) (*functiondomain.Execution, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -53,10 +44,9 @@ func (s *Store) GetExecutionByID(ctx context.Context, id string) (*functiondomai
 	return &row, nil
 }
 
-// ListExecutions returns cursor-paginated executions newest-first matching
-// the filter. Cursor uses (started_at, id) DESC like function.go.
+// ListExecutions returns cursor-paginated executions newest-first matching filter.
 //
-// ListExecutions 返按 filter 过滤的 cursor 分页(新→旧)。
+// ListExecutions 返按 filter 过滤的分页（新→旧）。
 func (s *Store) ListExecutions(ctx context.Context, filter functiondomain.ExecutionFilter) ([]*functiondomain.Execution, string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -101,12 +91,9 @@ func (s *Store) ListExecutions(ctx context.Context, filter functiondomain.Execut
 	return rows, nextCursor, nil
 }
 
-// ComputeAggregates returns rollup counts + elapsed-ms p50 / p95 over the
-// rows matching filter. Uses one SELECT with conditional COUNT for the
-// count breakdown and an in-memory percentile from a small fetched slice
-// (capped at 1000 rows to bound memory).
+// ComputeAggregates returns rollup counts + p95 (in-memory from a 1000-row slice).
 //
-// ComputeAggregates 返 filter 匹配行的聚合 + p95(条件 count + 小切片在内存求百分位)。
+// ComputeAggregates 返 filter 匹配行的聚合 + p95（1000 行切片内存求百分位）。
 func (s *Store) ComputeAggregates(ctx context.Context, filter functiondomain.ExecutionFilter) (functiondomain.ExecutionAggregates, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -156,10 +143,6 @@ func (s *Store) ComputeAggregates(ctx context.Context, filter functiondomain.Exe
 	return agg, nil
 }
 
-// applyExecutionFilter applies common filter fields to a query builder.
-// Used by ListExecutions + ComputeAggregates so they hit the same row set.
-//
-// applyExecutionFilter 把 filter 字段挂到 query 上(List + Aggregates 共用)。
 func (s *Store) applyExecutionFilter(q *gorm.DB, uid string, filter functiondomain.ExecutionFilter) *gorm.DB {
 	q = q.Where("user_id = ?", uid)
 	if filter.FunctionID != "" {

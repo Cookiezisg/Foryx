@@ -1,6 +1,3 @@
-// get_execution.go — get_mcp_call system tool (D22).
-// Fetches one mcp_calls row by id.
-
 package mcp
 
 import (

@@ -1,15 +1,6 @@
-// Package model (infra/store/model) is the GORM-backed implementation of
-// the domain model Repository port. Every method scopes queries by the
-// userID carried in ctx — callers MUST have run the InjectUserID middleware.
+// Package model is the GORM-backed modeldomain.Repository, scoped by ctx userID.
 //
-// The package shares its name with domain/model by design; external callers
-// alias at import: `modelstore "…/infra/store/model"`.
-//
-// Package model（infra/store/model）是 domain model Repository port 的 GORM
-// 实现。所有方法按 ctx 中的 userID 过滤——调用方必须先经过 InjectUserID 中间件。
-//
-// 本包与 domain/model 同名是刻意的；外部调用方 import 时起别名，
-// 例如 `modelstore "…/infra/store/model"`。
+// Package model 是 modeldomain.Repository 的 GORM 实现，按 ctx userID 过滤。
 package model
 
 import (
@@ -37,10 +28,9 @@ func New(db *gorm.DB) *Store {
 	return &Store{db: db}
 }
 
-// GetByScenario fetches the active config for (current user, scenario).
-// Returns modeldomain.ErrNotConfigured if none exists.
+// GetByScenario fetches the active config for (current user, scenario); ErrNotConfigured on miss.
 //
-// GetByScenario 返回 (当前用户, scenario) 的活跃配置；无则返 ErrNotConfigured。
+// GetByScenario 返 (当前用户, scenario) 的活跃配置；无则 ErrNotConfigured。
 func (s *Store) GetByScenario(ctx context.Context, scenario string) (*modeldomain.ModelConfig, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -77,12 +67,9 @@ func (s *Store) List(ctx context.Context) ([]*modeldomain.ModelConfig, error) {
 	return rows, nil
 }
 
-// Upsert saves m by primary key: INSERT if ID is new, UPDATE if it already
-// exists. Caller (app/model.Service) is responsible for deciding which path
-// by calling GetByScenario first.
+// Upsert saves m by primary key (INSERT if new, UPDATE if exists).
 //
-// Upsert 按主键保存 m：ID 新则 INSERT，已存在则 UPDATE。
-// 调用方（app/model.Service）负责先调 GetByScenario 决定走哪条路径。
+// Upsert 按主键保存 m（ID 新 INSERT，已存在 UPDATE）。
 func (s *Store) Upsert(ctx context.Context, m *modeldomain.ModelConfig) error {
 	if err := s.db.WithContext(ctx).Save(m).Error; err != nil {
 		return fmt.Errorf("modelstore.Upsert: %w", err)

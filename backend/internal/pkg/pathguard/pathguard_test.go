@@ -6,10 +6,6 @@ import (
 	"testing"
 )
 
-// homeDir returns the user's home directory or fails the test. Used to build
-// the absolute-path expectations that NewDefault() creates internally.
-//
-// homeDir 返回用户家目录或失败测试。用于构造 NewDefault() 内部展开的绝对路径期望。
 func homeDir(t *testing.T) string {
 	t.Helper()
 	h, err := os.UserHomeDir()
@@ -76,13 +72,6 @@ func TestDefault_DeniesForgifyState(t *testing.T) {
 	}
 }
 
-// Regression: Linux runtime / secrets paths must be denied. Pre-fix the
-// deny list was macOS-biased (only /etc/, /usr/, /sys/, /private/, /System/
-// etc.) so Linux users had no protection on /proc/<pid>/environ etc.
-//
-// 回归：Linux runtime / secrets 路径必须被拒。修复前 deny list 偏 macOS
-// （只有 /etc/、/usr/、/sys/、/private/、/System/），Linux 用户在 /proc/
-// /run/secrets/ 等关键路径上完全无保护。
 func TestDefault_DeniesLinuxRuntimePaths(t *testing.T) {
 	g := NewDefault()
 	cases := []string{
@@ -100,14 +89,6 @@ func TestDefault_DeniesLinuxRuntimePaths(t *testing.T) {
 	}
 }
 
-// Regression: Windows credential-store paths under ~/AppData must be denied.
-// These rules survive on macOS / Linux too (~/ expansion on Unix yields
-// /Users/x/AppData/... which is absolute) — wasted but harmless because
-// the path won't exist there.
-//
-// 回归：Windows 凭据库路径 ~/AppData/... 必须被拒。这些 rule 在 macOS /
-// Linux 上也会进 rule 表（home 展开后仍是绝对路径）但永不命中真实文件，
-// 浪费几个 entry 但无害。
 func TestDefault_DeniesWindowsCredentialPaths(t *testing.T) {
 	g := NewDefault()
 	home := homeDir(t)
@@ -115,7 +96,7 @@ func TestDefault_DeniesWindowsCredentialPaths(t *testing.T) {
 		filepath.Join(home, "AppData", "Roaming", "Microsoft", "Credentials", "abc"),
 		filepath.Join(home, "AppData", "Local", "Microsoft", "Credentials", "xyz"),
 		filepath.Join(home, "AppData", "Roaming", "Microsoft", "Crypto", "RSA", "key"),
-		filepath.Join(home, "AppData", "Roaming", "Microsoft", "Protect", "S-1-5-21-x"), // DPAPI master keys
+		filepath.Join(home, "AppData", "Roaming", "Microsoft", "Protect", "S-1-5-21-x"),
 		filepath.Join(home, "AppData", "Local", "Microsoft", "Vault", "x.vsch"),
 	}
 	for _, p := range cases {
@@ -126,22 +107,14 @@ func TestDefault_DeniesWindowsCredentialPaths(t *testing.T) {
 	}
 }
 
-// Regression: browser saved-login databases must be denied on every
-// platform's canonical install path. Reading them lets a malicious LLM
-// exfiltrate user credentials at rest.
-//
-// 回归：浏览器登录数据库在每个平台的标准位置都必须被拒——读到即等同于
-// 偷凭据。
 func TestDefault_DeniesBrowserLoginPaths(t *testing.T) {
 	g := NewDefault()
 	home := homeDir(t)
 	cases := []string{
-		// Chrome (each platform's location, listed unconditionally — only
-		// the matching one applies on the running OS, others are harmless).
-		filepath.Join(home, "Library", "Application Support", "Google", "Chrome", "Default", "Login Data"),    // macOS
-		filepath.Join(home, ".config", "google-chrome", "Default", "Login Data"),                              // Linux
-		filepath.Join(home, "AppData", "Local", "Google", "Chrome", "User Data", "Default", "Login Data"),     // Windows
-		filepath.Join(home, "AppData", "Local", "Microsoft", "Edge", "User Data", "Default", "Login Data"),    // Windows Edge
+		filepath.Join(home, "Library", "Application Support", "Google", "Chrome", "Default", "Login Data"),
+		filepath.Join(home, ".config", "google-chrome", "Default", "Login Data"),
+		filepath.Join(home, "AppData", "Local", "Google", "Chrome", "User Data", "Default", "Login Data"),
+		filepath.Join(home, "AppData", "Local", "Microsoft", "Edge", "User Data", "Default", "Login Data"),
 	}
 	for _, p := range cases {
 		ok, _ := g.Allow(p)
@@ -151,10 +124,6 @@ func TestDefault_DeniesBrowserLoginPaths(t *testing.T) {
 	}
 }
 
-// Regression: kubectl / docker config files must be denied — they hold
-// cluster credentials and registry auth tokens.
-//
-// 回归：kubectl / docker 配置文件必须被拒——含集群凭据 / registry auth token。
 func TestDefault_DeniesKubeAndDockerConfig(t *testing.T) {
 	g := NewDefault()
 	home := homeDir(t)
@@ -178,7 +147,7 @@ func TestDefault_AllowsNormalPaths(t *testing.T) {
 		filepath.Join(home, "Downloads", "data.csv"),
 		filepath.Join(home, "Desktop", "notes.txt"),
 		filepath.Join(home, "Projects", "myrepo", "main.go"),
-		filepath.Join(home, ".config", "fish", "config.fish"), // sibling of git-credentials, not the file itself
+		filepath.Join(home, ".config", "fish", "config.fish"),
 	}
 	for _, p := range cases {
 		ok, reason := g.Allow(p)
@@ -210,19 +179,15 @@ func TestAllow_RejectsRelativePath(t *testing.T) {
 func TestNew_DirectoryRuleMatchesPathItselfAndDescendants(t *testing.T) {
 	g := New([]string{"/secret/"})
 
-	// Path itself
 	if ok, _ := g.Allow("/secret"); ok {
 		t.Errorf("expected /secret (the dir itself) to be denied")
 	}
-	// Descendant
 	if ok, _ := g.Allow("/secret/key.pem"); ok {
 		t.Errorf("expected /secret/key.pem to be denied")
 	}
-	// Deeply nested
 	if ok, _ := g.Allow("/secret/sub/deep/file"); ok {
 		t.Errorf("expected /secret/sub/deep/file to be denied")
 	}
-	// Sibling — must NOT be denied (prefix match should require separator boundary)
 	if ok, _ := g.Allow("/secretly/safe.txt"); !ok {
 		t.Errorf("expected /secretly/safe.txt to be allowed (not under /secret/)")
 	}
@@ -260,19 +225,12 @@ func TestNew_TildeExpansion(t *testing.T) {
 func TestNew_PathCleanResolvesTraversal(t *testing.T) {
 	g := New([]string{"/forbidden/"})
 
-	// `..` traversal — Clean should resolve to /forbidden/x
 	if ok, _ := g.Allow("/forbidden/../forbidden/x"); ok {
-		// After Clean: /forbidden/x → still under /forbidden/
-		// (this is what we want — defenders shouldn't be fooled by ..)
 		t.Errorf("expected /forbidden/../forbidden/x to be denied after Clean")
 	}
-
-	// `/safe/../forbidden/x` cleans to /forbidden/x → denied
 	if ok, _ := g.Allow("/safe/../forbidden/x"); ok {
 		t.Errorf("expected /safe/../forbidden/x to be denied after Clean")
 	}
-
-	// `/forbidden/../safe/x` cleans to /safe/x → allowed
 	if ok, _ := g.Allow("/forbidden/../safe/x"); !ok {
 		t.Errorf("expected /forbidden/../safe/x to be allowed after Clean (resolves to /safe/x)")
 	}
@@ -294,11 +252,8 @@ func TestNew_EmptyDenyListAllowsEverything(t *testing.T) {
 }
 
 func TestNew_NonAbsoluteRuleSilentlyDropped(t *testing.T) {
-	// Non-absolute rules should be silently dropped (per the package doc:
-	// fail-open is acceptable for defense-in-depth).
 	g := New([]string{"relative/path/"})
 
-	// Anything goes — the rule was dropped.
 	if ok, _ := g.Allow("/etc/hosts"); !ok {
 		t.Errorf("relative rule should be dropped; /etc/hosts should still be allowed")
 	}

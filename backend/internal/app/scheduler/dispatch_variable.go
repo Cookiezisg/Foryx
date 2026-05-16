@@ -1,9 +1,3 @@
-// dispatch_variable.go — VariableDispatcher. Reads node.Config keys
-// `operation` ("set" / "unset") and `name` + `value` to mutate
-// ExecCtx.Variables. Plan 05 §3.2 variable.
-//
-// dispatch_variable.go —— VariableDispatcher;set/unset ExecCtx.Variables。
-
 package scheduler
 
 import (
@@ -11,7 +5,7 @@ import (
 	"fmt"
 )
 
-// VariableDispatcher mutates workflow-level Variables in-place.
+// VariableDispatcher mutates workflow-level Variables in place.
 //
 // VariableDispatcher 原地改 workflow-level Variables。
 type VariableDispatcher struct{}
@@ -21,9 +15,9 @@ type VariableDispatcher struct{}
 // NewVariableDispatcher 构造 VariableDispatcher。
 func NewVariableDispatcher() *VariableDispatcher { return &VariableDispatcher{} }
 
-// Dispatch performs the set/unset op against ExecCtx.Variables.
+// Dispatch performs set/unset against ExecCtx.Variables.
 //
-// Dispatch 在 ExecCtx.Variables 执行 set/unset。
+// Dispatch 对 ExecCtx.Variables 执行 set/unset。
 func (d *VariableDispatcher) Dispatch(_ context.Context, in DispatchInput) DispatchOutput {
 	op, _ := in.Node.Config["operation"].(string)
 	name, _ := in.Node.Config["name"].(string)

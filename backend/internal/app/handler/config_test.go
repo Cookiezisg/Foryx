@@ -16,23 +16,15 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// fakeEncryptor returns ciphertext = plaintext (identity). Pure for testing.
-//
-// fakeEncryptor 返密文 = 明文(恒等);测试用。
 type fakeEncryptor struct{}
 
 func (fakeEncryptor) Encrypt(_ context.Context, p []byte) ([]byte, error) { return p, nil }
 func (fakeEncryptor) Decrypt(_ context.Context, c []byte) ([]byte, error) { return c, nil }
 
-// fakeRepo is a partial Repository implementation just for config tests —
-// only the 3 config methods + GetHandler are exercised here. Other methods
-// panic if hit (forces test isolation).
-//
-// fakeRepo 仅实现 config 测试需要的 4 方法;其他方法 panic 保隔离。
 type fakeRepo struct {
 	mu     sync.Mutex
-	cipher map[string]string // handlerID → ciphertext
-	exists map[string]bool   // handlerID → row exists
+	cipher map[string]string
+	exists map[string]bool
 }
 
 func newFakeRepo() *fakeRepo {
@@ -77,9 +69,6 @@ func (r *fakeRepo) GetConfigEncrypted(_ context.Context, handlerID string) (stri
 	return r.cipher[handlerID], nil
 }
 
-// All other Repository methods panic — they should not be hit by config tests.
-//
-// 其他 Repository 方法 panic — config 测试不该碰到。
 func (r *fakeRepo) SaveHandler(context.Context, *handlerdomain.Handler) error { panic("not implemented") }
 func (r *fakeRepo) GetHandler(context.Context, string) (*handlerdomain.Handler, error) {
 	panic("not implemented")
@@ -126,7 +115,6 @@ func (r *fakeRepo) HardDeleteVersion(context.Context, string) error {
 	panic("not implemented")
 }
 
-// Call-log methods (D22) — config tests never hit these.
 func (r *fakeRepo) SaveCall(context.Context, *handlerdomain.Call) error { panic("not implemented") }
 func (r *fakeRepo) GetCallByID(context.Context, string) (*handlerdomain.Call, error) {
 	panic("not implemented")
@@ -138,23 +126,13 @@ func (r *fakeRepo) ComputeCallAggregates(context.Context, handlerdomain.CallFilt
 	panic("not implemented")
 }
 
-// Trick: handlerdomain.Repository.UpdateVersionEnv has a *time.Time arg, not
-// *struct{}. We need to satisfy the actual interface. Switch to embedding a
-// nil Repository so unimplemented methods auto-panic. Above panics are
-// scaffolding for compile-time interface satisfaction; the real check is
-// embedding pattern.
-
-// configTestSvc builds a Service with fakeEncryptor + fakeRepo + nil sandbox.
-// Suitable for config-method tests that don't touch sandbox.
-//
-// configTestSvc 构造 fakeEncryptor + fakeRepo + nil sandbox 的 Service。
 func configTestSvc(t *testing.T) (*Service, *fakeRepo) {
 	t.Helper()
 	repo := newFakeRepo()
 	svc := NewService(
-		repo,                        // satisfy Repository interface
-		nil,                                      // sandbox not used by config methods
-		DefaultClientFactory,                     // unused; required non-nil if you choose
+		repo,
+		nil,
+		DefaultClientFactory,
 		fakeEncryptor{},
 		notificationspkg.New(silentBridge{}, zap.NewNop()),
 		zap.NewNop(),
@@ -162,9 +140,6 @@ func configTestSvc(t *testing.T) (*Service, *fakeRepo) {
 	return svc, repo
 }
 
-// silentBridge implements notificationsdomain.Bridge as a no-op for tests.
-//
-// silentBridge 实现 notificationsdomain.Bridge 当 no-op 测试用。
 type silentBridge struct{}
 
 func (silentBridge) Publish(_ context.Context, e notificationsdomain.Event) (notificationsdomain.Envelope, error) {
@@ -178,16 +153,9 @@ func (silentBridge) Replay(_ context.Context, fromSeq int64) ([]notificationsdom
 	return nil, nil
 }
 
-// fakeRepo IS the Repository for these tests (panic stubs everywhere except
-// the 3 config methods).
-//
-// fakeRepo 直接当 Repository 用(panic stub 占位剩下方法)。
-
 func ctxFor(userID string) context.Context {
 	return reqctxpkg.SetUserID(context.Background(), userID)
 }
-
-// ── ConfigState ──────────────────────────────────────────────────────────────
 
 func TestComputeConfigState_AllStates(t *testing.T) {
 	svc, repo := configTestSvc(t)
@@ -254,14 +222,11 @@ func TestComputeConfigState_PartiallyConfigured(t *testing.T) {
 	}
 }
 
-// ── LoadConfig / UpdateConfig round-trip ─────────────────────────────────────
-
 func TestLoadConfig_RoundTrip(t *testing.T) {
 	svc, repo := configTestSvc(t)
 	repo.addHandler("hd1")
 	ctx := ctxFor("u-alice")
 
-	// Empty initially.
 	cfg, err := svc.LoadConfig(ctx, "hd1")
 	if err != nil {
 		t.Fatalf("LoadConfig empty: %v", err)
@@ -270,7 +235,6 @@ func TestLoadConfig_RoundTrip(t *testing.T) {
 		t.Errorf("expected nil for unconfigured; got %v", cfg)
 	}
 
-	// Update with patch.
 	if err := svc.UpdateConfig(ctx, "hd1", map[string]any{"k1": "v1", "k2": 42}); err != nil {
 		t.Fatalf("UpdateConfig: %v", err)
 	}
@@ -289,7 +253,7 @@ func TestUpdateConfig_MergeOverwrites(t *testing.T) {
 	ctx := ctxFor("u-alice")
 
 	_ = svc.UpdateConfig(ctx, "hd1", map[string]any{"k1": "old", "k2": "keep"})
-	_ = svc.UpdateConfig(ctx, "hd1", map[string]any{"k1": "new"}) // only k1
+	_ = svc.UpdateConfig(ctx, "hd1", map[string]any{"k1": "new"})
 	cfg, _ := svc.LoadConfig(ctx, "hd1")
 	if cfg["k1"] != "new" {
 		t.Errorf("k1 = %v, want new", cfg["k1"])
@@ -305,7 +269,6 @@ func TestUpdateConfig_NilDeletesKey(t *testing.T) {
 	ctx := ctxFor("u-alice")
 
 	_ = svc.UpdateConfig(ctx, "hd1", map[string]any{"k1": "v", "k2": "keep"})
-	// Map with nil value → mergePatch deletes the key.
 	_ = svc.UpdateConfig(ctx, "hd1", map[string]any{"k1": nil})
 	cfg, _ := svc.LoadConfig(ctx, "hd1")
 	if _, ok := cfg["k1"]; ok {
@@ -328,8 +291,6 @@ func TestClearConfig_BackToUnconfigured(t *testing.T) {
 		t.Errorf("after Clear: expected nil, got %v", cfg)
 	}
 }
-
-// ── MaskedConfig ─────────────────────────────────────────────────────────────
 
 func TestMaskedConfig_SensitiveReplaced(t *testing.T) {
 	svc, repo := configTestSvc(t)
@@ -356,11 +317,6 @@ func TestMaskedConfig_SensitiveReplaced(t *testing.T) {
 	}
 }
 
-// ── Decrypt failure path ─────────────────────────────────────────────────────
-
-// brokenEncryptor returns an error from Decrypt to exercise ErrConfigDecryptFailed.
-//
-// brokenEncryptor Decrypt 返错,触发 ErrConfigDecryptFailed。
 type brokenEncryptor struct{}
 
 func (brokenEncryptor) Encrypt(_ context.Context, p []byte) ([]byte, error) { return p, nil }

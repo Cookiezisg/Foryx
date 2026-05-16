@@ -1,49 +1,6 @@
-// Command resources downloads jdx/mise release binaries into the source
-// tree at backend/internal/infra/sandbox/mise/<goos>-<goarch>/mise[.exe],
-// where D2-2's per-platform go:embed directives pick them up at compile time.
+// Command resources fetches jdx/mise binaries into backend/internal/infra/sandbox/mise/<goos>-<goarch>/ for go:embed.
 //
-// Default mode fetches just the current platform's binary (fast — what
-// developers run locally). Pass --all-platforms to fetch all 5 supported
-// platforms; this is what release builds invoke before cross-compiling
-// per-platform binaries.
-//
-// Layout under the source tree (the per-platform sub-dirs match D2-2's
-// embed pattern; .gitignore at mise/ keeps binaries out of git). Paths
-// below are relative to the backend module root — the command must run
-// from there (Makefile + devbox bootstrap both `cd backend` first):
-//
-//	internal/infra/sandbox/mise/.gitignore
-//	internal/infra/sandbox/mise/darwin-arm64/mise
-//	internal/infra/sandbox/mise/darwin-amd64/mise
-//	internal/infra/sandbox/mise/linux-amd64/mise
-//	internal/infra/sandbox/mise/linux-arm64/mise
-//	internal/infra/sandbox/mise/windows-amd64/mise.exe
-//
-// Pin version via MISE_VERSION env (defaults to "latest", resolved through
-// the GitHub releases API). The fetcher trusts mise's official SHA256SUMS
-// asset and aborts on hash mismatch.
-//
-// Note: this command replaced the v1 uv + python-build-standalone fetcher
-// (which targeted ~/.forgify-dev-resources). PluginSandbox v2 has mise
-// install python + uv lazily on first use, so the v1 dev resources
-// directory is no longer consumed. Forge sandbox v1 will return
-// ErrSandboxUnavailable until D2-5 migrates forge to the v2 service —
-// short-lived gap during the D2 sub-task chain.
-//
-// Command resources 把 jdx/mise release 二进制下到源码树
-// backend/internal/infra/sandbox/mise/<goos>-<goarch>/mise[.exe]，
-// 由 D2-2 的 per-platform go:embed 编译期取走。
-//
-// 默认拉当前平台（开发本地快），加 --all-platforms 拉全 5 平台
-// （release pipeline 跨平台编译前用）。版本 pin via MISE_VERSION env，
-// 默认 "latest" 走 GitHub releases API 解析。fetcher 校验 mise 官方
-// SHA256SUMS asset，hash 不匹配立即 abort。
-//
-// 注：本命令替换了 v1 的 uv + python-build-standalone fetcher（原向
-// ~/.forgify-dev-resources/）。PluginSandbox v2 改由 mise 在首次使用时
-// lazy install python + uv，v1 dev resources 目录不再被消费。Forge sandbox v1
-// 将返 ErrSandboxUnavailable 直到 D2-5 把 forge 迁到 v2 service——D2 子任务
-// 链中的短暂过渡期。
+// Command resources 下载 jdx/mise 二进制到 sandbox/mise 目录供 go:embed 取走。
 package main
 
 import (
@@ -65,26 +22,20 @@ import (
 	"strings"
 )
 
-// platform encodes one supported (GOOS, GOARCH) tuple plus the upstream
-// asset naming mise uses (macos≠darwin, x64≠amd64) and the archive
-// extension (zip on windows, tar.gz elsewhere).
+// platform pairs a Go GOOS/GOARCH with mise's upstream asset naming and archive format.
 //
-// platform 编一个支持的 (GOOS, GOARCH) tuple + mise 上游 asset 命名
-// （macos≠darwin、x64≠amd64）+ 归档格式（windows .zip，其余 .tar.gz）。
+// platform 把 Go GOOS/GOARCH 配上 mise 上游 asset 命名与归档格式。
 type platform struct {
-	goos    string // Go GOOS — used for output sub-dir naming
-	goarch  string // Go GOARCH — used for output sub-dir naming
-	miseOS  string // mise asset OS name: "linux" / "macos" / "windows"
-	miseArc string // mise asset arch name: "x64" / "arm64"
-	archExt string // archive format: ".tar.gz" or ".zip"
-	binName string // binary name inside archive: "mise" or "mise.exe"
+	goos    string
+	goarch  string
+	miseOS  string
+	miseArc string
+	archExt string
+	binName string
 }
 
 func (p platform) key() string { return p.goos + "-" + p.goarch }
 func (p platform) outDir() string {
-	// Path relative to backend module root (Makefile + devbox bootstrap
-	// both `cd backend` before invoking us, so the cwd is backend/).
-	// 路径相对 backend module 根（Makefile + devbox bootstrap 都先 cd backend）。
 	return filepath.Join("internal", "infra", "sandbox", "mise", p.key())
 }
 func (p platform) outBin() string { return filepath.Join(p.outDir(), p.binName) }
@@ -140,10 +91,9 @@ func main() {
 	}
 }
 
-// currentPlatform returns the supported entry matching runtime.GOOS/GOARCH or
-// dies if the host platform isn't in our v1 matrix.
+// currentPlatform returns the supported entry matching runtime.GOOS/GOARCH or fatals.
 //
-// currentPlatform 返回匹配 runtime.GOOS/GOARCH 的支持项；不在 v1 矩阵则 fatal。
+// currentPlatform 返回匹配 runtime.GOOS/GOARCH 的项，无匹配则 fatal。
 func currentPlatform() platform {
 	for _, p := range supported {
 		if p.goos == runtime.GOOS && p.goarch == runtime.GOARCH {
@@ -155,9 +105,9 @@ func currentPlatform() platform {
 	return platform{}
 }
 
-// fetchOne downloads + verifies + extracts the mise binary for one platform.
+// fetchOne downloads, verifies SHA256, and extracts the mise binary for one platform.
 //
-// fetchOne 下载 + 校验 + 解压一份 mise 二进制（单平台）。
+// fetchOne 下载 + SHA256 校验 + 解压一份 mise 二进制。
 func fetchOne(version string, p platform) error {
 	assetName := fmt.Sprintf("mise-%s-%s-%s%s", version, p.miseOS, p.miseArc, p.archExt)
 	url := fmt.Sprintf("https://github.com/jdx/mise/releases/download/%s/%s", version, assetName)
@@ -168,11 +118,6 @@ func fetchOne(version string, p platform) error {
 		return fmt.Errorf("download: %w", err)
 	}
 
-	// SHA256 verification — mise publishes SHASUMS256.txt next to assets.
-	// Match the line `<hex>  <assetName>` then compare to local hash.
-	//
-	// SHA256 校验——mise 在 release 旁边发布 SHASUMS256.txt。匹配
-	// `<hex>  <assetName>` 行后比本地 hash。
 	sumsURL := fmt.Sprintf("https://github.com/jdx/mise/releases/download/%s/SHASUMS256.txt", version)
 	sums, err := httpGetBytes(sumsURL)
 	if err != nil {
@@ -195,12 +140,9 @@ func fetchOne(version string, p platform) error {
 	return extractZip(body, p.binName, p.outBin())
 }
 
-// extractTarGz finds binName inside a tar.gz blob and writes it to dst with
-// 0755. mise's tarball layout puts the binary at "mise/bin/mise" — we
-// match by Base name to stay resilient to layout tweaks.
+// extractTarGz writes binName from a tar.gz blob to dst with 0755; matches by Base name.
 //
-// extractTarGz 从 tar.gz 找到 binName 写到 dst，权限 0755。mise tarball
-// 把二进制放在 "mise/bin/mise"——按 Base 名匹配以抗布局微调。
+// extractTarGz 从 tar.gz 按 Base 名抽 binName 写到 dst（0755）。
 func extractTarGz(blob []byte, binName, dst string) error {
 	gz, err := gzip.NewReader(bytes.NewReader(blob))
 	if err != nil {
@@ -223,10 +165,9 @@ func extractTarGz(blob []byte, binName, dst string) error {
 	}
 }
 
-// extractZip finds binName inside a zip blob and writes it to dst. Used for
-// the windows-amd64 asset.
+// extractZip writes binName from a zip blob to dst; used for windows-amd64.
 //
-// extractZip 从 zip blob 找 binName 写到 dst。windows-amd64 asset 用。
+// extractZip 从 zip blob 抽 binName 写到 dst（windows-amd64 专用）。
 func extractZip(blob []byte, binName, dst string) error {
 	zr, err := zip.NewReader(bytes.NewReader(blob), int64(len(blob)))
 	if err != nil {
@@ -247,10 +188,9 @@ func extractZip(blob []byte, binName, dst string) error {
 	return fmt.Errorf("%s not found in zip", binName)
 }
 
-// writeBinary streams r into dst with 0755 permission. Uses tmp+rename for
-// atomicity so partial downloads never leave a half-written binary.
+// writeBinary streams r into dst (0755) via tmp+rename for atomicity.
 //
-// writeBinary 把 r 流到 dst，权限 0755。tmp+rename 原子写避免半成品。
+// writeBinary 用 tmp+rename 原子写 r 到 dst（0755）。
 func writeBinary(r io.Reader, dst string) error {
 	tmp := dst + ".tmp"
 	out, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o755)
@@ -259,13 +199,7 @@ func writeBinary(r io.Reader, dst string) error {
 	}
 	if _, err := io.Copy(out, r); err != nil {
 		out.Close()
-		// Best-effort cleanup of half-written tmp; copy already failed
-		// so caller will surface that. A Remove failure here (e.g. file
-		// got renamed by concurrent run, permission flipped) is not
-		// actionable for the build script. §S3 例外。
-		//
-		// 半成 tmp 尽力清理；copy 已失败上抛。Remove 失败（被并发运行
-		// 改名 / 权限翻转）无可执行动作。§S3 例外。
+		// §S3 例外: best-effort cleanup of half-written tmp.
 		_ = os.Remove(tmp)
 		return fmt.Errorf("write %s: %w", tmp, err)
 	}
@@ -275,13 +209,9 @@ func writeBinary(r io.Reader, dst string) error {
 	return os.Rename(tmp, dst)
 }
 
-// lookupSum scans a SHASUMS256.txt blob for the line whose 2nd column matches
-// assetName and returns the hex digest from the 1st column. mise's format
-// is `<hex>  ./<name>` — names are prefixed with `./`, so we strip it
-// before comparing.
+// lookupSum returns the hex digest for assetName from a SHASUMS256.txt blob.
 //
-// lookupSum 扫 SHASUMS256.txt blob 找第 2 列匹配 assetName 的行，返第 1 列的
-// hex digest。mise 格式 `<hex>  ./<name>`——文件名带 `./` 前缀，比较前剥掉。
+// lookupSum 从 SHASUMS256.txt 找 assetName 对应的 hex digest。
 func lookupSum(sums []byte, assetName string) (string, error) {
 	for _, line := range strings.Split(string(sums), "\n") {
 		fields := strings.Fields(line)
@@ -292,12 +222,9 @@ func lookupSum(sums []byte, assetName string) (string, error) {
 	return "", fmt.Errorf("no entry for %s in SHASUMS256.txt", assetName)
 }
 
-// httpGetBytes GETs url and returns the full body, or an error on non-2xx /
-// network failure. Body capped at 100 MB defensive against accidental
-// content-type surprises (mise binary is ~25 MB).
+// httpGetBytes GETs url and returns the body (capped at 100 MB).
 //
-// httpGetBytes 拉 url 返完整 body，非 2xx / 网络失败返错。100 MB 上限防意外
-// content-type 巨型响应（mise 二进制 ~25 MB）。
+// httpGetBytes 拉 url 返 body，上限 100 MB。
 func httpGetBytes(url string) ([]byte, error) {
 	resp, err := http.Get(url)
 	if err != nil {
@@ -310,10 +237,9 @@ func httpGetBytes(url string) ([]byte, error) {
 	return io.ReadAll(io.LimitReader(resp.Body, 100<<20))
 }
 
-// mustLatestTag returns the latest tag for owner/repo via GitHub API; fatal
-// on failure.
+// mustLatestTag returns the latest tag for owner/repo via GitHub API; fatals on failure.
 //
-// mustLatestTag 通过 GitHub API 返 owner/repo 最新 tag；失败 fatal。
+// mustLatestTag 通过 GitHub API 拿 owner/repo 最新 tag；失败 fatal。
 func mustLatestTag(repo string) string {
 	body, err := httpGetBytes("https://api.github.com/repos/" + repo + "/releases/latest")
 	if err != nil {

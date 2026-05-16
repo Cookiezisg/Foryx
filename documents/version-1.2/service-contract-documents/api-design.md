@@ -247,6 +247,31 @@ Function + Handler + Workflow System Tools 注入(9 function + 10 handler + 6 wo
 
 > 决策 D11：问题本身坐 `chat.message` SSE 流（AskUserQuestion tool_call block 含 `question` + `options`），不新建事件家族；answers endpoint 仅闭合答案投递路径。
 
+#### memory（V1.2 §2 final-sweep）✅
+
+跨对话长期事实 CRUD + pin/unpin。详见 [`../service-design-documents/memory.md`](../service-design-documents/memory.md)。
+
+| Method | Path | 用途 |
+|---|---|---|
+| GET | `/api/v1/memories?type=&pinned=` | 列出活跃 memory；可选按 type / pinned 过滤 → 200 |
+| POST | `/api/v1/memories` | 创建（source=user 服务端硬定）→ 201；name 冲突返 409 MEMORY_NAME_CONFLICT |
+| GET | `/api/v1/memories/{name}` | 按 name 取（同时 bump access stats）→ 200；缺失 404 MEMORY_NOT_FOUND |
+| PATCH | `/api/v1/memories/{name}` | 部分更新；source 永不变（保留原作者身份）→ 200 |
+| DELETE | `/api/v1/memories/{name}` | 软删 → 204 |
+| POST | `/api/v1/memories/{name}:pin` | 标 pinned=true → 200 |
+| POST | `/api/v1/memories/{name}:unpin` | 标 pinned=false → 200 |
+
+3 个 system tool（`read_memory` / `write_memory` / `forget_memory`）无独立 HTTP 端点；write_memory 内部走 Upsert 语义（不报 NAME_CONFLICT），source 硬写为 `ai`。Pin 字段对 LLM 不可见——pinning 是用户控件（pinned 全文进每次 system prompt，只用户能决定该不该）。
+
+#### compaction（V1.2 §1 final-sweep）
+
+**无新 HTTP 端点**。压缩由 `app/contextmgr.Manager` 在每轮 AI turn 完成后同步触发（chat runner 内部）。状态可通过：
+- `GET /api/v1/conversations/{id}` 看 `summary` + `summaryCoversUpToSeq` 字段
+- `GET /api/v1/conversations/{id}/messages` 看 blocks 的 `contextRole`（`hot`/`warm`/`cold`/`archived`）+ type=`compaction` 行（attrs 含 `coversFromSeq`/`coversToSeq`/`blocksArchived`）
+- testend `/current/compaction` 面板可视化展示
+
+未来扩展：`POST /api/v1/conversations/{id}:compact` 手动强制（Manager.ForceCompact 已实现，端点未接）。
+
 ---
 
 ### Phase 4 准备件（2026-05-05 提前交付）

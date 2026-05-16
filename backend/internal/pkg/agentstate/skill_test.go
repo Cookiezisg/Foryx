@@ -1,10 +1,3 @@
-// skill_test.go — exercises the ActiveSkill side-channel: atomic
-// set/get/clear semantics + wildcardMatch glob coverage + paren-form
-// pattern matching for Bash + per-spec edge cases (concurrent overwrite
-// is benign per skill.md §9.5).
-//
-// skill_test.go ——验 ActiveSkill 旁路：原子 set/get/clear + wildcardMatch
-// 覆盖 + Bash paren-form pattern + spec 边界（并发覆写良性 §9.5）。
 package agentstate
 
 import (
@@ -33,15 +26,11 @@ func TestActiveSkill_SetGetClear(t *testing.T) {
 		t.Errorf("ActiveSkill mismatch after Set: %v", got)
 	}
 
-	// Clear by mismatching name → no-op.
-	// 名字不匹配的 Clear → 不动。
 	s.ClearActiveSkillIfMatches("other-skill")
 	if got := s.ActiveSkill(); got != sk {
 		t.Errorf("ClearActiveSkillIfMatches mismatched name should not clear; got %v", got)
 	}
 
-	// Clear by matching name → cleared.
-	// 名字匹配的 Clear → 真清。
 	s.ClearActiveSkillIfMatches("pr-review")
 	if got := s.ActiveSkill(); got != nil {
 		t.Errorf("ClearActiveSkillIfMatches matching name should clear; got %v", got)
@@ -49,9 +38,6 @@ func TestActiveSkill_SetGetClear(t *testing.T) {
 }
 
 func TestActiveSkill_LastWriteWins(t *testing.T) {
-	// skill.md §9.5: concurrent activate races are benign — last-write-wins
-	// without locking. Two writers, one reader; reader sees one of the two.
-	// §9.5 并发 activate 良性——last-write-wins 无锁。两写一读，读到二者之一。
 	var s AgentState
 	a := &skilldomain.Skill{Name: "a"}
 	b := &skilldomain.Skill{Name: "b"}
@@ -137,9 +123,8 @@ func TestIsToolPreApprovedBySkill_BashWildcard(t *testing.T) {
 }
 
 func TestIsToolPreApprovedBySkill_MalformedPatternIsRejected(t *testing.T) {
-	// Author bug (unbalanced paren) must not collapse the permission gate
-	// into "everything allowed" — must instead fail closed.
-	// 作者 bug（括号不闭合）不该把权限门击穿为"全允许"——必须 fail closed。
+	// Malformed pattern must fail closed.
+	// 畸形 pattern 必须 fail closed。
 	var s AgentState
 	s.SetActiveSkill(&skilldomain.Skill{
 		Frontmatter: skilldomain.Frontmatter{
@@ -155,9 +140,6 @@ func TestIsToolPreApprovedBySkill_MalformedPatternIsRejected(t *testing.T) {
 }
 
 func TestIsToolPreApprovedBySkill_ParenForNonBashFallsThrough(t *testing.T) {
-	// V1 only knows the Bash arg schema for paren patterns; other tools
-	// fall through to non-match. (V2 would add per-tool extractors.)
-	// V1 paren pattern 仅支持 Bash；其他 tool 退化为不匹配（V2 加 per-tool）。
 	var s AgentState
 	s.SetActiveSkill(&skilldomain.Skill{
 		Frontmatter: skilldomain.Frontmatter{
@@ -198,11 +180,6 @@ func TestWildcardMatch(t *testing.T) {
 }
 
 func TestIsToolPreApprovedBySkill_BadJSONArgsDoesNotPanic(t *testing.T) {
-	// Tool dispatch should never panic on permission check; bad args JSON
-	// just means "no primary command extracted" → paren patterns
-	// non-match. Bare patterns still match.
-	// dispatch 不该 panic；坏 args JSON = 提不到 command → paren 不匹配；
-	// 裸 pattern 仍匹配。
 	var s AgentState
 	s.SetActiveSkill(&skilldomain.Skill{
 		Frontmatter: skilldomain.Frontmatter{
@@ -213,6 +190,4 @@ func TestIsToolPreApprovedBySkill_BadJSONArgsDoesNotPanic(t *testing.T) {
 	if !s.IsToolPreApprovedBySkill("Bash", bad) {
 		t.Error("bare Bash should still match even with malformed args")
 	}
-	// Paren pattern can't extract from bad JSON; bare match wins above.
-	// paren 提不出来；上面裸 pattern 已匹配胜出。
 }

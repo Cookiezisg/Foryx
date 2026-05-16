@@ -1,16 +1,3 @@
-// config.go — Handler config (init_args values) AES-GCM at-rest encryption +
-// per-Definition merge-patch update + computed ConfigState (unconfigured /
-// partially_configured / ready).
-//
-// Per D-handler decision: one ciphertext blob per (user, handlerID) covers
-// ALL init_args values (sensitive + non-sensitive lumped together for
-// simplicity). The schema (InitArgSpec list) declares which keys are
-// sensitive; UI / LLM tool result masks them but storage is uniformly encrypted.
-//
-// config.go —— Handler config(init_args 值)AES-GCM 静态加密 + per-Definition
-// JSON Merge Patch 更新 + 计算 ConfigState。整 config JSON 一起加密(不区分
-// sensitive/non-sensitive),简化;UI/LLM 工具结果按 schema 标记 mask。
-
 package handler
 
 import (
@@ -23,10 +10,9 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// LoadConfig fetches encrypted config from DB + decrypts. Returns nil when
-// unconfigured (ConfigEncrypted == ""), distinguishing from {} (empty config).
+// LoadConfig fetches encrypted config from DB and decrypts; returns nil when unconfigured.
 //
-// LoadConfig 取加密 config + 解密。未配时返 nil(跟 {} 空 config 区分)。
+// LoadConfig 从 DB 取加密 config 并解密；未配置时返 nil。
 func (s *Service) LoadConfig(ctx context.Context, handlerID string) (map[string]any, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("handlerapp.LoadConfig: %w", err)
@@ -49,12 +35,9 @@ func (s *Service) LoadConfig(ctx context.Context, handlerID string) (map[string]
 	return config, nil
 }
 
-// UpdateConfig merges partial into existing config (JSON Merge Patch — nil
-// values delete keys), encrypts the whole blob, persists. Publishes a
-// "config_updated" notification.
+// UpdateConfig applies a JSON Merge Patch and re-encrypts the whole blob; publishes config_updated.
 //
-// UpdateConfig 合并 partial 到现有 config(JSON Merge Patch,nil 删键),
-// 整 blob 加密回写,推 "config_updated" 通知。
+// UpdateConfig 应用 JSON Merge Patch 后整 blob 重新加密回写，并推 config_updated。
 func (s *Service) UpdateConfig(ctx context.Context, handlerID string, partial map[string]any) error {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return fmt.Errorf("handlerapp.UpdateConfig: %w", err)
@@ -83,9 +66,9 @@ func (s *Service) UpdateConfig(ctx context.Context, handlerID string, partial ma
 	return nil
 }
 
-// ClearConfig wipes the ciphertext blob to ""(back to unconfigured).
+// ClearConfig wipes the ciphertext blob back to unconfigured.
 //
-// ClearConfig 清密文 blob 到 "" (回未配置)。
+// ClearConfig 清空密文 blob 回到未配置。
 func (s *Service) ClearConfig(ctx context.Context, handlerID string) error {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return fmt.Errorf("handlerapp.ClearConfig: %w", err)
@@ -97,12 +80,9 @@ func (s *Service) ClearConfig(ctx context.Context, handlerID string) error {
 	return nil
 }
 
-// ComputeConfigState compares declared init_args schema against actual stored
-// config keys, returns one of (ready / partially_configured / unconfigured)
-// + the list of missing required keys. attachComputed in CRUD reads this.
+// ComputeConfigState compares declared schema against stored config and returns state + missing required keys.
 //
-// ComputeConfigState 比较 declared schema vs 实际 config 键,返
-// (ready / partially_configured / unconfigured) + 缺失必填 key 列表。
+// ComputeConfigState 比较 declared schema 与已存 config，返状态加缺失必填 key 列表。
 func (s *Service) ComputeConfigState(ctx context.Context, handlerID string, schema []handlerdomain.InitArgSpec) (string, []string, error) {
 	cfg, err := s.LoadConfig(ctx, handlerID)
 	if err != nil {
@@ -135,12 +115,9 @@ func (s *Service) ComputeConfigState(ctx context.Context, handlerID string, sche
 	}
 }
 
-// MaskedConfig returns a copy of the loaded config with sensitive values
-// (per schema) replaced by "********". For GET / list endpoints that should
-// never expose secrets.
+// MaskedConfig returns the loaded config with sensitive values replaced by "********".
 //
-// MaskedConfig 返加载好 config 的副本,sensitive 字段(按 schema)替为
-// "********"。GET/list 端点用,永不暴露 secret。
+// MaskedConfig 返加载 config 的副本，sensitive 字段替换为 "********"。
 func (s *Service) MaskedConfig(ctx context.Context, handlerID string, schema []handlerdomain.InitArgSpec) (map[string]any, error) {
 	cfg, err := s.LoadConfig(ctx, handlerID)
 	if err != nil {
@@ -166,12 +143,6 @@ func (s *Service) MaskedConfig(ctx context.Context, handlerID string, schema []h
 	return out, nil
 }
 
-// publishHandlerEvent is a thin notification helper. Action goes into the
-// data envelope; UI subscribes to "handler" entity events and refreshes the
-// affected entity.
-//
-// publishHandlerEvent 是 notification 包装。action 走 data envelope;
-// UI 订阅 "handler" entity 事件后刷新对应 entity。
 func (s *Service) publishHandlerEvent(ctx context.Context, handlerID, action string, extra map[string]any) {
 	envelope := map[string]any{"action": action}
 	for k, v := range extra {

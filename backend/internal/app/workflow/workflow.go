@@ -1,14 +1,6 @@
-// Package workflow (app layer) orchestrates the trinity workflow
-// authoring domain: CRUD, version + pending lifecycle, ops engine,
-// graph validation, slim notifications. Execution (scheduler / trigger
-// / flowrun) lives in Plan 05.
+// Package workflow (app layer) orchestrates workflow authoring: CRUD, versions, ops, graph validation.
 //
-// All three workflow packages (domain / app / store) declare
-// `package workflow`; importers alias as workflowapp / workflowdomain /
-// workflowstore at import sites per §S13.
-//
-// Package workflow(app 层)负责 Service 编排 workflow 锻造域。三个 workflow
-// 包均 `package workflow`;外部按角色起别名。
+// Package workflow（app 层）编排 workflow 锻造：CRUD、版本、ops、图校验。
 package workflow
 
 import (
@@ -30,12 +22,9 @@ type Service struct {
 	log     *zap.Logger
 }
 
-// NewService wires Service dependencies. Panics on nil log / notif.
-// checker may be nil — Service uses NopChecker as fallback so unit tests
-// don't need to wire function / handler / mcp / skill services.
+// NewService wires Service; panics on nil log/notif; nil checker uses NopChecker.
 //
-// NewService 装配 Service 依赖;nil log/notif panic。checker 可 nil(用
-// NopChecker),单测无须接外部 service。
+// NewService 装配 Service；nil log/notif panic；nil checker 回落 NopChecker。
 func NewService(
 	repo workflowdomain.Repository,
 	checker CapabilityChecker,
@@ -59,20 +48,13 @@ func NewService(
 	}
 }
 
-// WorkflowReader is the read-only contract Plan 05 (scheduler / trigger /
-// flowrun) consumes to look up active versions and enabled workflows
-// without depending on the full Service.
+// WorkflowReader is the read-only contract Plan 05 consumes for active versions and enabled lists.
 //
-// WorkflowReader 是 Plan 05 (scheduler/trigger/flowrun) 消费的只读契约;
-// 拿 active version + enabled 列表,不依赖完整 Service。
+// WorkflowReader 是 Plan 05 消费的只读契约（active version + enabled 列表）。
 type WorkflowReader interface {
 	GetActiveVersion(ctx context.Context, workflowID string) (*workflowdomain.Version, error)
 	GetWorkflow(ctx context.Context, workflowID string) (*workflowdomain.Workflow, error)
 	ListEnabled(ctx context.Context) ([]*workflowdomain.Workflow, error)
 }
 
-// Compile-time assertion that *Service satisfies WorkflowReader so Plan 05
-// callers can take the interface and feed *Service through.
-//
-// 编译期断言 *Service 满足 WorkflowReader。
 var _ WorkflowReader = (*Service)(nil)

@@ -1,8 +1,3 @@
-// config_test.go — Load / Save / Merge for ~/.forgify/mcp.json. Uses
-// t.TempDir for filesystem isolation; no real ~/.forgify written.
-//
-// config_test.go ——~/.forgify/mcp.json 的 Load / Save / Merge。t.TempDir
-// 文件系统隔离；不写真 ~/.forgify。
 package mcp
 
 import (
@@ -38,7 +33,6 @@ const claudeDesktopExample = `{
   }
 }`
 
-// ── Load ─────────────────────────────────────────────────────────────
 
 func TestLoad_MissingFile_ReturnsEmpty(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "absent.json")
@@ -127,7 +121,6 @@ func TestLoad_TimeoutSecPreserved(t *testing.T) {
 	}
 }
 
-// ── Save ─────────────────────────────────────────────────────────────
 
 func TestSave_RoundTrip(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "mcp.json")
@@ -270,7 +263,6 @@ func TestSave_NameFieldNotDuplicatedInValue(t *testing.T) {
 	}
 }
 
-// ── Merge ────────────────────────────────────────────────────────────
 
 func TestMerge_NewEntries_AllImported(t *testing.T) {
 	existing := map[string]mcpdomain.ServerConfig{

@@ -1,6 +1,3 @@
-// get.go — get_handler system tool: returns full details + configState +
-// method list. Masks sensitive config values per InitArgSpec.
-
 package handler
 
 import (

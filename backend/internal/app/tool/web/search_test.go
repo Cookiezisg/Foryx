@@ -1,10 +1,3 @@
-// search_test.go — unit tests for WebSearch (BYOK → MCP routing). All
-// network calls go through httptest servers. KeyProvider and
-// MCPSearchRouter are stubbed via tiny in-test fakes. Real-internet calls
-// are not exercised.
-//
-// search_test.go ——WebSearch（BYOK → MCP 路由）单测；所有网络调用走
-// httptest；KeyProvider / MCPSearchRouter 经测试内 fake 替身。不打真实互联网。
 package web
 
 import (
@@ -20,7 +13,6 @@ import (
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 )
 
-// ── Identity / metadata / schema ──────────────────────────────────────────────
 
 func TestWebSearch_IdentityMethods(t *testing.T) {
 	tool := newTestSearch(t)
@@ -64,7 +56,6 @@ func TestWebSearch_Schema_IsParsableObject(t *testing.T) {
 	}
 }
 
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestWebSearch_ValidateInput_RequiresQuery(t *testing.T) {
 	tool := newTestSearch(t)
@@ -83,7 +74,6 @@ func TestWebSearch_ValidateInput_RejectsNegativeLimit(t *testing.T) {
 	}
 }
 
-// ── normalize ─────────────────────────────────────────────────────────────────
 
 func TestSearchArgs_NormalizeFillsDefaults(t *testing.T) {
 	a := searchArgs{}
@@ -101,7 +91,6 @@ func TestSearchArgs_NormalizeCapsHardLimit(t *testing.T) {
 	}
 }
 
-// ── End-to-end via Execute (BYOK → MCP → Bing CN dispatch) ───────────────────
 
 func TestExecute_BYOKBrave_ReturnsResults(t *testing.T) {
 	srv := newBraveServer(t, []searchResult{
@@ -232,7 +221,6 @@ func TestExecute_HonoursContextCancellation(t *testing.T) {
 	}
 }
 
-// ── MCP result parser ─────────────────────────────────────────────────────────
 
 func TestParseMCPSearchResults_KeyedShape(t *testing.T) {
 	raw := `{"results":[{"title":"A","url":"https://a","snippet":"sa"},{"name":"B","link":"https://b","content":"sb"}]}`
@@ -274,7 +262,6 @@ func TestParseMCPSearchResults_PlainTextFallback(t *testing.T) {
 	}
 }
 
-// ── Test helpers / fakes ──────────────────────────────────────────────────────
 
 func newTestSearch(t *testing.T) *WebSearch {
 	t.Helper()

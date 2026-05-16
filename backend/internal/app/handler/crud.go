@@ -1,18 +1,3 @@
-// crud.go — Handler CRUD + version lifecycle (pending → accept / reject /
-// revert) + metadata update + soft-delete at the Service layer.
-//
-// Mirrors function/crud.go structure. Handler-specific differences:
-//   - Version has methods + init_args_schema (no whole-code-file)
-//   - attachComputed also fills ConfigState by calling ComputeConfigState
-//     against active version's InitArgsSchema (D-handler)
-//   - Delete cascades to instance registry: DestroyAllOwnersOf the handler
-//     (we don't have a per-handler scoped registry index in V1 — just iterate
-//     the snapshot)
-//
-// crud.go —— Handler CRUD + 版本生命周期(pending → accept/reject/revert)+
-// 元数据更新 + 软删。差异:Version 含 methods + init_args_schema;
-// attachComputed 计算 ConfigState;Delete 时级联销毁所有 owner 持有的 instance。
-
 package handler
 
 import (
@@ -31,11 +16,9 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// ── Input types ───────────────────────────────────────────────────────────────
-
 // CreateInput is the request shape for Service.Create (LLM ops-driven path).
 //
-// CreateInput Service.Create 的请求形状(LLM ops 驱动路径)。
+// CreateInput 是 Service.Create 的请求形状（LLM ops 驱动）。
 type CreateInput struct {
 	Ops             []Op
 	ChangeReason    string
@@ -44,7 +27,7 @@ type CreateInput struct {
 
 // EditInput is the request shape for Service.Edit (writes a pending version).
 //
-// EditInput Service.Edit 的请求形状(写 pending)。
+// EditInput 是 Service.Edit 的请求形状（写 pending）。
 type EditInput struct {
 	ID              string
 	Ops             []Op
@@ -52,9 +35,9 @@ type EditInput struct {
 	ProgressBlockID string
 }
 
-// UpdateMetaInput patches Handler-level metadata (no version side effects).
+// UpdateMetaInput patches Handler metadata without a version bump.
 //
-// UpdateMetaInput 改 Handler 元数据(不改版本)。
+// UpdateMetaInput 改 Handler 元数据不动版本。
 type UpdateMetaInput struct {
 	ID          string
 	Name        *string
@@ -62,11 +45,9 @@ type UpdateMetaInput struct {
 	Tags        *[]string
 }
 
-// DirectCreateInput is the HTTP-friendly flat shape for POST /handlers
-// (curl/UI use). Service.CreateDirect translates to canonical ops then
-// delegates to Create.
+// DirectCreateInput is the flat HTTP shape for POST /handlers; CreateDirect rebuilds the canonical ops.
 //
-// DirectCreateInput POST /handlers 的扁平形状;CreateDirect 转 ops 再 Create。
+// DirectCreateInput 是 POST /handlers 的扁平形状，CreateDirect 反推 canonical ops。
 type DirectCreateInput struct {
 	Name           string
 	Description    string
@@ -81,9 +62,7 @@ type DirectCreateInput struct {
 	ChangeReason   string
 }
 
-// ── Reads ─────────────────────────────────────────────────────────────────────
-
-// List returns a paginated page of live handlers for current user.
+// List returns a paginated page of live handlers for the current user.
 //
 // List 返当前用户活跃 handler 的 cursor 分页。
 func (s *Service) List(ctx context.Context, filter handlerdomain.ListFilter) ([]*handlerdomain.Handler, string, error) {
@@ -137,11 +116,9 @@ func (s *Service) Search(ctx context.Context, query string) ([]*handlerdomain.Ha
 	return out, nil
 }
 
-// Get fetches one handler with all computed fields populated (Pending,
-// active env state, ConfigState, LiveInstances).
+// Get fetches one handler with all computed fields populated.
 //
-// Get 返单 handler 含全部计算字段(Pending / active env / ConfigState /
-// LiveInstances)。
+// Get 返单 handler 含全部计算字段。
 func (s *Service) Get(ctx context.Context, id string) (*handlerdomain.Handler, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("handlerapp.Get: %w", err)
@@ -154,10 +131,9 @@ func (s *Service) Get(ctx context.Context, id string) (*handlerdomain.Handler, e
 	return h, nil
 }
 
-// GetByName fetches one handler by name (skips computed fields — meant for
-// cross-domain existence checks like workflow validation).
+// GetByName fetches one handler by name without computed fields.
 //
-// GetByName 按 name 查 handler(不填计算字段;跨 domain 存在性检查用)。
+// GetByName 按 name 查 handler，不填计算字段。
 func (s *Service) GetByName(ctx context.Context, name string) (*handlerdomain.Handler, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("handlerapp.GetByName: %w", err)
@@ -169,17 +145,10 @@ func (s *Service) GetByName(ctx context.Context, name string) (*handlerdomain.Ha
 	return h, nil
 }
 
-// attachComputed fills Pending + Env* + ConfigState + LiveInstances on a
-// Handler row. Best-effort: individual fetch failures log a warning but
-// don't fail the parent call.
-//
-// attachComputed 填 Pending + Env* + ConfigState + LiveInstances。
-// 单项失败 warn log,不挂主调用。
 func (s *Service) attachComputed(ctx context.Context, h *handlerdomain.Handler) {
 	if h == nil {
 		return
 	}
-	// Pending
 	pending, err := s.repo.GetPending(ctx, h.ID)
 	if err == nil {
 		h.Pending = pending
@@ -187,10 +156,7 @@ func (s *Service) attachComputed(ctx context.Context, h *handlerdomain.Handler) 
 		s.log.Warn("handlerapp.attachComputed: pending fetch", zap.String("id", h.ID), zap.Error(err))
 	}
 
-	// Active env mirror + ConfigState (depends on active version's schema).
 	if h.ActiveVersionID == "" {
-		// No active version → can't compute ConfigState meaningfully.
-		// No active 版本 → ConfigState 没意义。
 		h.ConfigState = ""
 	} else {
 		active, err := s.repo.GetVersion(ctx, h.ActiveVersionID)
@@ -211,8 +177,6 @@ func (s *Service) attachComputed(ctx context.Context, h *handlerdomain.Handler) 
 		}
 	}
 
-	// LiveInstances: count across all owners. Cheap iteration via Snapshot.
-	// LiveInstances 跨 owner 数;Snapshot 一次扫。
 	live := 0
 	for _, om := range s.registry.Snapshot() {
 		if _, ok := om[h.Name]; ok {
@@ -222,20 +186,9 @@ func (s *Service) attachComputed(ctx context.Context, h *handlerdomain.Handler) 
 	h.LiveInstances = live
 }
 
-// ── Lifecycle ─────────────────────────────────────────────────────────────────
-
-// Create applies ops to an empty draft + persists Handler + v1 auto-accepted
-// version. ConfigEncrypted starts empty (config flow is separate).
+// Create applies ops, persists Handler + auto-accepted v1, and synchronously syncs the venv.
 //
-// Per D-redo-9 (forge_redesign 2026-05-12) env sync is synchronous here —
-// the venv is built before Create returns; v.EnvStatus is terminal (ready or
-// failed) when the call exits. Failure does NOT roll back the entity rows
-// (LLM tool retry-loop in C2 will own the recovery path). Per D-redo-20 a
-// sandbox ping precedes any DB writes.
-//
-// Create 应用 ops → 持久化 Handler + v1 auto-accepted 版本;同步装 env
-// (D-redo-9),返时 v.EnvStatus 已是终态;失败不回滚行;DB 写入前 sandbox
-// ping(D-redo-20)。
+// Create 应用 ops、持久化 Handler + 自动 accept 的 v1、同步装 venv。
 func (s *Service) Create(ctx context.Context, in CreateInput) (*handlerdomain.Handler, *handlerdomain.Version, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -287,7 +240,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*handlerdomain.Ha
 		InitArgsSchema: draft.InitArgsSchema,
 		Dependencies:   draft.Dependencies,
 		PythonVersion:  pyVer,
-		EnvID:          idgenpkg.New("hdenv"), // D-redo-8: fresh per-version env id, decoupled from versionID
+		EnvID:          idgenpkg.New("hdenv"),
 		EnvStatus:      handlerdomain.EnvStatusPending,
 		ChangeReason:   in.ChangeReason,
 		CreatedAt:      now,
@@ -303,8 +256,6 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*handlerdomain.Ha
 
 	s.publishHandlerEvent(ctx, hdID, "created", map[string]any{"versionId": v.ID, "versionNumber": versionN})
 
-	// Sync env synchronously (D-redo-9). syncEnv mutates v in place + writes DB.
-	// 同步装 env;syncEnv 同时更新 v 内存 + DB 行。
 	if err := s.syncEnv(ctx, v); err != nil {
 		s.log.Warn("handlerapp.Create: env sync failed",
 			zap.String("handlerId", hdID), zap.String("versionId", versionID), zap.Error(err))
@@ -313,11 +264,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*handlerdomain.Ha
 	return h, v, nil
 }
 
-// checkSandbox runs a fast availability ping. PythonPath()=="" signals
-// sandbox bootstrap failure (D-redo-20). Create/Edit reject before any DB
-// writes when the sandbox is unavailable.
+// checkSandbox is a fast availability ping; PythonPath()=="" signals bootstrap failure.
 //
-// checkSandbox 快速 ping sandbox 可用性;PythonPath()=="" 表 bootstrap 失败
+// checkSandbox 快速 ping sandbox 可用性，PythonPath()=="" 表 bootstrap 失败。
 // (D-redo-20)。Create/Edit 在 DB 写入前先调,失败硬拒。
 func (s *Service) checkSandbox() error {
 	if s.sandbox.PythonPath() == "" {
@@ -337,11 +286,6 @@ func (s *Service) CreateDirect(ctx context.Context, in DirectCreateInput) (*hand
 	return s.Create(ctx, CreateInput{Ops: ops, ChangeReason: in.ChangeReason})
 }
 
-// buildOpsFromDirect marshals direct fields to canonical ops:
-// set_meta → set_imports → set_init → set_shutdown → set_init_args_schema →
-// add_method × N → set_dependencies → set_python_version. Empty fields skipped.
-//
-// buildOpsFromDirect 转扁平字段为 canonical ops;空字段跳。
 func buildOpsFromDirect(in DirectCreateInput) ([]Op, error) {
 	ops := make([]Op, 0, 8+len(in.Methods))
 
@@ -389,15 +333,9 @@ func buildOpsFromDirect(in DirectCreateInput) ([]Op, error) {
 	return ops, nil
 }
 
-// Edit produces a pending version under D-redo-11 "iterate same pending"
-// semantics (same shape as function.Service.Edit):
-//   - No pending → ApplyOps on top of active → new pending row + sync env.
-//   - Pending exists → ApplyOps on top of pending → rewrite same row (keep ID,
-//     destroy old env, sync new env). No ErrPendingConflict.
-//   - ops=[] (D-redo-22) → force-rebuild env of pending (if any) else active.
+// Edit produces or iterates a pending version; ops=[] is the force-rebuild-env path.
 //
-// Edit 按 D-redo-11 "iterate same pending"(跟 function 同模式);ops=[] 走
-// D-redo-22 强制重建 env。
+// Edit 产出或迭代 pending 版本；ops=[] 走强制重建 env 路径。
 func (s *Service) Edit(ctx context.Context, in EditInput) (*handlerdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("handlerapp.Edit: %w", err)
@@ -413,14 +351,12 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*handlerdomain.Versio
 	pending, perr := s.repo.GetPending(ctx, in.ID)
 	switch {
 	case perr == nil:
-		// pending exists → iterate same row
 	case errors.Is(perr, handlerdomain.ErrPendingNotFound):
 		pending = nil
 	default:
 		return nil, fmt.Errorf("handlerapp.Edit: pending-check: %w", perr)
 	}
 
-	// D-redo-22: ops=[] is the "force rebuild env" path.
 	if len(in.Ops) == 0 {
 		var target *handlerdomain.Version
 		if pending != nil {
@@ -470,8 +406,6 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*handlerdomain.Versio
 
 	var v *handlerdomain.Version
 	if pending != nil {
-		// Rewrite same pending row. EnvID stays == pending.ID; destroy old
-		// venv (deps/python may have changed); re-sync below.
 		_ = s.sandbox.DestroyEnv(ctx, in.ID, pending.EnvID)
 		pending.Imports = draft.Imports
 		pending.InitBody = draft.InitBody
@@ -501,7 +435,7 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*handlerdomain.Versio
 			InitArgsSchema: draft.InitArgsSchema,
 			Dependencies:   draft.Dependencies,
 			PythonVersion:  pyVer,
-			EnvID:          idgenpkg.New("hdenv"), // D-redo-8: fresh per-version env id, decoupled from versionID
+			EnvID:          idgenpkg.New("hdenv"),
 			EnvStatus:      handlerdomain.EnvStatusPending,
 			ChangeReason:   in.ChangeReason,
 			CreatedAt:      now,
@@ -519,10 +453,6 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*handlerdomain.Versio
 	return v, nil
 }
 
-// versionToDraft converts an existing Version row to a VersionDraft for Edit's
-// iterate-same-pending path.
-//
-// versionToDraft 把已有 Version 行转 VersionDraft(iterate pending 时作 ApplyOps 起点)。
 func versionToDraft(h *handlerdomain.Handler, v *handlerdomain.Version) *VersionDraft {
 	return &VersionDraft{
 		Name:           h.Name,
@@ -538,10 +468,9 @@ func versionToDraft(h *handlerdomain.Handler, v *handlerdomain.Version) *Version
 	}
 }
 
-// AcceptPending turns the active pending into a numbered accepted version,
-// flips Handler.ActiveVersionID, enforces AcceptedVersionCap.
+// AcceptPending promotes the pending version to a numbered accepted version.
 //
-// AcceptPending 翻 pending 为带号 accepted + 翻 ActiveVersionID + 应用 cap。
+// AcceptPending 把 pending 翻为带号 accepted。
 func (s *Service) AcceptPending(ctx context.Context, id string) (*handlerdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("handlerapp.AcceptPending: %w", err)
@@ -570,11 +499,9 @@ func (s *Service) AcceptPending(ctx context.Context, id string) (*handlerdomain.
 	return pending, nil
 }
 
-// RejectPending destroys the pending venv and hard-deletes the pending Version
-// row (per D-redo-12). No state change to ActiveVersion. UI/LLM can Edit
-// again to create a fresh pending.
+// RejectPending destroys the pending venv and hard-deletes the pending Version row.
 //
-// RejectPending 销 pending 的 venv + 物理删 Version 行(D-redo-12)。
+// RejectPending 销 pending 的 venv 并物理删 Version 行。
 func (s *Service) RejectPending(ctx context.Context, id string) error {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return fmt.Errorf("handlerapp.RejectPending: %w", err)
@@ -594,9 +521,9 @@ func (s *Service) RejectPending(ctx context.Context, id string) error {
 	return nil
 }
 
-// Revert flips ActiveVersionID to a target accepted version number.
+// Revert flips ActiveVersionID to an accepted version identified by its integer number.
 //
-// Revert 翻 ActiveVersionID 到指定 accepted 版本号。
+// Revert 把 ActiveVersionID 翻到指定整数号的 accepted 版本。
 func (s *Service) Revert(ctx context.Context, id string, targetVersion int) (*handlerdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("handlerapp.Revert: %w", err)
@@ -616,10 +543,9 @@ func (s *Service) Revert(ctx context.Context, id string, targetVersion int) (*ha
 	return target, nil
 }
 
-// UpdateMeta patches Handler metadata (name/description/tags) without
-// creating a version. Enforces duplicate-name + name char-set.
+// UpdateMeta patches Handler metadata without creating a version.
 //
-// UpdateMeta 改元数据(name/description/tags)不创建版本;校验重名 + 字符集。
+// UpdateMeta 改 Handler 元数据不创建版本。
 func (s *Service) UpdateMeta(ctx context.Context, in UpdateMetaInput) (*handlerdomain.Handler, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("handlerapp.UpdateMeta: %w", err)
@@ -652,14 +578,13 @@ func (s *Service) UpdateMeta(ctx context.Context, in UpdateMetaInput) (*handlerd
 	if err := s.repo.SaveHandler(ctx, h); err != nil {
 		return nil, fmt.Errorf("handlerapp.UpdateMeta: %w", err)
 	}
-	// D-redo-6: slim payload — UI does GET to fetch updated meta.
 	s.publishHandlerEvent(ctx, h.ID, "updated", nil)
 	return h, nil
 }
 
-// Delete soft-deletes a handler + tears down any live instance across owners.
+// Delete soft-deletes a handler and tears down live instances across owners.
 //
-// Delete 软删 + 跨 owner 销毁所有 instance。
+// Delete 软删 handler 并销毁所有 owner 的活跃 instance。
 func (s *Service) Delete(ctx context.Context, id string) error {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return fmt.Errorf("handlerapp.Delete: %w", err)
@@ -671,8 +596,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if err := s.repo.DeleteHandler(ctx, id); err != nil {
 		return fmt.Errorf("handlerapp.Delete: %w", err)
 	}
-	// Tear down any live instances scoped to any owner.
-	// 跨 owner 关掉活的 instance(直接 iterate snapshot 找此 handler.Name)。
 	for owner, om := range s.registry.Snapshot() {
 		if _, ok := om[h.Name]; ok {
 			s.registry.DestroyOwner(ctx, owner)
@@ -682,11 +605,9 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// ── Versions/Pending pass-throughs ───────────────────────────────────────────
-
 // ListVersions returns paginated versions for a handler.
 //
-// ListVersions 返某 handler 版本分页。
+// ListVersions 返回某 handler 的版本分页。
 func (s *Service) ListVersions(ctx context.Context, handlerID string, filter handlerdomain.VersionListFilter) ([]*handlerdomain.Version, string, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, "", fmt.Errorf("handlerapp.ListVersions: %w", err)
@@ -704,7 +625,7 @@ func (s *Service) GetVersion(ctx context.Context, versionID string) (*handlerdom
 	return s.repo.GetVersion(ctx, versionID)
 }
 
-// GetVersionByNumber fetches accepted version by integer.
+// GetVersionByNumber fetches an accepted version by integer number.
 //
 // GetVersionByNumber 按整数号取 accepted 版本。
 func (s *Service) GetVersionByNumber(ctx context.Context, handlerID string, versionN int) (*handlerdomain.Version, error) {
@@ -716,7 +637,7 @@ func (s *Service) GetVersionByNumber(ctx context.Context, handlerID string, vers
 
 // GetPending returns the active pending version.
 //
-// GetPending 返活动 pending。
+// GetPending 返回活动 pending。
 func (s *Service) GetPending(ctx context.Context, handlerID string) (*handlerdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("handlerapp.GetPending: %w", err)
@@ -724,12 +645,6 @@ func (s *Service) GetPending(ctx context.Context, handlerID string) (*handlerdom
 	return s.repo.GetPending(ctx, handlerID)
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-// activeAsDraft loads the handler's active version into a VersionDraft for
-// Edit's base. Returns a name/desc/tags-only draft when no active version.
-//
-// activeAsDraft 把 active 版本加载为 Edit 的 base draft。
 func (s *Service) activeAsDraft(ctx context.Context, h *handlerdomain.Handler) (*VersionDraft, error) {
 	d := &VersionDraft{
 		Name:        h.Name,
@@ -753,9 +668,6 @@ func (s *Service) activeAsDraft(ctx context.Context, h *handlerdomain.Handler) (
 	return d, nil
 }
 
-// nextVersionNumber returns max(accepted.version)+1 for the handler.
-//
-// nextVersionNumber 返某 handler 的 max(accepted.version)+1。
 func (s *Service) nextVersionNumber(ctx context.Context, handlerID string) (int, error) {
 	rows, _, err := s.repo.ListVersions(ctx, handlerID, handlerdomain.VersionListFilter{
 		Status: handlerdomain.StatusAccepted,
@@ -770,8 +682,4 @@ func (s *Service) nextVersionNumber(ctx context.Context, handlerID string) (int,
 	return *rows[0].Version + 1, nil
 }
 
-// validNameRe must match validateIncremental's regex (re-exported here so
-// UpdateMeta can validate name before save).
-//
-// 注意:此处的 validNameRe 跟 validate.go 中的同义。UpdateMeta 用,validate 用。
-var _ = regexp.MustCompile // keep import; the regex itself is declared in validate.go
+var _ = regexp.MustCompile

@@ -1,33 +1,3 @@
-// search.go — WebSearch system tool: 2-tier routing (BYOK → MCP).
-//
-// Routing priority:
-//  1. BYOK: iterate apikeydomain.SearchProviderPriority (brave, serper,
-//     tavily, bocha) — first configured key whose call returns non-empty
-//     wins. Per-provider failures fall through with warn log.
-//  2. MCP: if user installed the duckduckgo-search MCP server (V1
-//     marketplace entry), route the query through it. Connection failures
-//     fall through with warn log; "not configured" falls through silently.
-//
-// When both tiers return empty / fail, the tool surfaces a clear LLM-
-// actionable hint: install duckduckgo-search via install_mcp_server tool,
-// or configure a search BYOK key. (We deliberately removed the previous
-// Bing CN HTML scrape "fallback" — modern Bing/Bing CN renders results
-// via JavaScript, so HTML scraping returns 0 hits regardless of UA. See
-// progress-record.md 屎山拯救计划 #4 follow-up.)
-//
-// search.go ——WebSearch 系统工具：2 层路由（BYOK → MCP）。
-//
-// 路由优先级：
-//  1. BYOK：按 apikeydomain.SearchProviderPriority 顺序遍历（brave / serper /
-//     tavily / bocha）—— 第一个配了 key 且调用返非空的胜出。per-provider 失败
-//     log warn 并降级。
-//  2. MCP：用户装了 duckduckgo-search MCP server（V1 marketplace 条目）就
-//     路由过去。连接失败 warn log 降级；未配置静默降级。
-//
-// 两层都空/失败时给 LLM 一条 actionable 提示：用 install_mcp_server 装
-// duckduckgo-search，或者配 search BYOK key。（之前的 Bing CN HTML 抓取
-// "兜底" 故意删了——现代 Bing 搜索结果完全 JS 渲染，HTML 抓取无论用啥 UA
-// 都返 0 命中，是个假兜底。详见 progress-record.md 屎山拯救计划 #4 后续。）
 package web
 
 import (
@@ -46,55 +16,28 @@ import (
 	"go.uber.org/zap"
 )
 
-// ── Sentinel errors ───────────────────────────────────────────────────────────
+// HTTP-classified sentinels enabling errors.Is matching (not substring).
 //
-// HTTP-status-classified errors from BYOK provider calls. Wrapping with
-// these sentinels lets markInvalidIfAuthErr (and any future caller) use
-// errors.Is instead of fragile substring matching on err.Error(). Mirrors
-// the llm.ErrAuthFailed / ErrRateLimited pattern from infra/llm (commit
-// 363b084) — separate sentinel set because BYOK search providers
-// (Brave / Serper / Tavily / Bocha) are not LLM transports.
-//
-// BYOK 调用按 HTTP 状态分类的 sentinel。markInvalidIfAuthErr（及未来调用方）
-// 用 errors.Is 替代 err.Error() substring 匹配。同 infra/llm 的
-// llm.ErrAuthFailed / ErrRateLimited 模式（commit 363b084）——独立
-// sentinel 因为 BYOK search provider 不是 LLM transport。
+// HTTP 状态分类的 sentinel，允许 errors.Is 匹配（非 substring）。
 var (
-	ErrAuthFailed    = errors.New("websearch: provider authentication failed")
-	ErrRateLimited   = errors.New("websearch: provider rate limited")
-	ErrUpstreamHTTP  = errors.New("websearch: provider upstream HTTP error")
+	ErrAuthFailed   = errors.New("websearch: provider authentication failed")
+	ErrRateLimited  = errors.New("websearch: provider rate limited")
+	ErrUpstreamHTTP = errors.New("websearch: provider upstream HTTP error")
 )
-
-// ── Limits & defaults ─────────────────────────────────────────────────────────
 
 const (
-	// searchTimeout caps a single backend call. Two backends × 10s = 20s
-	// worst case which fits comfortably inside the chat tool budget.
-	//
-	// searchTimeout 限制单后端调用；2 后端 × 10s = 20s 最坏，适配 chat 工具预算。
-	searchTimeout = 10 * time.Second
-
-	// defaultSearchLimit is the result count when LLM does not specify.
-	// Matches what most search APIs return on a default query.
-	//
-	// defaultSearchLimit 是 LLM 不指定时的结果数；与多数搜索 API 默认一致。
+	searchTimeout      = 10 * time.Second
 	defaultSearchLimit = 10
-
-	// maxSearchLimit hard cap so the LLM cannot ask for 1000 results.
-	//
-	// maxSearchLimit 硬上限，防 LLM 索取上千条。
-	maxSearchLimit = 30
+	maxSearchLimit     = 30
 )
-
-// ── Validation sentinels ──────────────────────────────────────────────────────
 
 var (
 	// ErrEmptyQuery: query missing or empty.
+	//
 	// ErrEmptyQuery：query 缺失或为空。
 	ErrEmptyQuery = errors.New("query is required and must be non-empty")
 )
 
-// ── Description & schema ──────────────────────────────────────────────────────
 
 const searchDescription = `Web search. Routes to the first available source: a configured BYOK provider (Brave / Serper / Tavily / Bocha), then the duckduckgo-search MCP server (if installed). When neither is available the result includes a hint about how to enable one.
 
@@ -120,7 +63,6 @@ var searchSchema = json.RawMessage(`{
 	}
 }`)
 
-// ── Args ──────────────────────────────────────────────────────────────────────
 
 type searchArgs struct {
 	Query string `json:"query"`
@@ -136,12 +78,7 @@ func (a *searchArgs) normalize() {
 	}
 }
 
-// ── Output ────────────────────────────────────────────────────────────────────
 
-// searchResult is one hit. Field shapes match what an LLM expects from a
-// search API; we never leak engine-specific extras.
-//
-// searchResult 是一条命中；字段形态对齐 LLM 对搜索 API 的期望，不漏后端内部。
 type searchResult struct {
 	Title   string `json:"title"`
 	URL     string `json:"url"`
@@ -150,21 +87,14 @@ type searchResult struct {
 
 type searchResponse struct {
 	Query     string         `json:"query"`
-	Source    string         `json:"source"` // "brave" / "serper" / "tavily" / "bocha" / "mcp"
+	Source    string         `json:"source"`
 	Results   []searchResult `json:"results"`
 	Truncated bool           `json:"truncated"`
 }
 
-// ── Tool struct & 9 methods ───────────────────────────────────────────────────
-
-// WebSearch implements the WebSearch system tool. Carries:
-//   - httpClient: short-timeout client shared by all backends
-//   - keys: BYOK lookup for search-category providers (apikey domain)
-//   - mcpRouter: optional port to delegate to a connected MCP search server
-//   - log: structured logger for per-tier fall-through traces
+// WebSearch implements the WebSearch system tool with BYOK → MCP routing.
 //
-// WebSearch struct 是 WebSearch 系统工具；持短超时 httpClient、apikey 域的
-// BYOK 查询 keys、可选 MCP 路由 mcpRouter、log 用于 per-tier 降级追踪。
+// WebSearch 是 WebSearch 系统工具的实现，BYOK → MCP 路由。
 type WebSearch struct {
 	httpClient *http.Client
 	keys       apikeydomain.KeyProvider
@@ -172,19 +102,13 @@ type WebSearch struct {
 	log        *zap.Logger
 }
 
-// Identity --------------------------------------------------------------------
-
 func (t *WebSearch) Name() string                { return "WebSearch" }
 func (t *WebSearch) Description() string         { return searchDescription }
 func (t *WebSearch) Parameters() json.RawMessage { return searchSchema }
 
-// Static metadata -------------------------------------------------------------
-
 func (t *WebSearch) IsReadOnly() bool        { return true }
 func (t *WebSearch) NeedsReadFirst() bool    { return false }
 func (t *WebSearch) RequiresWorkspace() bool { return false }
-
-// Args-dependent hooks --------------------------------------------------------
 
 // ValidateInput rejects empty queries and negative limits pre-Execute.
 //
@@ -207,17 +131,10 @@ func (t *WebSearch) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionMode
 	return toolapp.PermissionAllow
 }
 
-// ── Execute ───────────────────────────────────────────────────────────────────
 
-// Execute walks the BYOK → MCP routing ladder. Returns the first non-empty
-// result list as JSON. Per-tier failures + zero-result responses both
-// trigger the next tier; warns are logged for "tried and failed" but not
-// for "not configured" cases (the silent BYOK miss is the normal path for
-// users who never set a key).
+// Execute walks BYOK → MCP routing and returns the first non-empty result list.
 //
-// Execute 走 BYOK → MCP 路由阶梯。第一个非空结果作 JSON 返。per-tier 失败
-// + 零结果都触发下一层；"试了挂"走 warn log，"未配置"静默（用户从没配 key
-// 时这是正常路径）。
+// Execute 走 BYOK → MCP 路由，返首个非空结果列表。
 func (t *WebSearch) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var args searchArgs
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
@@ -225,7 +142,6 @@ func (t *WebSearch) Execute(ctx context.Context, argsJSON string) (string, error
 	}
 	args.normalize()
 
-	// Tier 1: BYOK iterate.
 	if t.keys != nil {
 		for _, provider := range apikeydomain.SearchProviderPriority {
 			if ctx.Err() != nil {
@@ -238,13 +154,10 @@ func (t *WebSearch) Execute(ctx context.Context, argsJSON string) (string, error
 		}
 	}
 
-	// Tier 2: MCP duckduckgo-search.
 	if ctx.Err() == nil && t.mcpRouter != nil {
 		results, err := t.runMCPSearch(ctx, args.Query, args.Limit)
 		switch {
 		case errors.Is(err, ErrMCPSearchUnavailable):
-			// Silent fall-through — MCP search server simply not installed.
-			// 静默降级——MCP 搜索 server 未装。
 		case err != nil:
 			t.warnf("WebSearch MCP backend failed; falling through", err)
 		case len(results) > 0:
@@ -259,29 +172,12 @@ func (t *WebSearch) Execute(ctx context.Context, argsJSON string) (string, error
 		args.Query), nil
 }
 
-// tryBYOKProvider attempts one BYOK search call. Returns (results, source,
-// true) on success; (nil, "", false) when the provider has no configured
-// key OR the call failed (latter logged at warn). source is the provider
-// name on success so the response payload tells the LLM which backend
-// produced the results.
+// tryBYOKProvider tries one BYOK provider; ErrNotFoundForProvider is silent (user just hasn't configured it).
 //
-// tryBYOKProvider 试调一个 BYOK 搜索。成功 (results, source, true)；provider
-// 无 key 或调用失败 (nil, "", false)；后者 warn log。source 是成功时的 provider
-// 名让响应载荷告诉 LLM 是哪个后端给的结果。
+// tryBYOKProvider 试一个 BYOK provider；ErrNotFoundForProvider 静默（用户没配）。
 func (t *WebSearch) tryBYOKProvider(ctx context.Context, provider, query string, limit int) ([]searchResult, string, bool) {
 	creds, err := t.keys.ResolveCredentials(ctx, provider)
 	if err != nil {
-		// ErrNotFoundForProvider IS the silent path — user just hasn't
-		// configured this provider, fall through to next tier without
-		// noise. Other errors (decryption fail, store fail, ctx canceled)
-		// are NOT user-recoverable from "no key configured" — they
-		// indicate something concrete is broken (corrupt encryption /
-		// DB issue). Log loudly so operator sees the difference.
-		// Same defect-class lesson as B2 bash auto-route silent fallback.
-		//
-		// ErrNotFoundForProvider 是静默路径——用户没配，无声降级到下层。
-		// 其他错误（解密失败、store 失败、ctx 取消）不是"没配"——是有真问
-		// 题。高声 log 让 operator 看出区别。同 B2 bash auto-route 经验。
 		if !errors.Is(err, apikeydomain.ErrNotFoundForProvider) {
 			t.warnf(fmt.Sprintf("WebSearch BYOK %q ResolveCredentials failed (not 'no key configured')", provider), err)
 		}
@@ -290,9 +186,6 @@ func (t *WebSearch) tryBYOKProvider(ctx context.Context, provider, query string,
 
 	baseURL := strings.TrimRight(creds.BaseURL, "/")
 	if baseURL == "" {
-		// Defensive — meta.DefaultBaseURL should be merged by the
-		// keyProvider. Fall through.
-		// 防御——meta.DefaultBaseURL 应由 keyProvider 合并。降级。
 		return nil, "", false
 	}
 
@@ -310,43 +203,26 @@ func (t *WebSearch) tryBYOKProvider(ctx context.Context, provider, query string,
 	case "bocha":
 		results, runErr = t.searchBocha(ctx, baseURL, creds.Key, query, limit)
 	default:
-		// Defensive — providers list and switch must stay in sync.
-		// 防御——providers 列表与 switch 必须同步。
 		return nil, "", false
 	}
 	if runErr != nil {
 		t.warnf(fmt.Sprintf("WebSearch BYOK %q failed; falling through", provider), runErr)
-		// Surface 401/403 to apikey domain so the UI badge flips invalid.
-		// 把 401/403 通知 apikey 域让 UI 徽章翻 invalid。
 		t.markInvalidIfAuthErr(ctx, provider, runErr)
 		return nil, "", false
 	}
 	return results, provider, true
 }
 
-// markInvalidIfAuthErr surfaces 401/403 errors from BYOK calls back to the
-// apikey domain so the UI status flips. Best-effort: failure to mark
-// is logged at debug only.
+// markInvalidIfAuthErr surfaces 401/403 to apikey domain so the UI status flips; best-effort.
 //
-// markInvalidIfAuthErr 把 BYOK 401/403 通知 apikey 域让 UI 状态翻转。
-// best-effort：marker 失败 debug log。
+// markInvalidIfAuthErr 把 401/403 通知 apikey 域让 UI 翻转；best-effort。
 func (t *WebSearch) markInvalidIfAuthErr(ctx context.Context, provider string, err error) {
-	// errors.Is(ErrAuthFailed) catches both 401 + 403 (sentinel covers
-	// both). Replaced fragile string match `Contains(msg, "HTTP 401")`
-	// — see audit doc app-tool-web/search.go.md site #12.
-	// errors.Is(ErrAuthFailed) 同时捕获 401 + 403（sentinel 覆盖两者）。
-	// 替代脆 substring 匹配——见 audit doc。
 	if !errors.Is(err, ErrAuthFailed) {
 		return
 	}
 	if t.keys == nil {
 		return
 	}
-	// MarkInvalid expects ctx with userID; reqctx middleware always stamps
-	// it for HTTP-driven calls. detached context retains the user ID so
-	// background invocations work too.
-	// MarkInvalid 期望 ctx 含 userID；HTTP 路径走 middleware；detached ctx 留
-	// userID 让后台调用也能 mark。
 	uid, _ := reqctxpkg.GetUserID(ctx)
 	mctx := ctx
 	if uid != "" {
@@ -357,9 +233,6 @@ func (t *WebSearch) markInvalidIfAuthErr(ctx context.Context, provider string, e
 	}
 }
 
-// warnf logs at warn level when t.log is non-nil; nil log = silent (tests).
-//
-// warnf 当 t.log 非空时 warn log；nil log 静默（测试）。
 func (t *WebSearch) warnf(msg string, err error) {
 	if t.log == nil {
 		return
@@ -374,10 +247,6 @@ func (t *WebSearch) debugf(msg string, err error) {
 	t.log.Debug(msg, zap.Error(err))
 }
 
-// marshalSearchResponse caps to args.Limit, sets the truncated flag, and
-// JSON-encodes the response.
-//
-// marshalSearchResponse 截到 args.Limit、置 truncated、JSON 编码。
 func marshalSearchResponse(args searchArgs, source string, results []searchResult) (string, error) {
 	truncated := false
 	if len(results) > args.Limit {
@@ -396,6 +265,5 @@ func marshalSearchResponse(args searchArgs, source string, results []searchResul
 	return string(body), nil
 }
 
-// ── Compile-time checks ───────────────────────────────────────────────────────
 
 var _ toolapp.Tool = (*WebSearch)(nil)

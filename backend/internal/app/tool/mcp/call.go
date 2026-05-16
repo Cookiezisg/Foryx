@@ -1,9 +1,3 @@
-// call.go — call_mcp system tool. LLM uses this to invoke a specific
-// tool on a specific MCP server, after picking from search_mcp results.
-// Result is the server's tool output as a string.
-//
-// call.go ——call_mcp 系统工具。LLM 选完 search_mcp 候选后用它调具体
-// server 的具体 tool。返 server 工具输出字符串。
 package mcp
 
 import (
@@ -18,19 +12,19 @@ import (
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
 )
 
-// ── Validation sentinels ─────────────────────────────────────────────
 
-// ErrEmptyServer / ErrEmptyTool — required-field guards. Args itself is
-// optional (some MCP tools take no args).
-//
-// ErrEmptyServer / ErrEmptyTool 必填字段守卫。Args 自身可选（部分 MCP
-// 工具无参数）。
 var (
+	// ErrEmptyServer: server missing or empty.
+	//
+	// ErrEmptyServer：server 缺失或为空。
 	ErrEmptyServer = errors.New("server is required and must be non-empty")
-	ErrEmptyTool   = errors.New("tool is required and must be non-empty")
+
+	// ErrEmptyTool: tool missing or empty.
+	//
+	// ErrEmptyTool：tool 缺失或为空。
+	ErrEmptyTool = errors.New("tool is required and must be non-empty")
 )
 
-// ── Description & schema ─────────────────────────────────────────────
 
 const callMCPDescription = `Invoke a specific tool on a specific MCP server. Pair with search_mcp_tools: discover the tool + its inputSchema, then call_mcp_tool with matching server / tool / args. The args object must conform to the tool's inputSchema. On failure the result string carries the reason so you can adjust args, pick a different tool, or stop.`
 
@@ -54,34 +48,22 @@ var callMCPSchema = json.RawMessage(`{
 	}
 }`)
 
-// ── Tool struct & 9 methods ──────────────────────────────────────────
 
 // CallMCP implements the call_mcp system tool.
 //
-// CallMCP struct 是 call_mcp 系统工具。
+// CallMCP 是 call_mcp 系统工具的实现。
 type CallMCP struct {
 	svc *mcpapp.Service
 }
-
-// Identity --------------------------------------------------------------------
 
 func (t *CallMCP) Name() string                { return "call_mcp_tool" }
 func (t *CallMCP) Description() string         { return callMCPDescription }
 func (t *CallMCP) Parameters() json.RawMessage { return callMCPSchema }
 
-// Static metadata -------------------------------------------------------------
-
-// IsReadOnly is conservatively false: an MCP tool may write/mutate.
-// LLM should set destructive=true on the call_mcp invocation when the
-// underlying MCP tool is destructive (e.g. github.delete_repo).
-//
-// IsReadOnly 保守取 false：MCP 工具可能写。LLM 应在调底层 MCP 工具是
-// destructive（如 github.delete_repo）时给 call_mcp 调用设 destructive=true。
 func (t *CallMCP) IsReadOnly() bool        { return false }
 func (t *CallMCP) NeedsReadFirst() bool    { return false }
 func (t *CallMCP) RequiresWorkspace() bool { return false }
 
-// ── Args-dependent hooks ─────────────────────────────────────────────
 
 func (t *CallMCP) ValidateInput(args json.RawMessage) error {
 	var a struct {
@@ -104,16 +86,10 @@ func (t *CallMCP) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionMode) 
 	return toolapp.PermissionAllow
 }
 
-// ── Execute ──────────────────────────────────────────────────────────
 
-// Execute parses args, dispatches to Service.CallTool, and returns the
-// server's response. Each known sentinel maps to a friendly message so
-// the LLM can read the failure mode and react (re-search, pick another
-// server, surrender). Per §S18 / ask.go pattern.
+// Execute dispatches to Service.CallTool; known sentinels map to LLM-friendly strings.
 //
-// Execute 解析 args，派发到 Service.CallTool，返 server 响应。每个已知
-// sentinel 映射到友好消息让 LLM 看清失败原因并自决（重搜 / 换 server /
-// 放弃）。按 §S18 / ask.go 模式。
+// Execute 派发到 Service.CallTool；已知 sentinel 映射到 LLM 友好字符串。
 func (t *CallMCP) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var args struct {
 		Server string          `json:"server"`
@@ -131,14 +107,9 @@ func (t *CallMCP) Execute(ctx context.Context, argsJSON string) (string, error) 
 	return out, nil
 }
 
-// mapCallToolErrorToFriendly converts known mcpdomain sentinels into
-// LLM-readable strings the chat layer wraps in a tool_result block.
-// Unknown errors are surfaced verbatim with a 'CallTool failed' prefix
-// so they're still searchable and the LLM can still react.
+// mapCallToolErrorToFriendly converts mcpdomain sentinels to LLM-readable strings; unknown errors pass through.
 //
-// mapCallToolErrorToFriendly 把已知 mcpdomain sentinel 转成 LLM 可读字符串，
-// 由 chat 层包成 tool_result block。未知错误前缀 'CallTool failed' 原样
-// 暴露——可搜索 + LLM 仍可反应。
+// mapCallToolErrorToFriendly 把 mcpdomain sentinel 转成 LLM 可读字符串；未知错误原样透传。
 func mapCallToolErrorToFriendly(server, tool string, err error) string {
 	switch {
 	case errors.Is(err, mcpdomain.ErrServerNotFound):
@@ -156,6 +127,5 @@ func mapCallToolErrorToFriendly(server, tool string, err error) string {
 	}
 }
 
-// ── Compile-time checks ──────────────────────────────────────────────
 
 var _ toolapp.Tool = (*CallMCP)(nil)

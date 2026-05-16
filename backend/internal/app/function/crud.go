@@ -1,28 +1,3 @@
-// crud.go — Function CRUD + version lifecycle (pending → accept / reject /
-// revert) at the Service layer. Each method is ctx-scoped to the current user
-// via reqctxpkg.RequireUserID; cross-user reads return ErrNotFound by repo.
-//
-// Notifications: every state change publishes a `function` entity event via
-// notif.Publish (conversationID == "" → global broadcast). UI subscribes to
-// /api/v1/notifications and refreshes the function list / detail panel on each
-// matching envelope.
-//
-// Sandbox env sync (writing code files + materializing the venv) is wired in
-// Task 12 via sandbox_adapter.go. For now Create / Edit / AcceptPending leave
-// EnvStatus == "pending" — the adapter (Task 12) starts a background goroutine
-// after each accept that runs Sync + writes EnvStatus = ready/failed.
-//
-// crud.go —— Function CRUD + 版本生命周期(pending → accept / reject /
-// revert)在 Service 层。每方法按 ctx userID 过滤;跨用户读由 repo 返
-// ErrNotFound。
-//
-// 通知:每次状态变更经 notif.Publish 推 `function` entity 事件(全局广播)。
-// UI 订阅 /api/v1/notifications,刷列表/详情。
-//
-// Sandbox env sync 在 Task 12 sandbox_adapter.go 接驳。本任务 Create / Edit /
-// AcceptPending 留 EnvStatus="pending",adapter 在 accept 后起后台 goroutine
-// 跑 Sync 写终态。
-
 package function
 
 import (
@@ -40,23 +15,18 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// ── Input types ───────────────────────────────────────────────────────────────
-
-// CreateInput is the request shape for Service.Create. Name + Description come
-// from explicit fields (used for duplicate-name check before applying ops);
-// Ops carry the full editable surface (code / parameters / dependencies / etc).
+// CreateInput is the request shape for Service.Create.
 //
-// CreateInput 是 Service.Create 的请求形状。Name + Description 是显式字段(
-// 用于 ops 应用前查重),Ops 携带其余可编辑面(代码 / 参数 / 依赖等)。
+// CreateInput 是 Service.Create 的请求形状。
 type CreateInput struct {
 	Ops             []Op
 	ChangeReason    string
-	ProgressBlockID string // optional eventlog block id for progress deltas
+	ProgressBlockID string
 }
 
 // EditInput is the request shape for Service.Edit (writes a pending version).
 //
-// EditInput 是 Service.Edit 的请求形状(写 pending 版本)。
+// EditInput 是 Service.Edit 的请求形状（写 pending 版本）。
 type EditInput struct {
 	ID              string
 	Ops             []Op
@@ -64,13 +34,9 @@ type EditInput struct {
 	ProgressBlockID string
 }
 
-// DirectCreateInput is the HTTP-friendly shape for POST /functions (flat
-// definition instead of an ops list — easier for curl / UI / scripts than
-// constructing the ops array). Service.CreateDirect translates these into
-// the canonical ops sequence and delegates to Service.Create.
+// DirectCreateInput is the flat HTTP shape for POST /functions; CreateDirect rebuilds the canonical ops.
 //
-// DirectCreateInput 是 POST /functions 用的扁平定义形状(curl/UI/script 比
-// ops 数组好用)。Service.CreateDirect 转为 canonical ops 再委托 Create。
+// DirectCreateInput 是 POST /functions 的扁平形状，CreateDirect 反推 canonical ops。
 type DirectCreateInput struct {
 	Name          string
 	Description   string
@@ -83,10 +49,9 @@ type DirectCreateInput struct {
 	ChangeReason  string
 }
 
-// UpdateMetaInput patches Function metadata (no version side effects). nil
-// fields are unchanged.
+// UpdateMetaInput patches Function metadata without a version bump; nil fields are unchanged.
 //
-// UpdateMetaInput 改 Function 元数据(不改版本)。nil 字段不变。
+// UpdateMetaInput 改 Function 元数据不动版本，nil 字段不变。
 type UpdateMetaInput struct {
 	ID          string
 	Name        *string
@@ -94,12 +59,9 @@ type UpdateMetaInput struct {
 	Tags        *[]string
 }
 
-// ── Reads ─────────────────────────────────────────────────────────────────────
-
 // List returns a paginated page of live functions for the current user.
-// Computed Pending / Env* fields are NOT populated — caller uses Get for detail.
 //
-// List 返当前用户活跃 function 的 cursor 分页;计算字段不填,详情用 Get。
+// List 返当前用户活跃 function 的 cursor 分页。
 func (s *Service) List(ctx context.Context, filter functiondomain.ListFilter) ([]*functiondomain.Function, string, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, "", fmt.Errorf("functionapp.List: %w", err)
@@ -112,10 +74,8 @@ func (s *Service) List(ctx context.Context, filter functiondomain.ListFilter) ([
 }
 
 // ListAll returns every live function for the current user (no pagination).
-// Used by CatalogSource.ListItems + the search_function LLM tool.
 //
-// ListAll 返当前用户全部活跃 function(无分页);CatalogSource + search_function
-// tool 用。
+// ListAll 返当前用户全部活跃 function（无分页）。
 func (s *Service) ListAll(ctx context.Context) ([]*functiondomain.Function, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("functionapp.ListAll: %w", err)
@@ -127,12 +87,9 @@ func (s *Service) ListAll(ctx context.Context) ([]*functiondomain.Function, erro
 	return rows, nil
 }
 
-// Search returns functions whose name / description / tags contain query (case-
-// insensitive substring). V1 implementation;V1.5 will let the LLM tool layer
-// re-rank semantically.
+// Search returns functions whose name / description / tags contain query (case-insensitive substring).
 //
-// Search 返 name / description / tags 含 query 子串(忽略大小写)的 function。
-// V1 实现;V1.5 由 LLM tool 层再语义排序。
+// Search 返 name / description / tags 含 query 子串（忽略大小写）的 function。
 func (s *Service) Search(ctx context.Context, query string) ([]*functiondomain.Function, error) {
 	all, err := s.ListAll(ctx)
 	if err != nil {
@@ -159,11 +116,9 @@ func (s *Service) Search(ctx context.Context, query string) ([]*functiondomain.F
 	return out, nil
 }
 
-// Get fetches one function with its computed fields populated (active version's
-// env state mirrored onto Function;pending version attached if present).
+// Get fetches one function with its computed fields populated (active env state + pending if any).
 //
-// Get 返单 function 含计算字段(active version 的 env 状态镜像到 Function;
-// 有 pending 时挂上)。
+// Get 返单 function 含计算字段（active env 状态 + 可能的 pending）。
 func (s *Service) Get(ctx context.Context, id string) (*functiondomain.Function, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("functionapp.Get: %w", err)
@@ -176,12 +131,6 @@ func (s *Service) Get(ctx context.Context, id string) (*functiondomain.Function,
 	return f, nil
 }
 
-// attachComputed populates Function.Pending + Function.Env* from the pending
-// version (if any) + active version. Errors fetching either are non-fatal —
-// the function row is still usable, just without those decorations.
-//
-// attachComputed 把 pending + active 版本的状态填到 Function 计算字段。
-// 单独失败不影响主返回(降级,只是少装饰)。
 func (s *Service) attachComputed(ctx context.Context, f *functiondomain.Function) {
 	if f == nil {
 		return
@@ -207,28 +156,9 @@ func (s *Service) attachComputed(ctx context.Context, f *functiondomain.Function
 	f.EnvSyncDetail = active.EnvSyncDetail
 }
 
-// ── Lifecycle ─────────────────────────────────────────────────────────────────
-
-// Create builds a new Function from ops + auto-accepts the resulting version
-// as v1 (first-create auto-accept — aligns with forge's TE-15 pattern).
+// Create applies ops, persists Function + auto-accepted v1, and synchronously syncs the venv.
 //
-// Per D-redo-9 (forge_redesign 2026-05-12) env sync is **synchronous** here;
-// the caller's tool returns only after the venv is built (or terminally
-// failed). Failure does NOT roll back the entity rows — v.EnvStatus is set to
-// `failed` + v.EnvError captured, caller checks the returned Version to
-// decide next step (typically retry via edit_function with new deps, the
-// env-fix loop lives in the LLM tool layer, see C2).
-//
-// Per D-redo-20 a sandbox ping precedes the DB writes: if the sandbox is
-// unavailable (mise binary missing / data dir not writable / etc.) we hard-
-// reject with ErrSandboxUnavailable and create no entity.
-//
-// Create 应用 ops → 持久化 Function + Version1(自动 accept)。
-//
-// 按 D-redo-9,env sync 同步在此发生,工具返前必装完(或终态失败);失败
-// **不回滚** entity 行,v.EnvStatus=failed + v.EnvError 写入,调用方检查
-// Version 自行决定下一步(LLM tool env-fix loop 见 C2)。
-// 按 D-redo-20,DB 写入前先 sandbox ping;不可用则硬拒,不建 entity。
+// Create 应用 ops、持久化 Function + 自动 accept 的 v1、同步装 venv。
 func (s *Service) Create(ctx context.Context, in CreateInput) (*functiondomain.Function, *functiondomain.Version, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -278,7 +208,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*functiondomain.F
 		ReturnSchema:  draft.ReturnSchema,
 		Dependencies:  draft.Dependencies,
 		PythonVersion: pyVer,
-		EnvID:         idgenpkg.New("fnenv"), // D-redo-8: each Version owns a venv keyed by a fresh fnenv_ id (decoupled from versionID)
+		EnvID:         idgenpkg.New("fnenv"),
 		EnvStatus:     functiondomain.EnvStatusPending,
 		ChangeReason:  in.ChangeReason,
 		CreatedAt:     now,
@@ -294,9 +224,6 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*functiondomain.F
 
 	s.publish(ctx, fnID, "created", map[string]any{"versionId": v.ID, "versionNumber": versionN})
 
-	// Sync env synchronously (D-redo-9). Failure marks v.EnvStatus=failed +
-	// v.EnvError via syncEnvSync (which writes to DB + mutates v in place);
-	// entity rows kept. Caller checks v.EnvStatus to react.
 	if err := s.syncEnvSync(ctx, v); err != nil {
 		s.log.Warn("functionapp.Create: env sync failed",
 			zap.String("functionId", fnID), zap.String("versionId", versionID), zap.Error(err))
@@ -305,13 +232,6 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*functiondomain.F
 	return f, v, nil
 }
 
-// checkSandbox runs a fast availability check against the Sandbox port. It
-// uses PythonPath()=="" as the failure signal (sandbox bootstrap failure
-// leaves the bundled python path empty). D-redo-20: hard-reject Create/Edit
-// before any DB writes when the sandbox is unavailable.
-//
-// checkSandbox 对 Sandbox 端口跑快速可用性 ping;PythonPath()=="" 表示
-// bootstrap 失败(D-redo-20)。Create/Edit 在 DB 写入前先调,失败硬拒。
 func (s *Service) checkSandbox() error {
 	if s.sandbox.PythonPath() == "" {
 		return functiondomain.ErrSandboxUnavailable
@@ -319,12 +239,9 @@ func (s *Service) checkSandbox() error {
 	return nil
 }
 
-// CreateDirect builds an ops list from a flat definition and delegates to
-// Create. HTTP POST /functions uses this; LLM create_function tool uses Create
-// directly with its own ops.
+// CreateDirect builds an ops list from a flat definition and delegates to Create.
 //
-// CreateDirect 从扁平定义构 ops 再委托 Create。HTTP POST /functions 用;LLM
-// create_function 直接走 Create 用自己的 ops。
+// CreateDirect 从扁平定义构 ops 再委托 Create。
 func (s *Service) CreateDirect(ctx context.Context, in DirectCreateInput) (*functiondomain.Function, *functiondomain.Version, error) {
 	ops, err := buildOpsFromDirect(in)
 	if err != nil {
@@ -333,13 +250,6 @@ func (s *Service) CreateDirect(ctx context.Context, in DirectCreateInput) (*func
 	return s.Create(ctx, CreateInput{Ops: ops, ChangeReason: in.ChangeReason})
 }
 
-// buildOpsFromDirect marshals direct definition fields into a canonical ops
-// sequence: set_meta → set_code → set_parameters → set_return_schema →
-// set_dependencies → set_python_version. Empty fields are skipped (no-op);
-// only set_code is required (apply final validation enforces).
-//
-// buildOpsFromDirect 把扁平字段 marshal 为 canonical ops 序列。空字段跳;
-// 仅 set_code 必填(final 校验保证)。
 func buildOpsFromDirect(in DirectCreateInput) ([]Op, error) {
 	ops := make([]Op, 0, 6)
 	raw, err := json.Marshal(map[string]any{
@@ -390,23 +300,9 @@ func buildOpsFromDirect(in DirectCreateInput) ([]Op, error) {
 	return ops, nil
 }
 
-// Edit produces a pending version under D-redo-11 "iterate same pending"
-// semantics:
-//   - No pending → ApplyOps on top of active → new pending Version row + sync env.
-//   - Pending exists → ApplyOps on top of pending → **rewrite same pending row
-//     in place** (keep ID, destroy old env, sync new env). No ErrPendingConflict.
-//   - ops=[] with no pending → D-redo-22 "force rebuild env": no draft change,
-//     destroy + re-sync the active version's env (returns the active version).
-//   - ops=[] with pending → re-sync the pending row's env (no field change).
+// Edit produces or iterates a pending version; ops=[] is the force-rebuild-env path.
 //
-// Per D-redo-9 the env sync is synchronous; failure marks v.EnvStatus=failed +
-// v.EnvError, entity rows kept. Per D-redo-20 a sandbox ping precedes work.
-//
-// Edit 按 D-redo-11 "iterate same pending":
-//   - 无 pending → 在 active 上 ApplyOps → 新建 pending + 装 env
-//   - 有 pending → 在 pending 上 ApplyOps → 重写同 ID pending(销旧 env + 装新 env)
-//   - ops=[] 无 pending → D-redo-22 强制重建 active version 的 env
-//   - ops=[] 有 pending → 重装 pending 的 env(字段不变)
+// Edit 产出或迭代 pending 版本；ops=[] 走强制重建 env 路径。
 func (s *Service) Edit(ctx context.Context, in EditInput) (*functiondomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("functionapp.Edit: %w", err)
@@ -422,15 +318,12 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*functiondomain.Versi
 	pending, perr := s.repo.GetPending(ctx, in.ID)
 	switch {
 	case perr == nil:
-		// pending exists → iterate same row
 	case errors.Is(perr, functiondomain.ErrPendingNotFound):
 		pending = nil
 	default:
 		return nil, fmt.Errorf("functionapp.Edit: pending-check: %w", perr)
 	}
 
-	// D-redo-22: ops=[] is the "force rebuild env" path — destroy + re-sync
-	// the existing row (pending if present, else active). No draft change.
 	if len(in.Ops) == 0 {
 		var target *functiondomain.Version
 		if pending != nil {
@@ -458,7 +351,6 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*functiondomain.Versi
 		return target, nil
 	}
 
-	// ApplyOps on top of pending (if any) else active.
 	var base *VersionDraft
 	if pending != nil {
 		base = versionToDraft(f, pending)
@@ -481,8 +373,6 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*functiondomain.Versi
 
 	var v *functiondomain.Version
 	if pending != nil {
-		// Rewrite same pending row (keep ID + EnvID == ID). Destroy old venv
-		// since deps/python may have changed; re-sync below.
 		_ = s.sandbox.DestroyEnv(ctx, in.ID, pending.EnvID)
 		pending.Code = draft.Code
 		pending.Parameters = draft.Parameters
@@ -508,7 +398,7 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*functiondomain.Versi
 			ReturnSchema:  draft.ReturnSchema,
 			Dependencies:  draft.Dependencies,
 			PythonVersion: pyVer,
-			EnvID:         idgenpkg.New("fnenv"), // D-redo-8: fresh per-version env id, decoupled from versionID
+			EnvID:         idgenpkg.New("fnenv"),
 			EnvStatus:     functiondomain.EnvStatusPending,
 			ChangeReason:  in.ChangeReason,
 			CreatedAt:     now,
@@ -526,10 +416,6 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*functiondomain.Versi
 	return v, nil
 }
 
-// versionToDraft converts an existing Version row to a VersionDraft (base for
-// ApplyOps when iterating a pending row).
-//
-// versionToDraft 把已有 Version 行转 VersionDraft(iterate pending 时作 ApplyOps 起点)。
 func versionToDraft(f *functiondomain.Function, v *functiondomain.Version) *VersionDraft {
 	return &VersionDraft{
 		Name:          f.Name,
@@ -543,12 +429,9 @@ func versionToDraft(f *functiondomain.Function, v *functiondomain.Version) *Vers
 	}
 }
 
-// AcceptPending turns the active pending into a numbered accepted version and
-// flips Function.ActiveVersionID. Enforces the per-function accepted-version
-// cap (functiondomain.AcceptedVersionCap).
+// AcceptPending promotes the pending version to a numbered accepted version and flips ActiveVersionID.
 //
-// AcceptPending 把 pending 翻为带号 accepted + 翻 ActiveVersionID;
-// 应用 per-function accepted 上限。
+// AcceptPending 把 pending 翻为带号 accepted 并翻 ActiveVersionID。
 func (s *Service) AcceptPending(ctx context.Context, id string) (*functiondomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("functionapp.AcceptPending: %w", err)
@@ -578,12 +461,9 @@ func (s *Service) AcceptPending(ctx context.Context, id string) (*functiondomain
 	return pending, nil
 }
 
-// RejectPending destroys the pending venv and hard-deletes the pending Version
-// row (per D-redo-12). UI/LLM can immediately Edit again to create a fresh
-// pending. No state change to ActiveVersion.
+// RejectPending destroys the pending venv and hard-deletes the pending Version row.
 //
-// RejectPending 销 pending 的 venv + 物理删 Version 行(D-redo-12);
-// 不动 ActiveVersion;UI/LLM 可立即重新 Edit。
+// RejectPending 销 pending 的 venv 并物理删 Version 行。
 func (s *Service) RejectPending(ctx context.Context, id string) error {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return fmt.Errorf("functionapp.RejectPending: %w", err)
@@ -593,8 +473,6 @@ func (s *Service) RejectPending(ctx context.Context, id string) error {
 		return fmt.Errorf("functionapp.RejectPending: %w", err)
 	}
 	if err := s.sandbox.DestroyEnv(ctx, id, pending.EnvID); err != nil {
-		// best-effort; venv cleanup failure shouldn't block the reject decision
-		// 尽力清理 venv;失败仅 log,不阻 reject
 		s.log.Warn("functionapp.RejectPending: DestroyEnv failed (best-effort)",
 			zap.String("functionId", id), zap.String("versionId", pending.ID), zap.Error(err))
 	}
@@ -605,10 +483,9 @@ func (s *Service) RejectPending(ctx context.Context, id string) error {
 	return nil
 }
 
-// Revert flips ActiveVersionID to a target accepted version. Returns
-// ErrVersionNotFound if no accepted version with that number exists.
+// Revert flips ActiveVersionID to an accepted version identified by its integer number.
 //
-// Revert 把 ActiveVersionID 翻到指定 accepted 版本号;无则 ErrVersionNotFound。
+// Revert 把 ActiveVersionID 翻到指定整数号的 accepted 版本。
 func (s *Service) Revert(ctx context.Context, id string, targetVersion int) (*functiondomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("functionapp.Revert: %w", err)
@@ -628,13 +505,9 @@ func (s *Service) Revert(ctx context.Context, id string, targetVersion int) (*fu
 	return target, nil
 }
 
-// UpdateMeta patches Function metadata without creating a new version. Used
-// by the PATCH /functions/{id} endpoint for direct UI edits to name /
-// description / tags. Code / parameters / dependencies changes go through
-// Edit (pending version flow).
+// UpdateMeta patches Function metadata without creating a new version.
 //
-// UpdateMeta 改 Function 元数据不创建新版本。UI PATCH 端点用,改 code/
-// parameters/deps 必须走 Edit(pending 流程)。
+// UpdateMeta 改 Function 元数据不创建新版本。
 func (s *Service) UpdateMeta(ctx context.Context, in UpdateMetaInput) (*functiondomain.Function, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("functionapp.UpdateMeta: %w", err)
@@ -667,7 +540,6 @@ func (s *Service) UpdateMeta(ctx context.Context, in UpdateMetaInput) (*function
 	if err := s.repo.SaveFunction(ctx, f); err != nil {
 		return nil, fmt.Errorf("functionapp.UpdateMeta: %w", err)
 	}
-	// D-redo-6: slim payload — UI does GET to fetch updated meta.
 	s.publish(ctx, f.ID, "updated", nil)
 	return f, nil
 }
@@ -712,12 +584,9 @@ func (s *Service) GetPending(ctx context.Context, functionID string) (*functiond
 	return s.repo.GetPending(ctx, functionID)
 }
 
-// Delete soft-deletes a function. Publishes a deletion notification — the
-// workflow domain subscribes to mark referencing workflows as needs_attention
-// (per forge_redesign D20).
+// Delete soft-deletes a function and publishes a deletion notification.
 //
-// Delete 软删 function。发删除通知——workflow domain 订阅后把引用此 function
-// 的 workflow 标 needs_attention(D20)。
+// Delete 软删 function 并推删除通知。
 func (s *Service) Delete(ctx context.Context, id string) error {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return fmt.Errorf("functionapp.Delete: %w", err)
@@ -729,14 +598,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-// activeAsDraft loads the function's active version and returns it as a
-// VersionDraft suitable as base for ApplyOps. If ActiveVersionID is empty
-// (draft state) returns a zero-value draft preserving function name/desc/tags.
-//
-// activeAsDraft 把 active 版本加载为 VersionDraft 作为 Edit 的 base。
-// ActiveVersionID 空时返保留 function 元数据的空 draft。
 func (s *Service) activeAsDraft(ctx context.Context, f *functiondomain.Function) (*VersionDraft, error) {
 	d := &VersionDraft{
 		Name:        f.Name,
@@ -758,12 +619,6 @@ func (s *Service) activeAsDraft(ctx context.Context, f *functiondomain.Function)
 	return d, nil
 }
 
-// nextVersionNumber returns max(accepted.version)+1 for the function. First
-// accepted gets 1. Walks ListVersions accepted page (size 1) to find current
-// max.
-//
-// nextVersionNumber 返该 function 下 max(accepted.version)+1。首个 accepted
-// 返 1。
 func (s *Service) nextVersionNumber(ctx context.Context, functionID string) (int, error) {
 	rows, _, err := s.repo.ListVersions(ctx, functionID, functiondomain.VersionListFilter{
 		Status: functiondomain.StatusAccepted,
@@ -778,10 +633,6 @@ func (s *Service) nextVersionNumber(ctx context.Context, functionID string) (int
 	return *rows[0].Version + 1, nil
 }
 
-// publish emits a `function` entity notification. data may be nil for purely
-// state-transition events (e.g. deleted).
-//
-// publish 推 `function` entity 通知;data 可为 nil(纯状态变更事件)。
 func (s *Service) publish(ctx context.Context, functionID, action string, data map[string]any) {
 	envelope := map[string]any{"action": action}
 	for k, v := range data {

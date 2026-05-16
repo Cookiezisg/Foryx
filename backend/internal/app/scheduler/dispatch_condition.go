@@ -1,11 +1,3 @@
-// dispatch_condition.go — ConditionDispatcher. Reads node.Config key
-// `condition` (expression string), evaluates it with the workflow
-// expression engine. Truthy → NextPort="true", falsy → NextPort="false"
-// so downstream edges can branch via portMatches.
-//
-// dispatch_condition.go —— ConditionDispatcher;evaluate condition 表达式,
-// truthy → NextPort="true" / falsy → NextPort="false"。
-
 package scheduler
 
 import (
@@ -26,9 +18,9 @@ type ConditionDispatcher struct{}
 // NewConditionDispatcher 构造 ConditionDispatcher。
 func NewConditionDispatcher() *ConditionDispatcher { return &ConditionDispatcher{} }
 
-// Dispatch evaluates `condition` and routes to "true" / "false" port.
+// Dispatch evaluates the condition and routes to the "true" or "false" port.
 //
-// Dispatch 评估 condition,走 true / false port。
+// Dispatch 评估 condition 并走 true / false port。
 func (d *ConditionDispatcher) Dispatch(_ context.Context, in DispatchInput) DispatchOutput {
 	exprSrc, _ := in.Node.Config["condition"].(string)
 	if exprSrc == "" {
@@ -62,11 +54,6 @@ func (d *ConditionDispatcher) Dispatch(_ context.Context, in DispatchInput) Disp
 	}
 }
 
-// isTruthy treats "true" / "1" / "yes" / non-empty other-string as
-// truthy. Whitespace-trimmed + lowercased. Empty / "false" / "0" / "no"
-// are falsy.
-//
-// isTruthy "true"/"1"/"yes"/非空它串 → 真;空/false/0/no → 假。
 func isTruthy(s string) bool {
 	s = strings.TrimSpace(strings.ToLower(s))
 	if s == "" || s == "false" || s == "0" || s == "no" || s == "null" {

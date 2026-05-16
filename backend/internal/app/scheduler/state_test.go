@@ -1,7 +1,3 @@
-// state_test.go — executeRun + topo state machine tests. Uses fake
-// Dispatchers via DispatcherFunc to verify DAG order + fan-out + cancel
-// + onError policies.
-
 package scheduler
 
 import (
@@ -62,8 +58,6 @@ func runWith(t *testing.T, graph *workflowdomain.Graph, register func(*Router)) 
 	t.Fatalf("run did not reach terminal state within 2s")
 	return nil, ""
 }
-
-// ── executeRun tests ─────────────────────────────────────────────────────────
 
 func TestExecuteRun_EmptyGraph_Completed(t *testing.T) {
 	graph := mkGraph(nil, nil)
@@ -285,12 +279,6 @@ func TestExecuteRun_WritesFlowrunNodeRow(t *testing.T) {
 	}
 }
 
-// TestAdvance_BranchingRoutesByFromPort — the core fix for B-05 (2026-05).
-// With EdgeSpec.FromPort declared, advance() must route to the edge whose
-// FromPort matches the dispatcher's NextPort and park the others.
-//
-// 2026-05 B-05 修复核心:advance() 应按 EdgeSpec.FromPort 路由,匹配的
-// 走,不匹配的 park。
 func TestAdvance_BranchingRoutesByFromPort(t *testing.T) {
 	graph := mkGraph(
 		[]workflowdomain.NodeSpec{
@@ -331,10 +319,6 @@ func TestAdvance_BranchingRoutesByFromPort(t *testing.T) {
 	}
 }
 
-// TestAdvance_BranchingRejectPath — symmetric: choosing "rejected" routes
-// to on_reject + parks on_approve.
-//
-// 反向对称测试。
 func TestAdvance_BranchingRejectPath(t *testing.T) {
 	graph := mkGraph(
 		[]workflowdomain.NodeSpec{

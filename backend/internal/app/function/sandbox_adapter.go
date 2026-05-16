@@ -1,31 +1,3 @@
-// sandbox_adapter.go — bridges the function.Sandbox port to sandboxapp.Service.
-//
-// Owner.ID convention: "<functionID>_<envID>" — mirrors forge's per-entity
-// EnvID buffer (lets us keep 2-3 EnvIDs per function for fast revert without
-// re-syncing). Layout matches forge:
-//
-//     <dataDir>/functions/<functionID>/versions/<versionID>/main.py
-//
-// The adapter owns the file layout (driver template + main.py write); the
-// sandbox v2 service only knows about runtime + env materialization.
-//
-// Per forge_redesign D5, this duplicates ~150 lines of forge's adapter rather
-// than extracting to a shared pkg — once handler ships its own sandbox
-// adapter (Plan 02) we'll re-evaluate whether the count justifies a `pkg/
-// pyrunner` (handlers are stateful, file layout differs, so probably not).
-//
-// sandbox_adapter.go —— 桥接 function.Sandbox 端口到 sandboxapp.Service。
-//
-// Owner.ID = "<functionID>_<envID>",镜像 forge per-entity EnvID buffer。布局:
-//     <dataDir>/functions/<functionID>/versions/<versionID>/main.py
-//
-// adapter 拥有文件布局(driver 模板 + main.py 写);v2 sandbox 只管 runtime +
-// env 物化。
-//
-// per forge_redesign D5,这里有意复制 forge 的 ~150 行不抽公共 pkg——handler
-// 跑出 sandbox adapter(Plan 02)之后再看是否值得抽 pkg/pyrunner(handler 是
-// 有状态的,布局不一样,大概率不抽)。
-
 package function
 
 import (
@@ -42,37 +14,29 @@ import (
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 )
 
-// SandboxAdapter satisfies the function.Sandbox interface by delegating
-// runtime/env management to sandboxapp.Service while owning the function-
-// specific file layout.
+// SandboxAdapter satisfies function.Sandbox by delegating runtime/env work to sandboxapp.Service.
 //
-// SandboxAdapter 通过委托 sandboxapp.Service 管 runtime/env 满足
-// function.Sandbox 接口,同时拥有 function 专属文件布局。
+// SandboxAdapter 把 runtime/env 工作委托给 sandboxapp.Service 满足 function.Sandbox。
 type SandboxAdapter struct {
 	svc             *sandboxapp.Service
-	functionDataDir string // <dataDir> — adapter writes versions/<vID>/main.py under <dataDir>/functions/
+	functionDataDir string
 
 	pythonPathOnce sync.Once
 	pythonPath     string
 }
 
-// Static-assert SandboxAdapter implements Sandbox.
 var _ Sandbox = (*SandboxAdapter)(nil)
 
-// NewSandboxAdapter wires the adapter to a sandbox service + the data
-// directory under which function versions live.
+// NewSandboxAdapter wires the adapter to a sandbox service and the function data dir.
 //
-// NewSandboxAdapter 把 adapter 跟 sandbox service + function 版本根目录绑起来。
+// NewSandboxAdapter 把 adapter 绑到 sandbox service 与 function 数据根目录。
 func NewSandboxAdapter(svc *sandboxapp.Service, functionDataDir string) *SandboxAdapter {
 	return &SandboxAdapter{svc: svc, functionDataDir: functionDataDir}
 }
 
-// PythonPath lazy-resolves the bundled Python interpreter on first call,
-// caching for process lifetime. Returns "" on EnsureTool failure — the caller
-// (Service.validate) treats "" as "AST parse unavailable" and degrades.
+// PythonPath lazy-resolves the bundled Python interpreter; returns "" on EnsureTool failure.
 //
-// PythonPath 首次调用懒解析捆绑 Python 解释器,结果缓存到进程生命周期。
-// EnsureTool 失败返 "",调用方降级处理。
+// PythonPath 懒解析捆绑 Python 解释器，EnsureTool 失败返 ""。
 func (a *SandboxAdapter) PythonPath() string {
 	a.pythonPathOnce.Do(func() {
 		path, err := a.svc.EnsureTool(context.Background(), "python", "")
@@ -84,9 +48,9 @@ func (a *SandboxAdapter) PythonPath() string {
 	return a.pythonPath
 }
 
-// Sync materializes the venv via Service.EnsureEnv. Owner.Kind = "function".
+// Sync materializes the venv via Service.EnsureEnv.
 //
-// Sync 通过 Service.EnsureEnv 物化 venv。Owner.Kind = "function"。
+// Sync 通过 Service.EnsureEnv 物化 venv。
 func (a *SandboxAdapter) Sync(ctx context.Context, req SyncRequest) error {
 	owner := sandboxdomain.Owner{
 		Kind: sandboxdomain.OwnerKindFunction,
@@ -108,15 +72,9 @@ func (a *SandboxAdapter) Sync(ctx context.Context, req SyncRequest) error {
 	return nil
 }
 
-// Run writes main.py + driver to <dataDir>/functions/<fnID>/versions/<vID>/,
-// then spawns "python main.py" via Service.Spawn piping the input JSON to
-// stdin. Non-zero exit returns ExecutionResult{OK:false, ErrorMsg:stderr}
-// (NOT a Go error) — LLM sees the failure as a tool_result, not infra error.
+// Run writes main.py + driver and spawns "python main.py"; non-zero exit becomes ExecutionResult{OK:false}.
 //
-// Run 把 main.py + driver 写到 <dataDir>/functions/<fnID>/versions/<vID>/,
-// 经 Service.Spawn 跑 "python main.py" 把 input pipe 到 stdin。非零退出返
-// ExecutionResult{OK:false, ErrorMsg:stderr}(不是 Go error)——LLM 看到
-// 失败为 tool_result 而非基础设施错。
+// Run 写 main.py + driver 并 spawn "python main.py"，非零退出返 ExecutionResult{OK:false} 而非 Go error。
 func (a *SandboxAdapter) Run(ctx context.Context, req RunRequest) (*functiondomain.ExecutionResult, error) {
 	verDir := a.versionDir(req.FunctionID, req.VersionID)
 	if err := os.MkdirAll(verDir, 0o755); err != nil {
@@ -175,7 +133,7 @@ func (a *SandboxAdapter) Run(ctx context.Context, req RunRequest) (*functiondoma
 
 // WriteCodeFile updates main.py for a version without touching its venv.
 //
-// WriteCodeFile 写 version 的 main.py 不动 venv。
+// WriteCodeFile 重写 version 的 main.py，不动 venv。
 func (a *SandboxAdapter) WriteCodeFile(ctx context.Context, functionID, versionID, code, entryFunction string) error {
 	verDir := a.versionDir(functionID, versionID)
 	if err := os.MkdirAll(verDir, 0o755); err != nil {
@@ -193,10 +151,9 @@ func (a *SandboxAdapter) WriteCodeFile(ctx context.Context, functionID, versionI
 	return writeAtomic(mainPy, []byte(code+buildDriver(funcName)), 0o644)
 }
 
-// Destroy removes every env owned by this function and the function's
-// versions directory on disk.
+// Destroy removes every env owned by this function and its on-disk versions dir.
 //
-// Destroy 删该 function 所有 env + 盘上 versions 目录。
+// Destroy 删除该 function 的所有 env 与盘上 versions 目录。
 func (a *SandboxAdapter) Destroy(ctx context.Context, functionID string) error {
 	envs, err := a.svc.ListEnvs(ctx, sandboxdomain.OwnerKindFunction)
 	if err != nil {
@@ -221,7 +178,7 @@ func (a *SandboxAdapter) Destroy(ctx context.Context, functionID string) error {
 
 // DestroyEnv removes a single (functionID, envID) env.
 //
-// DestroyEnv 删单个 (functionID, envID) env。
+// DestroyEnv 删除单个 (functionID, envID) env。
 func (a *SandboxAdapter) DestroyEnv(ctx context.Context, functionID, envID string) error {
 	owner := sandboxdomain.Owner{
 		Kind: sandboxdomain.OwnerKindFunction,
@@ -230,20 +187,10 @@ func (a *SandboxAdapter) DestroyEnv(ctx context.Context, functionID, envID strin
 	return a.svc.Destroy(ctx, owner)
 }
 
-// versionDir returns the absolute path where main.py lives for a
-// (functionID, versionID) pair.
-//
-// versionDir 返 (functionID, versionID) 对的 main.py 绝对路径。
 func (a *SandboxAdapter) versionDir(functionID, versionID string) string {
 	return filepath.Join(a.functionDataDir, "functions", functionID, "versions", versionID)
 }
 
-// ── helpers (mirrored from forge sandbox adapter per D5) ────────
-
-// driverTemplate wraps the user function with a stdin → kwargs → stdout JSON
-// shim so Run can pipe input/output without the user code knowing.
-//
-// driverTemplate 把用户函数包以 stdin → kwargs → stdout JSON shim。
 const driverTemplate = `
 
 if __name__ == "__main__":
@@ -257,9 +204,6 @@ func buildDriver(funcName string) string {
 	return strings.Replace(driverTemplate, "{FUNC_NAME}", funcName, 1)
 }
 
-// extractFuncName parses the first `def <name>` line from the code.
-//
-// extractFuncName 从代码第一个 `def <name>` 行解析名字。
 func extractFuncName(code string) (string, error) {
 	for line := range strings.SplitSeq(code, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -274,14 +218,38 @@ func extractFuncName(code string) (string, error) {
 	return "", fmt.Errorf("no function definition found in code")
 }
 
-// writeAtomic writes data via tmp + rename so readers never see a half-written
-// file.
+// writeAtomic write-then-rename is concurrency-safe — each invocation
+// gets a unique temp filename via os.CreateTemp so parallel writers don't
+// collide on the same `<path>.tmp` (which would cause one rename to find
+// its source already moved by the other).
 //
-// writeAtomic tmp + rename 原子写。
+// writeAtomic 写后 rename，**并发安全**——每次调用经 os.CreateTemp 取唯一
+// 临时文件名，避免多 goroutine 撞同一个 `<path>.tmp`（否则一方 rename 时
+// 源已被另一方移走，导致 no such file or directory）。
 func writeAtomic(path string, data []byte, mode os.FileMode) error {
-	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, data, mode); err != nil {
+	dir, base := filepath.Split(path)
+	f, err := os.CreateTemp(dir, base+".*.tmp")
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	tmp := f.Name()
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Chmod(mode); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	return nil
 }

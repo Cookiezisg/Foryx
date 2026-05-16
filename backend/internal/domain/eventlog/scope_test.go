@@ -31,10 +31,8 @@ func TestScope_StringFormat(t *testing.T) {
 }
 
 func TestParseScope_IDWithColon(t *testing.T) {
-	// Some ids legitimately contain ':' (sandbox owner IDs use "_" but other
-	// future scopes might). ParseScope must split on FIRST ':' only.
-	//
-	// 一些 id 可能含 ':'(虽然 sandbox 用 '_',未来 scope 可能)。只在首个 ':' 切。
+	// ParseScope must split on the FIRST ':' only — id may contain ':'.
+	// ParseScope 只在首个 ':' 切，id 自身可含 ':'。
 	s, err := ParseScope("conversation:cv:abc")
 	if err != nil {
 		t.Fatalf("ParseScope: %v", err)

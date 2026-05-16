@@ -8,10 +8,6 @@ import (
 	"testing"
 )
 
-// fakeClient implements handlerinfra.Client for registry tests — no real
-// subprocess, just stub state.
-//
-// fakeClient 实现 handlerinfra.Client 接口给 registry 测试用。
 type fakeClient struct {
 	mu       sync.Mutex
 	crashed  bool
@@ -45,9 +41,6 @@ func (f *fakeClient) isShutdown() bool {
 	return f.shutdown
 }
 
-// killCounter wraps a fake kill closure so tests can assert call count.
-//
-// killCounter 包 fake kill,测试可断言调用次数。
 type killCounter struct{ count atomic.Int32 }
 
 func (k *killCounter) kill() error { k.count.Add(1); return nil }
@@ -64,8 +57,6 @@ func mkInstance(t *testing.T, owner Owner, handlerName string) (*Instance, *fake
 		Kill:      kc.kill,
 	}, fc, kc
 }
-
-// ── Acquire ──────────────────────────────────────────────────────────────────
 
 func TestAcquire_FirstCallSpawns(t *testing.T) {
 	r := newInstanceRegistry()
@@ -153,8 +144,6 @@ func TestAcquire_CrossOwnerIsolation(t *testing.T) {
 	}
 }
 
-// ── DestroyOwner ─────────────────────────────────────────────────────────────
-
 func TestDestroyOwner_ShutsAndKills(t *testing.T) {
 	r := newInstanceRegistry()
 	owner := Owner{Kind: "test", ID: "t_001"}
@@ -199,8 +188,6 @@ func TestDestroyOwner_OtherOwnersUntouched(t *testing.T) {
 	}
 }
 
-// ── DestroyEverything ────────────────────────────────────────────────────────
-
 func TestDestroyEverything(t *testing.T) {
 	r := newInstanceRegistry()
 	owners := []Owner{
@@ -229,8 +216,6 @@ func TestDestroyEverything(t *testing.T) {
 	}
 }
 
-// ── Snapshot ─────────────────────────────────────────────────────────────────
-
 func TestSnapshot_ReflectsLiveInstances(t *testing.T) {
 	r := newInstanceRegistry()
 	owner := Owner{Kind: "workflow", ID: "X"}
@@ -246,8 +231,6 @@ func TestSnapshot_ReflectsLiveInstances(t *testing.T) {
 	}
 }
 
-// ── ID generation ────────────────────────────────────────────────────────────
-
 func TestNewInstanceID_Prefix(t *testing.T) {
 	id := NewInstanceID()
 	if id == "" || len(id) < 4 || id[:4] != "hdi_" {
@@ -255,7 +238,6 @@ func TestNewInstanceID_Prefix(t *testing.T) {
 	}
 }
 
-// Sanity-check that spawn errors propagate.
 func TestAcquire_SpawnError(t *testing.T) {
 	r := newInstanceRegistry()
 	owner := Owner{Kind: "test", ID: "fail"}

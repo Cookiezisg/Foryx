@@ -7,32 +7,15 @@ import (
 	middlewarehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/middleware"
 )
 
-// New builds the complete HTTP handler: routes + middleware chain +
-// 404 fallback. main.go calls this once and hands the result to http.Server.
+// New assembles routes + middleware (Recover → Logger → CORS → Locale → UserID → mux).
 //
-// Chain order on the wire (outermost first):
-//
-//	Recover → RequestLogger → CORS → InjectLocale → InjectUserID → mux
-//
-// Recover outermost catches any inner panic. RequestLogger next so the
-// access log captures 500s from Recover. CORS / locale / userID are
-// innermost so preflight OPTIONS (terminates inside CORS) doesn't need them.
-//
-// New 构造完整的 HTTP handler：路由 + 中间件链 + 404 兜底。
-// main.go 只调一次，结果交给 http.Server。
-//
-// 链序（从外到内）：Recover → RequestLogger → CORS → InjectLocale →
-// InjectUserID → mux。Recover 在最外层捕 panic；RequestLogger 在其内层
-// 让 Recover 写的 500 也能被日志记录；CORS/locale/userID 在最内层，
-// 因 preflight OPTIONS 在 CORS 层就结束，不需要它们。
+// New 装配路由 + 中间件链(Recover → Logger → CORS → Locale → UserID → mux)。
 func New(deps Deps) http.Handler {
 	mux := deps.Mux
 	if mux == nil {
 		mux = http.NewServeMux()
 	}
 
-	// Each handler registers its own routes.
-	// 每个 handler 注册自己的路由。
 	handlershttpapi.NewHealthHandler().Register(mux)
 	handlershttpapi.NewProvidersHandler().Register(mux)
 	if deps.APIKeyService != nil {
@@ -50,13 +33,6 @@ func New(deps Deps) http.Handler {
 	if deps.HandlerService != nil {
 		handlershttpapi.NewHandlerHandler(deps.HandlerService, deps.Log).Register(mux)
 	}
-	// WorkflowHandler + FlowRunHandler share workflow-scoped routes (the
-	// :trigger action lives on WorkflowHandler so it can compose with
-	// :revert in one {idAction} dispatcher;FlowRunHandler exposes the
-	// trigger Service via thin helpers).
-	// WorkflowHandler 跟 FlowRunHandler 共享 workflow-scoped 路由;:trigger
-	// 走 WorkflowHandler(跟 :revert 同 {idAction} dispatcher),FlowRunHandler
-	// 仅暴露 trigger Service 薄 helper。
 	var wfH *handlershttpapi.WorkflowHandler
 	if deps.WorkflowService != nil {
 		wfH = handlershttpapi.NewWorkflowHandler(deps.WorkflowService, deps.Log)
@@ -87,12 +63,6 @@ func New(deps Deps) http.Handler {
 	if deps.SandboxService != nil {
 		handlershttpapi.NewSandboxHandler(deps.SandboxService, deps.Log).Register(mux)
 	}
-	// SubagentService no longer registers HTTP routes — sub-run data lives
-	// in the unified messages/message_blocks tables and is observed via
-	// the eventlog SSE stream + standard chat message endpoints.
-	//
-	// SubagentService 不再注册 HTTP 路由——sub-run 数据在统一 messages/
-	// message_blocks 表，经 eventlog SSE 流 + 标准 chat message 端点观测。
 	_ = deps.SubagentService
 	if deps.MCPService != nil {
 		handlershttpapi.NewMCPHandler(deps.MCPService, deps.Log).Register(mux)
@@ -103,27 +73,23 @@ func New(deps Deps) http.Handler {
 	if deps.CatalogService != nil {
 		handlershttpapi.NewCatalogHandler(deps.CatalogService, deps.Log).Register(mux)
 	}
+	if deps.MemoryService != nil {
+		handlershttpapi.NewMemoryHandler(deps.MemoryService, deps.Log).Register(mux)
+	}
 	if deps.Dev {
 		handlershttpapi.NewDevHandler(deps.DB, deps.LogBroadcaster, deps.CollectionsDir, deps.IntegrationDir, deps.ForgifyHome, deps.Port, deps.Tools, deps.LLMFactory, deps.ShellManager, deps.Log).Register(mux)
 	}
 
-	// 404 fallback — must be last so specific routes take precedence.
-	// 404 兜底——必须最后，让具体路由优先。
 	mux.HandleFunc("/", middlewarehttpapi.NotFound)
 
 	return applyChain(mux, deps)
 }
 
-// applyChain wraps h with the full middleware chain. Inside-out: the
-// outermost middleware (Recover) is applied last so it runs first per request.
-//
-// applyChain 用完整中间件链包裹 h。从内向外：最外层中间件（Recover）
-// 最后应用，因而在每次请求中最先运行。
 func applyChain(h http.Handler, deps Deps) http.Handler {
-	h = middlewarehttpapi.InjectUserID(h) // innermost / 最内层
+	h = middlewarehttpapi.InjectUserID(h)
 	h = middlewarehttpapi.InjectLocale(h)
 	h = middlewarehttpapi.CORS(middlewarehttpapi.DefaultCORSConfig())(h)
 	h = middlewarehttpapi.RequestLogger(deps.Log)(h)
-	h = middlewarehttpapi.Recover(deps.Log)(h) // outermost / 最外层
+	h = middlewarehttpapi.Recover(deps.Log)(h)
 	return h
 }

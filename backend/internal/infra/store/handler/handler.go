@@ -1,13 +1,6 @@
-// Package handler (infra/store/handler) is the GORM-backed implementation of
-// the domain handler Repository port. All methods scope by ctx userID — callers
-// MUST run InjectUserID middleware first.
+// Package handler is the GORM-backed handlerdomain.Repository, scoped by ctx userID.
 //
-// Shares its name with domain/handler by design; importers alias as
-// `handlerstore`.
-//
-// Package handler(infra/store/handler)是 domain handler Repository 的 GORM
-// 实现。所有方法按 ctx userID 过滤;调用方先跑 InjectUserID 中间件。
-// 包名跟 domain/handler 同名是刻意的;外部 import 起别名 handlerstore。
+// Package handler 是 handlerdomain.Repository 的 GORM 实现，按 ctx userID 过滤。
 package handler
 
 import (
@@ -38,15 +31,11 @@ func New(db *gorm.DB) *Store {
 	return &Store{db: db}
 }
 
-// Compile-time interface assertion.
-//
-// 编译期接口兼容性断言。
 var _ handlerdomain.Repository = (*Store)(nil)
 
-// AutoMigrateModels returns the GORM models to register in db.AutoMigrate
-// (called from cmd/server/main.go).
+// AutoMigrateModels returns the GORM models to register in db.AutoMigrate.
 //
-// AutoMigrateModels 返回 cmd/server/main.go 注册 AutoMigrate 用的 GORM models。
+// AutoMigrateModels 返 AutoMigrate 用的 GORM models。
 func AutoMigrateModels() []interface{} {
 	return []interface{}{
 		&handlerdomain.Handler{},
@@ -55,12 +44,9 @@ func AutoMigrateModels() []interface{} {
 	}
 }
 
-// ── Handler CRUD ─────────────────────────────────────────────────────────────
-
-// SaveHandler upserts by primary key. UNIQUE violation on (user_id, name)
-// WHERE deleted_at IS NULL → ErrDuplicateName.
+// SaveHandler upserts by PK; partial-UNIQUE name violation maps to ErrDuplicateName.
 //
-// SaveHandler 按主键 upsert;name 重复(partial UNIQUE)返 ErrDuplicateName。
+// SaveHandler 按主键 upsert；name partial UNIQUE 违反返 ErrDuplicateName。
 func (s *Store) SaveHandler(ctx context.Context, h *handlerdomain.Handler) error {
 	if err := s.db.WithContext(ctx).Save(h).Error; err != nil {
 		if isHandlerDuplicateName(err) {
@@ -71,9 +57,9 @@ func (s *Store) SaveHandler(ctx context.Context, h *handlerdomain.Handler) error
 	return nil
 }
 
-// GetHandler fetches by id, scoped to caller. ErrNotFound on miss.
+// GetHandler fetches by id; ErrNotFound on miss.
 //
-// GetHandler 按 id 查,按调用者过滤;未命中返 ErrNotFound。
+// GetHandler 按 id 查；未命中返 ErrNotFound。
 func (s *Store) GetHandler(ctx context.Context, id string) (*handlerdomain.Handler, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -92,10 +78,9 @@ func (s *Store) GetHandler(ctx context.Context, id string) (*handlerdomain.Handl
 	return &h, nil
 }
 
-// GetHandlerByName fetches by name (scoped to caller) — for create-time
-// duplicate check (race with concurrent Save still caught by partial UNIQUE).
+// GetHandlerByName fetches by name for create-time dup check (race caught by partial UNIQUE).
 //
-// GetHandlerByName 按 name 查;create 时查重名用(竞态由 partial UNIQUE 兜底)。
+// GetHandlerByName 按 name 查（create 查重；竞态由 partial UNIQUE 兜底）。
 func (s *Store) GetHandlerByName(ctx context.Context, name string) (*handlerdomain.Handler, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -116,7 +101,7 @@ func (s *Store) GetHandlerByName(ctx context.Context, name string) (*handlerdoma
 
 // GetHandlersByIDs batch fetches by id slice, preserving input order.
 //
-// GetHandlersByIDs 按 id 切片批量查,保持输入顺序。
+// GetHandlersByIDs 按 id 切片批量查，保持输入顺序。
 func (s *Store) GetHandlersByIDs(ctx context.Context, ids []string) ([]*handlerdomain.Handler, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -146,10 +131,9 @@ func (s *Store) GetHandlersByIDs(ctx context.Context, ids []string) ([]*handlerd
 	return out, nil
 }
 
-// ListHandlers returns cursor-paginated handlers for caller. Tuple cursor
-// (created_at, id) DESC.
+// ListHandlers returns cursor-paginated handlers for caller; (created_at, id) DESC.
 //
-// ListHandlers 返当前用户活跃 handler cursor 分页(新→旧)。
+// ListHandlers 返当前用户活跃 handler 分页（新→旧）。
 func (s *Store) ListHandlers(ctx context.Context, filter handlerdomain.ListFilter) ([]*handlerdomain.Handler, string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -193,9 +177,8 @@ func (s *Store) ListHandlers(ctx context.Context, filter handlerdomain.ListFilte
 }
 
 // ListAllHandlers returns all live handlers for caller (no pagination).
-// Used by search + CatalogSource.
 //
-// ListAllHandlers 返当前用户全部活跃 handler(无分页)。
+// ListAllHandlers 返当前用户全部活跃 handler（无分页）。
 func (s *Store) ListAllHandlers(ctx context.Context) ([]*handlerdomain.Handler, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -212,10 +195,9 @@ func (s *Store) ListAllHandlers(ctx context.Context) ([]*handlerdomain.Handler, 
 	return rows, nil
 }
 
-// DeleteHandler soft-deletes by id, scoped to caller. ErrNotFound on miss
-// so retries don't silently succeed.
+// DeleteHandler soft-deletes by id; ErrNotFound on miss.
 //
-// DeleteHandler 软删,按调用者过滤;未命中返 ErrNotFound。
+// DeleteHandler 按 id 软删；未命中返 ErrNotFound。
 func (s *Store) DeleteHandler(ctx context.Context, id string) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -233,10 +215,9 @@ func (s *Store) DeleteHandler(ctx context.Context, id string) error {
 	return nil
 }
 
-// SetActiveVersion updates Handler.ActiveVersionID atomically. Used by accept-
-// pending / revert flows.
+// SetActiveVersion atomically updates Handler.ActiveVersionID (accept / revert flows).
 //
-// SetActiveVersion 原子更新 ActiveVersionID(accept / revert 用)。
+// SetActiveVersion 原子更新 ActiveVersionID（accept / revert 用）。
 func (s *Store) SetActiveVersion(ctx context.Context, handlerID, versionID string) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -254,8 +235,6 @@ func (s *Store) SetActiveVersion(ctx context.Context, handlerID, versionID strin
 	}
 	return nil
 }
-
-// ── Versions ─────────────────────────────────────────────────────────────────
 
 // SaveVersion upserts by primary key.
 //
@@ -301,7 +280,7 @@ func (s *Store) GetVersionByNumber(ctx context.Context, handlerID string, versio
 
 // ListVersions returns cursor-paginated versions for a handler, newest first.
 //
-// ListVersions 返某 handler 版本 cursor 分页(新→旧)。
+// ListVersions 返某 handler 版本的分页（新→旧）。
 func (s *Store) ListVersions(ctx context.Context, handlerID string, filter handlerdomain.VersionListFilter) ([]*handlerdomain.Version, string, error) {
 	limit := filter.Limit
 	if limit <= 0 {
@@ -343,9 +322,9 @@ func (s *Store) ListVersions(ctx context.Context, handlerID string, filter handl
 	return rows, next, nil
 }
 
-// GetPending returns the active pending version. ErrPendingNotFound if none.
+// GetPending returns the active pending version; ErrPendingNotFound if none.
 //
-// GetPending 返活动 pending(无则 ErrPendingNotFound)。
+// GetPending 返活动 pending；无则 ErrPendingNotFound。
 func (s *Store) GetPending(ctx context.Context, handlerID string) (*handlerdomain.Version, error) {
 	var v handlerdomain.Version
 	err := s.db.WithContext(ctx).
@@ -361,10 +340,9 @@ func (s *Store) GetPending(ctx context.Context, handlerID string) (*handlerdomai
 	return &v, nil
 }
 
-// UpdateVersionStatus state-machine transitions a version. versionN must be
-// non-nil for accepted; nil for pending/rejected.
+// UpdateVersionStatus transitions status; versionN non-nil iff transitioning to accepted.
 //
-// UpdateVersionStatus 状态机转换;转 accepted 时 versionN 非 nil。
+// UpdateVersionStatus 状态机转换；转 accepted 时 versionN 非 nil。
 func (s *Store) UpdateVersionStatus(ctx context.Context, versionID, status string, versionN *int) error {
 	updates := map[string]any{"status": status}
 	if versionN != nil {
@@ -409,10 +387,9 @@ func (s *Store) UpdateVersionEnv(ctx context.Context, versionID, envStatus, envE
 	return nil
 }
 
-// HardDeleteVersion physically deletes one Version row by ID. handler_versions
-// has no soft-delete column.
+// HardDeleteVersion physically deletes one Version row (no soft-delete column).
 //
-// HardDeleteVersion 按 ID 物理删 Version 行(handler_versions 无软删列)。
+// HardDeleteVersion 按 ID 物理删 Version 行（无软删列）。
 func (s *Store) HardDeleteVersion(ctx context.Context, versionID string) error {
 	if err := s.db.WithContext(ctx).
 		Where("id = ?", versionID).
@@ -422,10 +399,9 @@ func (s *Store) HardDeleteVersion(ctx context.Context, versionID string) error {
 	return nil
 }
 
-// HardDeleteOldestAccepted keeps `keep` newest accepted versions per handler
-// and HARD-deletes the rest (Version has no soft-delete).
+// HardDeleteOldestAccepted keeps `keep` newest accepted versions, hard-deletes the rest.
 //
-// HardDeleteOldestAccepted 保留 keep 个最新 accepted,其余 hard delete。
+// HardDeleteOldestAccepted 保留 keep 个最新 accepted，其余物理删。
 func (s *Store) HardDeleteOldestAccepted(ctx context.Context, handlerID string, keep int) error {
 	if keep <= 0 {
 		keep = handlerdomain.AcceptedVersionCap
@@ -452,12 +428,9 @@ func (s *Store) HardDeleteOldestAccepted(ctx context.Context, handlerID string, 
 	return nil
 }
 
-// ── Config (D-handler — AES-GCM ciphertext blob) ─────────────────────────────
-
-// UpdateConfigEncrypted writes the AES-GCM ciphertext blob for one (caller,
-// handler) pair. Repo is opaque to ciphertext (encryption is in Service).
+// UpdateConfigEncrypted writes the AES-GCM ciphertext blob (repo opaque to ciphertext).
 //
-// UpdateConfigEncrypted 写 AES-GCM 密文 blob;密文对 repo 不透明(加密在 Service)。
+// UpdateConfigEncrypted 写 AES-GCM 密文 blob（repo 对密文不透明）。
 func (s *Store) UpdateConfigEncrypted(ctx context.Context, handlerID, ciphertext string) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -476,16 +449,16 @@ func (s *Store) UpdateConfigEncrypted(ctx context.Context, handlerID, ciphertext
 	return nil
 }
 
-// ClearConfig wipes ConfigEncrypted to "" (back to unconfigured state).
+// ClearConfig wipes ConfigEncrypted back to unconfigured state.
 //
-// ClearConfig 清 ConfigEncrypted 到 ""(回未配置态)。
+// ClearConfig 清 ConfigEncrypted（回未配置态）。
 func (s *Store) ClearConfig(ctx context.Context, handlerID string) error {
 	return s.UpdateConfigEncrypted(ctx, handlerID, "")
 }
 
 // GetConfigEncrypted returns the raw ciphertext ("" if unconfigured).
 //
-// GetConfigEncrypted 返原始密文("" = 未配置)。
+// GetConfigEncrypted 返原始密文（"" = 未配置）。
 func (s *Store) GetConfigEncrypted(ctx context.Context, handlerID string) (string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -500,10 +473,8 @@ func (s *Store) GetConfigEncrypted(ctx context.Context, handlerID string) (strin
 	if err != nil {
 		return "", fmt.Errorf("handlerstore.GetConfigEncrypted: %w", err)
 	}
-	// Scan with no rows leaves the destination zero — distinguish "no row" from
-	// "row with empty ciphertext" via existence check.
-	//
-	// Scan 无行不报错,留零值——用单独存在性查区分"无行" vs "有行但密文为空"。
+	// Scan leaves zero on no-row — explicit existence check distinguishes missing vs empty.
+	// Scan 无行不报错——单独 count 查区分"无行" vs "有行但密文空"。
 	var count int64
 	if err := s.db.WithContext(ctx).
 		Model(&handlerdomain.Handler{}).
@@ -517,12 +488,6 @@ func (s *Store) GetConfigEncrypted(ctx context.Context, handlerID string) (strin
 	return ciphertext, nil
 }
 
-// ── helpers ───────────────────────────────────────────────────────────────────
-
-// isHandlerDuplicateName detects SQLite UNIQUE constraint violation on the
-// handlers partial UNIQUE index (idx_handlers_user_name_active in schema_extras).
-//
-// isHandlerDuplicateName 检测 handlers partial UNIQUE 违反。
 func isHandlerDuplicateName(err error) bool {
 	if err == nil {
 		return false

@@ -1,22 +1,12 @@
-// dispatch_trigger.go — TriggerDispatcher. Plan 05 §3.2: trigger nodes
-// are no-op at execution time;they're just the topo entry point. The
-// trigger source already fired by the time executeRun starts.
-//
-// dispatch_trigger.go —— TriggerDispatcher;§3.2 trigger 节点执行时 no-op,
-// 只做 topo 入口。trigger source 已在 executeRun 起跑前 fire。
-
 package scheduler
 
 import (
 	"context"
 )
 
-// TriggerDispatcher passes the trigger input straight to the "out" port.
-// Other nodes read it via execCtx.Variables["trigger"] (set by
-// newExecutionContext).
+// TriggerDispatcher passes the run's trigger input through the "out" port.
 //
-// TriggerDispatcher 把 trigger input 透传 "out" port;其他节点经
-// execCtx.Variables["trigger"] 拿。
+// TriggerDispatcher 把 run 的 trigger input 透传到 "out" port。
 type TriggerDispatcher struct{}
 
 // NewTriggerDispatcher constructs the no-op trigger dispatcher.

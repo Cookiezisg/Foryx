@@ -1,21 +1,3 @@
-// calltool.go — Service.CallTool, Search, HealthCheck. The hot-path
-// methods that the LLM (via search_mcp / call_mcp tools) and the UI
-// "Test Connection" button drive at runtime.
-//
-// CallTool integrates the §5.7 timeout precedence + §5.6 health
-// tracking (consecutive-failure → degraded transition + auto-heal).
-// Search uses the LLM-ranking pattern from forge.search (mcp.md §6
-// mode A). HealthCheck probes via tools/list without mutating any
-// ServerStatus counter (so test-connection clicks don't accidentally
-// trigger degraded).
-//
-// calltool.go ——Service.CallTool / Search / HealthCheck。LLM（经
-// search_mcp / call_mcp）与 UI "Test Connection" 按钮在运行时驱动的热路径。
-//
-// CallTool 整合 §5.7 超时 precedence + §5.6 健康追踪（连续失败 → degraded
-// + 自愈）。Search 沿用 forge.search LLM-ranking 模式（mcp.md §6 mode A）。
-// HealthCheck 经 tools/list 探针，不改任何 ServerStatus 计数（防 test-
-// connection 点击触发 degraded）。
 package mcp
 
 import (
@@ -38,16 +20,9 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// CallTool routes one tool/call to the named server. Computes the per-
-// call timeout from §5.7 precedence (ServerConfig.TimeoutSec > 30s
-// default), wraps the parent ctx in a deadline, invokes the Client,
-// then records success/failure into ServerStatus counters and triggers
-// degraded/recovery transitions per §5.6.
+// CallTool routes a tool/call with per-call timeout and updates health counters.
 //
-// CallTool 把一次 tool/call 路由到 named server。按 §5.7 precedence 算 per-
-// call 超时（ServerConfig.TimeoutSec > 30s），把父 ctx 包成 deadline，调
-// Client，然后把成功/失败记到 ServerStatus counter，按 §5.6 触发
-// degraded/恢复转换。
+// CallTool 用 per-call 超时路由 tool/call，并更新健康计数。
 func (s *Service) CallTool(ctx context.Context, server, tool string, args json.RawMessage) (string, error) {
 	s.mu.RLock()
 	client, hasClient := s.clients[server]
@@ -62,11 +37,6 @@ func (s *Service) CallTool(ctx context.Context, server, tool string, args json.R
 		return "", fmt.Errorf("mcpapp.CallTool %s: %w (status=%s)",
 			server, mcpdomain.ErrServerNotConnected, state.Status)
 	}
-	// Validate the tool exists on this server before dispatching — gives
-	// LLM a precise ErrToolNotFound rather than the server's generic
-	// "method not found" RPC error.
-	// 派发前校验 tool 存在——给 LLM 精确的 ErrToolNotFound 而非 server 通用
-	// "method not found" RPC 错。
 	if !toolExists(state.Tools, tool) {
 		return "", fmt.Errorf("mcpapp.CallTool %s/%s: %w",
 			server, tool, mcpdomain.ErrToolNotFound)
@@ -80,18 +50,13 @@ func (s *Service) CallTool(ctx context.Context, server, tool string, args json.R
 	result, err := client.CallTool(cctx, tool, args)
 	endedAt := time.Now().UTC()
 	s.recordCallResult(server, err)
-	// D22 call log (terminal write, detached ctx per §S9 — fire-and-forget).
-	// D22 call log 终态写 detached ctx (fire-and-forget,失败不挂主调用)。
 	s.recordCallLog(ctx, server, tool, state, args, result, err, startedAt, endedAt)
 	return result, err
 }
 
-// recordCallLog persists one mcp_calls row (D22). Best-effort — failure
-// logs but doesn't fail the CallTool path. Uses a detached ctx + user
-// stamp so caller-cancel doesn't lose the audit row (§S9).
+// recordCallLog persists one mcp_calls row via detached ctx (§S9); best-effort.
 //
-// recordCallLog 写 mcp_calls 一行(D22)best-effort;detached ctx + user
-// stamp 防 caller-cancel 丢 audit。
+// recordCallLog 用 detached ctx 写入 mcp_calls 一行，best-effort。
 func (s *Service) recordCallLog(ctx context.Context, server, tool string, state *mcpdomain.ServerStatus, args json.RawMessage, result string, callErr error, startedAt, endedAt time.Time) {
 	s.mu.RLock()
 	repo := s.callRepo
@@ -141,10 +106,6 @@ func (s *Service) recordCallLog(ctx context.Context, server, tool string, state 
 		}
 	}
 
-	// V1: ServerStatus doesn't carry server's self-reported version yet
-	// (initialize-response field unexposed in mcpinfra Client); leave
-	// empty until that lands. _ = state keeps the param meaningful.
-	// V1:ServerStatus 暂未携 server 自报 version;mcpinfra Client 暴露后再填。
 	serverVersion := ""
 	_ = state
 
@@ -177,15 +138,9 @@ func (s *Service) recordCallLog(ctx context.Context, server, tool string, state 
 	}
 }
 
-// Search returns at most topK ToolDef matching query. When the total
-// connected-server tool count is ≤ topK we skip the LLM call entirely
-// and return everything (mcp.md §6 says "少时直接全返"). Otherwise we
-// build a ranking prompt à la forge.search mode A and parse the LLM's
-// ordered ID list.
+// Search returns up to topK tools; total ≤ topK skips the LLM.
 //
-// Search 返最多 topK 个匹配 query 的 ToolDef。connected server 总工具数
-// ≤ topK 时跳过 LLM 直接全返（mcp.md §6 "少时直接全返"）。否则构造
-// forge.search 模式 A 的排序 prompt 并解析 LLM 排序 ID 列表。
+// Search 返回最多 topK 个工具；总数 ≤ topK 时跳过 LLM 直接全返。
 func (s *Service) Search(ctx context.Context, query string, topK int) ([]mcpdomain.ToolDef, error) {
 	if topK <= 0 {
 		topK = 5
@@ -200,12 +155,6 @@ func (s *Service) Search(ctx context.Context, query string, topK int) ([]mcpdoma
 
 	prompt := buildRankingPrompt(query, all, topK)
 
-	// Surface this internal LLM rerank as a progress block under the
-	// caller's tool_call (chat invokes this from search_mcp_tools).
-	// emitter is no-op outside chat — always safe.
-	//
-	// 把内部 LLM rerank 作为 progress block 挂调用方 tool_call 下（chat
-	// 经 search_mcp_tools 调）；chat 外 emitter no-op，永远安全。
 	em := eventlogpkg.From(ctx)
 	progID := em.StartBlock(ctx, eventlogdomain.BlockTypeProgress,
 		map[string]any{"stage": "rerank", "tool": "search_mcp_tools", "candidates": len(all)})
@@ -231,15 +180,6 @@ func (s *Service) Search(ctx context.Context, query string, topK int) ([]mcpdoma
 
 	indices, err := parseRankedIndices(resp, len(all))
 	if err != nil {
-		// Ranking parse failure → return error to caller (LLM). Alpha-
-		// order fallback would be misleading — for "PDF reader" an
-		// alpha-ordered list starting with "ai-coder" tricks the LLM
-		// into recommending wrong tools. Fail loud so LLM retries /
-		// refines.
-		//
-		// 排序解析失败 → 返错给调用方（LLM）。字母序兜底是误导——搜
-		// "PDF reader" 拿到字母序首位 "ai-coder" 与 query 无关，骗 LLM 推错
-		// 工具。明显失败让 LLM 自重试/精化。
 		s.log.Warn("mcp search rank parse failed",
 			zap.String("query", query),
 			zap.String("response_snippet", trimResp(resp, 200)),
@@ -260,12 +200,9 @@ func (s *Service) Search(ctx context.Context, query string, topK int) ([]mcpdoma
 	return out, nil
 }
 
-// HealthCheck probes the server with a tools/list call and times the
-// RTT. Does NOT mutate ServerStatus — UI test-connection clicks
-// shouldn't accidentally trip the degraded transition. 10s timeout.
+// HealthCheck probes with tools/list; does NOT mutate ServerStatus.
 //
-// HealthCheck 用 tools/list 探针 + 测 RTT。不改 ServerStatus——UI
-// test-connection 点击不该误触 degraded 转换。10s 超时。
+// HealthCheck 用 tools/list 探测；不修改 ServerStatus 计数。
 func (s *Service) HealthCheck(ctx context.Context, name string) (*mcpdomain.HealthResult, error) {
 	s.mu.RLock()
 	client, hasClient := s.clients[name]
@@ -301,22 +238,9 @@ func (s *Service) HealthCheck(ctx context.Context, name string) (*mcpdomain.Heal
 	return res, nil
 }
 
-// ── recordCallResult (internal) ──────────────────────────────────────
-
-// recordCallResult updates the per-server health counters after each
-// CallTool. Increments TotalCalls; on err: bumps TotalFailures +
-// ConsecutiveFailures, sets LastError; ≥ degradedThreshold (3) consecutive
-// while ready → degraded (in-memory only — frontend sees this on next
-// ListServers / health-check poll, no notification). On success: clears
-// ConsecutiveFailures, sets LastSuccessAt; degraded → ready auto-heal
-// (also in-memory only). Per mcp.md §5.6 通知边界.
+// recordCallResult bumps per-server health counters; consecutive failures flip degraded/ready.
 //
-// recordCallResult 每次 CallTool 后更新 per-server 健康 counter。增
-// TotalCalls；err：增 TotalFailures + ConsecutiveFailures、设 LastError；
-// 连续失败 ≥ degradedThreshold (3) 且当前 ready → degraded（仅内存——
-// 不主动推；前端下次 ListServers / health-check 轮询时看到）。成功：清
-// ConsecutiveFailures、设 LastSuccessAt；前为 degraded → ready 自愈（同样
-// 仅内存）。详 mcp.md §5.6 通知边界。
+// recordCallResult 更新 per-server 健康计数；连续失败/成功触发 degraded/ready 转换。
 func (s *Service) recordCallResult(name string, err error) {
 	now := time.Now().UTC()
 
@@ -344,11 +268,6 @@ func (s *Service) recordCallResult(name string, err error) {
 	}
 }
 
-// resolveCallTimeout walks the §5.7 precedence chain: per-server
-// ServerConfig.TimeoutSec when > 0 wins; otherwise defaultCallTimeout.
-//
-// resolveCallTimeout 走 §5.7 precedence 链：per-server
-// ServerConfig.TimeoutSec > 0 时优先；否则回 defaultCallTimeout。
 func (s *Service) resolveCallTimeout(cfg mcpdomain.ServerConfig) time.Duration {
 	if cfg.TimeoutSec > 0 {
 		return time.Duration(cfg.TimeoutSec) * time.Second
@@ -356,17 +275,6 @@ func (s *Service) resolveCallTimeout(cfg mcpdomain.ServerConfig) time.Duration {
 	return defaultCallTimeout
 }
 
-// ── ranking helpers ──────────────────────────────────────────────────
-
-// buildRankingPrompt assembles the LLM ranking request: numbered tool
-// catalog + the user query + JSON output spec. Uses 0-based indexes
-// instead of full server/tool names so the LLM's response stays compact
-// (and we don't burn tokens on long names like
-// "mcp__github__create_pull_request_with_files").
-//
-// buildRankingPrompt 装 LLM 排序请求：编号 tool 目录 + 用户 query + JSON
-// 输出规范。用 0-based index 而非完整 server/tool 名让 LLM 响应紧凑（不
-// 在 "mcp__github__create_pull_request_with_files" 这种长名上烧 token）。
 func buildRankingPrompt(query string, all []mcpdomain.ToolDef, topK int) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Query: %s\n\nAvailable MCP tools:\n", query)
@@ -383,12 +291,6 @@ func buildRankingPrompt(query string, all []mcpdomain.ToolDef, topK int) string 
 	return sb.String()
 }
 
-// parseRankedIndices extracts the LLM-emitted index array. Tolerates
-// markdown fencing / surrounding prose via llmparsepkg.ExtractJSON.
-// Validates each index is within [0, total).
-//
-// parseRankedIndices 提取 LLM 发的 index 数组。经 llmparsepkg.ExtractJSON
-// 容忍 markdown 围栏 / 前后散文。校验每个 index 在 [0, total)。
 func parseRankedIndices(resp string, total int) ([]int, error) {
 	jsonStr, ok := llmparsepkg.ExtractJSON(resp)
 	if !ok {
@@ -407,9 +309,6 @@ func parseRankedIndices(resp string, total int) ([]int, error) {
 	return out, nil
 }
 
-// toolExists is the per-server membership check used by CallTool.
-//
-// toolExists 是 CallTool 用的 per-server 成员检查。
 func toolExists(tools []mcpdomain.ToolDef, name string) bool {
 	for _, t := range tools {
 		if t.Name == name {

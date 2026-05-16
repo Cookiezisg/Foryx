@@ -1,27 +1,3 @@
-// sandbox.go — HTTP handler for /api/v1/sandbox/* + the conversation
-// scratch-env sub-routes under /api/v1/conversations/{id}/sandbox-envs/*.
-// Thin: decode → service → envelope.
-//
-// Endpoints (per sandbox.md §11):
-//
-//	GET  /api/v1/sandbox/runtimes                            list installed runtimes
-//	GET  /api/v1/sandbox/envs?ownerKind=...                  list envs (filtered)
-//	GET  /api/v1/sandbox/envs/{id}                           single env detail
-//	GET  /api/v1/sandbox/disk-usage                          total bytes
-//	POST /api/v1/sandbox/envs/{id}:destroy                   force delete env (debug)
-//	POST /api/v1/sandbox/runtimes/{id}:destroy               force delete runtime
-//	POST /api/v1/sandbox:gc?olderThanDays=N                  user-triggered GC
-//	GET  /api/v1/sandbox/bootstrap-status                    {ok, error, miseBin}
-//	POST /api/v1/sandbox:retry-bootstrap                     re-run Bootstrap
-//	POST /api/v1/sandbox/runtimes:install                    explicit install (debug)
-//
-//	GET  /api/v1/conversations/{id}/sandbox-envs             list this conv's scratch envs
-//	POST /api/v1/conversations/{id}/sandbox-envs/{kind}:reset  destroy one
-//	POST /api/v1/conversations/{id}/sandbox-envs:reset-all   destroy all for conv
-//
-// sandbox.go ——/api/v1/sandbox/* + /api/v1/conversations/{id}/sandbox-envs/*
-// 子路由的 HTTP handler。薄层：decode → service → envelope。
-
 package handlers
 
 import (
@@ -37,8 +13,7 @@ import (
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
-// SandboxHandler serves the /api/v1/sandbox/* + per-conversation scratch
-// env routes.
+// SandboxHandler serves /api/v1/sandbox/* + per-conversation scratch env routes.
 //
 // SandboxHandler 提供 /api/v1/sandbox/* + per-conversation scratch env 路由。
 type SandboxHandler struct {
@@ -46,35 +21,17 @@ type SandboxHandler struct {
 	log *zap.Logger
 }
 
-// NewSandboxHandler wires the handler dependencies.
-//
-// NewSandboxHandler 装配 handler 依赖。
 func NewSandboxHandler(svc *sandboxapp.Service, log *zap.Logger) *SandboxHandler {
 	return &SandboxHandler{svc: svc, log: log}
 }
 
-// Register attaches sandbox routes. Action-style routes (:destroy / :gc /
-// :retry-bootstrap / :reset / :install) use a single trailing-segment
-// dispatch — the standard library's mux supports {var} patterns but not
-// arbitrary action suffixes, so we route the verb-bearing prefix and
-// dispatch on the action inside the handler.
-//
-// Register 挂 sandbox 路由。:action 风格路由（:destroy / :gc /
-// :retry-bootstrap / :reset / :install）用单尾段派发——stdlib mux 支持
-// {var} 但不支持任意 action 后缀，所以路由带动词前缀，handler 内按 action
-// 分派。
 func (h *SandboxHandler) Register(mux *http.ServeMux) {
-	// Read endpoints
 	mux.HandleFunc("GET /api/v1/sandbox/runtimes", h.ListRuntimes)
 	mux.HandleFunc("GET /api/v1/sandbox/envs", h.ListEnvs)
 	mux.HandleFunc("GET /api/v1/sandbox/envs/{id}", h.GetEnv)
 	mux.HandleFunc("GET /api/v1/sandbox/disk-usage", h.DiskUsage)
 	mux.HandleFunc("GET /api/v1/sandbox/bootstrap-status", h.BootstrapStatus)
 	mux.HandleFunc("GET /api/v1/conversations/{id}/sandbox-envs", h.ListConvEnvs)
-
-	// :action endpoints (POST). Use a wildcard pattern then strings.Cut to
-	// split id from action — keeps the route table compact.
-	// :action 端点（POST）。用通配 + strings.Cut 拆 id/action——路由表紧凑。
 	mux.HandleFunc("POST /api/v1/sandbox/envs/{idAction}", h.envAction)
 	mux.HandleFunc("POST /api/v1/sandbox/runtimes/{idAction}", h.runtimeAction)
 	mux.HandleFunc("POST /api/v1/sandbox/{action}", h.sandboxAction)
@@ -82,9 +39,6 @@ func (h *SandboxHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/conversations/{id}/sandbox-envs:reset-all", h.convEnvsAction)
 }
 
-// ── Read endpoints ────────────────────────────────────────────────────
-
-// ListRuntimes: GET /api/v1/sandbox/runtimes → 200 [{kind, version, ...}].
 func (h *SandboxHandler) ListRuntimes(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.svc.ListRuntimes(r.Context())
 	if err != nil {
@@ -94,12 +48,9 @@ func (h *SandboxHandler) ListRuntimes(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, rows)
 }
 
-// validOwnerKinds is the 5-value whitelist for OwnerKind inputs at HTTP
-// boundary. Returning 400 on unknown values (instead of silently filtering
-// to []) saves admin/curl users from a "where's my data" debugging loop.
+// validOwnerKinds whitelists OwnerKind inputs; unknown values return 400.
 //
-// validOwnerKinds 是 OwnerKind 输入的 5 值白名单。非法值返 400 而不静默
-// 空 list,避免 admin/curl 调试时困惑"为什么没数据"。
+// validOwnerKinds 白名单,非法 OwnerKind 返 400 避免空 list 误读为"没数据"。
 var validOwnerKinds = map[string]bool{
 	sandboxdomain.OwnerKindFunction:     true,
 	sandboxdomain.OwnerKindHandler:      true,
@@ -108,14 +59,9 @@ var validOwnerKinds = map[string]bool{
 	sandboxdomain.OwnerKindConversation: true,
 }
 
-// ListEnvs: GET /api/v1/sandbox/envs?ownerKind=mcp → 200 [{...}].
-// Empty ownerKind returns 400 — caller must scope the query (otherwise
-// the response is unbounded across all owner kinds). Unknown ownerKind
-// also returns 400 (#16 fix) so silent empty-list isn't mistaken for "no data".
+// ListEnvs requires ownerKind; empty or non-whitelisted returns 400.
 //
-// ListEnvs: GET /api/v1/sandbox/envs?ownerKind=mcp → 200。空 ownerKind
-// 返 400——调用方必须 scope 查询(否则跨所有 owner kind 无界)。非白名单
-// 值同样 400(#16 修),避免空 list 被误读成"没数据"。
+// ListEnvs 要求 ownerKind;空或非白名单返 400。
 func (h *SandboxHandler) ListEnvs(w http.ResponseWriter, r *http.Request) {
 	ownerKind := r.URL.Query().Get("ownerKind")
 	if ownerKind == "" {
@@ -136,7 +82,6 @@ func (h *SandboxHandler) ListEnvs(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, rows)
 }
 
-// GetEnv: GET /api/v1/sandbox/envs/{id} → 200 / 404.
 func (h *SandboxHandler) GetEnv(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	env, err := h.svc.GetEnv(r.Context(), id)
@@ -147,7 +92,6 @@ func (h *SandboxHandler) GetEnv(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, env)
 }
 
-// DiskUsage: GET /api/v1/sandbox/disk-usage → 200 {totalBytes}.
 func (h *SandboxHandler) DiskUsage(w http.ResponseWriter, r *http.Request) {
 	total, err := h.svc.TotalDiskUsage(r.Context())
 	if err != nil {
@@ -157,8 +101,6 @@ func (h *SandboxHandler) DiskUsage(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, map[string]int64{"totalBytes": total})
 }
 
-// BootstrapStatus: GET /api/v1/sandbox/bootstrap-status → 200
-// {ok: bool, error: string?, miseBin: string?}.
 func (h *SandboxHandler) BootstrapStatus(w http.ResponseWriter, r *http.Request) {
 	body := map[string]any{
 		"ok":      h.svc.IsReady(),
@@ -170,14 +112,9 @@ func (h *SandboxHandler) BootstrapStatus(w http.ResponseWriter, r *http.Request)
 	responsehttpapi.Success(w, http.StatusOK, body)
 }
 
-// ListConvEnvs: GET /api/v1/conversations/{id}/sandbox-envs → 200 [{...}].
-// Filters all conversation-kind envs to those whose ownerID prefix matches
-// "<convID>:" (matching sandbox.md §5 conversation owner-id convention
-// "<conv_id>:<runtime_kind>").
+// ListConvEnvs filters conversation-kind envs by ownerID prefix "<convID>_".
 //
-// ListConvEnvs: GET /api/v1/conversations/{id}/sandbox-envs → 200。过滤所有
-// conversation-kind env 找 ownerID 前缀 "<convID>:" 匹配的（按 sandbox.md
-// §5 conversation owner-id 约定 "<conv_id>:<runtime_kind>"）。
+// ListConvEnvs 按 ownerID 前缀 "<convID>_" 过滤 conversation-kind env。
 func (h *SandboxHandler) ListConvEnvs(w http.ResponseWriter, r *http.Request) {
 	convID := r.PathValue("id")
 	all, err := h.svc.ListEnvs(r.Context(), sandboxdomain.OwnerKindConversation)
@@ -195,11 +132,6 @@ func (h *SandboxHandler) ListConvEnvs(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, scoped)
 }
 
-// ── :action dispatchers ──────────────────────────────────────────────
-
-// envAction handles POST /api/v1/sandbox/envs/{id}:destroy.
-//
-// envAction 处理 POST /api/v1/sandbox/envs/{id}:destroy。
 func (h *SandboxHandler) envAction(w http.ResponseWriter, r *http.Request) {
 	id, action := splitAction(r.PathValue("idAction"))
 	if action != "destroy" {
@@ -220,9 +152,6 @@ func (h *SandboxHandler) envAction(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.NoContent(w)
 }
 
-// runtimeAction handles POST /api/v1/sandbox/runtimes/{id}:destroy.
-//
-// runtimeAction 处理 POST /api/v1/sandbox/runtimes/{id}:destroy。
 func (h *SandboxHandler) runtimeAction(w http.ResponseWriter, r *http.Request) {
 	id, action := splitAction(r.PathValue("idAction"))
 	if action != "destroy" {
@@ -237,12 +166,9 @@ func (h *SandboxHandler) runtimeAction(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.NoContent(w)
 }
 
-// sandboxAction handles POST /api/v1/sandbox/{action} where action is
-// one of "gc" / "retry-bootstrap" / "runtimes:install" (the last keeps
-// its colon since it's namespaced under runtimes/).
+// sandboxAction dispatches :gc / :retry-bootstrap / runtimes:install.
 //
-// sandboxAction 处理 POST /api/v1/sandbox/{action}，action 取
-// "gc" / "retry-bootstrap" / "runtimes:install"。
+// sandboxAction 分派 :gc / :retry-bootstrap / runtimes:install。
 func (h *SandboxHandler) sandboxAction(w http.ResponseWriter, r *http.Request) {
 	action := r.PathValue("action")
 	switch {
@@ -278,12 +204,6 @@ func (h *SandboxHandler) gc(w http.ResponseWriter, r *http.Request) {
 
 func (h *SandboxHandler) retryBootstrap(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.RetryBootstrap(r.Context()); err != nil {
-		// Don't 500 — RetryBootstrap's failure is observable state, not an
-		// HTTP error. Return the new status with the failure reason; UI
-		// surfaces it as the bootstrap-status banner.
-		//
-		// 不 500——RetryBootstrap 失败是可观察状态非 HTTP 错。返新状态带
-		// 失败原因；UI 暴露为 bootstrap-status banner。
 		responsehttpapi.Success(w, http.StatusOK, map[string]any{
 			"ok":    false,
 			"error": err.Error(),
@@ -304,10 +224,6 @@ func (h *SandboxHandler) installRuntime(w http.ResponseWriter, r *http.Request) 
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	// Empty kind falls through — EnsureRuntime returns
-	// ErrRuntimeNotSupported via errmap → SANDBOX_RUNTIME_NOT_SUPPORTED 422.
-	// 空 kind 不预校验——下游 EnsureRuntime 返 ErrRuntimeNotSupported
-	// 经 errmap 翻 422，错误码统一。
 	rt, err := h.svc.EnsureRuntime(r.Context(),
 		sandboxdomain.RuntimeSpec{Kind: req.Kind, Version: req.Version}, nil)
 	if err != nil {
@@ -317,9 +233,6 @@ func (h *SandboxHandler) installRuntime(w http.ResponseWriter, r *http.Request) 
 	responsehttpapi.Success(w, http.StatusOK, rt)
 }
 
-// convEnvKindAction handles POST /api/v1/conversations/{id}/sandbox-envs/{kind}:reset.
-//
-// convEnvKindAction 处理 POST /api/v1/conversations/{id}/sandbox-envs/{kind}:reset。
 func (h *SandboxHandler) convEnvKindAction(w http.ResponseWriter, r *http.Request) {
 	convID := r.PathValue("id")
 	kind, action := splitAction(r.PathValue("kindAction"))
@@ -328,10 +241,6 @@ func (h *SandboxHandler) convEnvKindAction(w http.ResponseWriter, r *http.Reques
 			"unknown conv-env action: "+action, nil)
 		return
 	}
-	// "_" not ":" — see bash.go maybeAutoRoute for full reason. TL;DR:
-	// owner.ID becomes a literal dir on PATH, ":" splits the segment.
-	// "_" 不用 ":"——bash.go maybeAutoRoute 详注。owner.ID 直接当目录上
-	// PATH，含 ":" 会被 shell 切。
 	owner := sandboxdomain.Owner{
 		Kind: sandboxdomain.OwnerKindConversation,
 		ID:   convID + "_" + kind,
@@ -343,9 +252,6 @@ func (h *SandboxHandler) convEnvKindAction(w http.ResponseWriter, r *http.Reques
 	responsehttpapi.NoContent(w)
 }
 
-// convEnvsAction handles POST /api/v1/conversations/{id}/sandbox-envs:reset-all.
-//
-// convEnvsAction 处理 POST /api/v1/conversations/{id}/sandbox-envs:reset-all。
 func (h *SandboxHandler) convEnvsAction(w http.ResponseWriter, r *http.Request) {
 	convID := r.PathValue("id")
 	all, err := h.svc.ListEnvs(r.Context(), sandboxdomain.OwnerKindConversation)
@@ -369,12 +275,9 @@ func (h *SandboxHandler) convEnvsAction(w http.ResponseWriter, r *http.Request) 
 	responsehttpapi.Success(w, http.StatusOK, map[string]int{"removed": removed})
 }
 
-// splitAction parses "<id>:<action>" path tail. Returns ("", input) if
-// no colon — used to dispatch the action; missing-colon falls through
-// to the "unknown action" branch.
+// splitAction parses "<id>:<action>"; no colon returns ("", input).
 //
-// splitAction 解析 "<id>:<action>" 路径尾部。无冒号返 ("", input)——用于
-// action 派发；漏冒号落到 "unknown action" 分支。
+// splitAction 解析 "<id>:<action>";无冒号返 ("", input)。
 func splitAction(idAction string) (id, action string) {
 	if i := strings.LastIndexByte(idAction, ':'); i >= 0 {
 		return idAction[:i], idAction[i+1:]

@@ -1,15 +1,6 @@
-// Package todo (app layer) owns the Service that the LLM tool family
-// (app/tool/todo) drives: validation, conversation scoping, ID minting,
-// and SSE event publication on every mutation.
+// Package todo (app layer) owns the Service driving conversation-scoped todo CRUD with SSE publish.
 //
-// All three todo packages (domain / app / store) declare `package todo`;
-// callers alias by role (tododomain / todoapp / todostore) per §S13.
-//
-// Package todo（app 层）持有 LLM 工具家族（app/tool/todo）驱动的 Service：
-// 校验、conversation 作用域、ID 分配、每次变更发 SSE。
-//
-// 三个 todo 包（domain / app / store）都声明 `package todo`；调用方按 §S13
-// 别名（tododomain / todoapp / todostore）。
+// Package todo（app 层）提供 conversation 作用域的 todo CRUD 与 SSE 发布 Service。
 package todo
 
 import (
@@ -25,24 +16,18 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// Service orchestrates todo CRUD, scopes to ctx conversation, and
-// publishes "todo" notifications on entity changes (Create / Update /
-// SoftDelete) so all open UI windows showing the parent conversation's
-// todo panel update in real time.
+// Service orchestrates todo CRUD scoped to ctx conversation and publishes "todo" notifications.
 //
-// Service 编排 todo CRUD、按 ctx conversation 作用域、entity 变化时
-// （Create / Update / SoftDelete）发 "todo" 通知让所有打开父对话 todo
-// panel 的 UI 实时更新。
+// Service 编排 conversation 作用域的 todo CRUD 并发布 "todo" 通知。
 type Service struct {
 	repo          tododomain.Repository
 	notifications notificationspkg.Publisher
 	log           *zap.Logger
 }
 
-// NewService wires Service. notifications may be nil → no-op fallback.
-// Panics on nil logger so the missing-init bug surfaces immediately.
+// NewService wires Service; notifications may be nil for a no-op fallback; nil logger panics.
 //
-// NewService 装配 Service。notifications 可 nil → no-op。nil logger 立即 panic。
+// NewService 装配 Service；notifications 可 nil 走 no-op；nil logger 立即 panic。
 func NewService(repo tododomain.Repository, notifications notificationspkg.Publisher, log *zap.Logger) *Service {
 	if log == nil {
 		panic("todo.NewService: logger is nil")
@@ -64,12 +49,9 @@ type CreateInput struct {
 	Metadata    map[string]any
 }
 
-// UpdateInput is the partial-update payload for Service.Update. Pointer
-// fields encode "leave unchanged" (nil) vs "set to this value"
-// (including empty string / nil slice).
+// UpdateInput is the partial-update payload; nil pointer = leave unchanged.
 //
-// UpdateInput 是 Service.Update 的部分更新载荷；指针字段编码"不变"（nil）
-// 与"设为该值"（含空字符串 / nil 切片）。
+// UpdateInput 是部分更新载荷；nil 指针表示「不变」。
 type UpdateInput struct {
 	Subject     *string
 	Description *string
@@ -80,10 +62,9 @@ type UpdateInput struct {
 	Metadata    map[string]any
 }
 
-// Create inserts a new todo scoped to the current conversation. ID is
-// minted with the `td_` prefix per §S15.
+// Create inserts a new todo scoped to the current conversation.
 //
-// Create 插入新 todo，作用域为当前 conversation；ID 用 `td_` 前缀（§S15）。
+// Create 插入新 todo，作用域为当前 conversation。
 func (s *Service) Create(ctx context.Context, in CreateInput) (*tododomain.Todo, error) {
 	convID, ok := reqctxpkg.GetConversationID(ctx)
 	if !ok || convID == "" {
@@ -114,12 +95,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*tododomain.Todo,
 	return t, nil
 }
 
-// Get returns a todo by ID, scoped to the current conversation. Cross-
-// conversation lookups return ErrNotFound to avoid leaking existence
-// across conversations.
+// Get returns a todo by ID scoped to the current conversation; cross-conversation lookups return ErrNotFound.
 //
-// Get 按 ID 返 todo，作用域为当前 conversation；跨对话查询返 ErrNotFound，
-// 不泄漏存在性。
+// Get 按 ID 返 todo 作用域当前 conversation；跨对话查询返 ErrNotFound。
 func (s *Service) Get(ctx context.Context, id string) (*tododomain.Todo, error) {
 	convID, ok := reqctxpkg.GetConversationID(ctx)
 	if !ok || convID == "" {
@@ -146,12 +124,9 @@ func (s *Service) List(ctx context.Context) ([]*tododomain.Todo, error) {
 	return s.repo.ListByConversation(ctx, convID)
 }
 
-// Update applies a partial update. Status transitions are validated
-// against the whitelist; other fields are written verbatim. ConversationID
-// cannot be changed (the input struct has no field for it).
+// Update applies a partial update; status is validated against the whitelist.
 //
-// Update 应用部分更新；status 转换按白名单校验；其他字段原样写入。
-// ConversationID 不可改（input 无该字段）。
+// Update 应用部分更新；status 按白名单校验。
 func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*tododomain.Todo, error) {
 	convID, ok := reqctxpkg.GetConversationID(ctx)
 	if !ok || convID == "" {
@@ -162,8 +137,6 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*todod
 		return nil, err
 	}
 	if t.ConversationID != convID {
-		// Same not-found semantics as Get.
-		// 与 Get 同的 not-found 语义。
 		return nil, tododomain.ErrNotFound
 	}
 	if in.Subject != nil {
@@ -205,12 +178,9 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*todod
 	return t, nil
 }
 
-// Delete soft-deletes a todo scoped to the current conversation. Returns
-// ErrNotFound when absent or owned by another conversation. The final
-// snapshot is published so subscribers can drop their local copy.
+// Delete soft-deletes a todo scoped to the current conversation and publishes the final snapshot.
 //
-// Delete 软删 todo（作用域当前 conversation）；不存在或属另一对话返
-// ErrNotFound；发最终快照让订阅方丢本地拷贝。
+// Delete 软删 conversation 作用域内的 todo 并发布最终快照。
 func (s *Service) Delete(ctx context.Context, id string) error {
 	convID, ok := reqctxpkg.GetConversationID(ctx)
 	if !ok || convID == "" {
@@ -226,10 +196,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if err := s.repo.SoftDelete(ctx, id); err != nil {
 		return err
 	}
-	// Stamp the final status so subscribers see the deletion intent
-	// (the row's deleted_at is set but not in the snapshot fields).
-	// 把最终状态印到快照让订阅方看到删除意图（行的 deleted_at 已置但
-	// 未在快照字段里）。
 	t.Status = tododomain.StatusDeleted
 	s.publish(ctx, t)
 	s.log.Info("todo deleted",
@@ -238,12 +204,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// publish fires a "todo" notification with the entity snapshot. Routed
-// by Todo.ConversationID so all open UI windows on that conversation
-// see the update. Best-effort.
-//
-// publish 发 "todo" 通知携 entity 快照。按 Todo.ConversationID 路由让
-// 该对话所有打开 UI 窗口看到更新。Best-effort。
 func (s *Service) publish(ctx context.Context, t *tododomain.Todo) {
 	s.notifications.Publish(ctx, "todo", t.ID, t, t.ConversationID)
 }

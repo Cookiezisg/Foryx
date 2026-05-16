@@ -1,35 +1,3 @@
-// install_server.go — install_mcp_server system tool: LLM-driven flow
-// for installing an MCP server from the marketplace.
-//
-// Two-phase contract:
-//
-//   Phase 1: LLM calls install_mcp_server({name}) without `confirmed`.
-//            Tool reads RegistryEntry, derives alias, checks for collision,
-//            returns a "needs_confirmation" JSON containing a suggested
-//            question for the user (incl. required env/args + alias).
-//   Phase 2: LLM uses ask tool to get user consent + any required values.
-//            LLM calls install_mcp_server({name, confirmed:true, alias?,
-//            env?, arguments?}). Tool runs Service.InstallFromRegistry.
-//
-// This puts consent + parameter collection in LLM hands ("everything in
-// LLM" per project preference) rather than having the framework's
-// PermissionAsk pop up an out-of-band UI dialog. Permission at framework
-// level is Allow because real consent flows through the LLM-driven ask.
-//
-// install_server.go ——install_mcp_server 系统工具：LLM 驱动的从 marketplace
-// 装 MCP server 流程。
-//
-// 两阶段契约：
-//   阶段 1: LLM 调 install_mcp_server({name}) 不带 confirmed。工具读
-//           RegistryEntry、派生 alias、检冲突，返 "needs_confirmation"
-//           JSON 含给用户的建议问句（含必填 env/args + alias）。
-//   阶段 2: LLM 用 ask 工具拿用户同意 + 必填值。LLM 调 install_mcp_server(
-//           {name, confirmed:true, alias?, env?, arguments?})。工具调
-//           Service.InstallFromRegistry。
-//
-// 把同意 + 参数收集放 LLM 手里（与项目"everything in LLM"偏好一致）而非
-// 让框架 PermissionAsk 弹带外 UI 对话框。框架级权限 = Allow，真正同意走
-// LLM 驱动的 ask。
 package mcp
 
 import (
@@ -46,7 +14,7 @@ import (
 
 // InstallMCPServer implements the install_mcp_server system tool.
 //
-// InstallMCPServer 实现 install_mcp_server 系统工具。
+// InstallMCPServer 是 install_mcp_server 系统工具的实现。
 type InstallMCPServer struct {
 	svc *mcpapp.Service
 }

@@ -1,6 +1,3 @@
-// search_executions.go — search_skill_executions system tool (D22).
-// Queries skill_executions for Skill-activation diagnostics.
-
 package skill
 
 import (

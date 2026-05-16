@@ -1,7 +1,3 @@
-// trigger_test.go — Service-level integration: 4 kinds register/state +
-// manual fire path. Uses fake SchedulerStarter to capture forwards
-// without actually wiring scheduler domain.
-
 package trigger
 
 import (
@@ -83,7 +79,6 @@ func TestRegister_CronInvalid_TracksSpec_ButErrors(t *testing.T) {
 	if !errors.Is(err, triggerdomain.ErrInvalidCronExpression) {
 		t.Errorf("expected ErrInvalidCronExpression, got %v", err)
 	}
-	// Spec tracked anyway so State() exposes it to user.
 	if got := s.State("wf1"); len(got) != 1 {
 		t.Errorf("Spec not tracked after fail: %+v", got)
 	}

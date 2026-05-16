@@ -11,12 +11,6 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// msgStart makes a valid MessageStart for test brevity. ConversationID
-// is still carried in the event payload (clients demux on it) but the
-// bridge keys by user_id from ctx (D-redo-2).
-//
-// msgStart 给测试方便造合法 MessageStart;payload 仍带 ConversationID 给
-// client demux,但 bridge 按 ctx user_id key(D-redo-2)。
 func msgStart(convID, msgID string) eventlogdomain.MessageStart {
 	return eventlogdomain.MessageStart{
 		ConversationID: convID,
@@ -25,10 +19,6 @@ func msgStart(convID, msgID string) eventlogdomain.MessageStart {
 	}
 }
 
-// ctxFor returns a ctx with user_id set. The infra Bridge reads user_id
-// via reqctxpkg.RequireUserID.
-//
-// ctxFor 返带 user_id 的 ctx。
 func ctxFor(uid string) context.Context {
 	return reqctxpkg.SetUserID(context.Background(), uid)
 }
@@ -47,8 +37,6 @@ func TestPublish_AssignsMonotonicSeq(t *testing.T) {
 	}
 }
 
-// TestPublish_PerUserSeq — different users have independent seq counters
-// (D-redo-2). One user's traffic does not bump another user's seq.
 func TestPublish_PerUserSeq(t *testing.T) {
 	b := NewBridge(nil)
 	ctxA := ctxFor("user_a")
@@ -65,8 +53,6 @@ func TestPublish_PerUserSeq(t *testing.T) {
 	}
 }
 
-// TestPublish_PerUserSeqAcrossConversations — same user, multiple convs:
-// seq is monotonic across the user's whole stream (not per-conv).
 func TestPublish_PerUserSeqAcrossConversations(t *testing.T) {
 	b := NewBridge(nil)
 	ctx := ctxFor("user_a")
@@ -133,7 +119,6 @@ func TestSubscribe_ReplayFromSeq(t *testing.T) {
 		b.Publish(ctx, msgStart("cv_1", "m"))
 	}
 
-	// Subscribe asking for replay from seq=2 (so we want seq 3,4,5).
 	ch, cancelSub, err := b.Subscribe(ctx, 2)
 	if err != nil {
 		t.Fatalf("subscribe: %v", err)
@@ -151,7 +136,6 @@ func TestSubscribe_ReplayFromSeq(t *testing.T) {
 		}
 	}
 
-	// Publish a 6th event live; should arrive after replay.
 	b.Publish(ctx, msgStart("cv_1", "m"))
 	select {
 	case env := <-ch:
@@ -178,7 +162,6 @@ func TestSubscribe_FromSeqZeroSkipsReplay(t *testing.T) {
 	case env := <-ch:
 		t.Errorf("fromSeq=0 should skip replay; got seq %d", env.Seq)
 	case <-time.After(50 * time.Millisecond):
-		// expected silence
 	}
 }
 
@@ -186,26 +169,22 @@ func TestSubscribe_TooOldReturnsErrSeqTooOld(t *testing.T) {
 	b := NewBridge(nil)
 	ctx := ctxFor("u1")
 
-	// Fill buffer past replayBufferSize so old seqs get evicted.
 	const total = replayBufferSize + 100
 	for i := 0; i < total; i++ {
 		b.Publish(ctx, msgStart("cv_1", "m"))
 	}
 
-	// Ask for replay from seq=10 (long evicted).
 	_, _, err := b.Subscribe(ctx, 10)
 	if !errors.Is(err, eventlogdomain.ErrSeqTooOld) {
 		t.Errorf("want ErrSeqTooOld, got %v", err)
 	}
 
-	// But asking for seq within buffer should succeed.
 	from := int64(total - 50)
 	ch, cancelSub, err := b.Subscribe(ctx, from)
 	if err != nil {
 		t.Fatalf("subscribe near tail: %v", err)
 	}
 	defer cancelSub()
-	// Should receive 50 envelopes.
 	for want := from + 1; want <= int64(total); want++ {
 		select {
 		case env := <-ch:
@@ -223,9 +202,8 @@ func TestSubscribe_CancelStopsDelivery(t *testing.T) {
 	ctx := ctxFor("u1")
 	ch, cancelSub, _ := b.Subscribe(ctx, 0)
 	cancelSub()
-	cancelSub() // idempotent — should not panic
+	cancelSub() // idempotent
 
-	// Publish after cancel; subscriber should NOT block publisher.
 	done := make(chan struct{})
 	go func() {
 		b.Publish(ctx, msgStart("cv_1", "m"))
@@ -233,12 +211,10 @@ func TestSubscribe_CancelStopsDelivery(t *testing.T) {
 	}()
 	select {
 	case <-done:
-		// good — publisher returned
 	case <-time.After(time.Second):
 		t.Fatal("publisher blocked after subscriber cancelled")
 	}
 
-	// Drain any in-flight events.
 	go func() {
 		for range ch {
 		}
@@ -252,11 +228,8 @@ func TestSubscribe_CtxCancelStopsDelivery(t *testing.T) {
 	defer cancelSub()
 
 	cancelCtx()
-	// Allow goroutine to see ctx.Done.
 	time.Sleep(10 * time.Millisecond)
 
-	// Publish should not block (sub must have been auto-removed). Use
-	// a fresh ctx with user_id (the cancelled one would refuse publish).
 	done := make(chan struct{})
 	go func() {
 		b.Publish(ctxFor("u1"), msgStart("cv_1", "m"))
@@ -268,7 +241,6 @@ func TestSubscribe_CtxCancelStopsDelivery(t *testing.T) {
 		t.Fatal("publisher blocked after ctx cancelled")
 	}
 
-	// Drain any pending.
 	go func() {
 		for range ch {
 		}
@@ -280,9 +252,7 @@ func TestPublish_BlockOnSlowSubscriber(t *testing.T) {
 	ctx := ctxFor("u1")
 	_, cancelSub, _ := b.Subscribe(ctx, 0)
 	defer cancelSub()
-	// Don't drain the channel — buffer fills.
 
-	// Publish subscriberBufferSize+1 events; the +1 should block.
 	pubDone := make(chan struct{})
 	go func() {
 		for i := 0; i < subscriberBufferSize+1; i++ {
@@ -295,9 +265,7 @@ func TestPublish_BlockOnSlowSubscriber(t *testing.T) {
 	case <-pubDone:
 		t.Fatal("publisher should have blocked on full subscriber buffer")
 	case <-time.After(100 * time.Millisecond):
-		// good — blocked as expected
 	}
-	// Cancel sub to unblock the goroutine.
 	cancelSub()
 	select {
 	case <-pubDone:

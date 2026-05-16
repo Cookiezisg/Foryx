@@ -1,35 +1,8 @@
 //go:build pipeline
 
-// catalog_test.go — pipeline tests for the Capability Catalog. Three offline
-// scenarios drive the full registration → poll → fingerprint → mechanical-
-// fallback path with real function / skill / mcp services wired through the
-// harness's CatalogSource adapters (D8-4).
+// Package catalog runs pipeline tests for the Capability Catalog.
 //
-// Scenarios per catalog.md §11:
-//
-//  1. AllSourcesCovered_E2E
-//     Seed 1 function + 1 skill via the harness services → call
-//     Catalog.Refresh → assert Coverage map includes IDs from both sources +
-//     Summary contains both names + chat's next system prompt carries the
-//     catalog block.
-//
-//  2. FunctionDescriptionChange_TriggersRegen
-//     Seed function with description 'v1' → Refresh (Version=1) → update
-//     function.Description to 'v2' → Refresh again → assert Version=2,
-//     fingerprint changed, Summary now contains 'v2'.
-//
-//  3. NoLLMKey_FallsBackToMechanical
-//     Harness wires LLMGenerator but no apikey is seeded → Generator fails
-//     LLM resolve → Service.Refresh switches to mechanical fallback → assert
-//     GeneratedBy='mechanical-fallback' + lastFP still updates (catalog.md §3
-//     'user-activity-driven retry' invariant — next tick won't re-call LLM
-//     until source data actually changes).
-//
-// All three are offline (no LLM / no network).
-//
-// catalog_test.go —— Capability Catalog pipeline 测试。3 个离线场景驱动
-// 注册 → 轮询 → fingerprint → mechanical-fallback 全路径,经 harness
-// CatalogSource 适配器接 function / skill / mcp 真服务。
+// Package catalog 跑 Capability Catalog pipeline 测试。
 package catalog
 
 import (
@@ -43,12 +16,9 @@ import (
 	th "github.com/sunweilin/forgify/backend/test/harness"
 )
 
-// seedSkillForCatalog writes a SKILL.md to harness's SkillsDir and triggers
-// Service.Scan so the Skill source's ListItems returns it on the next catalog
-// Refresh.
+// seedSkillForCatalog writes a SKILL.md and triggers Scan so the next Refresh sees it.
 //
-// seedSkillForCatalog 写 SKILL.md 到 harness SkillsDir + 调 Service.Scan 让
-// Skill source 下次 catalog Refresh 时返。
+// seedSkillForCatalog 写 SKILL.md 并 Scan，让下次 Refresh 看到它。
 func seedSkillForCatalog(t *testing.T, h *th.Harness, name, desc string) {
 	t.Helper()
 	dir := filepath.Join(h.Skill.SkillsDir(), name)
@@ -63,8 +33,6 @@ func seedSkillForCatalog(t *testing.T, h *th.Harness, name, desc string) {
 		t.Fatalf("Skill.Scan: %v", err)
 	}
 }
-
-// ── 1. all 3 sources end-to-end ─────────────────────────────────────
 
 func TestCatalog_AllSourcesCovered_E2E(t *testing.T) {
 	h := th.New(t)
@@ -104,8 +72,6 @@ func TestCatalog_AllSourcesCovered_E2E(t *testing.T) {
 		t.Errorf("GetForSystemPrompt mismatch with Get().Summary")
 	}
 }
-
-// ── 2. description change triggers regen ────────────────────────────
 
 func TestCatalog_FunctionDescriptionChange_TriggersRegen(t *testing.T) {
 	h := th.New(t)
@@ -147,8 +113,6 @@ func TestCatalog_FunctionDescriptionChange_TriggersRegen(t *testing.T) {
 	}
 }
 
-// ── 3. mechanical fallback when LLM unavailable ────────────────────
-
 func TestCatalog_NoLLMKey_FallsBackToMechanical(t *testing.T) {
 	h := th.New(t)
 	h.NewFunction(t, "alpha", "def alpha(a):\n    return a\n")
@@ -179,8 +143,6 @@ func TestCatalog_NoLLMKey_FallsBackToMechanical(t *testing.T) {
 			h.Catalog.Get().Version, versionAfterFirst)
 	}
 }
-
-// ── helpers ─────────────────────────────────────────────────────────
 
 func contains(xs []string, want string) bool {
 	for _, x := range xs {

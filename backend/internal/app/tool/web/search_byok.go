@@ -1,14 +1,3 @@
-// search_byok.go — BYOK search backend clients (Brave / Serper / Tavily /
-// Bocha). Each function receives (ctx, baseURL, key, query, limit) and
-// returns []searchResult; HTTP plumbing + auth headers + JSON parsing all
-// inline. WebSearch.Execute iterates these in apikeydomain
-// .SearchProviderPriority order, skipping providers without configured
-// keys, falling through on per-provider error.
-//
-// search_byok.go ——BYOK 搜索后端 client（Brave / Serper / Tavily / Bocha）。
-// 每函数收 (ctx, baseURL, key, query, limit) 返 []searchResult；HTTP plumbing
-// + 认证头 + JSON 解析全内联。WebSearch.Execute 按 apikeydomain
-// .SearchProviderPriority 顺序遍历，跳过未配 key 的，per-provider 错误降级。
 package web
 
 import (
@@ -20,12 +9,9 @@ import (
 	"net/url"
 )
 
-// searchBrave queries Brave Search API. Endpoint: GET {baseURL}/web/search
-// ?q={query}&count={limit}. Auth: X-Subscription-Token. Response shape:
-// {"web":{"results":[{"title","url","description"}]}}.
+// searchBrave queries Brave Search API; auth via X-Subscription-Token header.
 //
-// searchBrave 调 Brave Search API。响应形如
-// {"web":{"results":[{"title","url","description"}]}}。
+// searchBrave 调 Brave Search API；认证走 X-Subscription-Token。
 func (t *WebSearch) searchBrave(ctx context.Context, baseURL, key, query string, limit int) ([]searchResult, error) {
 	u := fmt.Sprintf("%s/web/search?q=%s&count=%d",
 		baseURL, url.QueryEscape(query), limit)
@@ -58,12 +44,9 @@ func (t *WebSearch) searchBrave(ctx context.Context, baseURL, key, query string,
 	return out, nil
 }
 
-// searchSerper queries Serper.dev (Google search results proxy).
-// Endpoint: POST {baseURL}/search. Auth: X-API-KEY. Response shape:
-// {"organic":[{"title","link","snippet"}]}.
+// searchSerper queries Serper.dev (Google results proxy); auth via X-API-KEY header.
 //
-// searchSerper 调 Serper.dev（Google 结果代理）。响应形如
-// {"organic":[{"title","link","snippet"}]}。
+// searchSerper 调 Serper.dev（Google 结果代理）；认证走 X-API-KEY。
 func (t *WebSearch) searchSerper(ctx context.Context, baseURL, key, query string, limit int) ([]searchResult, error) {
 	payload, _ := json.Marshal(map[string]any{"q": query, "num": limit})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/search", bytes.NewReader(payload))
@@ -93,12 +76,9 @@ func (t *WebSearch) searchSerper(ctx context.Context, baseURL, key, query string
 	return out, nil
 }
 
-// searchTavily queries Tavily (AI-agent-tuned search).
-// Endpoint: POST {baseURL}/search. Auth: api_key in JSON body.
-// Response shape: {"results":[{"title","url","content"}]}.
+// searchTavily queries Tavily; auth via api_key in JSON body.
 //
-// searchTavily 调 Tavily（agent 调优搜索）。响应形如
-// {"results":[{"title","url","content"}]}。
+// searchTavily 调 Tavily；认证用 api_key JSON body 字段。
 func (t *WebSearch) searchTavily(ctx context.Context, baseURL, key, query string, limit int) ([]searchResult, error) {
 	payload, _ := json.Marshal(map[string]any{
 		"api_key":     key,
@@ -131,12 +111,9 @@ func (t *WebSearch) searchTavily(ctx context.Context, baseURL, key, query string
 	return out, nil
 }
 
-// searchBocha queries Bocha (博查) — China-native search API. Endpoint:
-// POST {baseURL}/web-search. Auth: Authorization Bearer header. Response
-// shape: {"data":{"webPages":{"value":[{"name","url","snippet"}]}}}.
+// searchBocha queries Bocha (博查); auth via Authorization Bearer header.
 //
-// searchBocha 调博查——国产搜索 API。响应形如
-// {"data":{"webPages":{"value":[{"name","url","snippet"}]}}}。
+// searchBocha 调博查；认证走 Authorization Bearer。
 func (t *WebSearch) searchBocha(ctx context.Context, baseURL, key, query string, limit int) ([]searchResult, error) {
 	payload, _ := json.Marshal(map[string]any{"query": query, "count": limit})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/web-search", bytes.NewReader(payload))
@@ -170,12 +147,9 @@ func (t *WebSearch) searchBocha(ctx context.Context, baseURL, key, query string,
 	return out, nil
 }
 
-// doSearchHTTP is the shared HTTP send + status check used by all 4 BYOK
-// clients. Returns body bytes on 2xx; named-provider error otherwise so
-// the routing log shows which backend failed.
+// doSearchHTTP is shared HTTP send + status check; 2xx returns body, otherwise provider-named error.
 //
-// doSearchHTTP 是 4 个 BYOK client 共用的 HTTP 发送 + 状态检查。2xx 返 body；
-// 否则返带 provider 名的错误，让路由日志看清是哪一家挂。
+// doSearchHTTP 共享 HTTP 发送 + 状态检查；2xx 返 body，否则返带 provider 名的错误。
 func (t *WebSearch) doSearchHTTP(req *http.Request, provider string) ([]byte, error) {
 	resp, err := t.httpClient.Do(req)
 	if err != nil {
@@ -198,13 +172,6 @@ func (t *WebSearch) doSearchHTTP(req *http.Request, provider string) ([]byte, er
 		}
 	}
 	if resp.StatusCode/100 != 2 {
-		// Wrap with status-classified sentinel so errors.Is can drive
-		// downstream behaviour (e.g. markInvalidIfAuthErr → flip apikey
-		// status). Previously err.Error() string-matched "HTTP 401" /
-		// "HTTP 403" — fragile and breaks if format changes.
-		// 用状态分类 sentinel 包装让 errors.Is 驱动下游（如 markInvalidIfAuthErr
-		// → 翻 apikey 状态）。原来 err.Error() string match "HTTP 401"
-		// 易碎，格式变就破。
 		var sentinel error
 		switch resp.StatusCode {
 		case http.StatusUnauthorized, http.StatusForbidden:
@@ -219,9 +186,6 @@ func (t *WebSearch) doSearchHTTP(req *http.Request, provider string) ([]byte, er
 	return body, nil
 }
 
-// snippet trims body bytes for inclusion in error messages.
-//
-// snippet 截 body 字节用于错误消息。
 func snippet(body []byte, n int) string {
 	if len(body) <= n {
 		return string(body)

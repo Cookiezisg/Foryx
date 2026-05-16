@@ -1,18 +1,3 @@
-// checker_production.go — production CapabilityChecker backed by the live
-// function / handler / skill / mcp services. Used in main.go DI wiring.
-//
-// Resolution policy:
-//   - HasFunction(id):   functionapp.Get(ctx, id) → ErrNotFound = false
-//   - HasHandler(name):  handlerapp.GetByName(ctx, name) → ErrNotFound = false
-//   - HasSkill(name):    skillapp.Get(ctx, name) → ErrSkillNotFound = false
-//   - HasMCPServer(name): mcpapp.GetServer(ctx, name) → ErrServerNotFound = false
-//
-// Any other error from these services bubbles up (treated as transient by
-// caller — validation will report ErrInvalidReference + the underlying message).
-//
-// checker_production.go — 接生产 service 的 CapabilityChecker;main.go 用。
-// 各服务 ErrNotFound = 不存在;其他错误透传(调用方按 transient 报)。
-
 package workflow
 
 import (
@@ -29,12 +14,9 @@ import (
 	skilldomain "github.com/sunweilin/forgify/backend/internal/domain/skill"
 )
 
-// ProductionChecker wires the four backing services into a single
-// CapabilityChecker. Pass nil for any service whose checks should fall
-// through to "exists" (e.g. tests that don't wire skill).
+// ProductionChecker wires the four backing services into a CapabilityChecker.
 //
-// ProductionChecker 把四个 service 接到一个 CapabilityChecker。任一 nil 会
-// 让对应 check 返 true(测试场景)。
+// ProductionChecker 把四个 service 装配为 CapabilityChecker。
 type ProductionChecker struct {
 	Function *functionapp.Service
 	Handler  *handlerapp.Service
@@ -42,9 +24,6 @@ type ProductionChecker struct {
 	MCP      *mcpapp.Service
 }
 
-// Compile-time interface assertion.
-//
-// 编译期接口断言。
 var _ CapabilityChecker = (*ProductionChecker)(nil)
 
 func (c *ProductionChecker) HasFunction(ctx context.Context, id string) (bool, error) {

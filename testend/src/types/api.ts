@@ -50,4 +50,5 @@ export type IDPrefix =
   | 'smm' // subagent message
   | 'fnenv' // function venv
   | 'hdenv' // handler venv
-  | 'bsh'; // background bash shell
+  | 'bsh' // background bash shell
+  | 'mem'; // memory (V1.2 §2 final-sweep)

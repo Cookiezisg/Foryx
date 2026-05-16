@@ -1,8 +1,3 @@
-// agentstate_test.go — concurrency + ordering checks for AgentState.
-// Covers MarkRead/WasRead, cwd round-trip.
-//
-// agentstate_test.go ——AgentState 的并发与顺序检查。覆盖 MarkRead/
-// WasRead、cwd round-trip。
 package agentstate
 
 import (

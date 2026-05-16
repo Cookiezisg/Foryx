@@ -1,13 +1,6 @@
-// Package function (infra/store/function) is the GORM-backed implementation
-// of the domain function Repository port. All methods scope by the userID
-// carried in ctx — callers MUST have run the InjectUserID middleware.
+// Package function is the GORM-backed functiondomain.Repository, scoped by ctx userID.
 //
-// The package shares its name with domain/function by design; external
-// callers alias at import: `functionstore "…/infra/store/function"`.
-//
-// Package function (infra/store/function) 是 domain function Repository
-// 的 GORM 实现。所有方法按 ctx userID 过滤;调用方先跑 InjectUserID 中间件。
-// 包名跟 domain/function 同名是刻意的;外部 import 起别名 functionstore。
+// Package function 是 functiondomain.Repository 的 GORM 实现，按 ctx userID 过滤。
 package function
 
 import (
@@ -38,15 +31,11 @@ func New(db *gorm.DB) *Store {
 	return &Store{db: db}
 }
 
-// Compile-time interface assertion.
-//
-// 编译期接口兼容性断言。
 var _ functiondomain.Repository = (*Store)(nil)
 
-// AutoMigrateModels returns the GORM models to register in db.AutoMigrate
-// (called from cmd/server/main.go).
+// AutoMigrateModels returns the GORM models to register in db.AutoMigrate.
 //
-// AutoMigrateModels 返回 cmd/server/main.go 注册 AutoMigrate 用的 GORM models。
+// AutoMigrateModels 返 AutoMigrate 用的 GORM models。
 func AutoMigrateModels() []interface{} {
 	return []interface{}{
 		&functiondomain.Function{},
@@ -55,12 +44,9 @@ func AutoMigrateModels() []interface{} {
 	}
 }
 
-// ── Function CRUD ────────────────────────────────────────────────────────────
-
-// SaveFunction inserts or updates by primary key. UNIQUE violation on
-// (user_id, name) WHERE deleted_at IS NULL is translated to ErrDuplicateName.
+// SaveFunction upserts by PK; partial-UNIQUE name violation maps to ErrDuplicateName.
 //
-// SaveFunction 按主键插入或更新;name 重复(partial UNIQUE)返 ErrDuplicateName。
+// SaveFunction 按主键 upsert；name partial UNIQUE 违反返 ErrDuplicateName。
 func (s *Store) SaveFunction(ctx context.Context, f *functiondomain.Function) error {
 	if err := s.db.WithContext(ctx).Save(f).Error; err != nil {
 		if isFunctionDuplicateName(err) {
@@ -71,9 +57,9 @@ func (s *Store) SaveFunction(ctx context.Context, f *functiondomain.Function) er
 	return nil
 }
 
-// GetFunction fetches by id, scoped to caller. ErrNotFound on miss.
+// GetFunction fetches by id; returns ErrNotFound on miss.
 //
-// GetFunction 按 id 查,按调用者过滤;未命中返 ErrNotFound。
+// GetFunction 按 id 查；未命中返 ErrNotFound。
 func (s *Store) GetFunction(ctx context.Context, id string) (*functiondomain.Function, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -92,10 +78,9 @@ func (s *Store) GetFunction(ctx context.Context, id string) (*functiondomain.Fun
 	return &f, nil
 }
 
-// GetFunctionByName fetches by name (scoped to caller) — for create-time
-// duplicate check (race with concurrent Save still caught by partial UNIQUE).
+// GetFunctionByName fetches by name for create-time dup check (race caught by partial UNIQUE).
 //
-// GetFunctionByName 按 name 查;create 时查重名用(竞态由 partial UNIQUE 兜底)。
+// GetFunctionByName 按 name 查（create 查重；竞态由 partial UNIQUE 兜底）。
 func (s *Store) GetFunctionByName(ctx context.Context, name string) (*functiondomain.Function, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -114,10 +99,9 @@ func (s *Store) GetFunctionByName(ctx context.Context, name string) (*functiondo
 	return &f, nil
 }
 
-// GetFunctionsByIDs batch fetches by id slice, preserving input order (used
-// by search after LLM returns ranked IDs).
+// GetFunctionsByIDs batch fetches by id slice, preserving input order.
 //
-// GetFunctionsByIDs 按 id 切片批量查,保持输入顺序。
+// GetFunctionsByIDs 按 id 切片批量查，保持输入顺序。
 func (s *Store) GetFunctionsByIDs(ctx context.Context, ids []string) ([]*functiondomain.Function, error) {
 	if len(ids) == 0 {
 		return nil, nil
@@ -134,7 +118,6 @@ func (s *Store) GetFunctionsByIDs(ctx context.Context, ids []string) ([]*functio
 		return nil, fmt.Errorf("functionstore.GetFunctionsByIDs: %w", err)
 	}
 
-	// Preserve input order
 	byID := make(map[string]*functiondomain.Function, len(rows))
 	for _, r := range rows {
 		byID[r.ID] = r
@@ -148,11 +131,9 @@ func (s *Store) GetFunctionsByIDs(ctx context.Context, ids []string) ([]*functio
 	return out, nil
 }
 
-// ListFunctions returns a cursor-paginated page of live functions for the
-// caller. Tuple cursor (created_at, id) for stable pagination across identical
-// timestamps.
+// ListFunctions returns a cursor-paginated page of live functions; tuple cursor stable.
 //
-// ListFunctions 返当前用户活跃 function 的 cursor 分页;tuple cursor 保证稳定。
+// ListFunctions 返活跃 function 的分页；tuple cursor 稳定。
 func (s *Store) ListFunctions(ctx context.Context, filter functiondomain.ListFilter) ([]*functiondomain.Function, string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -196,10 +177,8 @@ func (s *Store) ListFunctions(ctx context.Context, filter functiondomain.ListFil
 }
 
 // ListAllFunctions returns all live functions for caller (no pagination).
-// Used by SearchFunction (LLM ranking) and CatalogSource.ListItems.
 //
-// ListAllFunctions 返当前用户全部活跃 function(无分页);SearchFunction +
-// CatalogSource 用。
+// ListAllFunctions 返当前用户全部活跃 function（无分页）。
 func (s *Store) ListAllFunctions(ctx context.Context) ([]*functiondomain.Function, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -216,10 +195,9 @@ func (s *Store) ListAllFunctions(ctx context.Context) ([]*functiondomain.Functio
 	return rows, nil
 }
 
-// DeleteFunction soft-deletes by id, scoped to caller. ErrNotFound if no live
-// row matched (so retries don't silently succeed).
+// DeleteFunction soft-deletes by id; ErrNotFound if no live row matched.
 //
-// DeleteFunction 软删,按调用者过滤;未命中返 ErrNotFound(让重试不静默成功)。
+// DeleteFunction 按 id 软删；未命中返 ErrNotFound。
 func (s *Store) DeleteFunction(ctx context.Context, id string) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -237,10 +215,9 @@ func (s *Store) DeleteFunction(ctx context.Context, id string) error {
 	return nil
 }
 
-// SetActiveVersion updates Function.ActiveVersionID atomically. Used by
-// accept-pending / revert flows.
+// SetActiveVersion atomically updates Function.ActiveVersionID (accept / revert flows).
 //
-// SetActiveVersion 原子更新 ActiveVersionID(accept / revert 用)。
+// SetActiveVersion 原子更新 ActiveVersionID（accept / revert 用）。
 func (s *Store) SetActiveVersion(ctx context.Context, functionID, versionID string) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -259,11 +236,9 @@ func (s *Store) SetActiveVersion(ctx context.Context, functionID, versionID stri
 	return nil
 }
 
-// ── Versions ─────────────────────────────────────────────────────────────────
-
-// SaveVersion inserts or updates a FunctionVersion by primary key.
+// SaveVersion upserts a Version by primary key.
 //
-// SaveVersion 按主键 upsert FunctionVersion。
+// SaveVersion 按主键 upsert Version。
 func (s *Store) SaveVersion(ctx context.Context, v *functiondomain.Version) error {
 	if err := s.db.WithContext(ctx).Save(v).Error; err != nil {
 		return fmt.Errorf("functionstore.SaveVersion: %w", err)
@@ -271,9 +246,9 @@ func (s *Store) SaveVersion(ctx context.Context, v *functiondomain.Version) erro
 	return nil
 }
 
-// GetVersion fetches by version id. ErrVersionNotFound on miss.
+// GetVersion fetches by version id; ErrVersionNotFound on miss.
 //
-// GetVersion 按 version id 查;未命中返 ErrVersionNotFound。
+// GetVersion 按 version id 查；未命中返 ErrVersionNotFound。
 func (s *Store) GetVersion(ctx context.Context, versionID string) (*functiondomain.Version, error) {
 	var v functiondomain.Version
 	err := s.db.WithContext(ctx).Where("id = ?", versionID).First(&v).Error
@@ -287,9 +262,8 @@ func (s *Store) GetVersion(ctx context.Context, versionID string) (*functiondoma
 }
 
 // GetVersionByNumber fetches an accepted version by (function_id, version_int).
-// Used by revert flow.
 //
-// GetVersionByNumber 按 (function_id, version 整数) 查 accepted 版本;revert 用。
+// GetVersionByNumber 按 (function_id, version 整数) 查 accepted 版本。
 func (s *Store) GetVersionByNumber(ctx context.Context, functionID string, versionN int) (*functiondomain.Version, error) {
 	var v functiondomain.Version
 	err := s.db.WithContext(ctx).
@@ -305,9 +279,8 @@ func (s *Store) GetVersionByNumber(ctx context.Context, functionID string, versi
 }
 
 // ListVersions returns cursor-paginated versions for a function, newest first.
-// Filter.Status filters by 'pending' / 'accepted' / 'rejected' if non-empty.
 //
-// ListVersions 返某 function 版本 cursor 分页(新→旧);可按 status 过滤。
+// ListVersions 返某 function 版本的分页（新→旧）；可按 status 过滤。
 func (s *Store) ListVersions(ctx context.Context, functionID string, filter functiondomain.VersionListFilter) ([]*functiondomain.Version, string, error) {
 	limit := filter.Limit
 	if limit <= 0 {
@@ -349,12 +322,9 @@ func (s *Store) ListVersions(ctx context.Context, functionID string, filter func
 	return rows, next, nil
 }
 
-// GetPending returns the active pending version for a function. ErrPendingNotFound
-// if none. There SHOULD be at most one pending per function — service-layer
-// invariant (DB doesn't enforce uniqueness across pending).
+// GetPending returns the active pending version (at most one — service-layer invariant).
 //
-// GetPending 返某 function 的活动 pending 版本(应至多一个,service 层保证);
-// 无则返 ErrPendingNotFound。
+// GetPending 返活动 pending 版本（应至多一个，service 层保证）；无则 ErrPendingNotFound。
 func (s *Store) GetPending(ctx context.Context, functionID string) (*functiondomain.Version, error) {
 	var v functiondomain.Version
 	err := s.db.WithContext(ctx).
@@ -370,10 +340,9 @@ func (s *Store) GetPending(ctx context.Context, functionID string) (*functiondom
 	return &v, nil
 }
 
-// UpdateVersionStatus transitions a version's status. When transitioning to
-// accepted, versionN must be non-nil. For pending / rejected pass nil.
+// UpdateVersionStatus transitions status; versionN non-nil iff transitioning to accepted.
 //
-// UpdateVersionStatus 状态机转换。转 accepted 时 versionN 非 nil;其他传 nil。
+// UpdateVersionStatus 状态机转换；转 accepted 时 versionN 非 nil，其他传 nil。
 func (s *Store) UpdateVersionStatus(ctx context.Context, versionID, status string, versionN *int) error {
 	updates := map[string]any{"status": status}
 	if versionN != nil {
@@ -394,16 +363,16 @@ func (s *Store) UpdateVersionStatus(ctx context.Context, versionID, status strin
 	return nil
 }
 
-// UpdateVersionEnv writes the env_* fields atomically. Called by sandbox sync.
+// UpdateVersionEnv atomically writes env_* fields (sandbox sync).
 //
-// UpdateVersionEnv 原子写 env_* 字段(sandbox sync 用)。
+// UpdateVersionEnv 原子写 env_* 字段（sandbox sync 用）。
 func (s *Store) UpdateVersionEnv(ctx context.Context, versionID, envStatus, envError, envSyncStage, envSyncDetail string, syncedAt *time.Time) error {
 	updates := map[string]any{
 		"env_status":      envStatus,
 		"env_error":       envError,
 		"env_sync_stage":  envSyncStage,
 		"env_sync_detail": envSyncDetail,
-		"env_synced_at":   syncedAt, // *time.Time — nil writes NULL
+		"env_synced_at":   syncedAt,
 	}
 	res := s.db.WithContext(ctx).
 		Model(&functiondomain.Version{}).
@@ -418,10 +387,9 @@ func (s *Store) UpdateVersionEnv(ctx context.Context, versionID, envStatus, envE
 	return nil
 }
 
-// HardDeleteVersion physically deletes one Version row by ID. function_versions
-// has no soft-delete column so this is an unconditional DELETE.
+// HardDeleteVersion physically deletes one Version row by ID (no soft-delete column).
 //
-// HardDeleteVersion 按 ID 物理删 Version 行(function_versions 无软删列)。
+// HardDeleteVersion 按 ID 物理删 Version 行（无软删列）。
 func (s *Store) HardDeleteVersion(ctx context.Context, versionID string) error {
 	if err := s.db.WithContext(ctx).
 		Where("id = ?", versionID).
@@ -431,11 +399,9 @@ func (s *Store) HardDeleteVersion(ctx context.Context, versionID string) error {
 	return nil
 }
 
-// HardDeleteOldestAccepted keeps `keep` newest accepted versions per function
-// and HARD-deletes the rest (Version table has no soft-delete column). Called
-// from service layer after each new accept.
+// HardDeleteOldestAccepted keeps `keep` newest accepted versions, hard-deletes the rest.
 //
-// HardDeleteOldestAccepted 保留 keep 个最新 accepted 版本,其余 hard delete。
+// HardDeleteOldestAccepted 保留 keep 个最新 accepted 版本，其余物理删。
 func (s *Store) HardDeleteOldestAccepted(ctx context.Context, functionID string, keep int) error {
 	if keep <= 0 {
 		keep = functiondomain.AcceptedVersionCap
@@ -462,12 +428,6 @@ func (s *Store) HardDeleteOldestAccepted(ctx context.Context, functionID string,
 	return nil
 }
 
-// isFunctionDuplicateName detects SQLite UNIQUE constraint violation on the
-// functions partial UNIQUE index (idx_functions_user_name_active in
-// schema_extras). modernc.org/sqlite errors contain the literal
-// "UNIQUE constraint failed" + table name.
-//
-// isFunctionDuplicateName 检测 functions 表 partial UNIQUE 违反。
 func isFunctionDuplicateName(err error) bool {
 	if err == nil {
 		return false

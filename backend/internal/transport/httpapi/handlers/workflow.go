@@ -1,27 +1,3 @@
-// workflow.go — HTTP handlers for the workflow domain (forge_redesign Plan 04
-// W7). 11 endpoints per spec/04-workflow.md §8:
-//
-//   POST   /api/v1/workflows                          create (direct ops)
-//   GET    /api/v1/workflows                          list (paginated)
-//   GET    /api/v1/workflows/{id}                     detail (with pending)
-//   PATCH  /api/v1/workflows/{id}                     update metadata
-//   DELETE /api/v1/workflows/{id}                     soft-delete
-//   POST   /api/v1/workflows/{idAction}               :revert (no :trigger — Plan 05)
-//   GET    /api/v1/workflows/{id}/versions            list versions
-//   GET    /api/v1/workflows/{id}/versions/{v}        version detail
-//   GET    /api/v1/workflows/{id}/pending             fetch pending
-//   POST   /api/v1/workflows/{id}/pending:accept      accept pending
-//   POST   /api/v1/workflows/{id}/pending:reject      reject pending
-//
-// :trigger + flowrun endpoints live in Plan 05 (scheduler / trigger / flowrun
-// domains). LLM-driven authoring (ops streams) goes through the LLM tool path
-// (create_workflow / edit_workflow), NOT POST /workflows. The HTTP shape is
-// the direct ops definition for curl / UI / scripts.
-//
-// workflow.go —— workflow domain 的 HTTP handler(forge_redesign Plan 04 W7)。
-// 11 端点 per 04-workflow.md §8。:trigger + flowrun 在 Plan 05;LLM 走 ops 流
-// (create_workflow / edit_workflow 工具)。
-
 package handlers
 
 import (
@@ -42,30 +18,21 @@ import (
 // WorkflowHandler 持 workflow HTTP 路由。
 type WorkflowHandler struct {
 	svc     *workflowapp.Service
-	flowrun *FlowRunHandler // optional — drives :trigger action + /triggers state
+	flowrun *FlowRunHandler
 	log     *zap.Logger
 }
 
-// NewWorkflowHandler wires handler dependencies.
-//
-// NewWorkflowHandler 装配 handler 依赖。
 func NewWorkflowHandler(svc *workflowapp.Service, log *zap.Logger) *WorkflowHandler {
 	return &WorkflowHandler{svc: svc, log: log}
 }
 
-// AttachFlowRunHandler enables the workflow-scoped Plan 05 routes
-// (:trigger action + /triggers state). Called by the router after the
-// FlowRunHandler is constructed.
+// AttachFlowRunHandler enables :trigger action + /triggers state.
 //
-// AttachFlowRunHandler 接 Plan 05 workflow-scoped 路由(:trigger 与
-// /triggers state)。router 在 FlowRunHandler 构造后调。
+// AttachFlowRunHandler 接入 :trigger + /triggers 路由。
 func (h *WorkflowHandler) AttachFlowRunHandler(f *FlowRunHandler) {
 	h.flowrun = f
 }
 
-// Register mounts every workflow route on mux.
-//
-// Register 把所有 workflow 路由挂到 mux。
 func (h *WorkflowHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/workflows", h.Create)
 	mux.HandleFunc("GET /api/v1/workflows", h.List)
@@ -81,17 +48,9 @@ func (h *WorkflowHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/workflows/{id}/pending:reject", h.RejectPending)
 }
 
-// ── CRUD ──────────────────────────────────────────────────────────────────────
-
-// Create applies ops to an empty graph and persists workflow + auto-accepted
-// v1. ops payload is required (set_meta + at least one trigger node + edges).
-// ops is parsed via workflowapp.ParseOps (each op kept as json.RawMessage so
-// per-op handlers decode their own schema — handler-level DisallowUnknownFields
-// only inspects the top-level request envelope, not the ops payload).
+// Create applies ops to an empty graph and persists workflow + auto-accepted v1.
 //
-// Create 应用 ops 到空图 + 持久化 workflow + 自动 accept v1。ops 走 ParseOps
-// (每条 op 保 raw,per-op handler 自己解码,handler 层 DisallowUnknownFields
-// 只看顶层 envelope)。
+// Create 把 ops 应用到空图,持久化 workflow + 自动 accept v1。
 func (h *WorkflowHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Ops          json.RawMessage `json:"ops"`
@@ -184,12 +143,9 @@ func (h *WorkflowHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.NoContent(w)
 }
 
-// postOnWorkflow dispatches POST /api/v1/workflows/{id}:<action>. Supports
-// :revert (Plan 04) + :trigger (Plan 05; delegates to attached
-// FlowRunHandler so triggerService dep stays out of WorkflowHandler).
+// postOnWorkflow dispatches POST /api/v1/workflows/{id}:<action> (:revert/:trigger).
 //
-// postOnWorkflow 派发 POST /api/v1/workflows/{id}:<action>。:revert 走 Plan
-// 04;:trigger 走 Plan 05(委派 FlowRunHandler;triggerService 依赖留 flowrun)。
+// postOnWorkflow 派发 :revert / :trigger;后者委派 FlowRunHandler。
 func (h *WorkflowHandler) postOnWorkflow(w http.ResponseWriter, r *http.Request) {
 	id, action, ok := idAndAction(r, "idAction")
 	if !ok {
@@ -211,10 +167,9 @@ func (h *WorkflowHandler) postOnWorkflow(w http.ResponseWriter, r *http.Request)
 	}
 }
 
-// GetTriggers returns per-trigger State for a workflow (§6.12). Delegates
-// to attached FlowRunHandler; falls back to empty list if not wired.
+// GetTriggers returns per-trigger State; empty list when flowrun unwired.
 //
-// GetTriggers 返某 workflow 所有 trigger 状态(§6.12);委派 FlowRunHandler。
+// GetTriggers 返每个 trigger 状态;未接 flowrun 返空列表。
 func (h *WorkflowHandler) GetTriggers(w http.ResponseWriter, r *http.Request) {
 	if h.flowrun == nil {
 		responsehttpapi.Success(w, http.StatusOK, []any{})
@@ -239,8 +194,6 @@ func (h *WorkflowHandler) Revert(w http.ResponseWriter, r *http.Request, id stri
 	responsehttpapi.Success(w, http.StatusOK, v)
 }
 
-// ── Versions ──────────────────────────────────────────────────────────────────
-
 func (h *WorkflowHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 	p, err := paginationpkg.Parse(r)
 	if err != nil {
@@ -259,10 +212,9 @@ func (h *WorkflowHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Paged(w, rows, next, next != "")
 }
 
-// GetVersion accepts either an integer version number or a wfv_xxx version
-// ID, mirroring function / handler behaviour.
+// GetVersion accepts an integer version number or a wfv_xxx version ID.
 //
-// GetVersion 兼容数字版本号或 wfv_xxx 版本 ID(同 function / handler)。
+// GetVersion 兼容数字版本号或 wfv_xxx 版本 ID。
 func (h *WorkflowHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	versionStr := r.PathValue("version")
 	versionN, err := strconv.Atoi(versionStr)
@@ -282,8 +234,6 @@ func (h *WorkflowHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	responsehttpapi.Success(w, http.StatusOK, v)
 }
-
-// ── Pending ───────────────────────────────────────────────────────────────────
 
 func (h *WorkflowHandler) GetPending(w http.ResponseWriter, r *http.Request) {
 	v, err := h.svc.GetPending(r.Context(), r.PathValue("id"))

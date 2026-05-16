@@ -1,6 +1,3 @@
-// search_executions.go — search_mcp_calls system tool (D22).
-// Queries mcp_calls for MCP-tool-call diagnostics.
-
 package mcp
 
 import (

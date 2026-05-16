@@ -1,23 +1,3 @@
-// run.go — Service.RunFunction + syncEnvSync helper.
-//
-// Per D-redo-9 (forge_redesign 2026-05-12) there is no async env sync path —
-// env materialization happens synchronously inside Service.Create / Edit (and
-// in-flight here in RunFunction when an evicted version is invoked). The
-// prior SyncEnvForVersion fire-and-forget goroutine + Service.Resync entry
-// have been removed; rebuild-env is now done via Edit with empty ops.
-//
-// RunFunction is the synchronous "execute version X with inputs Y" entry
-// called by the run_function LLM tool and HTTP :run endpoint. It ensures the
-// env is ready (in-flight sync if the version's env was evicted between
-// accept and run) then delegates to Sandbox.Run. Every call writes one
-// terminal Execution row (D22).
-//
-// EnvStatus state machine: pending → syncing → ready / failed.
-// `evicted` is set by Sandbox GC (not here); in-flight sync re-builds it.
-//
-// run.go —— Service.RunFunction + syncEnvSync。env sync 同步发生(D-redo-9),
-// 无后台 goroutine。RunFunction 调时若版本 env 被 evict,这里 in-flight 重建。
-
 package function
 
 import (
@@ -34,29 +14,19 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// RunInput is the request shape for Service.RunFunction. Cancellation is
-// caller-driven only — HTTP client disconnect / LLM tool ctx cancel both
-// propagate through r.Context() to kill the sandbox process tree. No
-// per-call timeout knob (forge_redesign decision 2026-05-12).
+// RunInput is the request shape for Service.RunFunction.
 //
-// RunInput 是 Service.RunFunction 的请求形状。取消只走 caller ctx(HTTP
-// 断连 / LLM 工具 ctx cancel 一路传到 sandbox),无 per-call timeout。
+// RunInput 是 Service.RunFunction 的请求形状。
 type RunInput struct {
 	FunctionID  string
-	VersionID   string         // optional;empty = use Function.ActiveVersionID
-	Input       map[string]any // kwargs passed to the user's def
-	TriggeredBy string         // chat / workflow / http / test;default "http"
+	VersionID   string
+	Input       map[string]any
+	TriggeredBy string
 }
 
-// RunFunction synchronously executes a function. Ensures env is ready first
-// (kicks off a synchronous Sync if EnvStatus != ready), then delegates to
-// Sandbox.Run. Always writes one terminal Execution row (D22) to
-// function_executions; record write uses detached ctx (§S9) so caller cancel
-// doesn't lose the log.
+// RunFunction synchronously executes a function, ensuring env is ready and writing one Execution row.
 //
-// RunFunction 同步执行 function。先确保 env ready,再委托 Sandbox.Run。
-// 终态(成功/失败/timeout/cancel)写一行 Execution 到 function_executions
-// (D22),用 detached ctx(§S9)防 cancel 丢日志。
+// RunFunction 同步执行 function，先确保 env ready，并写一行 Execution。
 func (s *Service) RunFunction(ctx context.Context, in RunInput) (*functiondomain.ExecutionResult, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -89,19 +59,12 @@ func (s *Service) RunFunction(ctx context.Context, in RunInput) (*functiondomain
 		VersionID:  versionID,
 		EnvID:      v.EnvID,
 		Code:       v.Code,
-		// EntryFunction left empty — SandboxAdapter.Run extracts `def name`
-		// from the code; the function's user-facing Name (kebab-case allowed)
-		// doesn't have to equal the Python identifier.
-		Input: in.Input,
+		Input:      in.Input,
 	}
 	startedAt := time.Now().UTC()
 	res, sandboxErr := s.sandbox.Run(ctx, runRequest)
-	// #15 lazy rebuild: if env was destroyed externally (admin :destroy or
-	// disk wipe), v.EnvStatus is still "ready" in DB but Spawn finds no row.
-	// Rebuild from stored spec and retry once. Repeat NOT_FOUND after rebuild
-	// is a real bug — let it surface so we don't loop forever.
-	// #15 lazy rebuild: 外部销毁(admin :destroy / 磁盘清)后 v.EnvStatus
-	// 仍记 ready,Spawn 找不到行;按存档 spec 重建并重试一次。
+	// Lazy rebuild if env was destroyed externally; retry once.
+	// 外部销毁导致 env 找不到时按存档重建并重试一次。
 	if sandboxErr != nil && errors.Is(sandboxErr, sandboxdomain.ErrEnvNotFound) {
 		s.log.Info("function env evicted externally; rebuilding then retrying run",
 			zap.String("functionId", in.FunctionID),
@@ -123,13 +86,6 @@ func (s *Service) RunFunction(ctx context.Context, in RunInput) (*functiondomain
 	return res, nil
 }
 
-// recordExecution writes one terminal Execution row capturing the outcome.
-// Best-effort: errors are logged but do not bubble to the caller (a failed
-// log row shouldn't surface as a function failure). Uses detached ctx so
-// caller cancel doesn't lose the write.
-//
-// recordExecution 写一行 Execution(详 D22)。best-effort——写失败仅 log;
-// 用 detached ctx 防 cancel 丢日志。
 func (s *Service) recordExecution(
 	ctx context.Context,
 	uid string,
@@ -197,15 +153,9 @@ func (s *Service) recordExecution(
 	}
 }
 
-// syncEnvSync runs the venv materialization synchronously, writes terminal
-// EnvStatus to DB, mutates v in place so the caller sees the latest state
-// without re-reading. Env terminal state is surfaced via the returned
-// v.EnvStatus / v.EnvError + the LLM tool's tool_result (D-redo-7 removed
-// env_synced / env_failed notification actions — UI fetches via GET).
+// syncEnvSync materializes the venv synchronously and writes terminal EnvStatus to DB + v in place.
 //
-// syncEnvSync 同步物化 venv,终态写 DB + 镜像到 v(调用方不必 re-read);
-// 终态信息走 v.EnvStatus/EnvError + LLM tool_result(D-redo-7 删 env_synced/
-// env_failed 通知,UI 经 GET 拉)。
+// syncEnvSync 同步物化 venv，终态写 DB 并镜像到 v。
 func (s *Service) syncEnvSync(ctx context.Context, v *functiondomain.Version) error {
 	now := time.Now().UTC()
 	_ = s.repo.UpdateVersionEnv(ctx, v.ID,
@@ -238,12 +188,6 @@ func (s *Service) syncEnvSync(ctx context.Context, v *functiondomain.Version) er
 		v.EnvSyncStage = "failed"
 		v.EnvSyncDetail = ""
 		v.EnvSyncedAt = &now
-		// env_failed / env_synced notifications were removed in C3 (D-redo-7);
-		// the env terminal state is carried by the LLM tool_result and the
-		// UI fetches via GET /functions/{id}. Keeping notification action
-		// surface lean (D-redo-6 slim payload model).
-		// env_failed / env_synced 通知在 C3 删除(D-redo-7);终态走 LLM
-		// tool_result + UI GET 拉取。
 		return fmt.Errorf("sandbox.Sync: %w", err)
 	}
 

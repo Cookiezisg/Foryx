@@ -1,11 +1,8 @@
 //go:build pipeline
 
-// model_test.go — end-to-end tests for /api/v1/model-configs/*.
-// Covers the 2 endpoints (GET list + PUT upsert) including idempotency and
-// validation. All tests run offline (no external network).
+// Package model runs end-to-end tests for /api/v1/model-configs/*.
 //
-// model_test.go — /api/v1/model-configs/* 2 个端点的端到端测试。
-// 覆盖幂等性和校验，全部离线运行。
+// Package model 跑 /api/v1/model-configs/* 端到端测试。
 package model
 
 import (
@@ -15,10 +12,9 @@ import (
 	th "github.com/sunweilin/forgify/backend/test/harness"
 )
 
-// putModelConfig is a shorthand: PUT /api/v1/model-configs/{scenario}.
-// Returns (status, decoded data struct).
+// putModelConfig is shorthand for PUT /api/v1/model-configs/{scenario}.
 //
-// putModelConfig 简写：PUT /api/v1/model-configs/{scenario}。
+// putModelConfig 是 PUT /api/v1/model-configs/{scenario} 的简写。
 func putModelConfig(t *testing.T, h *th.Harness, scenario, provider, modelID string, out any) int {
 	t.Helper()
 	return th.DoRequest(t, h, "PUT", "/api/v1/model-configs/"+scenario, map[string]any{
@@ -26,8 +22,6 @@ func putModelConfig(t *testing.T, h *th.Harness, scenario, provider, modelID str
 		"modelId":  modelID,
 	}, out)
 }
-
-// ── 1. Upsert + List round-trip ──────────────────────────────────────────────
 
 func TestModel_UpsertAndList_Roundtrip(t *testing.T) {
 	h := th.New(t)
@@ -72,8 +66,6 @@ func TestModel_UpsertAndList_Roundtrip(t *testing.T) {
 	}
 }
 
-// ── 2. Upsert is idempotent — ID stable across calls ────────────────────────
-
 func TestModel_Upsert_Idempotent_IDUnchanged(t *testing.T) {
 	h := th.New(t)
 
@@ -87,20 +79,14 @@ func TestModel_Upsert_Idempotent_IDUnchanged(t *testing.T) {
 	second := struct {
 		Data struct{ ID string `json:"id"` } `json:"data"`
 	}{}
-	// Second PUT changes the model but same scenario → same row, same ID.
-	// 第二次 PUT 换 modelId 但 scenario 不变 → 同行，ID 不变。
 	if s := putModelConfig(t, h, "chat", "deepseek", "deepseek-reasoner", &second); s != http.StatusOK {
 		t.Fatalf("second PUT status=%d", s)
 	}
 
-	// N6: PUT upsert always returns 200; ID must be stable.
-	// N6：PUT upsert 总返 200；ID 跨调用必须稳定。
 	if first.Data.ID != second.Data.ID {
 		t.Errorf("ID changed: %q → %q", first.Data.ID, second.Data.ID)
 	}
 }
-
-// ── 3. Invalid scenario → 400 INVALID_SCENARIO ───────────────────────────────
 
 func TestModel_Upsert_InvalidScenario_Returns400(t *testing.T) {
 	h := th.New(t)
@@ -112,8 +98,6 @@ func TestModel_Upsert_InvalidScenario_Returns400(t *testing.T) {
 		t.Errorf("error.code=%q, want INVALID_SCENARIO", errResp.Error.Code)
 	}
 }
-
-// ── 4. Missing provider → 400 PROVIDER_REQUIRED ──────────────────────────────
 
 func TestModel_Upsert_MissingProvider_Returns400(t *testing.T) {
 	h := th.New(t)

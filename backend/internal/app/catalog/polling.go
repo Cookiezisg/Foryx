@@ -1,13 +1,3 @@
-// polling.go — Service.Start, Stop, pollLoop, tryRefresh, Refresh,
-// fingerprint helper, and the source-failure isolation policy. The
-// runtime heart of the catalog: cold-start cache load → polling
-// goroutine → fingerprint short-circuit → Generator (or mechanical
-// fallback on Generator absence/failure) → atomic cache swap.
-//
-// polling.go ——Service.Start / Stop / pollLoop / tryRefresh / Refresh +
-// fingerprint helper + source 失败隔离策略。catalog 运行时心脏：cold-
-// start 加载 cache → polling goroutine → fingerprint 短路 → Generator
-// （nil/失败 → mechanical fallback）→ 原子 swap cache。
 package catalog
 
 import (
@@ -24,23 +14,9 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// Start loads ~/.forgify/.catalog.json (cold-start optimization — chat
-// runner gets a usable cache instantly even before the first tick) and
-// launches the polling goroutine. Blocks only briefly for the disk
-// load; polling runs in the background until ctx cancels.
+// Start loads the disk cache then launches the polling goroutine.
 //
-// Per catalog.md §6 / §3:
-//   - parse fail → move to .bak + start with empty cache (don't crash)
-//   - missing file → benign (first launch)
-//   - polling tick = pollInterval (default 1s)
-//   - first tick fires immediately after Start (don't wait full second)
-//
-// Start 加载 ~/.forgify/.catalog.json（cold-start 优化——chat runner 在第
-// 一 tick 前即得可用 cache）+ 启 polling goroutine。disk 加载短暂阻塞；
-// polling 后台跑直到 ctx cancel。
-//
-// catalog.md §6 / §3：parse fail → .bak + 空启动；缺文件 → 良性（首次启
-// 动）；tick = pollInterval（默认 1s）；首 tick 立即跑，不等满 1s。
+// Start 加载磁盘 cache 后启动 polling goroutine。
 func (s *Service) Start(ctx context.Context) error {
 	cached, err := loadFromDisk(s.cachePath)
 	switch {
@@ -57,21 +33,11 @@ func (s *Service) Start(ctx context.Context) error {
 	case err != nil:
 		s.log.Warn("catalog cache load failed; starting with empty cache",
 			zap.String("path", s.cachePath), zap.Error(err))
-		// loadFromDisk has already moved corrupted file to .bak.
-		// loadFromDisk 已把损坏文件移 .bak。
 		s.lastFP.Store("")
 	default:
-		// File doesn't exist — first launch. Empty cache is correct.
-		// 文件不存在——首次启动。空 cache 正确。
 		s.lastFP.Store("")
 	}
 
-	// Wrap caller's ctx so Stop() can cancel even when caller passed
-	// context.Background. pollDone closes when the goroutine fully
-	// exits — Stop() blocks on it.
-	//
-	// 包装调用方 ctx 让 Stop() 在 caller 传 context.Background 时也能
-	// cancel。pollDone 在 goroutine 完全退后关闭——Stop() 阻塞其上。
 	pollCtx, pollCancel := context.WithCancel(ctx)
 	s.stopCancel = pollCancel
 	s.pollDone = make(chan struct{})
@@ -82,15 +48,9 @@ func (s *Service) Start(ctx context.Context) error {
 	return nil
 }
 
-// Stop signals the polling goroutine to exit and blocks until it has
-// fully drained (no in-flight tick still writing disk). Idempotent —
-// safe to call multiple times. Test harnesses must call Stop in a
-// t.Cleanup so the tempdir RemoveAll doesn't race with a final
-// Refresh's saveToDisk.
+// Stop cancels the polling goroutine and blocks until it drains; idempotent.
 //
-// Stop 给 polling goroutine 发退出信号 + 阻塞到完全 drain（无在飞 tick
-// 还在写 disk）。幂等——多次调用安全。测试 harness 必须在 t.Cleanup
-// 调 Stop，让 tempdir RemoveAll 不与最后一次 Refresh 的 saveToDisk 竞态。
+// Stop 取消 polling goroutine 并阻塞到完全 drain，幂等。
 func (s *Service) Stop() {
 	s.stopOnce.Do(func() {
 		if s.stopCancel != nil {
@@ -102,12 +62,6 @@ func (s *Service) Stop() {
 	})
 }
 
-// pollLoop runs Service.tryRefresh every pollInterval until ctx.Done.
-// Fires once immediately at startup so cold-start doesn't wait a full
-// pollInterval before producing the first catalog.
-//
-// pollLoop 每 pollInterval 跑一次 tryRefresh 直到 ctx.Done。启动时立即
-// 跑一次让 cold-start 无需等满 pollInterval 才出第一份 catalog。
 func (s *Service) pollLoop(ctx context.Context) {
 	s.tryRefresh(ctx)
 
@@ -123,12 +77,6 @@ func (s *Service) pollLoop(ctx context.Context) {
 	}
 }
 
-// tryRefresh wraps Refresh with the single-flight busy guard. If a
-// prior tick is still running (>1s LLM call) the next tick simply
-// skips — no queueing, no concurrent regen.
-//
-// tryRefresh 用 single-flight busy guard 包 Refresh。上次 tick 还在跑
-// （>1s LLM 调用）时下一 tick 直接跳——不排队、不并发 regen。
 func (s *Service) tryRefresh(ctx context.Context) {
 	if !s.busy.CompareAndSwap(false, true) {
 		return
@@ -141,42 +89,10 @@ func (s *Service) tryRefresh(ctx context.Context) {
 	}
 }
 
-// Refresh is the regen entry point. Used by both the polling loop and
-// the HTTP POST /catalog:refresh handler. Per catalog.md §6:
+// Refresh is the regen entry point used by both the polling loop and HTTP refresh.
 //
-//  1. Snapshot sources, walk each ListItems (failed sources substituted
-//     with empty list, others continue)
-//  2. If ALL sources failed → return without touching cache (preserves
-//     previous good catalog)
-//  3. Compute fingerprint, short-circuit if unchanged (~99% of ticks)
-//  4. Call Generator (LLM); on nil generator OR error → mechanical
-//     fallback
-//  5. Stamp Fingerprint / GeneratedAt / Version / SourcesAt and atomic-
-//     swap cache; persist to disk
-//  6. lastFP ALWAYS updates regardless of llm-vs-mechanical — user-
-//     activity-driven retry per §3 (user changes a source description
-//     → fp changes → next tick gets a fresh LLM attempt)
-//
-// Refresh 是 regen 入口。polling loop 与 HTTP POST /catalog:refresh
-// handler 都用。catalog.md §6：(1) 快照 sources 走 ListItems（失败用空替，
-// 其他续）(2) 全 source 挂 → 不动 cache 返（保留上次好 catalog）(3) 算
-// fingerprint，未变短路（~99% tick）(4) 调 Generator；nil 或失败 → 机械
-// fallback (5) 戳 Fingerprint / GeneratedAt / Version / SourcesAt + 原子
-// swap cache + 持久化 disk (6) lastFP 总更新无论 llm 还是 mechanical
-// ——用户活动驱动重试 §3。
+// Refresh 是重新生成的入口，polling 和 HTTP :refresh 共用。
 func (s *Service) Refresh(ctx context.Context) error {
-	// Catalog runs in a background goroutine so the ctx never has the
-	// HTTP middleware-stamped user ID. Single-user app: inject the
-	// local user ID once here so every downstream call (source
-	// ListItems → repo queries; LLM Generator → llmclient.Resolve →
-	// model picker) sees a usable identity. Bypass when the caller
-	// already set one (HTTP :refresh path comes through middleware).
-	//
-	// catalog 在后台 goroutine 跑，ctx 永无 HTTP middleware 注的 user
-	// ID。单人 app：本处一次性注入本地 user ID 让所有下游调用（source
-	// ListItems → repo 查询；LLM Generator → llmclient.Resolve → 模型
-	// picker）见到可用身份。调用方已设时跳过（HTTP :refresh 路径走
-	// middleware）。
 	if _, ok := reqctxpkg.GetUserID(ctx); !ok {
 		ctx = reqctxpkg.SetUserID(ctx, reqctxpkg.DefaultLocalUserID)
 	}
@@ -204,11 +120,6 @@ func (s *Service) Refresh(ctx context.Context) error {
 		gMap[src.Name()] = src.Granularity()
 	}
 
-	// All sources failed → keep the previous cache. Per §3 design:
-	// don't overwrite a good catalog with an empty one just because a
-	// transient hiccup hit every source at once.
-	// 全 source 挂 → 保留上次 cache。§3：不让瞬时全挂用空 catalog 覆盖
-	// 之前好的。
 	if failedCount == len(sources) {
 		return fmt.Errorf("catalogapp.Refresh: all %d sources failed; keeping previous cache: %w",
 			len(sources), catalogdomain.ErrAllSourcesFailed)
@@ -216,8 +127,6 @@ func (s *Service) Refresh(ctx context.Context) error {
 
 	fp := fingerprint(items)
 	if last, _ := s.lastFP.Load().(string); last == fp {
-		// ~99% of ticks land here.
-		// ~99% tick 走这里。
 		return nil
 	}
 
@@ -231,11 +140,6 @@ func (s *Service) Refresh(ctx context.Context) error {
 			cat = mechanicalFallback(items, gMap)
 		}
 	} else {
-		// No generator wired — D8-2 default; D8-3 plugs the LLM
-		// generator. Still produces a valid catalog so chat.runner gets
-		// per-source enumeration in the system prompt.
-		// 未接 generator——D8-2 默认；D8-3 接 LLM generator。仍出有效
-		// catalog 让 chat.runner 在 system prompt 拿到 per-source 枚举。
 		cat = mechanicalFallback(items, gMap)
 	}
 
@@ -259,14 +163,9 @@ func (s *Service) Refresh(ctx context.Context) error {
 	return nil
 }
 
-// fingerprint hashes the (source + name + description) triplet for
-// every item, sorted for determinism. Per catalog.md §6: only fields
-// that affect the Summary text are hashed — user changes to forge code,
-// tags, etc. don't trigger a regen, only name/description changes do.
+// fingerprint hashes (source + name + description) for each item, sorted.
 //
-// fingerprint 哈希每个 item 的 (source + name + description) 三元组，
-// 排序求确定性。§6：仅影响 Summary 文本的字段进哈希——用户改 forge code
-// / tags 等不触发 regen，只 name/description 改触发。
+// fingerprint 对每个 item 的 (source + name + description) 排序后哈希。
 func fingerprint(items []catalogdomain.Item) string {
 	sorted := make([]catalogdomain.Item, len(items))
 	copy(sorted, items)

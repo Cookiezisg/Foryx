@@ -1,9 +1,3 @@
-// calls.go — Service wrappers around the call-log repo (D22). LLM tools
-// (search_handler_calls / get_handler_call) and HTTP /handlers/{id}/calls
-// go through these.
-//
-// calls.go —— Service 包 call-log repo(D22);LLM tools + HTTP 经此。
-
 package handler
 
 import (
@@ -16,7 +10,7 @@ import (
 
 // SearchCallsResult is the response shape for SearchCalls.
 //
-// SearchCallsResult SearchCalls 的响应形状。
+// SearchCallsResult 是 SearchCalls 的响应形状。
 type SearchCallsResult struct {
 	Count      int                            `json:"count"`
 	Calls      []*handlerdomain.Call          `json:"calls"`
@@ -27,7 +21,7 @@ type SearchCallsResult struct {
 
 // CallDetail wraps a Call with machine-derived hints.
 //
-// CallDetail Call + machine hints。
+// CallDetail 把 Call 与机器计算的 hints 一起返回。
 type CallDetail struct {
 	*handlerdomain.Call
 	Hints CallHints `json:"hints"`
@@ -35,7 +29,7 @@ type CallDetail struct {
 
 // CallHints flags non-obvious signals.
 //
-// CallHints 标记非显然信号。
+// CallHints 标记非显然的信号。
 type CallHints struct {
 	OutputEmpty         bool `json:"outputEmpty"`
 	SignificantlySlower bool `json:"significantlySlower"`
@@ -43,7 +37,7 @@ type CallHints struct {
 
 // SearchCalls runs a paginated call-log query with aggregates.
 //
-// SearchCalls 跑分页 call-log 查询 + 聚合。
+// SearchCalls 跑分页 call-log 查询并附聚合。
 func (s *Service) SearchCalls(ctx context.Context, filter handlerdomain.CallFilter) (*SearchCallsResult, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("handlerapp.SearchCalls: %w", err)
@@ -65,9 +59,9 @@ func (s *Service) SearchCalls(ctx context.Context, filter handlerdomain.CallFilt
 	}, nil
 }
 
-// GetCallDetail returns one call row + hints.
+// GetCallDetail returns one call row with computed hints.
 //
-// GetCallDetail 返单 call 行 + hints。
+// GetCallDetail 返单 call 行加计算 hints。
 func (s *Service) GetCallDetail(ctx context.Context, id string) (*CallDetail, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("handlerapp.GetCallDetail: %w", err)
@@ -80,9 +74,6 @@ func (s *Service) GetCallDetail(ctx context.Context, id string) (*CallDetail, er
 	return &CallDetail{Call: row, Hints: hints}, nil
 }
 
-// buildCallHints computes the cheap hint flags (same shape as function).
-//
-// buildCallHints 算便宜 hint(跟 function 同形)。
 func buildCallHints(ctx context.Context, s *Service, c *handlerdomain.Call) CallHints {
 	h := CallHints{}
 	switch v := c.Output.(type) {

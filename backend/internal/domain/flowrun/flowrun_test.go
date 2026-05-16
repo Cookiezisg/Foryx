@@ -1,8 +1,3 @@
-// flowrun_test.go — domain-level invariant tests. No DB / no goroutines —
-// just shape + constant consistency + struct round-trip.
-//
-// flowrun_test.go —— domain 层 invariant 测试(无 DB / 无 goroutine)。
-
 package flowrun
 
 import (
@@ -66,7 +61,6 @@ func TestSentinels_DistinctMessages(t *testing.T) {
 }
 
 func TestSentinels_ErrorsIsRoundTrip(t *testing.T) {
-	// Round-trip discipline (§S16): wrap sentinels and confirm errors.Is.
 	wrapped := errors.Join(ErrApprovalNodeNotFound, errors.New("ctx: bogus"))
 	if !errors.Is(wrapped, ErrApprovalNodeNotFound) {
 		t.Errorf("errors.Is fails through errors.Join")

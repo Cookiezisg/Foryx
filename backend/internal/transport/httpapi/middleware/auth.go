@@ -6,12 +6,9 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// InjectUserID is the Phase 2 simplified auth middleware: stamps
-// DefaultLocalUserID into ctx. Will be rewritten to parse real auth
-// credentials (JWT / session) later.
+// InjectUserID stamps DefaultLocalUserID into ctx (simplified single-user auth).
 //
-// InjectUserID 是 Phase 2 的简化 auth 中间件：把 DefaultLocalUserID
-// 塞入 ctx。未来重写为解析真实凭证（JWT / session）。
+// InjectUserID 给 ctx 塞 DefaultLocalUserID(简化单用户 auth)。
 func InjectUserID(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx := reqctxpkg.SetUserID(r.Context(), reqctxpkg.DefaultLocalUserID)

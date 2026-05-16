@@ -117,6 +117,14 @@ handler.SendMessage
 
 **实际落地**:forge_redesign Plan 04(authoring) + Plan 05(execution plane)+ Plan 06(收尾)共 31 commits;详 [`adhoc-topic-documents/forge_redesign/README.md`](./adhoc-topic-documents/forge_redesign/README.md)。**焦点实体延伸**:workflow 节点编辑时推 `workflow` entity 通知 + flowrun 状态变更推 `flowrun` entity 通知(slim payload D-redo-6,UI 经 GET 拉详情)。
 
+### V1.2 final-sweep — 跨对话能力 ✅(已交付,2026-05-16)
+两块"对话长记忆"基础设施一并落地:
+
+- **§1 compaction**(`app/contextmgr.Manager`):对话超阈值时自动压缩。3 路径——< Soft(0.70) 跳过 / Soft 降级老 tool_result 到 `warm`/`cold` / Hard(0.85) 调便宜 LLM 生成 anchored-merge 摘要并 archive。schema:`conversations` 加 `summary` + `summary_covers_up_to_seq` 两列;`message_blocks` 加 `context_role` 一列 + 新 block type `compaction`(eventlog 协议 6→7);`pkg/modelmeta` + `pkg/tokencount` 给估算 + 校准。投影:`loop/history.BlocksToAssistantLLM` 按 role 渲染(archived 丢 / warm 200B preview / cold 元数据占位 / hot 全文);`chat.buildHistory` 前置 `<conversation_summary>` wrapper。
+- **§2 memory**(`app/memory.Service`):跨对话长期事实库,4 类(user / feedback / project / reference)× 2 source(user / ai);pinned memory 全文进每个 system prompt,非 pinned 只入索引段。3 system tools(`read_memory` / `write_memory` / `forget_memory`)给 LLM 自管;7 HTTP endpoints + testend `/config/memory` 面板给用户管。LLM 不见 `pinned` 字段——pinning 是用户控件(系统提示词预算只用户能控)。
+
+详见 [`service-design-documents/compaction.md`](./service-design-documents/compaction.md) + [`service-design-documents/memory.md`](./service-design-documents/memory.md);7 pipeline tests(4 memory + 3 compaction)全绿。
+
 ### Phase 5 — 智能化
 `knowledge` + `document`（本地 sqlite-vec）+ `intent`（自实现 ReAct Agent，基于 `infra/llm`）+ `skill`（V1 浅版：打标签的工具）+ `chat` 终极版（意图识别 → 工作流推荐 → 自动建草稿）。**注**：mcp 已提前在 V1.2 D5+D6 交付（Phase 4 准备件，官方 `modelcontextprotocol/go-sdk` v1.6），Phase 5 不再单独列。
 

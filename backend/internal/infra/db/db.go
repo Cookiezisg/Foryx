@@ -1,15 +1,6 @@
-// Package db is the generic relational-database gateway: connection setup,
-// schema application (Migrate), and escape-hatch SQL for features
-// AutoMigrate can't express (FTS5, triggers, complex CHECKs).
+// Package db is the generic SQLite gateway: connection, migration, and escape-hatch SQL.
 //
-// This package is domain-agnostic. Table-specific repositories live
-// under internal/infra/store/<domain>/ and consume *gorm.DB from here.
-//
-// Package db 是通用的关系数据库网关：连接建立、schema 应用（Migrate）、
-// 以及 AutoMigrate 表达不了的 SQL（FTS5、触发器、复杂 CHECK）。
-//
-// 本包与 domain 无关。表相关的 Repository 位于 internal/infra/store/<domain>/，
-// 从本包消费 *gorm.DB。
+// Package db 是通用 SQLite 网关：连接、迁移与 AutoMigrate 兜不住的 SQL。
 package db
 
 import (
@@ -22,26 +13,17 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 )
 
-// Config controls how the database is opened. Zero values are test-safe
-// defaults (in-memory, quiet logger).
+// Config opens the DB; zero value = in-memory + quiet logger (test default).
 //
-// Config 控制数据库的打开方式。零值为测试安全默认（内存 DB、静音 logger）。
+// Config 打开 DB 的配置；零值为内存 DB + 静音 logger（测试默认）。
 type Config struct {
-	// DataDir holds forgify.db. Empty = in-memory (for tests).
-	//
-	// DataDir 存放 forgify.db。空 = 内存数据库（测试用）。
-	DataDir string
-
-	// LogLevel controls GORM's internal SQL logger.
-	//
-	// LogLevel 控制 GORM 内部 SQL 日志。
+	DataDir  string
 	LogLevel gormlogger.LogLevel
 }
 
-// Open establishes a SQLite connection with WAL, FK, and prepared
-// statement caching all enabled.
+// Open returns a SQLite *gorm.DB with WAL, foreign_keys and prepared-stmt caching enabled.
 //
-// Open 打开 SQLite 连接，启用 WAL、FK、prepared statement 缓存。
+// Open 返回启用 WAL、FK、prepared-stmt 缓存的 SQLite *gorm.DB。
 func Open(cfg Config) (*gorm.DB, error) {
 	dsn, err := buildDSN(cfg.DataDir)
 	if err != nil {
@@ -54,8 +36,6 @@ func Open(cfg Config) (*gorm.DB, error) {
 	}
 
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
-		// UTC at rest; convert at the transport boundary.
-		// 存 UTC，传输边界再转换。
 		NowFunc:     func() time.Time { return time.Now().UTC() },
 		Logger:      gormlogger.Default.LogMode(logLevel),
 		PrepareStmt: true,
@@ -64,15 +44,8 @@ func Open(cfg Config) (*gorm.DB, error) {
 		return nil, fmt.Errorf("gorm open: %w", err)
 	}
 
-	// In-memory DSN (":memory:") creates a *fresh* database per Go SQL
-	// connection — concurrent goroutines that grab different pool slots
-	// will each see an empty schema. Pin to one connection so the whole
-	// process shares state. File-backed DSNs are unaffected (the file is
-	// the shared state); keep their pool default for parallelism.
-	//
-	// :memory: DSN 每条 Go sql conn 一个独立 DB — 并发 goroutine 拿不同 slot
-	// 就各看一个空 schema。锁 1 连接让全进程共享状态。文件 DSN 不受影响
-	// (文件本身共享状态),保留默认池。
+	// :memory: gives each sql conn its own empty DB — pin pool to 1 for shared state.
+	// :memory: DSN 每条 sql conn 独立 DB，所以锁 1 连接共享状态；文件 DSN 不需要。
 	if cfg.DataDir == "" {
 		sqlDB, err := db.DB()
 		if err != nil {
@@ -90,9 +63,9 @@ func Open(cfg Config) (*gorm.DB, error) {
 	return db, nil
 }
 
-// Close releases the connection pool. Safe on nil.
+// Close releases the connection pool; nil-safe.
 //
-// Close 释放连接池。对 nil 调用安全。
+// Close 释放连接池；对 nil 安全。
 func Close(db *gorm.DB) error {
 	if db == nil {
 		return nil
@@ -119,10 +92,6 @@ func buildDSN(dataDir string) (string, error) {
 	return fmt.Sprintf("file:%s/forgify.db?%s", dataDir, params), nil
 }
 
-// verifyPragmas double-checks critical PRAGMAs took effect. Belt-and-suspenders
-// for safety-critical settings like foreign_keys.
-//
-// verifyPragmas 二次确认关键 PRAGMA 生效。对 foreign_keys 这类安全关键项做双保险。
 func verifyPragmas(db *gorm.DB) error {
 	var fk int
 	if err := db.Raw("PRAGMA foreign_keys").Scan(&fk).Error; err != nil {

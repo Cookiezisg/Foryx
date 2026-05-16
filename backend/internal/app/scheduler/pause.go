@@ -1,15 +1,3 @@
-// pause.go — approval-node pause path. When ApprovalDispatcher returns
-// ErrApprovalRequired, executeRun catches it, persists ExecutionContext
-// as PausedState JSON, flips run.status=paused, releases the goroutine.
-// HTTP `POST /flowruns/{runId}/approvals/{nodeId}` later triggers
-// Service.ResumeApproval which rehydrates + continues execution.
-//
-// Plan 05 §3.5 (approval flow) + §6.1 (rehydrate at boot).
-//
-// pause.go —— approval 节点暂停路径。ApprovalDispatcher 返
-// ErrApprovalRequired 时 executeRun 抓住 → 持久化 ExecutionContext 到
-// PausedState JSON → 翻 status=paused → 释 goroutine。
-
 package scheduler
 
 import (
@@ -25,13 +13,9 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// pauseRun persists the ExecutionContext as PausedState + flips status.
-// Called by executeRun when an approval node returns ErrApprovalRequired.
-// The current ready set + pausing-node ID survive the restart so resume
-// can pick up from exactly where we left off.
+// pauseRun persists ExecutionContext as PausedState and flips status=paused.
 //
-// pauseRun 持久化 ExecutionContext 到 PausedState + 翻 status=paused;
-// executeRun 在 approval 返 ErrApprovalRequired 时调。
+// pauseRun 把 ExecutionContext 持久化为 PausedState 并把 status 翻为 paused。
 func (s *Service) pauseRun(ctx context.Context, run *flowrundomain.FlowRun, execCtx *ExecutionContext, pausedNodeID string, position []string) error {
 	ps := &flowrundomain.PausedState{
 		NodeID:    pausedNodeID,
@@ -55,13 +39,9 @@ func (s *Service) pauseRun(ctx context.Context, run *flowrundomain.FlowRun, exec
 	return nil
 }
 
-// ResumeApproval rehydrates a paused FlowRun + continues execution with
-// the user's approval decision routing to the next downstream branch.
-// decision must be "approved" or "rejected" — anything else returns
-// ErrApprovalDecisionInvalid.
+// ResumeApproval rehydrates a paused FlowRun and continues execution with the user's decision.
 //
-// ResumeApproval rehydrate paused FlowRun + 继续执行;decision = approved/
-// rejected,其他返 ErrApprovalDecisionInvalid。
+// ResumeApproval 重建 paused FlowRun 并按用户决策继续执行。
 func (s *Service) ResumeApproval(ctx context.Context, runID, nodeID, decision string) error {
 	if decision != "approved" && decision != "rejected" {
 		return fmt.Errorf("schedulerapp.ResumeApproval: %w", flowrundomain.ErrApprovalDecisionInvalid)
@@ -139,13 +119,9 @@ func (s *Service) ResumeApproval(ctx context.Context, runID, nodeID, decision st
 	return nil
 }
 
-// continueRun rebuilds ExecutionContext from PausedState + drives the
-// remaining DAG. Treats the approval node as done with NextPort=decision
-// so downstream edges with `from: "approval.approved"` / `"approval.rejected"`
-// take the right branch.
+// continueRun rebuilds ExecutionContext from PausedState and drives the remaining DAG.
 //
-// continueRun 从 PausedState 重建 ExecutionContext + 推剩余 DAG;
-// approval 节点视为 done,NextPort=decision。
+// continueRun 从 PausedState 重建 ExecutionContext 并推剩余 DAG。
 func (s *Service) continueRun(ctx context.Context, run *flowrundomain.FlowRun, graph *workflowdomain.Graph, pausedNodeID, decision string) {
 	execCtx := &ExecutionContext{
 		Run:       run,
@@ -204,10 +180,9 @@ func (s *Service) continueRun(ctx context.Context, run *flowrundomain.FlowRun, g
 	s.driveLoop(ctx, run, graph, execCtx, topo, ready)
 }
 
-// driveLoop is the per-ready-set loop body. Extracted so executeRun +
-// continueRun can share it.
+// driveLoop is the per-ready-set loop body shared by executeRun and continueRun.
 //
-// driveLoop 是 per-ready-set 循环本体;executeRun + continueRun 共享。
+// driveLoop 是 executeRun 与 continueRun 共享的 per-ready-set 循环本体。
 func (s *Service) driveLoop(ctx context.Context, run *flowrundomain.FlowRun, graph *workflowdomain.Graph, execCtx *ExecutionContext, topo *topoState, ready []string) {
 	terminalStatus := flowrundomain.StatusCompleted
 	var terminalErr string
@@ -284,12 +259,9 @@ FINALIZE:
 	s.finalizeRun(ctx, run, terminalStatus, output, terminalErrCode, terminalErr)
 }
 
-// loadFrozenGraph fetches the specific Version graph the FlowRun is pinned
-// to. Goes via repo.GetVersion (workflow domain's port) so it stays
-// independent of "what's currently active" (a workflow may have accepted
-// a new active version mid-run).
+// loadFrozenGraph fetches the specific Version graph the FlowRun is pinned to.
 //
-// loadFrozenGraph 取 run 锁定的 Version 的冻结图;与"当前 active 版本"无关。
+// loadFrozenGraph 取 run 锁定的 Version 的冻结图。
 func (s *Service) loadFrozenGraph(ctx context.Context, run *flowrundomain.FlowRun) (*workflowdomain.Graph, error) {
 	// We need a generic "GetVersion(versionID)" port — workflowRead is a
 	// reader interface that doesn't expose this directly. For V1 we go

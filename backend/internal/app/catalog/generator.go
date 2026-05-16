@@ -1,29 +1,3 @@
-// generator.go — LLM-driven Summary builder. Implements the Generator
-// interface that Service.Refresh consults when source items change.
-//
-// Single-attempt design (post-2026-05-08 屎山拯救计划 #7): one LLM call,
-// parse + validate that the Summary is non-empty, return on success.
-// Any failure (transport / parse / empty summary / output overflow)
-// returns ErrGenerationFailed so Service.Refresh falls back to
-// mechanicalFallback. The previous "3-attempt retry + coverage
-// validation + missing-id hint augmentation" was over-engineered for
-// the actual failure modes (modern LLMs succeed first-try at this
-// task ~99%; transport-level failures don't recover via retry; the 1s
-// polling loop already provides natural retry on the next user activity).
-//
-// Output cap: ~10 KB defensive char limit (~2000 tokens). Past that →
-// treat as malformed and fall back to mechanical.
-//
-// generator.go ——LLM-driven Summary 构建。实现 Service.Refresh 在 source
-// items 变时查的 Generator 接口。
-//
-// 单次设计（2026-05-08 屎山拯救计划 #7 后）：调一次 LLM，解析 + 校验 Summary
-// 非空，成功就返。任何失败（传输 / 解析 / Summary 空 / 输出溢出）返
-// ErrGenerationFailed 让 Service.Refresh 退 mechanicalFallback。原 "3 次重试
-// + coverage 校验 + 漏 ID hint" 对实际失败模式过设计——现代 LLM 这种任务首试
-// ~99%；传输层失败重试无效；catalog 1s 轮询本身已是用户下次活动时的自然重试。
-//
-// 输出上限 ~10 KB（~2000 token）防御 cap。超之视畸形退 mechanical。
 package catalog
 
 import (
@@ -43,18 +17,11 @@ import (
 	llmparsepkg "github.com/sunweilin/forgify/backend/internal/pkg/llmparse"
 )
 
-// generatorOutputCharCap is the ~10 KB defensive cap. The LLM's
-// max_tokens=2000 yields ~8 KB at typical English; 10 KB gives headroom.
-// Past this we treat as malformed.
-//
-// generatorOutputCharCap：~10 KB 防御上限。LLM max_tokens=2000 典型英文 ~8 KB；
-// 10 KB 留余。超之视畸形。
 const generatorOutputCharCap = 10 * 1024
 
-// LLMGenerator is the production Generator. Constructed in main.go;
-// plugged into Service via SetGenerator post-construction.
+// LLMGenerator is the production Generator wired in main.go.
 //
-// LLMGenerator 是生产 Generator。main.go 构造；经 SetGenerator 后置注入。
+// LLMGenerator 是生产环境的 Generator，由 main.go 装配。
 type LLMGenerator struct {
 	picker  modeldomain.ModelPicker
 	keys    apikeydomain.KeyProvider
@@ -62,12 +29,9 @@ type LLMGenerator struct {
 	log     *zap.Logger
 }
 
-// NewLLMGenerator constructs an LLMGenerator. picker / keys / factory
-// are the same triplet used by mcp.Search + skill.Search + forge.search
-// — wired in main.go from existing services.
+// NewLLMGenerator constructs an LLMGenerator wired with picker/keys/factory.
 //
-// NewLLMGenerator 构造 LLMGenerator。picker / keys / factory 三元组同
-// mcp.Search + skill.Search + forge.search——main.go 接已有 service。
+// NewLLMGenerator 用 picker/keys/factory 构造 LLMGenerator。
 func NewLLMGenerator(picker modeldomain.ModelPicker, keys apikeydomain.KeyProvider, factory *llminfra.Factory, log *zap.Logger) *LLMGenerator {
 	if log == nil {
 		log = zap.NewNop()
@@ -80,18 +44,9 @@ func NewLLMGenerator(picker modeldomain.ModelPicker, keys apikeydomain.KeyProvid
 	}
 }
 
-// Generate makes one LLM call to produce the Summary. Any failure
-// (resolve / transport / parse / empty Summary / output overflow)
-// returns ErrGenerationFailed so Service.Refresh switches to
-// mechanicalFallback. Coverage from the LLM is passed through verbatim
-// without validation — historic 3-attempt retry + missing-id hint
-// augmentation removed per 屎山拯救计划 #7 (modern LLMs first-try this
-// task ~99% successfully; the 1s polling loop is the natural retry).
+// Generate makes one LLM call; any failure returns ErrGenerationFailed.
 //
-// Generate 调一次 LLM 生成 Summary。任何失败（resolve / 传输 / 解析 / Summary
-// 空 / 输出溢出）返 ErrGenerationFailed 让 Service.Refresh 切 mechanicalFallback。
-// LLM 返的 Coverage 原样透传不校验——历史的 3 次重试 + 漏 ID hint 按屎山拯救
-// 计划 #7 删（现代 LLM 这种任务首试 ~99%；catalog 1s 轮询是自然重试）。
+// Generate 调一次 LLM；任何失败返 ErrGenerationFailed 触发 mechanical fallback。
 func (g *LLMGenerator) Generate(ctx context.Context, items []catalogdomain.Item, gMap map[string]catalogdomain.Granularity) (*catalogdomain.Catalog, error) {
 	if len(items) == 0 {
 		return mechanicalFallback(items, gMap), nil
@@ -130,11 +85,6 @@ func (g *LLMGenerator) Generate(ctx context.Context, items []catalogdomain.Item,
 		return nil, fmt.Errorf("%w: no JSON in response", catalogdomain.ErrGenerationFailed)
 	}
 
-	// 2026-05 #13 fix: LLM only generates Summary text; Coverage is computed
-	// from the raw items list by source name (function/handler/workflow/mcp/skill).
-	// Stable for the frontend, doesn't rely on LLM-decided semantic categories.
-	// 2026-05 #13: LLM 只生成 summary 文本;coverage 由 backend 按 source 名
-	// 直接从 items 拼装,稳定可消费。
 	var parsed struct {
 		Summary string `json:"summary"`
 	}
@@ -155,13 +105,6 @@ func (g *LLMGenerator) Generate(ctx context.Context, items []catalogdomain.Item,
 	}, nil
 }
 
-// computeCoverage groups items by their Source field into the coverage
-// map. Source values come straight from each CatalogSource.Name() (e.g.
-// "function" / "handler" / "workflow" / "mcp" / "skill") — frontend
-// and tests can index by these stable keys, no LLM semantic ambiguity.
-//
-// computeCoverage 按 Source 字段把 items 分组成 coverage map;Source 直接
-// 来自 CatalogSource.Name(),稳定可消费。
 func computeCoverage(items []catalogdomain.Item) map[string][]string {
 	out := make(map[string][]string)
 	for _, it := range items {
@@ -170,15 +113,11 @@ func computeCoverage(items []catalogdomain.Item) map[string][]string {
 		}
 		out[it.Source] = append(out[it.Source], it.ID)
 	}
-	// Sort each source's IDs for stable output (so fingerprint doesn't churn).
-	// 每个 source 的 ID 排序保 fingerprint 稳定。
 	for k := range out {
 		sort.Strings(out[k])
 	}
 	return out
 }
-
-// ── prompt + parsing helpers ─────────────────────────────────────────
 
 const generatorPromptTemplate = `You are generating a "Capability Catalog" summary that will be inserted into another LLM's system prompt.
 The summary tells the other LLM what high-level capability categories are available, when to use each, and how to discover details.
@@ -206,12 +145,6 @@ function/handler/workflow/mcp/skill — so you don't need to output one.)
 ITEMS:
 %s`
 
-// buildPrompt assembles the LLM request. Items rendered as a per-source
-// list with id + name + description so the LLM has both a stable handle
-// (id) for the coverage field and human-readable text for the summary.
-//
-// buildPrompt 装 LLM 请求。items 按 source 列出 + id + name + description
-// ——LLM 既有稳定 handle（id）填 coverage，又有人类可读文本写 summary。
 func buildPrompt(items []catalogdomain.Item, gMap map[string]catalogdomain.Granularity) string {
 	var itemsBlock strings.Builder
 	bySource := groupBySource(items)

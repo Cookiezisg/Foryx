@@ -16,10 +16,9 @@ import (
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 )
 
-// Step sentinels distinguish which resolve stage failed, for callers that
-// surface different user-facing error codes per stage.
+// Step sentinels distinguish which resolve stage failed for stage-specific error mapping.
 //
-// Step sentinel 标记三段解析中的失败步骤，让调用方按步骤分发不同的用户可见错误码。
+// Step sentinel 区分解析阶段错误，让调用方按阶段分发错误码。
 var (
 	ErrPickModel    = errors.New("llmclient: pick model failed")
 	ErrResolveCreds = errors.New("llmclient: resolve credentials failed")

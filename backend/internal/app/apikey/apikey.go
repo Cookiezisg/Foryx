@@ -1,14 +1,6 @@
-// Package apikey (app layer) owns the Service (CRUD + KeyProvider), the
-// HTTP-tester wiring, and package-private helpers (maskKey / isValidProvider).
+// Package apikey owns the CRUD service, KeyProvider, and HTTP-tester wiring.
 //
-// All three apikey packages (domain / app / store) declare `package apikey`;
-// external callers alias at import (e.g. apikeyapp "…/internal/app/apikey").
-//
-// Package apikey（app 层）负责 Service（CRUD + KeyProvider）、HTTP-tester 的
-// 装配、以及包内私有 helper（maskKey / isValidProvider）。
-//
-// 三个 apikey 包（domain / app / store）都声明 `package apikey`；
-// 外部调用方 import 时按角色起别名（如 apikeyapp "…/internal/app/apikey"）。
+// Package apikey 提供 CRUD service、KeyProvider 与 HTTP-tester 装配。
 package apikey
 
 import (
@@ -25,12 +17,9 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// Service orchestrates apikey CRUD + connectivity testing. It owns the
-// encryption boundary — callers never see plaintext or ciphertext, only
-// the APIKey entity (ciphertext hidden by `json:"-"`) and TestResult.
+// Service orchestrates apikey CRUD + connectivity testing; owns the encryption boundary.
 //
-// Service 编排 apikey 的 CRUD + 连通性测试。持有加密边界——调用方既看
-// 不到明文也看不到密文，只拿到 APIKey（密文由 json:"-" 隐藏）和 TestResult。
+// Service 编排 apikey CRUD 与连通性测试，持有加密边界。
 type Service struct {
 	repo      apikeydomain.Repository
 	encryptor cryptodomain.Encryptor
@@ -38,11 +27,9 @@ type Service struct {
 	log       *zap.Logger
 }
 
-// NewService wires Service dependencies. Panics on nil logger — a nil
-// logger is a wiring bug, not a runtime condition.
+// NewService wires Service dependencies; panics on nil logger.
 //
-// NewService 装配 Service 依赖。nil logger 会 panic——nil logger 是接线
-// bug，不是运行时状态。
+// NewService 装配 Service 依赖；nil logger 直接 panic。
 func NewService(repo apikeydomain.Repository, enc cryptodomain.Encryptor, tester ConnectivityTester, log *zap.Logger) *Service {
 	if log == nil {
 		panic("apikey.NewService: logger is nil")
@@ -52,7 +39,7 @@ func NewService(repo apikeydomain.Repository, enc cryptodomain.Encryptor, tester
 
 // CreateInput is the validated request for Service.Create.
 //
-// CreateInput 是 Service.Create 的已校验请求形状。
+// CreateInput 是 Service.Create 的已校验请求。
 type CreateInput struct {
 	Provider    string
 	DisplayName string
@@ -61,22 +48,14 @@ type CreateInput struct {
 	APIFormat   string
 }
 
-// UpdateInput is the partial-update payload for Service.Update. nil
-// fields are left unchanged; a non-nil pointer to "" clears the value.
-// Key / Provider / APIFormat are intentionally absent — changing them
-// means delete + recreate.
+// UpdateInput is the partial-update payload; nil fields unchanged, "" clears.
 //
-// UpdateInput 是 Service.Update 的部分更新载荷。nil 字段不改；指向 "" 的
-// 非 nil 指针清空该值。故意不含 Key / Provider / APIFormat——改它们
-// 意味着 delete + recreate。
+// UpdateInput 部分更新载荷；nil 不动、空串清空，不允许改 Key/Provider/APIFormat。
 type UpdateInput struct {
 	DisplayName *string
 	BaseURL     *string
 }
 
-// Compile-time guard: *Service satisfies apikeydomain.KeyProvider.
-//
-// 编译期守护：*Service 满足 apikeydomain.KeyProvider。
 var _ apikeydomain.KeyProvider = (*Service)(nil)
 
 func (s *Service) Create(ctx context.Context, in CreateInput) (*apikeydomain.APIKey, error) {
@@ -162,21 +141,9 @@ func (s *Service) List(ctx context.Context, filter apikeydomain.ListFilter) ([]*
 	return s.repo.List(ctx, filter)
 }
 
-// Test fetches the APIKey, decrypts, probes the upstream, writes the
-// outcome back, and returns the TestResult.
+// Test probes the upstream and persists outcome via detached ctx (§S9).
 //
-// Terminal-state writes use a detached context (§S9). If the browser
-// hard-refreshes or the user closes the tab while the upstream probe
-// is in flight, r.Context() gets cancelled — but the test outcome
-// must still land in DB, otherwise the row stays at its previous
-// status and the UI shows stale "ok" with no audit trail of the
-// failed probe.
-//
-// Test 取回 APIKey、解密、探测上游、写回结果、返回 TestResult。
-//
-// 终态写入用 detached ctx（§S9）。浏览器 hard refresh / 用户关 tab 时
-// r.Context() 被 cancel——但测试结果必须落库，否则 row 维持旧状态，
-// UI 显示陈旧"ok"无据可查。
+// Test 探测上游并用 detached ctx 写回结果，避免请求 cancel 丢落库。
 func (s *Service) Test(ctx context.Context, id string) (*TestResult, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -190,20 +157,9 @@ func (s *Service) Test(ctx context.Context, id string) (*TestResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("apikey.Service.Test: decrypt: %w", err)
 	}
-	// detached carries the user id but not the request lifetime — used
-	// for both UpdateTestResult calls below. Probing still uses ctx so
-	// it cancels promptly on client disconnect.
-	// detached 带 user id 但不绑请求生命周期，给两次 UpdateTestResult 用；
-	// 探测仍用 ctx，客户端断开能立即 cancel 出去。
 	detached := reqctxpkg.SetUserID(context.Background(), uid)
 	result, err := s.tester.Test(ctx, k.Provider, string(plain), k.BaseURL, k.APIFormat)
 	if err != nil {
-		// Best-effort write of failed status. If this DB update itself fails
-		// the row stays at its previous test_status — log loudly so a stale
-		// "ok" badge in the UI doesn't go unexplained.
-		//
-		// 尽力把失败状态写库。本次写入再次失败时 test_status 维持原值——
-		// 必须高声记录，避免 UI 还显示 "ok" 但实际已坏却无线索可追。
 		if uerr := s.repo.UpdateTestResult(detached, id, apikeydomain.TestStatusError, err.Error(), nil); uerr != nil {
 			s.log.Warn("apikey.Service.Test: persist test failure status itself failed; row stays at previous status",
 				zap.String("api_key_id", id), zap.NamedError("test_err", err), zap.Error(uerr))
@@ -229,11 +185,9 @@ func (s *Service) Test(ctx context.Context, id string) (*TestResult, error) {
 	return result, nil
 }
 
-// ResolveCredentials picks the best APIKey for (caller, provider), decrypts,
-// and merges baseURL with the provider default.
+// ResolveCredentials picks the best APIKey for provider, decrypts, merges baseURL.
 //
-// ResolveCredentials 为 (调用者, provider) 挑选最佳 APIKey，解密，
-// 并合并 baseURL 和 provider 默认值。
+// ResolveCredentials 挑选最佳 APIKey 并解密，合并 baseURL 与默认值。
 func (s *Service) ResolveCredentials(ctx context.Context, provider string) (apikeydomain.Credentials, error) {
 	k, err := s.repo.GetByProvider(ctx, provider)
 	if err != nil {
@@ -252,21 +206,9 @@ func (s *Service) ResolveCredentials(ctx context.Context, provider string) (apik
 	return apikeydomain.Credentials{Key: string(plain), BaseURL: baseURL}, nil
 }
 
-// MarkInvalid updates test_status to error on the selected APIKey when a
-// caller's LLM call got 401/403.
+// MarkInvalid flips test_status to error on 401/403 via detached ctx (§S9).
 //
-// Terminal-state write uses a detached context (§S9). This is called from
-// chat / forge / skill paths that may have their request ctx cancelled
-// mid-stream (browser close, abort). If the UpdateTestResult write rode
-// the same ctx, a cancelled write would silently leave the key showing
-// green "OK" in the UI while actually being invalid — same defect class
-// as the apikey.Service.Test path fixed in d8a5161.
-//
-// MarkInvalid 在调用方 LLM 调用遇到 401/403 时把选中 APIKey 的
-// test_status 标记为 error。终态写入用 detached ctx（§S9）：调用方
-// （chat / forge / skill）的 r.Context() 可能在中途被 cancel（浏览器关、
-// 流被 abort），用同一 ctx 写就会失败，UI 仍显示绿"OK"实则失效——同
-// d8a5161 修过的 apikey.Service.Test 同构缺陷。
+// MarkInvalid 在 401/403 时用 detached ctx 把 test_status 标为 error。
 func (s *Service) MarkInvalid(ctx context.Context, provider, reason string) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -287,14 +229,6 @@ func (s *Service) MarkInvalid(ctx context.Context, provider, reason string) erro
 	return nil
 }
 
-// maskKey converts a plaintext API key into a display-safe masked form.
-//
-// Rules:
-//   - length <  8  → "****"
-//   - length 8-20  → first 3 + "..." + last 4
-//   - length > 20  → first 7 + "..." + last 4
-//
-// maskKey 把明文 API Key 转成展示安全的掩码。
 func maskKey(key string) string {
 	n := len(key)
 	switch {

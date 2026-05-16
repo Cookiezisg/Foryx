@@ -1,6 +1,3 @@
-// dispatchers_control_test.go — E8 control/io dispatcher tests (http /
-// condition / loop / parallel / approval / wait / variable).
-
 package scheduler
 
 import (
@@ -12,12 +9,6 @@ import (
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
 )
-
-// ── HTTP ─────────────────────────────────────────────────────────────────────
-
-// Note: a httptest.Server-backed happy-path GET is covered in the E16
-// pipeline test (with a public/test-allowlisted URL). The SSRF guard
-// correctly blocks 127.0.0.1 which is what httptest uses.
 
 func TestHTTPDispatcher_MissingURL(t *testing.T) {
 	d := NewHTTPDispatcher(nil)
@@ -50,8 +41,6 @@ func TestHTTPDispatcher_SSRFBlocksLocalhost(t *testing.T) {
 		t.Errorf("expected blocked error, got %v", out.Error)
 	}
 }
-
-// ── Condition ────────────────────────────────────────────────────────────────
 
 func TestConditionDispatcher_Truthy(t *testing.T) {
 	d := NewConditionDispatcher()
@@ -91,8 +80,6 @@ func TestConditionDispatcher_MissingCondition(t *testing.T) {
 	}
 }
 
-// ── Variable ─────────────────────────────────────────────────────────────────
-
 func TestVariableDispatcher_Set(t *testing.T) {
 	d := NewVariableDispatcher()
 	in := mkInput(workflowdomain.NodeSpec{ID: "v", Type: workflowdomain.NodeTypeVariable,
@@ -120,8 +107,6 @@ func TestVariableDispatcher_Unset(t *testing.T) {
 		t.Errorf("var not unset")
 	}
 }
-
-// ── Wait ─────────────────────────────────────────────────────────────────────
 
 func TestWaitDispatcher_DurationMs(t *testing.T) {
 	d := NewWaitDispatcher()
@@ -164,8 +149,6 @@ func TestWaitDispatcher_MissingBoth(t *testing.T) {
 	}
 }
 
-// ── Approval ────────────────────────────────────────────────────────────────
-
 func TestApprovalDispatcher_EmitsSentinel(t *testing.T) {
 	d := NewApprovalDispatcher()
 	out := d.Dispatch(context.Background(), mkInput(
@@ -176,8 +159,6 @@ func TestApprovalDispatcher_EmitsSentinel(t *testing.T) {
 		t.Errorf("expected ErrApprovalRequired, got %v", out.Error)
 	}
 }
-
-// ── Loop ────────────────────────────────────────────────────────────────────
 
 func TestLoopDispatcher_EmitsItems(t *testing.T) {
 	d := NewLoopDispatcher()
@@ -203,8 +184,6 @@ func TestLoopDispatcher_BodySubgraphUnsupported(t *testing.T) {
 		t.Errorf("expected ErrLoopBodyNotSupported, got %v", out.Error)
 	}
 }
-
-// ── Parallel ────────────────────────────────────────────────────────────────
 
 func TestParallelDispatcher_PassThrough(t *testing.T) {
 	d := NewParallelDispatcher()

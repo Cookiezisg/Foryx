@@ -1,7 +1,3 @@
-// search_executions.go — search_workflow_executions system tool (D22).
-// Queries flowrun_nodes for workflow-execution diagnostics (per-node
-// dispatch trace). Plan 05 §6.5d.
-
 package workflow
 
 import (

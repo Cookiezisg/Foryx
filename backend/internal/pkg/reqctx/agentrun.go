@@ -5,16 +5,6 @@ import (
 	"errors"
 )
 
-// Per-agent-run identifiers (conversation / assistant message / LLM tool call).
-// Stamped by the chat layer just before invoking a tool. Lifetime: one tool
-// call. Missing values are not bugs — events with empty filter keys silently
-// go nowhere; only conversationID has a Require-form sentinel for callers
-// that need to surface it.
-//
-// Per-agent-run ID（conversation / 助手消息 / LLM tool call）。chat 层调 tool
-// 前注入。生命周期：单次 tool 调用。缺失非 bug——事件 filter key 为空时静默
-// 无订阅者；仅 conversationID 提供 Require-form sentinel 供需上抛的调用方用。
-
 // ErrMissingConversationID is returned by RequireConversationID.
 //
 // ErrMissingConversationID 由 RequireConversationID 返回。
@@ -80,49 +70,33 @@ func GetToolCallID(ctx context.Context) (string, bool) {
 	return id, ok && id != ""
 }
 
-// WithParentBlockID returns a copy of ctx carrying the current emit-tree
-// parent block. Used by pkg/eventlog so nested emits (tool progress
-// inside a tool_call, subagent text inside a message-block) automatically
-// get the correct parentId field without each emitter recomputing it.
+// WithParentBlockID returns a copy of ctx carrying the current emit-tree parent block.
 //
-// WithParentBlockID 返回携带当前 emit 树父 block 的 ctx 拷贝。pkg/eventlog
-// 用它让嵌套 emit（tool_call 下的 progress、message-block 下的 subagent
-// 文本）自动取得正确 parentId，不需各 emitter 重算。
+// WithParentBlockID 返回携带当前 emit 树父 block 的 ctx 拷贝。
 func WithParentBlockID(ctx context.Context, id string) context.Context {
 	return context.WithValue(ctx, parentBlockIDKey{}, id)
 }
 
-// GetParentBlockID returns the current emit-tree parent block ID;
-// ok=false when absent or empty (top-level emit).
+// GetParentBlockID returns the current emit-tree parent block ID; ok=false when absent or empty.
 //
-// GetParentBlockID 返回当前 emit 树父 block ID；缺失或空时 ok=false（顶层 emit）。
+// GetParentBlockID 返回当前 emit 树父 block ID；缺失或空时 ok=false。
 func GetParentBlockID(ctx context.Context) (string, bool) {
 	id, ok := ctx.Value(parentBlockIDKey{}).(string)
 	return id, ok && id != ""
 }
 
-// Subagent ctx key: SubagentDepth gates the recursion check inside
-// SubagentTool.Execute (the structural defense is registry-level tool
-// filtering, but depth is a runtime belt-and-suspenders).
-//
-// Subagent ctx key：SubagentDepth 给 SubagentTool.Execute 内的递归检查兜底
-// （结构性防线是注册表层的工具过滤，深度只是运行时双保险）。
 type subagentDepthKey struct{}
 
-// WithSubagentDepth returns a copy of ctx with depth (≥ 0). Increment by
-// one each time SubagentTool.Execute spawns a sub-runner.
+// WithSubagentDepth returns a copy of ctx with depth (≥ 0); increment per sub-runner spawn.
 //
-// WithSubagentDepth 返回带 depth（≥ 0）的 ctx 拷贝。每次 SubagentTool
-// .Execute 起 sub-runner 时 +1。
+// WithSubagentDepth 返回带 depth（≥ 0）的 ctx 拷贝；每起一次 sub-runner +1。
 func WithSubagentDepth(ctx context.Context, depth int) context.Context {
 	return context.WithValue(ctx, subagentDepthKey{}, depth)
 }
 
-// GetSubagentDepth returns the current subagent depth (0 in main chat).
-// Always returns a usable int; absent means depth=0.
+// GetSubagentDepth returns the current subagent depth; absent means 0.
 //
-// GetSubagentDepth 返回当前 subagent 深度（主对话为 0）。总返可用 int；
-// 缺失即 depth=0。
+// GetSubagentDepth 返回当前 subagent 深度；缺失即 0。
 func GetSubagentDepth(ctx context.Context) int {
 	if d, ok := ctx.Value(subagentDepthKey{}).(int); ok {
 		return d

@@ -1,13 +1,3 @@
-// create.go — create_handler system tool: applies method-level ops to build
-// a new Handler with auto-accepted v1, runs synchronous env install, and on
-// failure enters the C2 LLM env-fix loop (up to 3 attempts). On loop success
-// the fixed pending is auto-accepted to flip the active version, so the user
-// sees a single ready handler (the failed v1 stays in version history).
-// Per discussions/2026-05-12 §E (same shape as create_function).
-//
-// create.go —— create_handler 工具:method-level ops 建 v1 + 同步装 env;
-// 失败时跑 env-fix loop(同 create_function 模式)。
-
 package handler
 
 import (
@@ -50,10 +40,10 @@ up to 3 times by asking the LLM to revise the dependency list.
 MINIMAL COMPLETE EXAMPLE — a counter handler with persistent state:
   ops = [
     {"op":"set_meta", "name":"counter", "description":"In-memory counter; bump/get"},
-    {"op":"set_init_args_schema", "init_args":[
+    {"op":"set_init_args_schema", "args":[
         {"name":"start","type":"integer","required":true,"description":"initial count"}
     ]},
-    {"op":"set_init", "body":"self.count = start"},
+    {"op":"set_init", "init_body":"self.count = start"},
     {"op":"add_method", "method":{
         "name":"bump",
         "args":[{"name":"by","type":"integer","required":false,"default":1}],
@@ -71,12 +61,12 @@ plus bump(self, by: int = 1) and get(self) — bare-name access throughout.
 OPS:
   {"op":"set_meta", "name":"...", "description":"..."}
   {"op":"set_imports", "imports":"import psycopg2\nimport json"}
-  {"op":"set_init_args_schema", "init_args":[
+  {"op":"set_init_args_schema", "args":[
       {"name":"dsn", "type":"string", "required":true, "sensitive":true, "description":"PG DSN"},
       {"name":"timeout", "type":"integer", "required":false, "default":30}
   ]}
-  {"op":"set_init", "body":"self.conn = psycopg2.connect(dsn, connect_timeout=timeout)"}
-  {"op":"set_shutdown", "body":"self.conn.close()"}
+  {"op":"set_init", "init_body":"self.conn = psycopg2.connect(dsn, connect_timeout=timeout)"}
+  {"op":"set_shutdown", "shutdown_body":"self.conn.close()"}
   {"op":"add_method", "method":{"name":"query", "args":[{"name":"sql","type":"string","required":true}], "body":"return self.conn.cursor().execute(sql).fetchall()"}}
   {"op":"update_method", "name":"query", "patch":{"body":"new body"}}
   {"op":"delete_method", "name":"query"}

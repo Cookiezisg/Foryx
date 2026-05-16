@@ -1,33 +1,3 @@
-// mcp.go — HTTP handler for /api/v1/mcp-* server CRUD/import/reconnect/
-// health-check + /api/v1/mcp-registry list/get/install. Thin: decode →
-// service → envelope. The search_mcp + call_mcp SYSTEM TOOLS are what
-// LLMs use at runtime; these endpoints are the UI's configuration +
-// observability surface.
-//
-// Endpoints (per mcp.md §10):
-//
-//	GET    /api/v1/mcp-servers                       list all (status + tools + health)
-//	GET    /api/v1/mcp-servers/{name}                single server detail
-//	PUT    /api/v1/mcp-servers/{name}                upsert config + Connect
-//	DELETE /api/v1/mcp-servers/{name}                disconnect + remove
-//	POST   /api/v1/mcp-servers:import                drag-import (multipart or JSON body)
-//	POST   /api/v1/mcp-servers/{name}:reconnect      force restart subprocess
-//	POST   /api/v1/mcp-servers/{name}:health-check   active probe (tools/list)
-//
-//	GET    /api/v1/mcp-registry                      built-in marketplace catalog
-//	GET    /api/v1/mcp-registry/{name}               single entry detail
-//	POST   /api/v1/mcp-registry/{name}:install       fill env+args → write mcp.json → Connect
-//
-// Action-style routes (:reconnect / :health-check / :install / :import)
-// use the {nameAction} wildcard + splitAction helper, same pattern as
-// sandbox.go — stdlib mux supports {var} but not arbitrary action
-// suffixes, so we route the verb-bearing prefix and dispatch on the
-// suffix inside the handler.
-//
-// mcp.go ——/api/v1/mcp-* + /api/v1/mcp-registry HTTP handler。薄层：decode
-// → service → envelope。LLM 用 search_mcp + call_mcp 系统工具运行时调；这些
-// 端点是 UI 配置+观测面。:action 路由用 {nameAction} 通配 + splitAction，
-// 同 sandbox.go——stdlib mux 不支持任意 action 后缀。
 package handlers
 
 import (
@@ -44,15 +14,9 @@ import (
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
-// importMaxBytes caps the upload size for :import to prevent runaway
-// memory growth from a malicious / accidental huge JSON file. 1MB is
-// generous (Claude Desktop configs are typically <10KB).
-//
-// importMaxBytes 限定 :import 上传大小防恶意/意外大 JSON 文件爆内存。
-// 1MB 宽裕（Claude Desktop 配置通常 <10KB）。
 const importMaxBytes = 1 << 20
 
-// MCPHandler serves the /api/v1/mcp-* + /api/v1/mcp-registry routes.
+// MCPHandler serves /api/v1/mcp-* + /api/v1/mcp-registry routes.
 //
 // MCPHandler 提供 /api/v1/mcp-* + /api/v1/mcp-registry 路由。
 type MCPHandler struct {
@@ -60,63 +24,31 @@ type MCPHandler struct {
 	log *zap.Logger
 }
 
-// NewMCPHandler wires the handler dependencies.
-//
-// NewMCPHandler 装配 handler 依赖。
 func NewMCPHandler(svc *mcpapp.Service, log *zap.Logger) *MCPHandler {
 	return &MCPHandler{svc: svc, log: log}
 }
 
-// Register attaches the 10 MCP routes to mux.
-//
-// Register 把 10 个 MCP 路由挂到 mux。
 func (h *MCPHandler) Register(mux *http.ServeMux) {
-	// Server CRUD/lifecycle
 	mux.HandleFunc("GET /api/v1/mcp-servers", h.ListServers)
 	mux.HandleFunc("GET /api/v1/mcp-servers/{name}", h.GetServer)
 	mux.HandleFunc("GET /api/v1/mcp-servers/{name}/stderr", h.GetServerStderr)
 	mux.HandleFunc("PUT /api/v1/mcp-servers/{name}", h.PutServer)
 	mux.HandleFunc("DELETE /api/v1/mcp-servers/{name}", h.DeleteServer)
-
-	// Server :action endpoints. POST /mcp-servers:import has no name in
-	// the path, so it goes through serversAction which dispatches by
-	// action. POST /mcp-servers/{nameAction}:action uses splitAction.
-	//
-	// :action 端点。POST /mcp-servers:import 路径无 name，走 serversAction
-	// 按 action 派发。POST /mcp-servers/{nameAction}:action 用 splitAction。
 	mux.HandleFunc("POST /api/v1/mcp-servers/{nameAction}", h.serverNameAction)
-	// :import has no name in the path; stdlib mux can't wildcard-match
-	// when there's no '/' before the action, so register the literal.
-	// :import 路径无 name；stdlib mux 在 action 前无 '/' 时通配不到，直接
-	// 登记字面 path。
 	mux.HandleFunc("POST /api/v1/mcp-servers:import", h.importServers)
-
-	// Registry
 	mux.HandleFunc("GET /api/v1/mcp-registry", h.ListRegistry)
 	mux.HandleFunc("GET /api/v1/mcp-registry/{name}", h.GetRegistryEntry)
 	mux.HandleFunc("POST /api/v1/mcp-registry/{nameAction}", h.registryNameAction)
 }
 
-// ── Server reads ─────────────────────────────────────────────────────
-
-// ListServers: GET /api/v1/mcp-servers → 200 [{ServerStatus...}].
-//
-// ListServers: GET /api/v1/mcp-servers → 200 [{ServerStatus...}]。
 func (h *MCPHandler) ListServers(w http.ResponseWriter, r *http.Request) {
 	servers := h.svc.ListServers(r.Context())
 	responsehttpapi.Success(w, http.StatusOK, servers)
 }
 
-// GetServerStderr: GET /api/v1/mcp-servers/{name}/stderr → 200 with the
-// captured stderr ring-buffer (≤ 256 KB) of the named server's subprocess.
-// Empty string when configured-but-not-connected. 404 when no such
-// server is configured. Used by testend's MCP tab to debug connection
-// failures (handshake errors, missing executables, runtime crashes —
-// all surface in stderr).
+// GetServerStderr returns the captured stderr ring-buffer of the subprocess.
 //
-// GetServerStderr: GET /api/v1/mcp-servers/{name}/stderr → 200 返子进程
-// stderr 环形缓冲（≤ 256 KB）。配置了未连接返空。未配置 404。testend
-// MCP tab 用来调试连接失败。
+// GetServerStderr 返子进程 stderr 环形缓冲。
 func (h *MCPHandler) GetServerStderr(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	tail, err := h.svc.Stderr(name)
@@ -131,9 +63,6 @@ func (h *MCPHandler) GetServerStderr(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetServer: GET /api/v1/mcp-servers/{name} → 200 ServerStatus / 404.
-//
-// GetServer: GET /api/v1/mcp-servers/{name} → 200 / 404。
 func (h *MCPHandler) GetServer(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	st, err := h.svc.GetServer(r.Context(), name)
@@ -144,18 +73,9 @@ func (h *MCPHandler) GetServer(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, st)
 }
 
-// ── Server CRUD ──────────────────────────────────────────────────────
-
-// PutServer: PUT /api/v1/mcp-servers/{name} — upsert + Connect. Body
-// is a partial ServerConfig (Name is taken from the path; mcp.md §5
-// says Name is the map key on disk, not duplicated in the value).
-// Returns 200 with the resulting ServerStatus regardless of whether
-// the underlying connect succeeded — caller checks status field.
+// PutServer upserts ServerConfig and Connects; returns 200 with status row.
 //
-// PutServer: PUT /api/v1/mcp-servers/{name} 创建/更新 + Connect。Body 是
-// 部分 ServerConfig（Name 从 path 取；mcp.md §5：Name 是 disk 的 map key
-// 不在 value 重复）。返 200 + ServerStatus 不论 connect 是否成功——调用方
-// 看 status 字段。
+// PutServer 创建/更新 ServerConfig 并 Connect,返 200 + status row。
 func (h *MCPHandler) PutServer(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	var body struct {
@@ -182,18 +102,6 @@ func (h *MCPHandler) PutServer(w http.ResponseWriter, r *http.Request) {
 		TimeoutSec: body.TimeoutSec,
 	}
 	if err := h.svc.AddServer(r.Context(), cfg); err != nil {
-		// AddServer can fail at mcp.json save (filesystem) or at Connect
-		// (subprocess spawn). Per mcp.md §10: PUT returns 200 with
-		// ServerStatus regardless of connect succeed — caller checks the
-		// status field. Use Error (not Warn) log level so observability
-		// pipelines filtering on ERROR pick up the connect failure;
-		// 200 OK alone makes the original err disappear from anything
-		// not parsing the status row.
-		//
-		// AddServer 失败（mcp.json 保存或 Connect 失败）按 mcp.md §10
-		// 仍返 200 + status row（caller 检 status 字段）。Log 级 Error
-		// 而非 Warn——observability 过 ERROR 才能捞到此 connect 失败；
-		// 仅 200 OK 让 err 在不解 status row 的场景中消失。
 		st, gErr := h.svc.GetServer(r.Context(), name)
 		if gErr == nil && st != nil {
 			h.log.Error("PUT mcp-server completed with connect issue (returned 200 + status row per mcp.md §10)",
@@ -212,9 +120,6 @@ func (h *MCPHandler) PutServer(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, st)
 }
 
-// DeleteServer: DELETE /api/v1/mcp-servers/{name} → 204 / 404.
-//
-// DeleteServer: DELETE /api/v1/mcp-servers/{name} → 204 / 404。
 func (h *MCPHandler) DeleteServer(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	if err := h.svc.RemoveServer(r.Context(), name); err != nil {
@@ -224,15 +129,9 @@ func (h *MCPHandler) DeleteServer(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// ── Server :action dispatch ──────────────────────────────────────────
-
-// serverNameAction handles POST /api/v1/mcp-servers/{name}:reconnect
-// and POST /api/v1/mcp-servers/{name}:health-check. nameAction is the
-// "<name>:<action>" path tail.
+// serverNameAction dispatches :reconnect / :health-check on a server name.
 //
-// serverNameAction 处理 POST /api/v1/mcp-servers/{name}:reconnect 和
-// POST /api/v1/mcp-servers/{name}:health-check。nameAction 是
-// "<name>:<action>" 路径尾。
+// serverNameAction 分派 :reconnect / :health-check。
 func (h *MCPHandler) serverNameAction(w http.ResponseWriter, r *http.Request) {
 	name, action := splitAction(r.PathValue("nameAction"))
 	if name == "" {
@@ -265,19 +164,9 @@ func (h *MCPHandler) serverNameAction(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// importServers handles POST /api/v1/mcp-servers:import. Accepts:
-//   - JSON body: `{"mcpServers": {...}}` Claude Desktop fragment
-//     (preferred — easy for the testend console + UI clipboard paste)
-//   - multipart form-data: file field "config" carrying mcp.json
+// importServers accepts JSON or multipart Claude-Desktop mcp.json fragment.
 //
-// Query param ?overwrite=true forces replace of conflicts; default
-// keeps existing entries and returns them in MergeResult.Conflicts so
-// the UI can prompt for confirmation.
-//
-// importServers 处理 POST /api/v1/mcp-servers:import。接受 JSON body
-// （Claude Desktop 片段，testend 控制台 + UI 剪贴板粘贴方便）或 multipart
-// form-data 上传 mcp.json 文件。?overwrite=true 强制覆盖；默认保留已存在
-// 并在 MergeResult.Conflicts 返让 UI 弹确认。
+// importServers 接 JSON 或 multipart 上传的 Claude Desktop mcp.json 片段。
 func (h *MCPHandler) importServers(w http.ResponseWriter, r *http.Request) {
 	overwrite := r.URL.Query().Get("overwrite") == "true"
 	contentType := r.Header.Get("Content-Type")
@@ -296,15 +185,6 @@ func (h *MCPHandler) importServers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		defer file.Close()
-		// Use io.ReadAll on a LimitReader so non-EOF io errors (disk
-		// fail / truncated upload) surface as 400 instead of getting
-		// silently treated as legitimate truncated JSON. importMaxBytes+1
-		// boundary catches the "exactly at limit" case via len(raw) > N.
-		// Mirror handlers-B3 skills.go::Import fix.
-		//
-		// 用 io.ReadAll on LimitReader 让 non-EOF io err（disk fail /
-		// 截断 upload）显式 400 而非被当合法截断 JSON。+1 边界让"恰好
-		// 满"也被检出。同 handlers-B3 skills.go::Import 修复。
 		var rerr error
 		raw, rerr = io.ReadAll(io.LimitReader(file, importMaxBytes+1))
 		if rerr != nil {
@@ -318,9 +198,6 @@ func (h *MCPHandler) importServers(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else {
-		// JSON body path. Cap at importMaxBytes for symmetry with
-		// multipart.
-		// JSON body 路径。importMaxBytes 与 multipart 对称。
 		body := http.MaxBytesReader(w, r.Body, importMaxBytes)
 		var err error
 		raw, err = io.ReadAll(body)
@@ -331,8 +208,6 @@ func (h *MCPHandler) importServers(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Parse the Claude Desktop fragment into our config shape.
-	// 解 Claude Desktop 片段为我们的 config 形状。
 	var fragment struct {
 		MCPServers map[string]struct {
 			Command    string            `json:"command"`
@@ -371,14 +246,6 @@ func (h *MCPHandler) importServers(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, res)
 }
 
-// ── Registry ─────────────────────────────────────────────────────────
-
-// ListRegistry: GET /api/v1/mcp-registry → 200 [{RegistryEntry...}].
-// V3 (2026-05-09) returns the full curated catalog (~21 entries)
-// sorted tier-asc + name-asc. No query parameter — list everything.
-//
-// ListRegistry: GET /api/v1/mcp-registry → 200。V3 全列 curated 目录
-// （~21 条）按 tier asc + name asc 排。无 query 参数。
 func (h *MCPHandler) ListRegistry(w http.ResponseWriter, r *http.Request) {
 	entries, err := h.svc.ListRegistry(r.Context())
 	if err != nil {
@@ -388,11 +255,6 @@ func (h *MCPHandler) ListRegistry(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, entries)
 }
 
-// GetRegistryEntry: GET /api/v1/mcp-registry/{name} → 200 / 404.
-// Returns Hidden entries too — the install flow needs them.
-//
-// GetRegistryEntry: GET /api/v1/mcp-registry/{name} → 200 / 404。
-// 含 Hidden——install 流需要。
 func (h *MCPHandler) GetRegistryEntry(w http.ResponseWriter, r *http.Request) {
 	name := r.PathValue("name")
 	entry, err := h.svc.GetRegistryEntry(r.Context(), name)
@@ -403,15 +265,9 @@ func (h *MCPHandler) GetRegistryEntry(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, entry)
 }
 
-// registryNameAction handles POST /api/v1/mcp-registry/{name}:install
-// (currently the only action). Body is the install payload:
-// `{"env": {...}, "args": {...}}`. Validates env+args against the
-// entry's RequiredEnv/RequiredArgs, delegates runtime install to
-// sandboxapp, writes the resulting ServerConfig to mcp.json, Connects.
+// registryNameAction handles POST /api/v1/mcp-registry/{name}:install.
 //
-// registryNameAction 处理 POST /api/v1/mcp-registry/{name}:install
-// （当前唯一 action）。Body 是 install 载荷 {env, args}。校验 env+args
-// 后委托 sandboxapp 装 runtime，写 ServerConfig 到 mcp.json，Connect。
+// registryNameAction 处理 POST /api/v1/mcp-registry/{name}:install。
 func (h *MCPHandler) registryNameAction(w http.ResponseWriter, r *http.Request) {
 	name, action := splitAction(r.PathValue("nameAction"))
 	if name == "" {
@@ -430,19 +286,6 @@ func (h *MCPHandler) registryNameAction(w http.ResponseWriter, r *http.Request) 
 		Args map[string]string `json:"args,omitempty"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, importMaxBytes)).Decode(&body); err != nil {
-		// io.EOF = empty body (legit — entry may have no
-		// RequiredEnv/RequiredArgs). Anything else = malformed JSON or
-		// MaxBytes exceeded — surface as 400 so user fixes their input
-		// rather than seeing misleading "MCP_REQUIRED_ENV_MISSING" from
-		// InstallFromRegistry below. Previous code used a never-produced
-		// `errEmptyBody` sentinel that made `errors.Is` always-false →
-		// every decode err was silently swallowed.
-		//
-		// io.EOF = 空 body（合法——entry 可能无 RequiredEnv）；其他 =
-		// malformed JSON 或超 MaxBytes，显式 400 让用户修输入而非看
-		// InstallFromRegistry 的"MCP_REQUIRED_ENV_MISSING"误导。原代
-		// 码用从未产出的 errEmptyBody sentinel 让 errors.Is 恒 false
-		// → 全 decode err 被静默吞。
 		if !errors.Is(err, io.EOF) {
 			responsehttpapi.Error(w, http.StatusBadRequest, "INVALID_REQUEST",
 				"handlers.InstallFromRegistry: decode body: "+err.Error(), nil)
@@ -450,9 +293,6 @@ func (h *MCPHandler) registryNameAction(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	// Curated catalog has no separate alias — name doubles as the
-	// mcp.json key.
-	// curated 目录无独立 alias —— name 直接作 mcp.json key。
 	st, err := h.svc.InstallFromRegistry(r.Context(), name, body.Env, body.Args)
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)

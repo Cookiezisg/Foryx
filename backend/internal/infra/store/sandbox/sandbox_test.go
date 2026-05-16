@@ -1,11 +1,3 @@
-// Package sandbox — integration tests for Store using an in-memory SQLite.
-// Covers Runtime + Env CRUD, the two UNIQUE constraints (kind/version and
-// owner_kind/owner_id), FK reverse lookup, aggregate queries, and the
-// interface satisfaction check.
-//
-// Package sandbox — Store 集成测试（内存 SQLite）。
-// 覆盖 Runtime + Env CRUD、两个 UNIQUE 约束（kind/version 和 owner_kind/owner_id）、
-// FK 反查、聚合查询、接口满足检查。
 package sandbox
 
 import (
@@ -21,7 +13,6 @@ import (
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
 )
 
-// compile-time interface satisfaction check.
 var _ sandboxdomain.Repository = (*Store)(nil)
 
 func newStore(t *testing.T) *Store {
@@ -66,7 +57,6 @@ func mkEnv(id, ownerKind, ownerID, runtimeID string) *sandboxdomain.Env {
 	}
 }
 
-// ── Runtime CRUD ──────────────────────────────────────────────────────────────
 
 func TestCreateAndGetRuntime(t *testing.T) {
 	s := newStore(t)
@@ -98,8 +88,6 @@ func TestCreateRuntime_UniqueKindVersion(t *testing.T) {
 	if err := s.CreateRuntime(ctx, mkRuntime("sr_001", "python", "3.12.5")); err != nil {
 		t.Fatalf("first CreateRuntime: %v", err)
 	}
-	// Same (kind, version) — different ID — must violate UNIQUE.
-	// 同 (kind, version)、不同 ID——必须撞 UNIQUE。
 	err := s.CreateRuntime(ctx, mkRuntime("sr_002", "python", "3.12.5"))
 	if err == nil {
 		t.Fatal("want UNIQUE violation, got nil")
@@ -144,7 +132,6 @@ func TestListRuntimes_OrderByKindThenVersion(t *testing.T) {
 	if len(rows) != 3 {
 		t.Fatalf("want 3 rows, got %d", len(rows))
 	}
-	// Expect: node 20.0.0, node 22.5.0, python 3.12.5
 	want := []string{"sr_c", "sr_b", "sr_a"}
 	for i, w := range want {
 		if rows[i].ID != w {
@@ -188,7 +175,6 @@ func TestDeleteRuntime(t *testing.T) {
 	}
 }
 
-// ── Env CRUD ──────────────────────────────────────────────────────────────────
 
 func TestCreateAndGetEnv(t *testing.T) {
 	s := newStore(t)
@@ -229,8 +215,6 @@ func TestCreateEnv_UniqueOwner(t *testing.T) {
 	if err := s.CreateEnv(ctx, mkEnv("se_001", sandboxdomain.OwnerKindMCP, "playwright", "sr_001")); err != nil {
 		t.Fatalf("first CreateEnv: %v", err)
 	}
-	// Same (owner_kind, owner_id) — different ID — must violate UNIQUE.
-	// 同 (owner_kind, owner_id)、不同 ID——必须撞 UNIQUE。
 	err := s.CreateEnv(ctx, mkEnv("se_002", sandboxdomain.OwnerKindMCP, "playwright", "sr_001"))
 	if err == nil {
 		t.Fatal("want UNIQUE violation, got nil")
@@ -361,7 +345,6 @@ func TestDeleteEnv(t *testing.T) {
 	}
 }
 
-// ── Aggregate queries ─────────────────────────────────────────────────────────
 
 func TestTotalSizeBytes(t *testing.T) {
 	s := newStore(t)
@@ -393,7 +376,6 @@ func TestTotalSizeBytes(t *testing.T) {
 	}
 }
 
-// ── Layer B leak prevention ───────────────────────────────────────────────────
 
 func TestSetAndListEnvsWithRunningPID(t *testing.T) {
 	s := newStore(t)
@@ -409,8 +391,6 @@ func TestSetAndListEnvsWithRunningPID(t *testing.T) {
 		t.Fatalf("seed env b: %v", err)
 	}
 
-	// Empty manifest: no envs should be returned.
-	// 空 manifest：不该返任何 env。
 	rows, err := s.ListEnvsWithRunningPID(ctx)
 	if err != nil {
 		t.Fatalf("ListEnvsWithRunningPID empty: %v", err)
@@ -419,8 +399,6 @@ func TestSetAndListEnvsWithRunningPID(t *testing.T) {
 		t.Errorf("baseline: want 0 envs with PID, got %d", len(rows))
 	}
 
-	// Mark se_a as having a running process; se_b stays clean.
-	// 标 se_a 有 running 进程；se_b 保持干净。
 	if err := s.SetEnvRunningPID(ctx, "se_a", 12345); err != nil {
 		t.Fatalf("SetEnvRunningPID: %v", err)
 	}
@@ -490,7 +468,6 @@ func TestListEnvsLastUsedBefore(t *testing.T) {
 	if len(rows) != 2 {
 		t.Fatalf("want 2 envs older than cutoff, got %d", len(rows))
 	}
-	// Ascending order (oldest first).
 	if rows[0].ID != "se_old1" || rows[1].ID != "se_old2" {
 		t.Errorf("wrong order: %v", []string{rows[0].ID, rows[1].ID})
 	}

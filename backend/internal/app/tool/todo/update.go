@@ -1,10 +1,3 @@
-// update.go — TodoUpdate system tool: change a todo's status or other
-// fields. Pointer fields in the schema map to "set" semantics — omit a
-// field to leave it unchanged. Status transitions are validated against
-// the whitelist; status:"deleted" soft-deletes via the Service.
-//
-// update.go — TodoUpdate 系统工具：改 todo 状态或其他字段。schema 字段缺
-// 即"不变"；status 按白名单校验；status:"deleted" 走 Service 软删。
 package todo
 
 import (
@@ -60,7 +53,7 @@ var todoUpdateSchema = json.RawMessage(`{
 
 // TodoUpdate implements the TodoUpdate system tool.
 //
-// TodoUpdate struct 是 TodoUpdate 系统工具。
+// TodoUpdate 是 TodoUpdate 系统工具的实现。
 type TodoUpdate struct {
 	svc *todoapp.Service
 }
@@ -73,7 +66,7 @@ func (t *TodoUpdate) IsReadOnly() bool        { return false }
 func (t *TodoUpdate) NeedsReadFirst() bool    { return false }
 func (t *TodoUpdate) RequiresWorkspace() bool { return false }
 
-// ValidateInput rejects empty todo_id and out-of-whitelist status.
+// ValidateInput rejects empty todo_id and status outside the whitelist.
 //
 // ValidateInput 拒空 todo_id 与白名单外 status。
 func (t *TodoUpdate) ValidateInput(args json.RawMessage) error {
@@ -94,10 +87,6 @@ func (t *TodoUpdate) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionMod
 	return toolapp.PermissionAllow
 }
 
-// updateRaw is the JSON payload shape; pointer fields encode "set vs
-// leave unchanged" semantics.
-//
-// updateRaw 是 JSON 载荷形态；指针字段编码"设值 vs 不变"语义。
 type updateRaw struct {
 	TodoID      string    `json:"todo_id"`
 	Subject     *string   `json:"subject"`
@@ -108,20 +97,15 @@ type updateRaw struct {
 	BlockedBy   *[]string `json:"blocked_by"`
 }
 
-// Execute applies the partial update via Service. status:"deleted"
-// triggers Service.Delete instead so the soft-delete + final-snapshot
-// SSE broadcast happens in one place.
+// Execute applies the partial update; status:"deleted" routes to Service.Delete.
 //
-// Execute 通过 Service 应用部分更新；status:"deleted" 走 Service.Delete
-// 让软删 + 最终 SSE 广播集中一处。
+// Execute 应用部分更新；status:"deleted" 走 Service.Delete。
 func (t *TodoUpdate) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var raw updateRaw
 	if err := json.Unmarshal([]byte(argsJSON), &raw); err != nil {
 		return "", fmt.Errorf("TodoUpdate.Execute: %w", err)
 	}
 
-	// Special case: status:"deleted" → Service.Delete (sets deleted_at).
-	// 特例：status:"deleted" → Service.Delete（置 deleted_at）。
 	if raw.Status != nil && *raw.Status == tododomain.StatusDeleted {
 		if err := t.svc.Delete(ctx, raw.TodoID); err != nil {
 			return classifyTodoErr(err, "delete"), nil

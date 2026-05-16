@@ -1,12 +1,3 @@
-// skill_test.go — unit tests for the SearchSkills + ActivateSkill
-// system tools. Validates the §S18 9-method contract surface (each tool
-// implements all 9 methods; static metadata is deterministic; ValidateInput
-// rejects empty args; Execute returns friendly strings on documented
-// failure modes rather than opaque errors).
-//
-// skill_test.go ——SearchSkills + ActivateSkill 系统工具单测。验 §S18 9
-// 方法契约（每个 tool 实现全 9 方法；静态元数据确定；ValidateInput 拒空
-// args；Execute 在文档化失败路径返友好字符串而非不透明 error）。
 package skill
 
 import (
@@ -51,7 +42,6 @@ func TestSkillTools_FactoryReturnsBoth(t *testing.T) {
 	}
 }
 
-// ── SearchSkills 9-method contract ───────────────────────────────────
 
 func TestSearchSkills_Identity(t *testing.T) {
 	tt := &SearchSkills{}
@@ -157,7 +147,6 @@ func TestSearchSkills_Execute_ReturnsJSONList(t *testing.T) {
 	}
 }
 
-// ── ActivateSkill 9-method contract ──────────────────────────────────
 
 func TestActivateSkill_Identity(t *testing.T) {
 	tt := &ActivateSkill{}
@@ -243,7 +232,6 @@ func TestActivateSkill_Execute_ReturnsBody(t *testing.T) {
 	}
 }
 
-// ── helpers ──────────────────────────────────────────────────────────
 
 func seedSkill(t *testing.T, svc *skillapp.Service, name, desc string, fork bool) {
 	t.Helper()

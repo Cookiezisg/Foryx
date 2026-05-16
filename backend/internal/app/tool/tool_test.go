@@ -1,8 +1,3 @@
-// tool_test.go — unit tests for Tool interface utilities:
-// injectStandardFields, StripStandardFields, ToLLMDef.
-//
-// tool_test.go — Tool 接口工具函数的单元测试：
-// injectStandardFields、StripStandardFields、ToLLMDef。
 package tool
 
 import (
@@ -12,8 +7,6 @@ import (
 
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 )
-
-// ── injectStandardFields ──────────────────────────────────────────────────────
 
 func TestInjectStandardFields_AddsAllThreeFields(t *testing.T) {
 	params := json.RawMessage(`{
@@ -53,7 +46,6 @@ func TestInjectStandardFields_AddsAllThreeFields(t *testing.T) {
 	if !contains(required, "path") {
 		t.Error("original 'path' field removed from required")
 	}
-	// destructive 和 execution_group 不应进 required（都可选）
 	if contains(required, "destructive") {
 		t.Errorf("destructive must NOT be in required (default false): %v", required)
 	}
@@ -130,8 +122,6 @@ func TestInjectStandardFields_NonObjectPanics(t *testing.T) {
 	injectStandardFields(json.RawMessage(`"just a string"`))
 }
 
-// ── StripStandardFields ───────────────────────────────────────────────────────
-
 func TestStripStandardFields_ExtractsAllThree(t *testing.T) {
 	args := `{"summary":"Deleting all logs","destructive":true,"execution_group":2,"path":"/var/log"}`
 	fields, stripped := StripStandardFields(args)
@@ -165,8 +155,6 @@ func TestStripStandardFields_ExtractsAllThree(t *testing.T) {
 }
 
 func TestStripStandardFields_DefaultsWhenMissing(t *testing.T) {
-	// All three missing → zero values (empty / false / 0).
-	// 三者全缺 → 零值（空 / false / 0）。
 	args := `{"path":"/etc/hosts"}`
 	fields, stripped := StripStandardFields(args)
 
@@ -238,8 +226,6 @@ func TestStripStandardFields_OnlyExecutionGroup(t *testing.T) {
 }
 
 func TestStripStandardFields_NegativeExecutionGroupNormalizedToZero(t *testing.T) {
-	// Per StandardFields doc: negative values are treated as 0 (auto).
-	// 按 StandardFields 文档：负值视同 0（auto）。
 	args := `{"execution_group":-5,"path":"/x"}`
 	fields, _ := StripStandardFields(args)
 	if fields.ExecutionGroup != 0 {
@@ -264,11 +250,6 @@ func TestStripStandardFields_InvalidJSON(t *testing.T) {
 	}
 }
 
-// ── ToLLMDef ─────────────────────────────────────────────────────────────────
-
-// stubTool implements the full Tool interface for testing.
-//
-// stubTool 用于测试，实现完整 Tool 接口。
 type stubTool struct {
 	name   string
 	desc   string
@@ -332,14 +313,10 @@ func TestToLLMDef_OriginalParamsUnchanged(t *testing.T) {
 	original := `{"type":"object","properties":{"path":{"type":"string"}}}`
 	tool := &stubTool{params: json.RawMessage(original)}
 	ToLLMDef(tool)
-	// Original tool.Parameters() should not be mutated.
-	// 原始 tool.Parameters() 不应被修改。
 	if string(tool.params) != original {
 		t.Errorf("original params mutated: %s", tool.params)
 	}
 }
-
-// ── helpers ───────────────────────────────────────────────────────────────────
 
 func contains(ss []string, s string) bool {
 	for _, v := range ss {
@@ -350,6 +327,5 @@ func contains(ss []string, s string) bool {
 	return false
 }
 
-// Compile-time checks.
 var _ Tool = (*stubTool)(nil)
 var _ llminfra.ToolDef = llminfra.ToolDef{}

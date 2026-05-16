@@ -1,9 +1,3 @@
-// ask_test.go — unit tests for the AskUserQuestion system tool: schema
-// / metadata / ValidateInput / blocking-Execute round-trips against a
-// real askapp.Service.
-//
-// ask_test.go — AskUserQuestion 系统工具单测：schema / metadata /
-// ValidateInput / 与真 askapp.Service 配合的阻塞 Execute 往返。
 package ask
 
 import (
@@ -22,8 +16,6 @@ func newTestTool() (*AskUserQuestion, *askapp.Service) {
 	svc := askapp.NewService()
 	return &AskUserQuestion{svc: svc, timeout: 500 * time.Millisecond}, svc
 }
-
-// ── Identity / metadata / schema ──────────────────────────────────────────────
 
 func TestAskUserQuestion_Identity(t *testing.T) {
 	tool, _ := newTestTool()
@@ -68,16 +60,12 @@ func TestAskUserQuestion_Schema_HasExpectedFields(t *testing.T) {
 	}
 }
 
-// ── AskTools factory ─────────────────────────────────────────────────────────
-
 func TestAskTools_ReturnsOneTool(t *testing.T) {
 	tools := AskTools(askapp.NewService())
 	if len(tools) != 1 || tools[0].Name() != "AskUserQuestion" {
 		t.Errorf("AskTools = %+v", tools)
 	}
 }
-
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestAskUserQuestion_ValidateInput_RequiresQuestion(t *testing.T) {
 	tool, _ := newTestTool()
@@ -96,8 +84,6 @@ func TestAskUserQuestion_ValidateInput_AcceptsValid(t *testing.T) {
 	}
 }
 
-// ── Execute ──────────────────────────────────────────────────────────────────
-
 func TestAskUserQuestion_Execute_NoToolCallID_FriendlyMessage(t *testing.T) {
 	tool, _ := newTestTool()
 	out, err := tool.Execute(context.Background(), `{"question":"hi"}`)
@@ -113,8 +99,6 @@ func TestAskUserQuestion_Execute_AnswerArrivesBeforeTimeout(t *testing.T) {
 	tool, svc := newTestTool()
 	ctx := reqctxpkg.WithToolCallID(context.Background(), "call_xyz")
 
-	// Resolve in a side goroutine after the tool starts blocking.
-	// 工具阻塞后由 side goroutine Resolve。
 	go func() {
 		time.Sleep(20 * time.Millisecond)
 		_ = svc.Resolve("call_xyz", "yes please")
@@ -130,7 +114,7 @@ func TestAskUserQuestion_Execute_AnswerArrivesBeforeTimeout(t *testing.T) {
 }
 
 func TestAskUserQuestion_Execute_TimeoutMessage(t *testing.T) {
-	tool, _ := newTestTool() // tool.timeout = 500ms via newTestTool
+	tool, _ := newTestTool()
 	ctx := reqctxpkg.WithToolCallID(context.Background(), "call_timeout")
 	start := time.Now()
 	out, err := tool.Execute(ctx, `{"question":"any reply?"}`)

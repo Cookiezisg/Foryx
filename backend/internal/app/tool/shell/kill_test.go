@@ -1,6 +1,3 @@
-// kill_test.go — unit tests for the KillShell system tool.
-//
-// kill_test.go — KillShell 系统工具单测。
 package shell
 
 import (
@@ -19,7 +16,6 @@ func newTestKill() (*KillShell, *ProcessManager) {
 	return &KillShell{mgr: mgr}, mgr
 }
 
-// ── Identity / metadata / schema ──────────────────────────────────────────────
 
 func TestKillShell_IdentityMethods(t *testing.T) {
 	tool, _ := newTestKill()
@@ -52,7 +48,6 @@ func TestKillShell_Schema_HasBashID(t *testing.T) {
 	}
 }
 
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestKillShell_ValidateInput_RequiresBashID(t *testing.T) {
 	tool, _ := newTestKill()
@@ -62,7 +57,6 @@ func TestKillShell_ValidateInput_RequiresBashID(t *testing.T) {
 	}
 }
 
-// ── Execute ───────────────────────────────────────────────────────────────────
 
 func TestKillShell_Execute_UnknownID_FriendlyMessage(t *testing.T) {
 	tool, _ := newTestKill()

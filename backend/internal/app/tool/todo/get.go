@@ -1,7 +1,3 @@
-// get.go — TodoGet system tool: fetch a single todo by ID from the
-// current conversation.
-//
-// get.go — TodoGet 系统工具：按 ID 从当前对话取单条 todo。
 package todo
 
 import (
@@ -30,7 +26,7 @@ var todoGetSchema = json.RawMessage(`{
 
 // TodoGet implements the TodoGet system tool.
 //
-// TodoGet struct 是 TodoGet 系统工具。
+// TodoGet 是 TodoGet 系统工具的实现。
 type TodoGet struct {
 	svc *todoapp.Service
 }

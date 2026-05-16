@@ -1,9 +1,3 @@
-// revert.go — revert_function system tool: flips the active version pointer
-// to a previously-accepted version number (e.g. v3 → revert to v1).
-//
-// revert.go —— revert_function 系统工具:把 active 版本指针翻到指定的已
-// accepted 版本号。
-
 package function
 
 import (

@@ -1,9 +1,3 @@
-// list.go — TodoList system tool: read every active todo in the current
-// conversation, ordered by creation time. Used by the LLM to decide what
-// to do next.
-//
-// list.go — TodoList 系统工具：读取当前对话所有活跃 todo，按创建时间排序；
-// LLM 用来决定下一步做什么。
 package todo
 
 import (
@@ -24,7 +18,7 @@ var todoListSchema = json.RawMessage(`{
 
 // TodoList implements the TodoList system tool.
 //
-// TodoList struct 是 TodoList 系统工具。
+// TodoList 是 TodoList 系统工具的实现。
 type TodoList struct {
 	svc *todoapp.Service
 }
@@ -43,9 +37,6 @@ func (t *TodoList) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionMode)
 	return toolapp.PermissionAllow
 }
 
-// Execute pulls the conversation's todos and returns them as JSON.
-//
-// Execute 拉取对话 todo 并返 JSON。
 func (t *TodoList) Execute(ctx context.Context, _ string) (string, error) {
 	todos, err := t.svc.List(ctx)
 	if err != nil {

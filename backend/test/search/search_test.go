@@ -1,15 +1,8 @@
 //go:build pipeline
 
-// search_test.go — pipeline tests for the search system tools (Grep / Glob)
-// driving the full chat ReAct loop with a fake LLM. Verifies that:
-//   - Grep finds matching files in a temp tree the LLM never saw, then closes.
-//   - Glob with pattern "*" lists every immediate child as JSON enriched
-//     with type/size/mtime (the LS-replacement contract from decision D3).
-//   - Grep against a PathGuard-blocked location returns the friendly denial
-//     string in tool_result instead of bubbling up as a tool failure.
+// Package search_test runs pipeline tests for search system tools (Grep/Glob).
 //
-// search_test.go — search 系统工具（Grep / Glob）的 pipeline 测试，用 fake
-// LLM 驱动完整 chat ReAct 循环。
+// Package search_test 跑 search 系统工具（Grep/Glob）pipeline 测试。
 package search_test
 
 import (
@@ -25,12 +18,7 @@ import (
 	th "github.com/sunweilin/forgify/backend/test/harness"
 )
 
-// ── 1. Grep finds matches in a small fixture tree ─────────────────────────────
-
 func TestSearch_GrepFindsMatches(t *testing.T) {
-	// Seed a small tree the LLM has never seen; verify the tool actually
-	// reads the disk and returns paths matching the pattern.
-	// 种一棵 fixture 树（LLM 没见过），验证 Grep 真读盘并返符合模式的 path。
 	dir := t.TempDir()
 	files := map[string]string{
 		"a.go":     "package main\nfunc TargetFunc() {}\n",
@@ -79,8 +67,6 @@ func TestSearch_GrepFindsMatches(t *testing.T) {
 		t.Errorf("Grep tool_result not ok: %v", res)
 	}
 	resultText, _ := res["result"].(string)
-	// Both a.go and sub/c.go should appear; b.go (no TargetFunc) should not.
-	// a.go 与 sub/c.go 应出现；b.go 不应出现（无 TargetFunc）。
 	wantPaths := []string{filepath.Join(dir, "a.go"), filepath.Join(dir, "sub", "c.go")}
 	for _, p := range wantPaths {
 		if !strings.Contains(resultText, p) {
@@ -91,8 +77,6 @@ func TestSearch_GrepFindsMatches(t *testing.T) {
 		t.Errorf("Grep result should not list b.go (no TargetFunc):\n%s", resultText)
 	}
 }
-
-// ── 2. Glob "*" replaces LS — JSON with type/size/mtime ───────────────────────
 
 func TestSearch_GlobListsDirectoryWithMetadata(t *testing.T) {
 	dir := t.TempDir()
@@ -137,8 +121,6 @@ func TestSearch_GlobListsDirectoryWithMetadata(t *testing.T) {
 		t.Errorf("Glob tool_result not ok: %v", res)
 	}
 
-	// The Glob tool returns a JSON string in result; parse and verify shape.
-	// Glob 在 result 字段返 JSON 字符串；解析并验证结构。
 	resultText, _ := res["result"].(string)
 	var parsed struct {
 		Root    string `json:"root"`
@@ -171,8 +153,6 @@ func TestSearch_GlobListsDirectoryWithMetadata(t *testing.T) {
 		t.Errorf("alpha.txt type = %q, want file", gotTypes["alpha.txt"])
 	}
 }
-
-// ── 3. PathGuard denies sensitive paths in Grep ───────────────────────────────
 
 func TestSearch_GrepPathGuardDeniesSensitivePath(t *testing.T) {
 	home, err := os.UserHomeDir()
@@ -212,9 +192,6 @@ func TestSearch_GrepPathGuardDeniesSensitivePath(t *testing.T) {
 	if !strings.Contains(resultText, "denied by safety guard") {
 		t.Errorf("expected PathGuard denial in tool_result, got: %q", resultText)
 	}
-	// Defensive: framework-level ok must be true even though the tool refused —
-	// the denial is a friendly string, not a Go error.
-	// 防御：framework 层 ok 仍是 true（拒绝是友好字符串而非 Go err）。
 	if v, _ := res["ok"].(bool); !v {
 		t.Errorf("Grep tool_result.ok = false; expected true (denial is a string). data: %v", res)
 	}

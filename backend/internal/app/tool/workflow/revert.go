@@ -1,8 +1,3 @@
-// revert.go — revert_workflow system tool: flips active_version_id to a
-// numbered accepted version. Double-writes forge_started + forge_completed.
-//
-// revert.go —— revert_workflow:翻 active 指针到指定版本号;双写 forge bus。
-
 package workflow
 
 import (

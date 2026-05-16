@@ -1,8 +1,3 @@
-// mcp_test.go — JSON round-trip + status helpers + sentinel uniqueness.
-// Pure-function tests; runtime / Service tests live in app/mcp + infra/mcp.
-//
-// mcp_test.go ——JSON round-trip + status helper + sentinel 唯一性。
-// 纯函数测试；runtime / Service 在 app/mcp + infra/mcp 测。
 package mcp
 
 import (
@@ -148,10 +143,6 @@ func TestSentinels_AllDistinct(t *testing.T) {
 	}
 }
 
-// containsKey searches for a JSON object key (incl. its colon) so a stray
-// occurrence in a value doesn't false-positive.
-//
-// containsKey 找 JSON 对象键（含冒号）避免值里出现误报。
 func containsKey(haystack, needle string) bool {
 	return contains(haystack, needle+":") || contains(haystack, needle+" :")
 }

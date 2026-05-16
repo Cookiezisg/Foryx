@@ -1,10 +1,3 @@
-// grep_test.go — unit tests for the Grep system tool, focused on the
-// stdlib backend so they pass without ripgrep installed. The stdlib
-// backend is the surface-equivalent fallback; if it works, rg
-// (the speed-up path) only adds throughput.
-//
-// grep_test.go — Grep 单元测试，聚焦 stdlib 后端，让它在没装 ripgrep
-// 时也能跑过。stdlib 是 surface-equivalent 兜底；它对了，rg 只是加速。
 package search
 
 import (
@@ -20,7 +13,6 @@ import (
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 )
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 // newStdlibGrep builds a Grep wired with the default PathGuard and an
 // empty rgPath, forcing tests through the stdlib backend regardless of
@@ -74,7 +66,6 @@ func runGrep(t *testing.T, g *Grep, args grepArgs) string {
 	return out
 }
 
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestGrep_ValidateInput_RequiresPattern(t *testing.T) {
 	g := newStdlibGrep()
@@ -124,7 +115,6 @@ func TestGrep_ValidateInput_AcceptsValidArgs(t *testing.T) {
 	}
 }
 
-// ── normalize ─────────────────────────────────────────────────────────────────
 
 func TestGrepArgs_NormalizeFillsDefaults(t *testing.T) {
 	a := grepArgs{Around: 3}
@@ -150,7 +140,6 @@ func TestGrepArgs_NormalizeRespectsExplicitAB(t *testing.T) {
 	}
 }
 
-// ── Output modes ──────────────────────────────────────────────────────────────
 
 func TestGrep_FilesWithMatches_DefaultMode(t *testing.T) {
 	g := newStdlibGrep()
@@ -212,7 +201,6 @@ func TestGrep_Count_EmitsPerFileCounts(t *testing.T) {
 	}
 }
 
-// ── Filters: type / glob ──────────────────────────────────────────────────────
 
 func TestGrep_TypeFilter_GoOnly(t *testing.T) {
 	g := newStdlibGrep()
@@ -262,7 +250,6 @@ func TestGrep_GlobFilter_DoubleStarPattern(t *testing.T) {
 	}
 }
 
-// ── Modifiers: -i / -n / -A / -B / -C / multiline / head_limit ────────────────
 
 func TestGrep_IgnoreCase(t *testing.T) {
 	g := newStdlibGrep()
@@ -497,7 +484,6 @@ func TestGrep_HeadLimit_ContentMode_CapsMatches(t *testing.T) {
 	}
 }
 
-// ── Path safety + error paths ─────────────────────────────────────────────────
 
 func TestGrep_PathGuard_DeniesSensitivePath(t *testing.T) {
 	g := newStdlibGrep()
@@ -539,7 +525,6 @@ func TestGrep_NoMatches_ReportsExplicitly(t *testing.T) {
 	}
 }
 
-// ── Single-file root ──────────────────────────────────────────────────────────
 
 func TestGrep_SingleFileRoot_OmitsPathPrefix(t *testing.T) {
 	g := newStdlibGrep()
@@ -565,7 +550,6 @@ func TestGrep_SingleFileRoot_OmitsPathPrefix(t *testing.T) {
 	}
 }
 
-// ── Identity / metadata ───────────────────────────────────────────────────────
 
 func TestGrep_IdentityMethods(t *testing.T) {
 	g := newStdlibGrep()

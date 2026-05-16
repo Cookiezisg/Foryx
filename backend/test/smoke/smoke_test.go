@@ -1,15 +1,8 @@
 //go:build pipeline
 
-// smoke_test.go — sanity check that the harness wires up correctly end-to-end.
-// Boots with a FakeLLMServer, seeds credentials, POSTs a message, and confirms
-// the final SSE snapshot has status=completed with at least one text block and
-// non-zero token counts.
+// Package smoke is the foundational harness sanity check; failure invalidates the rest of the suite.
 //
-// This test runs offline (no external network). If it fails, the rest of the
-// pipeline suite has no valid foundation.
-//
-// smoke_test.go — 验证 harness 端到端接线正确的 sanity check。
-// 使用 FakeLLMServer 启动，无外网依赖。本测试失败则后续 pipeline 套件无效。
+// Package smoke 是 harness 基础 sanity check；失败则其他 pipeline 套件无效。
 package smoke
 
 import (
@@ -61,16 +54,10 @@ func TestHarness_Smoke(t *testing.T) {
 			len(final.Blocks), sub.FormatRawEvents())
 	}
 
-	// Token counts are echoed from Script.InputTokens / OutputTokens.
-	// Token 计数由 Script 里的值回传。
 	if final.InputTokens == 0 || final.OutputTokens == 0 {
 		t.Errorf("token counts not populated: in=%d out=%d", final.InputTokens, final.OutputTokens)
 	}
 
-	// Streaming events must have arrived: at minimum message_start +
-	// block_start + ≥1 block_delta + block_stop + message_stop = 5.
-	// 流式事件至少 5 条（message_start + block_start + ≥1 block_delta +
-	// block_stop + message_stop）。
 	eventLogCount := 0
 	for _, e := range sub.RawEvents() {
 		if e.Source == "eventlog" {

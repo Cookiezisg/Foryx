@@ -1,12 +1,3 @@
-// mcp_test.go — E2E contract tests for /api/v1/mcp-* and
-// /api/v1/mcp-registry routes. Real httptest server backed by an
-// app/mcp.Service with the SetClientFactory test seam wired to a
-// fake mcpinfra.Client (no subprocess spawn). End-to-end with a real
-// stdio MCP server lives in the D6-5 pipeline suite.
-//
-// mcp_test.go ——/api/v1/mcp-* + /api/v1/mcp-registry 端到端契约测试。真
-// httptest server 后端 app/mcp.Service，SetClientFactory 测试 seam 接 fake
-// mcpinfra.Client（无子进程）。完整端到端走 D6-5 pipeline。
 package handlers
 
 import (
@@ -31,8 +22,6 @@ import (
 	middlewarehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/middleware"
 )
 
-// ── fake Client + harness ────────────────────────────────────────────
-
 type fakeMCPClient struct {
 	mu            sync.Mutex
 	initErr       error
@@ -51,12 +40,6 @@ func (f *fakeMCPClient) CallTool(_ context.Context, _ string, _ json.RawMessage)
 func (f *fakeMCPClient) Close() error { f.mu.Lock(); defer f.mu.Unlock(); f.closed = true; return nil }
 func (f *fakeMCPClient) StderrTail() string { return "" }
 
-// mcpHandlerHarness owns the test server + Service + per-name fake
-// Client registry. Tests register fakeMCPClients before driving the
-// HTTP routes that trigger Connect.
-//
-// mcpHandlerHarness 持测试 server + Service + per-name fake Client 表。
-// 测试在驱动触 Connect 的 HTTP 路由前预注册 fakeMCPClient。
 type mcpHandlerHarness struct {
 	srv     *httptest.Server
 	svc     *mcpapp.Service
@@ -71,14 +54,6 @@ func newMCPTestServer(t *testing.T) *mcpHandlerHarness {
 	h := &mcpHandlerHarness{
 		clients: map[string]*fakeMCPClient{},
 	}
-	// Marketplace V3 (curated): tests use an inline fakeRegistrySource
-	// (see bottom of this file) seeded with two entries — "playwright"
-	// (zero-arg) and "sqlite" (forced required arg) — to exercise both
-	// install paths without depending on the production curated catalog.
-	//
-	// Marketplace V3（curated）：测试用底部内联的 fakeRegistrySource，注入
-	// "playwright"（零参）+ "sqlite"（强制必填 arg）两条覆盖装包路径，
-	// 不依赖生产 curated 目录。
 	source := newFakeRegistrySource(
 		mcpdomain.RegistryEntry{
 			Name:        "playwright",
@@ -103,8 +78,8 @@ func newMCPTestServer(t *testing.T) *mcpHandlerHarness {
 	h.svc = mcpapp.New(
 		filepath.Join(t.TempDir(), "mcp.json"),
 		source,
-		nil,                // sandbox not used by these endpoint tests
-		nil, nil, nil, nil, // model picker / keys / factory / notif — no Search probes here
+		nil,
+		nil, nil, nil, nil,
 		log,
 	)
 	h.svc.SetClientFactory(func(cfg mcpdomain.ServerConfig, _ *zap.Logger) mcpinfra.Client {
@@ -132,12 +107,6 @@ func (h *mcpHandlerHarness) registerClient(name string, c *fakeMCPClient) {
 	h.clients[name] = c
 }
 
-// containsMCP is a tiny string-slice helper local to mcp_test.go (the
-// shared name "contains" is defined in subagent_test.go in the same
-// package; we use a distinct name here to avoid a cross-file collision).
-//
-// containsMCP 是本文件内的 string-slice helper（subagent_test.go 同包已
-// 定义 "contains"，用不同名字避免跨文件冲突）。
 func contains(xs []string, want string) bool {
 	for _, x := range xs {
 		if x == want {
@@ -147,7 +116,7 @@ func contains(xs []string, want string) bool {
 	return false
 }
 
-// envOf decodes the standard {"data": ...} envelope for tests.
+// envOf decodes {"data": ...} into a typed value for tests.
 //
 // envOf 解 {"data": ...} envelope 给测试用。
 func envOf[T any](t *testing.T, body io.ReadCloser) T {
@@ -162,7 +131,6 @@ func envOf[T any](t *testing.T, body io.ReadCloser) T {
 	return env.Data
 }
 
-// ── List / Get servers ───────────────────────────────────────────────
 
 func TestMCP_ListServers_Empty(t *testing.T) {
 	h := newMCPTestServer(t)
@@ -202,7 +170,6 @@ func TestMCP_GetServer_NotFound(t *testing.T) {
 	}
 }
 
-// ── PUT / DELETE ─────────────────────────────────────────────────────
 
 func TestMCP_PutServer_Creates(t *testing.T) {
 	h := newMCPTestServer(t)
@@ -256,7 +223,6 @@ func TestMCP_DeleteServer_NotFound(t *testing.T) {
 	}
 }
 
-// ── :reconnect / :health-check ───────────────────────────────────────
 
 func TestMCP_Reconnect(t *testing.T) {
 	h := newMCPTestServer(t)
@@ -306,7 +272,6 @@ func TestMCP_NameAction_UnknownAction(t *testing.T) {
 	}
 }
 
-// ── :import ──────────────────────────────────────────────────────────
 
 func TestMCP_Import_JSONBody(t *testing.T) {
 	h := newMCPTestServer(t)
@@ -397,15 +362,8 @@ func TestMCP_Import_Multipart(t *testing.T) {
 	}
 }
 
-// ── Registry endpoints ───────────────────────────────────────────────
 
 func TestMCP_ListRegistry_ReturnsAllEntries(t *testing.T) {
-	// V3 (2026-05-09): GET /api/v1/mcp-registry returns the full curated
-	// catalog — no query parameter. fakeRegistrySource is seeded with
-	// playwright + sqlite, so we expect 2 entries.
-	//
-	// V3：GET /api/v1/mcp-registry 返完整 curated 目录，无 query 参数。
-	// fakeRegistrySource 注 playwright + sqlite，期 2 条。
 	h := newMCPTestServer(t)
 	resp, _ := http.Get(h.srv.URL + "/api/v1/mcp-registry")
 	if resp.StatusCode != http.StatusOK {
@@ -438,8 +396,6 @@ func TestMCP_GetRegistryEntry_NotFound(t *testing.T) {
 }
 
 func TestMCP_Install_MissingRequiredArg(t *testing.T) {
-	// SQLite entry requires `dbPath` arg. Install without args → 422.
-	// SQLite 条目要 `dbPath`。无 args 装 → 422。
 	h := newMCPTestServer(t)
 	body := strings.NewReader(`{}`)
 	req, _ := http.NewRequest(http.MethodPost, h.srv.URL+"/api/v1/mcp-registry/sqlite:install", body)
@@ -470,7 +426,6 @@ func TestMCP_Install_UnknownAction(t *testing.T) {
 	}
 }
 
-// ── inline fake RegistrySource (handler test only) ───────────────────
 
 type fakeRegistrySource struct {
 	byName map[string]mcpdomain.RegistryEntry

@@ -1,29 +1,3 @@
-// call.go — Service.Call dispatches to a HandlerInstance per the user-clarified
-// caller-owns lifetime model (forge_redesign 2026-05-12):
-//
-//   - chat scope (TriggeredByChat / Owner.Kind="chat"):
-//         per-call lifetime — spawn → call → destroy in one Service.Call.
-//         No registry interaction. Useful for one-off LLM tool invocations
-//         where the cost of spawning a fresh subprocess (~100ms typical) is
-//         acceptable for the simplicity gain.
-//
-//   - workflow / test / session scope:
-//         persistent — registry.Acquire spawns the first time and reuses on
-//         subsequent Calls within the same owner. Owner-end hooks
-//         (workflow.run.End / test.End / session.Release) call DestroyOwner
-//         to tear down everything for that scope.
-//
-// spawn flow (shared by both paths):
-//   1. Resolve active version + decrypt config
-//   2. Validate config matches InitArgsSchema (required keys present)
-//   3. AssembleClass → WriteCodeFile (user_handler.py + driver.py)
-//   4. Sync env if not ready
-//   5. SpawnLongLived → wrap pipes in handlerinfra.Client → Init
-//   6. Capture stderr to a 256KB ring (logged at crash time)
-//
-// call.go —— Service.Call 按 caller-owns lifetime 派发(2026-05-12 用户细化):
-// chat 单调用,workflow/test/session 经 registry 持久。spawn 流程见上。
-
 package handler
 
 import (
@@ -45,26 +19,22 @@ import (
 
 // CallInput is the request shape for Service.Call.
 //
-// CallInput Service.Call 的请求形状。
+// CallInput 是 Service.Call 的请求形状。
 type CallInput struct {
-	HandlerName string         // by name (preferred; LLM uses name)
-	HandlerID   string         // alternative — direct id lookup
+	HandlerName string
+	HandlerID   string
 	Method      string
 	Args        map[string]any
-	Owner       Owner          // caller-context scope (chat=per-call; others=persistent)
-	OnProgress  func(any)      // optional — invoked on each progress yield from streaming methods
+	Owner       Owner
+	OnProgress  func(any)
 }
 
-// Call dispatches a method call on a handler instance, honoring caller-owns
-// lifetime per the user's clarified model. Always writes one terminal Call
-// row (D22) to handler_calls.
+// Call dispatches a method on a handler instance honoring caller-owns lifetime; always writes one Call row.
 //
-// Call 派发 handler instance 的 method 调用,按 caller-owns lifetime 处理;
-// 终态写 1 行 Call 到 handler_calls(D22)。
+// Call 按 caller-owns lifetime 派发 handler 方法调用，并写一行 Call。
 func (s *Service) Call(ctx context.Context, in CallInput) (any, error) {
-	uid, _ := reqctxpkg.RequireUserID(ctx) // ok if empty — recordCall handles
+	uid, _ := reqctxpkg.RequireUserID(ctx)
 
-	// 1. Resolve handler by ID or name.
 	var h *handlerdomain.Handler
 	if in.HandlerID != "" {
 		got, err := s.repo.GetHandler(ctx, in.HandlerID)
@@ -121,9 +91,6 @@ func (s *Service) callPerCallTracked(ctx context.Context, h *handlerdomain.Handl
 	return res, inst.ID, err
 }
 
-// callViaRegistryTracked uses registry.Acquire and returns the instanceID used.
-//
-// callViaRegistryTracked 走 registry.Acquire 返 instanceID。
 func (s *Service) callViaRegistryTracked(ctx context.Context, h *handlerdomain.Handler, in CallInput) (any, string, error) {
 	inst, err := s.registry.Acquire(ctx, in.Owner, h.Name, func(ctx context.Context) (*Instance, error) {
 		return s.spawnInstance(ctx, h, in.Owner)
@@ -135,11 +102,6 @@ func (s *Service) callViaRegistryTracked(ctx context.Context, h *handlerdomain.H
 	return res, inst.ID, err
 }
 
-// recordCall writes a terminal Call row capturing the outcome. Best-effort
-// (a failed log write doesn't surface as a call failure). Uses detached ctx
-// (§S9) so caller cancel doesn't lose the log.
-//
-// recordCall 写一行 Call(详 D22)。best-effort + detached ctx。
 func (s *Service) recordCall(
 	ctx context.Context,
 	uid string,
@@ -207,17 +169,15 @@ func (s *Service) recordCall(
 	}
 }
 
-// spawnInstance is the shared spawn flow used by both paths. Spawns a fresh
-// subprocess, sends Init, returns ready-to-use Instance.
+// spawnInstance is the shared spawn flow: fresh subprocess, send Init, return ready Instance.
 //
-// spawnInstance 是双路共用的 spawn 流程;起子进程 + 发 Init,返就绪 Instance。
+// spawnInstance 是共用 spawn 流程：起子进程、发 Init、返就绪 Instance。
 func (s *Service) spawnInstance(ctx context.Context, h *handlerdomain.Handler, owner Owner) (*Instance, error) {
 	active, err := s.repo.GetVersion(ctx, h.ActiveVersionID)
 	if err != nil {
 		return nil, fmt.Errorf("get active version: %w", err)
 	}
 
-	// Validate config has all required init_args.
 	config, err := s.LoadConfig(ctx, h.ID)
 	if err != nil && !errors.Is(err, handlerdomain.ErrConfigDecryptFailed) {
 		return nil, fmt.Errorf("load config: %w", err)
@@ -232,29 +192,19 @@ func (s *Service) spawnInstance(ctx context.Context, h *handlerdomain.Handler, o
 		}
 	}
 
-	// Ensure env is ready. We sync here synchronously (call-path is interactive
-	// and the LLM/user is waiting). For first-call latency optimization, future
-	// versions could pre-warm on accept.
-	//
-	// 同步 sync env(call-path 是交互式,LLM/用户在等)。未来可在 accept 时预热。
 	if active.EnvStatus != handlerdomain.EnvStatusReady {
 		if err := s.syncEnv(ctx, active); err != nil {
 			return nil, fmt.Errorf("sync env: %w", err)
 		}
 	}
 
-	// Compose class + write files.
 	classCode := AssembleClass(activeToVersionDraft(active))
 	if err := s.sandbox.WriteCodeFile(ctx, h.ID, active.ID, classCode); err != nil {
 		return nil, fmt.Errorf("write code: %w", err)
 	}
 
-	// Spawn subprocess. #15: if env was destroyed externally (admin :destroy /
-	// disk wipe) between accept and call, env row is gone but active.EnvStatus
-	// still says "ready". Rebuild from stored spec + retry once. Persistent
-	// failure after rebuild surfaces normally so we don't loop.
-	// #15: 外部销毁后 active.EnvStatus 仍 ready 但 env 行没了;按 spec 重建
-	// 重试一次。
+	// Lazy rebuild if env was destroyed externally; retry once.
+	// 外部销毁导致 env 行丢失时按存档重建并重试一次。
 	spawnReq := SpawnRequest{
 		HandlerID: h.ID,
 		VersionID: active.ID,
@@ -276,14 +226,11 @@ func (s *Service) spawnInstance(ctx context.Context, h *handlerdomain.Handler, o
 		return nil, fmt.Errorf("%w: %v", handlerdomain.ErrInstanceSpawnFailed, err)
 	}
 
-	// Stderr → 256KB ring + zap log for crash diagnostics.
 	stderrRing := newStderrRing(256 * 1024)
 	go captureStderr(handle.Stderr(), stderrRing, s.log.With(zap.String("handlerId", h.ID), zap.Int("pid", handle.PID())))
 
-	// Wrap pipes in client and Init.
 	client := s.clientFact(handle.Stdin(), handle.Stdout(), s.log)
 	if err := client.Init(ctx, config); err != nil {
-		// Init failed; kill the subprocess.
 		_ = handle.Kill()
 		return nil, fmt.Errorf("init: %w", err)
 	}
@@ -298,9 +245,6 @@ func (s *Service) spawnInstance(ctx context.Context, h *handlerdomain.Handler, o
 	return inst, nil
 }
 
-// invokeMethod dispatches the method call (StreamCall if onProgress, Call otherwise).
-//
-// invokeMethod 派发 method;有 onProgress 走 StreamCall,否则 Call。
 func (s *Service) invokeMethod(ctx context.Context, inst *Instance, in CallInput) (any, error) {
 	if in.OnProgress != nil {
 		return inst.Client.StreamCall(ctx, in.Method, in.Args, in.OnProgress)
@@ -308,10 +252,6 @@ func (s *Service) invokeMethod(ctx context.Context, inst *Instance, in CallInput
 	return inst.Client.Call(ctx, in.Method, in.Args)
 }
 
-// activeToVersionDraft adapts a persisted Version row to a VersionDraft for
-// AssembleClass.
-//
-// activeToVersionDraft 把 Version 行转 VersionDraft 给 AssembleClass。
 func activeToVersionDraft(v *handlerdomain.Version) *VersionDraft {
 	return &VersionDraft{
 		Imports:        v.Imports,
@@ -324,15 +264,9 @@ func activeToVersionDraft(v *handlerdomain.Version) *VersionDraft {
 	}
 }
 
-// syncEnv runs Sync synchronously, writes terminal env_status to DB, mutates
-// v in place so the caller sees the terminal state without re-reading.
-// Env terminal state surfaces via v.EnvStatus / v.EnvError + the LLM tool
-// result; D-redo-7 removed env_synced / env_failed notification actions
-// (UI fetches via GET).
+// syncEnv materializes the venv synchronously, writes terminal EnvStatus to DB + v in place.
 //
-// syncEnv 同步跑 Sync + 写 DB 终态 + 镜像到 v(调用方不必 re-read);
-// 终态信息走 v.EnvStatus/EnvError + LLM tool_result(D-redo-7 删 env_synced/
-// env_failed 通知)。
+// syncEnv 同步物化 venv，终态写 DB 并镜像到 v。
 func (s *Service) syncEnv(ctx context.Context, v *handlerdomain.Version) error {
 	now := time.Now().UTC()
 	_ = s.repo.UpdateVersionEnv(ctx, v.ID,
@@ -364,8 +298,6 @@ func (s *Service) syncEnv(ctx context.Context, v *handlerdomain.Version) error {
 		v.EnvSyncStage = "failed"
 		v.EnvSyncDetail = ""
 		v.EnvSyncedAt = &now
-		// env_failed / env_synced notifications removed in C3 (D-redo-7);
-		// env terminal state carried by tool_result + UI GET (D-redo-6).
 		return fmt.Errorf("%w: %v", handlerdomain.ErrEnvFailed, err)
 	}
 	syncedAt := time.Now().UTC()
@@ -379,12 +311,9 @@ func (s *Service) syncEnv(ctx context.Context, v *handlerdomain.Version) error {
 	return nil
 }
 
-// ── stderr capture ───────────────────────────────────────────────────────────
-
-// stderrRing is a tiny 256KB ring buffer used to capture subprocess stderr.
-// On crash the ring's tail is what gets logged.
+// stderrRing is a small ring buffer capturing subprocess stderr; the tail is logged on crash.
 //
-// stderrRing 一个简易环形缓冲区抓子进程 stderr;crash 时尾部进 log。
+// stderrRing 小型环形缓冲，捕获子进程 stderr，crash 时尾部入 log。
 type stderrRing struct {
 	mu  sync.Mutex
 	buf []byte
@@ -400,7 +329,6 @@ func (r *stderrRing) Write(p []byte) (int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if len(p) >= r.cap {
-		// truncate to last cap bytes
 		p = p[len(p)-r.cap:]
 		r.buf = append(r.buf[:0], p...)
 		return len(p), nil
@@ -409,7 +337,6 @@ func (r *stderrRing) Write(p []byte) (int, error) {
 		r.buf = append(r.buf, p...)
 		return len(p), nil
 	}
-	// shift left to make room
 	overflow := len(r.buf) + len(p) - r.cap
 	copy(r.buf, r.buf[overflow:])
 	r.buf = r.buf[:len(r.buf)-overflow]
@@ -423,12 +350,9 @@ func (r *stderrRing) String() string {
 	return string(r.buf)
 }
 
-// captureStderr scans stderr line-by-line, writing each line to the ring
-// AND emitting at zap Info level. Runs in a goroutine for the subprocess
-// lifetime — exits on EOF (handle.Kill or natural process exit).
+// captureStderr scans stderr line-by-line into the ring and emits at zap Info.
 //
-// captureStderr 行扫 stderr,每行写 ring + zap Info log。子进程结束(EOF)时
-// goroutine 退。
+// captureStderr 行扫 stderr，写入 ring 并以 zap Info 输出。
 func captureStderr(r io.Reader, ring *stderrRing, log *zap.Logger) {
 	if r == nil {
 		return
@@ -443,8 +367,4 @@ func captureStderr(r io.Reader, ring *stderrRing, log *zap.Logger) {
 	}
 }
 
-// _ guard against unused field warnings; stderr ring used only on crash
-// reporting which is wired in Plan 02 Phase 5 (LLM tool friendly error msg).
-//
-// _ 占位防 ring 暂时未读警告(crash 路径在 Phase 5 LLM 工具接驳)。
 var _ = (&stderrRing{}).String

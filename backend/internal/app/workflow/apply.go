@@ -1,21 +1,3 @@
-// apply.go — ops engine for Workflow authoring. 9 ops mutate a Graph
-// snapshot (set_meta / add_node / update_node / delete_node / add_edge /
-// update_edge / delete_edge / set_variable / unset_variable). Each op
-// fires a progress delta on the caller's eventlog block for streaming
-// UX. update_node / update_edge use RFC 7396 JSON Merge Patch (same
-// scheme as handler's update_method) so LLM "patch just this field"
-// flows survive structural drift.
-//
-// Final-state validation (DAG / refs / required trigger / etc.) lives in
-// validate.go and runs at the end of ApplyOps, not per-op — intermediate
-// states are allowed to be transiently invalid (add_node before add_edge
-// referencing it, etc.).
-//
-// apply.go —— Workflow authoring 的 ops 引擎。9 op 改 Graph 快照;每 op 推
-// 一个 progress delta 给流式 UX 看;update_node/edge 走 RFC 7396 JSON Merge
-// Patch(同 handler.update_method);最终态校验在 validate.go,中间态允许
-// 临时不合法。
-
 package workflow
 
 import (
@@ -28,21 +10,17 @@ import (
 	eventlogpkg "github.com/sunweilin/forgify/backend/internal/pkg/eventlog"
 )
 
-// Op is one wire-level op from the LLM. Type is the discriminator; Raw is
-// the unmodified body so per-op handlers can decode it into their own
-// schema without forcing a single big union type up here.
+// Op is one wire-level op; Type is the discriminator and Raw is the unmodified body.
 //
-// Op 是来自 LLM 的线上 op 一条。Type 判别;Raw 是未动 body,让每 op handler
-// 自己解码到各自 schema。
+// Op 是单条 LLM op；Type 判别，Raw 是未动 body。
 type Op struct {
 	Type string          `json:"op"`
 	Raw  json.RawMessage `json:"-"`
 }
 
-// ParseOps decodes the JSON array the LLM emits into []Op (each object
-// preserved as Raw so the per-op handler decodes its own fields).
+// ParseOps decodes the LLM JSON array into []Op.
 //
-// ParseOps 把 LLM 发的 JSON 数组解为 []Op;每对象 Raw 保留给后续 handler 用。
+// ParseOps 把 LLM JSON 数组解码为 []Op。
 func ParseOps(raw json.RawMessage) ([]Op, error) {
 	if len(raw) == 0 {
 		return nil, nil
@@ -67,18 +45,9 @@ func ParseOps(raw json.RawMessage) ([]Op, error) {
 	return ops, nil
 }
 
-// ApplyOps applies ops to a base graph and returns the final graph. base
-// may be nil (create-from-scratch). progressBlockID, if non-empty, is the
-// eventlog progress block to receive one delta per op for streaming UX.
+// ApplyOps applies ops to a base graph (nil = from scratch) and returns the final graph.
 //
-// Per-op failures wrap workflowdomain.ErrOpInvalid with context. No
-// final-state validation here — callers run validate.go's ValidateGraph
-// after ApplyOps when they want the strict check (Service.Create / Edit
-// always do).
-//
-// ApplyOps 把 ops 应用到 base 图返最终图。base 可 nil(从零建)。
-// progressBlockID 非空则每 op 推一条 delta。per-op 失败 wrap ErrOpInvalid;
-// 不做最终态校验,调用方自己跑 ValidateGraph(Service.Create/Edit 都跑)。
+// ApplyOps 把 ops 应用到 base 图（nil = 从零建）并返最终图。
 func ApplyOps(ctx context.Context, base *workflowdomain.Graph, ops []Op, progressBlockID string) (*workflowdomain.Graph, error) {
 	g := cloneGraph(base)
 	em := eventlogpkg.From(ctx)
@@ -91,14 +60,11 @@ func ApplyOps(ctx context.Context, base *workflowdomain.Graph, ops []Op, progres
 			em.DeltaBlock(ctx, progressBlockID,
 				fmt.Sprintf("op[%d] %s ✓\n", i, op.Type))
 		}
-		_ = eventlogdomain.StatusStreaming // keep import used; eventlogdomain alias is referenced via the progress block flow
+		_ = eventlogdomain.StatusStreaming
 	}
 	return g, nil
 }
 
-// applyOne dispatches one op to its handler. Each handler mutates g in place.
-//
-// applyOne 派发一个 op 给对应 handler;handler in-place 改 g。
 func applyOne(g *workflowdomain.Graph, op Op) error {
 	switch op.Type {
 	case workflowdomain.OpSetMeta:
@@ -123,8 +89,6 @@ func applyOne(g *workflowdomain.Graph, op Op) error {
 		return fmt.Errorf("unknown op type %q", op.Type)
 	}
 }
-
-// ── per-op handlers ──────────────────────────────────────────────────────────
 
 func applySetMeta(g *workflowdomain.Graph, raw json.RawMessage) error {
 	var p struct {
@@ -158,6 +122,10 @@ func applyAddNode(g *workflowdomain.Graph, raw json.RawMessage) error {
 		return fmt.Errorf("add_node: empty node id")
 	}
 	if !workflowdomain.IsValidNodeType(p.Node.Type) {
+		if isPseudoTerminalType(p.Node.Type) {
+			return fmt.Errorf("add_node: node %q uses type %q — workflows have no terminal node; the DAG ends implicitly when no edges remain. Remove this node and let the last real node be the leaf",
+				p.Node.ID, p.Node.Type)
+		}
 		return fmt.Errorf("add_node: unknown node type %q", p.Node.Type)
 	}
 	if findNode(g, p.Node.ID) >= 0 {
@@ -334,12 +302,6 @@ func applyUnsetVariable(g *workflowdomain.Graph, raw json.RawMessage) error {
 	return nil
 }
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-// cloneGraph deep-copies base so applies don't mutate the caller's view.
-// nil base returns an empty Graph (create-from-scratch path).
-//
-// cloneGraph 深拷 base;nil 返空 Graph(create-from-scratch)。
 func cloneGraph(base *workflowdomain.Graph) *workflowdomain.Graph {
 	if base == nil {
 		return &workflowdomain.Graph{
@@ -355,9 +317,6 @@ func cloneGraph(base *workflowdomain.Graph) *workflowdomain.Graph {
 		Nodes:       append([]workflowdomain.NodeSpec(nil), base.Nodes...),
 		Edges:       append([]workflowdomain.EdgeSpec(nil), base.Edges...),
 	}
-	// Node.Config is a map[string]any — shallow-copy via JSON round-trip per
-	// node so update_node mutations don't bleed into the caller's base.
-	// 配置 map 深拷;否则 update_node 改 g.Nodes[i].Config 会污染 base。
 	for i := range g.Nodes {
 		if g.Nodes[i].Config != nil {
 			cfg, _ := json.Marshal(g.Nodes[i].Config)
@@ -387,21 +346,10 @@ func findEdge(g *workflowdomain.Graph, id string) int {
 	return -1
 }
 
-// edgeRefsNode reports whether edge e references node id on either side.
-// Post-port-refactor (2026-05), From / To are plain node IDs — no dot
-// parsing needed.
-//
-// edgeRefsNode 报告 edge 是否引用某节点(任一端)。port 重构后 From/To 是
-// 纯 node ID,不再走点分隔。
 func edgeRefsNode(e workflowdomain.EdgeSpec, nodeID string) bool {
 	return e.From == nodeID || e.To == nodeID
 }
 
-// mergeNodePatch applies a JSON Merge Patch (RFC 7396) to one NodeSpec.
-// Same pattern as handler.mergeMethodPatch.
-//
-// mergeNodePatch 对 NodeSpec 应用 JSON Merge Patch(RFC 7396);跟
-// handler.mergeMethodPatch 同模式。
 func mergeNodePatch(target workflowdomain.NodeSpec, patch json.RawMessage) (workflowdomain.NodeSpec, error) {
 	rawTarget, err := json.Marshal(target)
 	if err != nil {
@@ -452,10 +400,9 @@ func mergeEdgePatch(target workflowdomain.EdgeSpec, patch json.RawMessage) (work
 	return out, nil
 }
 
-// mergePatch implements RFC 7396 — patch values overwrite recursively; nil
-// values in patch delete the target key.
+// mergePatch implements RFC 7396 recursively; nil values delete the target key.
 //
-// mergePatch 实现 RFC 7396 — patch 值覆盖(递归);nil 值删 target 键。
+// mergePatch 递归实现 RFC 7396；patch 中 nil 删 target key。
 func mergePatch(target, patch map[string]any) map[string]any {
 	if target == nil {
 		target = map[string]any{}

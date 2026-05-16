@@ -1,15 +1,6 @@
-// Package forge provides the in-process Bridge implementation for the
-// trinity-forging SSE protocol. Per-user keying, replay buffer for
-// Last-Event-ID reconnect, block-on-slow-subscriber semantic — same
-// pattern as infra/eventlog + infra/notifications post D-redo-2/3.
+// Package forge is the in-process Bridge for the trinity-forging SSE protocol (per-user keyed).
 //
-// Sized for single-user desktop load: forge events fire ~once per
-// trinity create/edit lifecycle (a handful per active session), so the
-// buffer is generously sized at 1024 (≈ 12-hour active dev session).
-//
-// Package forge 提供 trinity 锻造 SSE 协议的进程内 Bridge。per-user key、
-// replay buffer + Last-Event-ID 重连、慢订阅者阻塞 publisher——跟
-// infra/eventlog + infra/notifications 同模式(D-redo-2/3 后统一)。
+// Package forge 是 trinity 锻造 SSE 协议的进程内 Bridge（按 user_id 分流）。
 package forge
 
 import (
@@ -23,10 +14,6 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// Tunables. Forge events fire once per create/edit lifecycle (~10 events
-// per active session). 1024 covers a multi-hour dev session.
-//
-// 调参。forge 事件每次 create/edit 触发一组(~10 个);1024 够 multi-hour 会话。
 const (
 	replayBufferSize     = 1024
 	subscriberBufferSize = 1280 // = replayBufferSize + 256 live headroom
@@ -53,12 +40,9 @@ type subscription struct {
 	closed sync.Once
 }
 
-// NewBridge constructs an empty Bridge. The log parameter is accepted
-// for API symmetry with eventlog / notifications NewBridge but is
-// currently unused — bridge follows §S10 "synchronous primitive"
-// rule (don't self-log; let callers decide).
+// NewBridge constructs an empty Bridge; log is unused (synchronous primitive per §S10).
 //
-// NewBridge 构造空 Bridge。log 参数为 API 对称保留,目前未用。
+// NewBridge 构造空 Bridge；log 暂未使用（§S10 同步原语不自打日志）。
 func NewBridge(_ *zap.Logger) *Bridge {
 	return &Bridge{users: make(map[string]*userState)}
 }
@@ -74,9 +58,9 @@ func (b *Bridge) ensureUser(id string) *userState {
 	return state
 }
 
-// Publish reads user_id from ctx, validates, assigns seq, dispatches.
+// Publish assigns per-user seq, buffers for replay, fans out; blocks on slow subscriber.
 //
-// Publish 从 ctx 读 user_id;校验、分配 seq、扇出。
+// Publish 分配 per-user seq、入 replay buffer、扇出订阅者；订阅者满时阻塞。
 func (b *Bridge) Publish(ctx context.Context, e forgedomain.Event) (forgedomain.Envelope, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -102,7 +86,6 @@ func (b *Bridge) Publish(ctx context.Context, e forgedomain.Event) (forgedomain.
 		select {
 		case s.ch <- env:
 		case <-s.done:
-			// subscriber cancelled — skip
 		case <-ctx.Done():
 			return env, ctx.Err()
 		}
@@ -110,12 +93,9 @@ func (b *Bridge) Publish(ctx context.Context, e forgedomain.Event) (forgedomain.
 	return env, nil
 }
 
-// Subscribe reads user_id from ctx and registers a subscriber. fromSeq>0
-// replays buffered envelopes with seq > fromSeq before live; ErrSeqTooOld
-// if too old.
+// Subscribe registers a subscriber for ctx's user_id; fromSeq>0 replays buffered envelopes first.
 //
-// Subscribe 从 ctx 读 user_id 注册订阅者。fromSeq>0 先 replay 再投实时;
-// 过旧返 ErrSeqTooOld。
+// Subscribe 按 ctx 的 user_id 注册订阅者；fromSeq>0 先 replay 历史再上实时。
 func (b *Bridge) Subscribe(ctx context.Context, fromSeq int64) (<-chan forgedomain.Envelope, func(), error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -171,7 +151,4 @@ func (b *Bridge) Subscribe(ctx context.Context, fromSeq int64) (<-chan forgedoma
 	return sub.ch, cancel, nil
 }
 
-// Compile-time check.
-//
-// 编译期检查。
 var _ forgedomain.Bridge = (*Bridge)(nil)

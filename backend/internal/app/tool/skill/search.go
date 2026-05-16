@@ -1,11 +1,3 @@
-// search.go — search_skills system tool. LLM calls this to discover
-// installed Anthropic Agent Skills matching a query. Returns top-K
-// candidates each with name + description + isFork flag (so the LLM
-// can predict whether activation will spawn a subagent).
-//
-// search.go ——search_skills 系统工具。LLM 调它发现匹配 query 的已装
-// Agent Skill。返 top-K 候选含 name + description + isFork 标志（让
-// LLM 预知激活会否 spawn subagent）。
 package skill
 
 import (
@@ -19,15 +11,9 @@ import (
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 )
 
-// defaultTopK matches mcp.search_mcp's default — 3 keeps the result tiny
-// (skills count is typically << MCP tool count) and makes the LLM commit
-// to one candidate fast rather than ruminating.
-//
-// defaultTopK 与 search_mcp 同——3 让结果小（skill 数远小于 MCP tool
-// 数）+ 让 LLM 快速决断而非纠结。
 const defaultTopK = 3
 
-// ErrEmptyQuery — query arg missing or whitespace.
+// ErrEmptyQuery: query missing or whitespace.
 //
 // ErrEmptyQuery：query 缺失或全空白。
 var ErrEmptyQuery = errors.New("query is required and must be non-empty")
@@ -53,7 +39,7 @@ var searchSkillsSchema = json.RawMessage(`{
 
 // SearchSkills implements the search_skills system tool.
 //
-// SearchSkills struct 是 search_skills 系统工具。
+// SearchSkills 是 search_skills 系统工具的实现。
 type SearchSkills struct {
 	svc *skillapp.Service
 }
@@ -70,7 +56,6 @@ func (t *SearchSkills) IsReadOnly() bool        { return true }
 func (t *SearchSkills) NeedsReadFirst() bool    { return false }
 func (t *SearchSkills) RequiresWorkspace() bool { return false }
 
-// ── Args-dependent hooks ─────────────────────────────────────────────
 
 func (t *SearchSkills) ValidateInput(args json.RawMessage) error {
 	var a struct {
@@ -89,13 +74,10 @@ func (t *SearchSkills) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionM
 	return toolapp.PermissionAllow
 }
 
-// ── Execute ──────────────────────────────────────────────────────────
 
-// searchResult is the per-skill row in the JSON response. Body is NOT
-// included (L2 progressive-disclosure: only activation loads body).
+// searchResult is the per-skill row in the JSON response; body is not included (L2 progressive disclosure).
 //
-// searchResult 是 JSON 响应里 per-skill 的一行。Body 不含（L2 progressive-
-// disclosure：仅激活时加载 body）。
+// searchResult 是响应里每个 skill 的一行；body 不含（L2 progressive disclosure）。
 type searchResult struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
@@ -103,12 +85,9 @@ type searchResult struct {
 	Arguments   []string `json:"arguments,omitempty"`
 }
 
-// Execute calls Service.Search and packs the result. Failure paths return
-// friendly strings (per §S18) so the LLM can read the situation rather
-// than getting an opaque tool failure.
+// Execute calls Service.Search and returns the result; failures map to LLM-friendly strings.
 //
-// Execute 调 Service.Search 打包结果。失败友好字符串（§S18）让 LLM 自决，
-// 不给不透明 tool 失败。
+// Execute 调 Service.Search 返结果；失败映射为 LLM 友好字符串。
 func (t *SearchSkills) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var args struct {
 		Query string `json:"query"`
@@ -152,6 +131,5 @@ func (t *SearchSkills) Execute(ctx context.Context, argsJSON string) (string, er
 	return string(body), nil
 }
 
-// ── Compile-time checks ──────────────────────────────────────────────
 
 var _ toolapp.Tool = (*SearchSkills)(nil)

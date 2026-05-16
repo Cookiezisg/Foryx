@@ -1,11 +1,3 @@
-// todo_test.go — unit tests for the 4 todo system tools. Identity /
-// schema / ValidateInput / Execute happy paths via a real Service backed
-// by in-memory SQLite + nil bridge (events not exercised here; covered
-// in app/todo tests).
-//
-// todo_test.go — 4 个 todo 系统工具的单测。identity / schema /
-// ValidateInput / Execute 走真 Service（内存 SQLite + nil bridge；事件
-// 由 app/todo 测覆盖）。
 package todo
 
 import (
@@ -40,7 +32,6 @@ func ctxWithConv(id string) context.Context {
 	return reqctxpkg.WithConversationID(context.Background(), id)
 }
 
-// ── TodoTools factory ─────────────────────────────────────────────────────────
 
 func TestTodoTools_ReturnsFourTools(t *testing.T) {
 	tools := TodoTools(newTestService(t))
@@ -58,7 +49,6 @@ func TestTodoTools_ReturnsFourTools(t *testing.T) {
 	}
 }
 
-// ── TodoCreate ────────────────────────────────────────────────────────────────
 
 func TestTodoCreate_Identity(t *testing.T) {
 	tool := &TodoCreate{svc: newTestService(t)}
@@ -103,7 +93,6 @@ func TestTodoCreate_Execute_PersistsAndReturnsJSON(t *testing.T) {
 	}
 }
 
-// ── TodoList ─────────────────────────────────────────────────────────────────
 
 func TestTodoList_Identity(t *testing.T) {
 	tool := &TodoList{svc: newTestService(t)}
@@ -150,7 +139,6 @@ func TestTodoList_Execute_NoConvID_ReportsFriendly(t *testing.T) {
 	}
 }
 
-// ── TodoGet ──────────────────────────────────────────────────────────────────
 
 func TestTodoGet_ValidateInput_RequiresTodoID(t *testing.T) {
 	tool := &TodoGet{svc: newTestService(t)}
@@ -187,7 +175,6 @@ func TestTodoGet_Execute_UnknownID_FriendlyMessage(t *testing.T) {
 	}
 }
 
-// ── TodoUpdate ────────────────────────────────────────────────────────────────
 
 func TestTodoUpdate_ValidateInput_RequiresTodoID(t *testing.T) {
 	tool := &TodoUpdate{svc: newTestService(t)}
@@ -249,7 +236,6 @@ func TestTodoUpdate_Execute_StatusDeletedRoutesToDelete(t *testing.T) {
 	}
 }
 
-// ── classifyTodoErr ──────────────────────────────────────────────────────────
 
 func TestClassifyTodoErr_KnownSentinels(t *testing.T) {
 	cases := map[error]string{

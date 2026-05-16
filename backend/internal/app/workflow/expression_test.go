@@ -1,9 +1,3 @@
-// expression_test.go — coverage for Compile + Execute. Each §6.2 reference
-// form gets a happy-path test + at least one bad-syntax / env-whitelist
-// guard.
-//
-// expression_test.go —— Compile + Execute 单测,覆盖 §6.2 各引用形式 + 边界。
-
 package workflow
 
 import (

@@ -1,5 +1,3 @@
-// trigger_test.go — domain-level invariant tests (no infra).
-
 package trigger
 
 import (

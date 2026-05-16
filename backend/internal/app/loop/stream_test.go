@@ -1,7 +1,3 @@
-// stream_test.go — unit tests for assembleBlocks, parseToolArgs, and
-// collectToolCalls.
-//
-// stream_test.go — assembleBlocks、parseToolArgs、collectToolCalls 的单元测试。
 package loop
 
 import (
@@ -12,7 +8,6 @@ import (
 	eventlogdomain "github.com/sunweilin/forgify/backend/internal/domain/eventlog"
 )
 
-// helpful local alias to keep test bodies short
 var _ = chatdomain.Block{}
 
 func makeAccums(triples ...string) map[int]*toolAccum {
@@ -80,7 +75,6 @@ func TestAssemble_ToolCallOnly(t *testing.T) {
 	if got, _ := blocks[0].Attrs["tool"].(string); got != "get_weather" {
 		t.Errorf("attrs.tool = %q, want get_weather (full attrs: %#v)", got, blocks[0].Attrs)
 	}
-	// Args JSON in Content should not include the standard fields.
 	if strings.Contains(blocks[0].Content, `"summary"`) {
 		t.Errorf("Content should have summary stripped, got %q", blocks[0].Content)
 	}
@@ -130,12 +124,6 @@ func TestAssemble_Empty(t *testing.T) {
 		t.Errorf("want 0 blocks, got %d", len(blocks))
 	}
 }
-
-// Note: text / reasoning block IDs are intentionally empty in
-// assembleBlocks output — BlocksToAssistantLLM never reads them. tool_call
-// blocks reuse the LLM's tool-call ID (set explicitly via accums[i].id);
-// see TestAssemble_TextOnly / TestAssemble_ReasoningOnly above for the
-// type + content assertions that *do* matter.
 
 func TestParseToolArgs_WithAllStandardFields(t *testing.T) {
 	fields, args := parseToolArgs(`{"summary":"doing X","destructive":true,"execution_group":3,"key":"val"}`)

@@ -1,10 +1,3 @@
-// anthropic.go — Anthropic native streaming client (/v1/messages).
-// Uses content_block_start/delta/stop events which map cleanly to our Block
-// model and give explicit signals when each tool call's arguments are complete.
-//
-// anthropic.go — Anthropic 原生流式客户端（/v1/messages）。
-// content_block_start/delta/stop 事件与我们的 Block 模型天然对应，
-// 并在每个 tool call arguments 完整时给出明确信号。
 package llm
 
 import (
@@ -26,9 +19,6 @@ const (
 	anthropicDefaultMaxTokens = 8096
 )
 
-// anthropicClient implements Client for the Anthropic native API.
-//
-// anthropicClient 为 Anthropic 原生 API 实现 Client 接口。
 type anthropicClient struct {
 	http *http.Client
 }
@@ -37,9 +27,6 @@ func newAnthropicClient() *anthropicClient {
 	return &anthropicClient{http: newOpenAIClient().http}
 }
 
-// Stream sends a streaming /v1/messages request to the Anthropic API.
-//
-// Stream 向 Anthropic API 发起流式 /v1/messages 请求。
 func (c *anthropicClient) Stream(ctx context.Context, req Request) iter.Seq[StreamEvent] {
 	return func(yield func(StreamEvent) bool) {
 		body, err := buildAnthropicBody(req)
@@ -78,13 +65,9 @@ func (c *anthropicClient) Stream(ctx context.Context, req Request) iter.Seq[Stre
 	}
 }
 
-// ── SSE parser ────────────────────────────────────────────────────────────────
-
-// parseAnthropicSSE reads the Anthropic named-event SSE stream.
-// Anthropic uses "event: <name>\ndata: <json>" pairs separated by blank lines.
+// parseAnthropicSSE consumes Anthropic's named-event SSE stream into StreamEvents.
 //
-// parseAnthropicSSE 读取 Anthropic 命名事件 SSE 流。
-// 格式为 "event: <name>\ndata: <json>" 对，由空行分隔。
+// parseAnthropicSSE 读取 Anthropic 命名事件 SSE 流并转成 StreamEvent。
 func parseAnthropicSSE(ctx context.Context, body io.Reader, yield func(StreamEvent) bool) {
 	scanner := bufio.NewScanner(body)
 	var eventName string
@@ -192,15 +175,9 @@ func emitAnthropicDelta(e anthropicBlockDelta, yield func(StreamEvent) bool) boo
 	return true
 }
 
-// ── Request builder ───────────────────────────────────────────────────────────
-
 func buildAnthropicBody(req Request) ([]byte, error) {
-	// TE-25: enforce tool_call ↔ tool_result pairing before encoding.
-	// Anthropic is even stricter than OpenAI here — a single orphan
-	// tool_use_id triggers 400 and the conversation is permanently
-	// stuck. See sanitizer.go for context.
-	// TE-25：编码前过 sanitizer，Anthropic 比 OpenAI 更严格，单个孤儿
-	// tool_use_id 即触发 400 永久锁死。
+	// TE-25: Anthropic 400s permanently on any orphan tool_use_id — sanitize first.
+	// TE-25：Anthropic 一个孤儿 tool_use_id 就 400 锁死，先 sanitize。
 	req.Messages = SanitizeMessages(req.Messages)
 	msgs, err := toAnthropicMsgs(req.Messages)
 	if err != nil {
@@ -221,20 +198,14 @@ func buildAnthropicBody(req Request) ([]byte, error) {
 	return json.Marshal(body)
 }
 
-// toAnthropicMsgs converts LLMMessages to Anthropic format.
-// Consecutive RoleTool messages are grouped into a single user message with
-// tool_result content blocks, as required by the Anthropic API.
+// toAnthropicMsgs converts LLMMessages; consecutive RoleTool entries merge into one user message.
 //
-// toAnthropicMsgs 把 LLMMessage 列表转为 Anthropic 格式。
-// 连续的 RoleTool 消息被合并为一条 user 消息的 tool_result content blocks，
-// 这是 Anthropic API 的要求。
+// toAnthropicMsgs 把 LLMMessage 列表转为 Anthropic 格式；连续 RoleTool 合并成一条 user 消息。
 func toAnthropicMsgs(msgs []LLMMessage) ([]anthropicMessage, error) {
 	var out []anthropicMessage
 	for i := 0; i < len(msgs); {
 		m := msgs[i]
 		if m.Role == RoleTool {
-			// Collect all consecutive tool results into one user message.
-			// 把连续的 tool result 合并进一条 user 消息。
 			var blocks []anthropicContent
 			for i < len(msgs) && msgs[i].Role == RoleTool {
 				blocks = append(blocks, anthropicContent{
@@ -267,22 +238,6 @@ func toAnthropicMsg(m LLMMessage) (anthropicMessage, error) {
 		return anthropicMessage{}, fmt.Errorf("llm.anthropic: unexpected role %q in toAnthropicMsg: %w", m.Role, ErrBadRequest)
 	}
 }
-
-// NOTE — Anthropic enforces a 5 MB per-image limit (decoded bytes); over
-// the limit returns 400 AND poisons the conversation history (every
-// subsequent message also 400s, see anthropics/claude-code#11564 /
-// #8202 / #12167). The proper fix lives in a future context-optimizer
-// layer (image resize / summary replacement at history level), not in
-// the wire client — adding a guard here would conflict with the
-// optimizer's resize/swap behavior. Per §S20 deferred WITH justification:
-// (a) structural constraint — fix belongs to a layer that doesn't yet
-// exist; (b) explanation — wire-layer guard would double-process or
-// conflict with the upcoming optimizer.
-//
-// 注：Anthropic 单图 5MB 限制；超限不仅 400 还毒化整段对话。真正修复属
-// 上下文优化层（未来做图压缩/摘要替换），wire 层加守门反而会跟优化器
-// 双处理。按 §S20 留下次 + 理由：(a) 修在尚未存在的层；(b) 提前加守门
-// 会冲突。
 
 func buildAnthropicUserMsg(m LLMMessage) anthropicMessage {
 	if len(m.Parts) == 0 {
@@ -319,14 +274,8 @@ func buildAnthropicAssistantMsg(m LLMMessage) anthropicMessage {
 		})
 	}
 	for _, tc := range m.ToolCalls {
-		// History tool-call arguments came from an earlier LLM turn that we
-		// persisted; bad JSON here means upstream stored garbage. Fall back
-		// to "{}" so Anthropic's tool_use schema is satisfied (input is
-		// required JSON), but log loudly so the corruption is traceable.
-		//
-		// 历史 tool-call 的 arguments 来自更早 LLM 轮次落库的内容；这里 JSON
-		// 不合法说明上游存了脏数据。回退 "{}" 满足 Anthropic tool_use schema
-		// 必填的要求，同时高声记录以便溯源。
+		// Bad JSON in persisted history → fall back to "{}" and log loudly.
+		// 历史里 arguments JSON 烂了 → 回退 "{}" 并高声 log。
 		input := json.RawMessage("{}")
 		if tc.Arguments != "" {
 			if err := json.Unmarshal([]byte(tc.Arguments), &input); err != nil {
@@ -360,10 +309,9 @@ func toAnthropicTools(defs []ToolDef) []anthropicTool {
 	return out
 }
 
-// extractMediaType pulls the MIME type from a base64 data URL.
-// Falls back to "image/jpeg" if the URL is not a data URL.
+// extractMediaType pulls the MIME from a base64 data URL; falls back to image/jpeg.
 //
-// extractMediaType 从 base64 data URL 提取 MIME 类型，非 data URL 时兜底为 image/jpeg。
+// extractMediaType 从 data URL 提取 MIME；非 data URL 时回退 image/jpeg。
 func extractMediaType(dataURL string) string {
 	if !strings.HasPrefix(dataURL, "data:") {
 		return "image/jpeg"
@@ -375,17 +323,12 @@ func extractMediaType(dataURL string) string {
 	return "image/jpeg"
 }
 
-// extractBase64Data strips the data URL prefix and returns only the base64 payload.
-//
-// extractBase64Data 去掉 data URL 前缀，仅返回 base64 数据。
 func extractBase64Data(dataURL string) string {
 	if _, data, ok := strings.Cut(dataURL, ","); ok {
 		return data
 	}
 	return dataURL
 }
-
-// ── Wire types ────────────────────────────────────────────────────────────────
 
 type anthropicRequest struct {
 	Model     string             `json:"model"`
@@ -424,8 +367,6 @@ type anthropicTool struct {
 	Description string          `json:"description"`
 	InputSchema json.RawMessage `json:"input_schema"`
 }
-
-// ── SSE event structs ─────────────────────────────────────────────────────────
 
 type anthropicMsgStart struct {
 	Message struct {

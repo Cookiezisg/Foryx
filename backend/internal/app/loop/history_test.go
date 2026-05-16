@@ -1,24 +1,3 @@
-// history_test.go — unit tests for BlocksToAssistantLLM. Synthetic blocks
-// exercise the converter shared by chat.buildHistory (DB-loaded historical
-// messages) and loop.extendHistory (in-loop accumulation).
-//
-// New Block model (post event-log unification):
-//   - text/reasoning: Block.Content is the raw text (no JSON wrapper)
-//   - tool_call: Block.ID is the LLM tool-call ID; Block.Attrs JSON has
-//     {tool: name}; Block.Content is the args JSON string
-//   - tool_result: Block.ParentBlockID = LLM tool-call ID;
-//     Block.Content = result text
-//
-// history_test.go ——BlocksToAssistantLLM 的单元测试。合成 block 演练
-// chat.buildHistory（DB 加载历史）与 loop.extendHistory（循环内累积）
-// 共享的转换器。
-//
-// 新 Block 模型（事件日志统一后）：
-//   - text/reasoning：Block.Content 裸文本
-//   - tool_call：Block.ID = LLM tool-call ID；Block.Attrs JSON 含
-//     {tool: name}；Block.Content 是 args JSON
-//   - tool_result：Block.ParentBlockID = LLM tool-call ID；
-//     Block.Content = result 文本
 package loop
 
 import (

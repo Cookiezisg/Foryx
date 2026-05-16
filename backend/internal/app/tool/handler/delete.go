@@ -1,6 +1,3 @@
-// delete.go — delete_handler system tool. Soft-delete + tears down any
-// live instances (registry cascade).
-
 package handler
 
 import (

@@ -1,6 +1,3 @@
-// fsnotify_test.go — Listener tests. Uses t.TempDir for path watch + real
-// fsnotify (Darwin kqueue / Linux inotify) so we catch real bugs.
-
 package fsnotify
 
 import (

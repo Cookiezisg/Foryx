@@ -1008,6 +1008,8 @@ chat domain 在 Phase 4-5 主要通过 **追加 system tools** + **升级 system
 | `ATTACHMENT_TOO_LARGE` | 413 | `chat.ErrAttachmentTooLarge` | 附件超过 50MB |
 | `ATTACHMENT_TYPE_UNSUPPORTED` | 415 | `chat.ErrAttachmentTypeUnsupported` | 无法处理的文件格式 |
 | `ATTACHMENT_PARSE_FAILED` | 422 | `chat.ErrAttachmentParseFailed` | 文件损坏或解析失败 |
+| `ATTACHMENT_NOT_FOUND` | 404 | `chat.ErrAttachmentNotFound` | attachmentIds 中包含未知 ID（或属于其他 user）|
+| `EMPTY_CONTENT` | 400 | `chat.ErrEmptyContent` | content 为空/空白且无附件 — burn-in v2 加入避免无意义 LLM 调用 |
 | `VISION_NOT_SUPPORTED` | 422 | `chat.ErrVisionNotSupported` | 当前 provider 不支持图片 |
 
 **未到 handler 的 sentinel**：

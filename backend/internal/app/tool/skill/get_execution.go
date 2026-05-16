@@ -1,6 +1,3 @@
-// get_execution.go — get_skill_execution system tool (D22).
-// Fetches one skill_executions row by id.
-
 package skill
 
 import (

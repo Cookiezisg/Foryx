@@ -1,15 +1,6 @@
-// Package cron is the cron-listener implementation for the trigger
-// domain. Wraps robfig/cron with a per-(workflowID,nodeID) registry and
-// last-fired-at memory so the scheduler can recover missed ticks at boot
-// (§6.2 missedPolicy=runOnce).
+// Package cron is the cron-listener for the trigger domain (wraps robfig/cron).
 //
-// Time zone is locked to time.Local per Plan 05 §6.10 (desktop app
-// matches user laptop's TZ — sane default; V1.5 may add per-trigger
-// override).
-//
-// Package cron 是 trigger 域的 cron-listener 实现。包 robfig/cron + per-
-// (workflowID,nodeID) 注册表 + last-fired-at 内存(让 boot 时按 §6.2
-// missedPolicy=runOnce 补漏触发)。时区锁 time.Local(§6.10)。
+// Package cron 是 trigger 域的 cron-listener（封装 robfig/cron）。
 package cron
 
 import (
@@ -23,18 +14,14 @@ import (
 	triggerdomain "github.com/sunweilin/forgify/backend/internal/domain/trigger"
 )
 
-// OnFireFunc is called when a cron entry fires. The Listener doesn't
-// know about scheduler — caller wires this to scheduler.StartRun.
+// OnFireFunc is invoked when a cron entry fires; caller wires it to scheduler.StartRun.
 //
-// OnFireFunc 在 cron entry firing 时调;Listener 不知 scheduler,
-// 由调用方接到 scheduler.StartRun。
+// OnFireFunc 在 cron entry 触发时调用；调用方接到 scheduler.StartRun。
 type OnFireFunc func(workflowID, nodeID string, input map[string]any)
 
-// Listener wraps robfig/cron with per-(workflowID,nodeID) keyed entries
-// and last-fired-at tracking.
+// Listener wraps robfig/cron with per-(workflowID,nodeID) entries + last-fired tracking.
 //
-// Listener 包 robfig/cron + per-(workflowID,nodeID) entry + last-fire
-// 跟踪。
+// Listener 包 robfig/cron，按 (workflowID,nodeID) 跟 entry 与 last-fired。
 type Listener struct {
 	mu       sync.Mutex
 	cron     *robfigcron.Cron
@@ -44,10 +31,9 @@ type Listener struct {
 	log      *zap.Logger
 }
 
-// New constructs a Listener bound to time.Local. cron.Start must be
-// called separately (caller decides timing).
+// New constructs a Listener bound to time.Local; caller calls Start to begin scheduling.
 //
-// New 构造 Listener;时区锁 time.Local;cron.Start 由调用方决定何时调。
+// New 构造 Listener，时区锁 time.Local；调用方调 Start 才开始调度。
 func New(log *zap.Logger, onFire OnFireFunc) *Listener {
 	return &Listener{
 		cron:     robfigcron.New(robfigcron.WithLocation(time.Local)),
@@ -58,19 +44,9 @@ func New(log *zap.Logger, onFire OnFireFunc) *Listener {
 	}
 }
 
-// Register adds a cron entry. spec.Config["expression"] is the 5-field
-// cron string. Invalid expression → ErrInvalidCronExpression. Replaces
-// any existing entry under the same (workflowID,nodeID) key.
+// Register adds or replaces a cron entry; missed runs fire one catch-up.
 //
-// Plan 05 §6.2 missedPolicy=runOnce: if lastFire[key] is set and the
-// last scheduled fire has already passed, fire one catch-up immediately
-// via a goroutine (so Register stays quick).
-//
-// Register 加 cron entry;表达式无效返 ErrInvalidCronExpression;同 key
-// 已存在则替换。
-//
-// §6.2 missedPolicy=runOnce:lastFire 已记+下次该 fire 时间已过时,
-// 起 goroutine 立刻补 1 次。
+// Register 增加或替换一个 cron entry；漏跑过的会立即补一次。
 func (l *Listener) Register(spec triggerdomain.Spec) error {
 	expr, _ := spec.Config["expression"].(string)
 	if expr == "" {
@@ -109,8 +85,8 @@ func (l *Listener) Register(spec triggerdomain.Spec) error {
 		l.mu.Lock()
 		l.lastFire[key] = now
 		l.mu.Unlock()
-		// recover the per-tick goroutine so a panic in onFire doesn't
-		// kill the global cron scheduler (§6.13).
+		// Recover so an onFire panic doesn't crash the global scheduler.
+		// 用 recover 防 onFire panic 把整个 scheduler 拉崩。
 		defer func() {
 			if r := recover(); r != nil {
 				l.log.Error("cron onFire panic",
@@ -130,9 +106,9 @@ func (l *Listener) Register(spec triggerdomain.Spec) error {
 	return nil
 }
 
-// Unregister removes a cron entry; safe to call on unknown key.
+// Unregister removes a cron entry; no-op on unknown key.
 //
-// Unregister 删 cron entry;key 未知时 no-op。
+// Unregister 删 cron entry；未知 key 时 no-op。
 func (l *Listener) Unregister(workflowID, nodeID string) {
 	key := workflowID + "/" + nodeID
 	l.mu.Lock()
@@ -143,24 +119,19 @@ func (l *Listener) Unregister(workflowID, nodeID string) {
 	}
 }
 
-// Start begins the cron scheduler.
-//
-// Start 启动 cron scheduler。
 func (l *Listener) Start() { l.cron.Start() }
 
-// Stop halts the cron scheduler. In-flight fires finish; new ones don't
-// start. Blocks until in-flight complete (robfig/cron contract).
+// Stop halts the scheduler and waits for in-flight fires to finish.
 //
-// Stop 停 cron scheduler;in-flight fire 跑完后真停。
+// Stop 停 scheduler 并等 in-flight fire 跑完。
 func (l *Listener) Stop() {
 	ctx := l.cron.Stop()
 	<-ctx.Done()
 }
 
 // State returns the current state for one (workflowID,nodeID) trigger.
-// Status is "active" when registered, "idle" when not. Plan 05 §6.12.
 //
-// State 返某 (workflowID,nodeID) 触发器当前状态(§6.12)。
+// State 返某 (workflowID,nodeID) 触发器的当前状态。
 func (l *Listener) State(workflowID, nodeID string) triggerdomain.State {
 	key := workflowID + "/" + nodeID
 	l.mu.Lock()

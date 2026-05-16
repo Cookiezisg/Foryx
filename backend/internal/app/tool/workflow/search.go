@@ -1,11 +1,3 @@
-// search.go — search_workflow system tool: case-insensitive substring
-// search over name / description / tags. V1 implementation. Workflow
-// catalog is NOT auto-injected to chat (D9 — workflows are trigger-driven,
-// LLM shouldn't fire them on a whim) so search is the LLM's discovery path.
-//
-// search.go —— search_workflow:大小写不敏感子串搜 name/description/tags。
-// workflow 不进 catalog(D9),LLM 靠本工具发现。
-
 package workflow
 
 import (

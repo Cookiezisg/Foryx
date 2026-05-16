@@ -6,9 +6,6 @@ import (
 	agentstatepkg "github.com/sunweilin/forgify/backend/internal/pkg/agentstate"
 )
 
-// AgentState ctx ferry — stamped by chat/runner.go::processTask once per
-// agent task; lifetime spans the conversation queue.
-
 type agentStateKey struct{}
 
 // WithAgentState returns a copy of ctx carrying s.
@@ -19,9 +16,8 @@ func WithAgentState(ctx context.Context, s *agentstatepkg.AgentState) context.Co
 }
 
 // GetAgentState returns the AgentState pointer; ok=false when absent or nil.
-// Caller decides whether to fail or defensively skip.
 //
-// GetAgentState 返回 AgentState 指针；缺失或 nil 时 ok=false，调用方自决 fail 或跳过。
+// GetAgentState 返回 AgentState 指针；缺失或 nil 时 ok=false。
 func GetAgentState(ctx context.Context) (*agentstatepkg.AgentState, bool) {
 	s, ok := ctx.Value(agentStateKey{}).(*agentstatepkg.AgentState)
 	return s, ok && s != nil

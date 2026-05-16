@@ -1,18 +1,3 @@
-// skills_test.go — E2E contract tests for the /api/v1/skills/* routes.
-// Real httptest server backed by an app/skill.Service rooted at a
-// per-test tempdir; tests seed SKILL.md files on disk + Scan or POST
-// through the handler to drive the route + assert response shape.
-//
-// The skill subsystem has no client/transport seam to inject (unlike
-// MCP's stdio Client), so tests exercise the full Service path. fsnotify
-// watcher is NOT started here — tests call Scan explicitly when seeding
-// files outside the handler so the cache is in the expected state.
-//
-// skills_test.go ——/api/v1/skills/* 端到端契约测试。真 httptest server
-// 后端 app/skill.Service（per-test tempdir）；种 SKILL.md 到 disk + Scan
-// 或经 handler POST 驱动路由 + 断响应形。skill 无可注 client seam（不像
-// MCP 的 stdio Client），跑全 Service 路径。fsnotify watcher 不起——测试
-// 在 handler 外种文件时显式 Scan 让 cache 进预期状态。
 package handlers
 
 import (
@@ -35,11 +20,6 @@ import (
 	middlewarehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/middleware"
 )
 
-// skillHandlerHarness owns a Service rooted at a per-test tempdir + an
-// httptest server with the SkillsHandler routes registered.
-//
-// skillHandlerHarness 持 per-test tempdir Service + 注册 SkillsHandler
-// 路由的 httptest server。
 type skillHandlerHarness struct {
 	srv *httptest.Server
 	svc *skillapp.Service
@@ -59,12 +39,6 @@ func newSkillsTestServer(t *testing.T) *skillHandlerHarness {
 	return &skillHandlerHarness{srv: srv, svc: svc, dir: dir}
 }
 
-// seedSkillOnDisk writes a SKILL.md to dir/<name>/SKILL.md but does NOT
-// call Scan — caller decides whether to Scan or test the :refresh
-// endpoint to populate the cache.
-//
-// seedSkillOnDisk 写 SKILL.md 到 dir/<name>/SKILL.md 但不调 Scan
-// ——调用方决定 Scan 还是测 :refresh 端点 populate cache。
 func (h *skillHandlerHarness) seedSkillOnDisk(t *testing.T, name, desc string, fork bool) {
 	t.Helper()
 	skDir := filepath.Join(h.dir, name)
@@ -84,7 +58,6 @@ func (h *skillHandlerHarness) seedSkillOnDisk(t *testing.T, name, desc string, f
 	}
 }
 
-// ── List / Get / GetBody ─────────────────────────────────────────────
 
 func TestSkills_List_Empty(t *testing.T) {
 	h := newSkillsTestServer(t)
@@ -114,7 +87,6 @@ func TestSkills_List_AfterSeed(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("len = %d", len(got))
 	}
-	// Alpha sorted.
 	if got[0].Name != "alpha" || got[1].Name != "beta" {
 		t.Errorf("order: %s/%s", got[0].Name, got[1].Name)
 	}
@@ -148,7 +120,6 @@ func TestSkills_GetBody_ReturnsRawSKILLMD(t *testing.T) {
 	}
 }
 
-// ── Create / Replace / Delete ────────────────────────────────────────
 
 func TestSkills_Create_201(t *testing.T) {
 	h := newSkillsTestServer(t)
@@ -169,7 +140,6 @@ func TestSkills_Create_201(t *testing.T) {
 	if got.Name != "new-skill" {
 		t.Errorf("name = %q", got.Name)
 	}
-	// File actually written?
 	if _, err := os.Stat(filepath.Join(h.dir, "new-skill", "SKILL.md")); err != nil {
 		t.Errorf("SKILL.md not on disk: %v", err)
 	}
@@ -245,7 +215,6 @@ func TestSkills_Delete_204(t *testing.T) {
 	if resp.StatusCode != http.StatusNoContent {
 		t.Errorf("status = %d, want 204", resp.StatusCode)
 	}
-	// Dir actually removed?
 	if _, err := os.Stat(filepath.Join(h.dir, "doomed")); !os.IsNotExist(err) {
 		t.Errorf("doomed dir still exists; stat err = %v", err)
 	}
@@ -260,13 +229,9 @@ func TestSkills_Delete_NotFound_404(t *testing.T) {
 	}
 }
 
-// ── :refresh + :import + :invoke ─────────────────────────────────────
-
 func TestSkills_Refresh_PicksUpDiskWrite(t *testing.T) {
 	h := newSkillsTestServer(t)
 	h.seedSkillOnDisk(t, "fresh", "fresh desc", false)
-	// No Scan yet — cache is empty.
-	// 还没 Scan——cache 空。
 	resp, _ := http.Post(h.srv.URL+"/api/v1/skills:refresh", "application/json", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d", resp.StatusCode)

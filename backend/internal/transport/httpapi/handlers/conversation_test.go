@@ -1,6 +1,3 @@
-// conversation_test.go — E2E contract tests for /api/v1/conversations/*.
-//
-// conversation_test.go — /api/v1/conversations/* 端到端契约测试。
 package handlers
 
 import (

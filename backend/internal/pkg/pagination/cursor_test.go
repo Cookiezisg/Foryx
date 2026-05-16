@@ -1,6 +1,3 @@
-// cursor_test.go — unit tests for cursor pagination encoding / parsing.
-//
-// cursor_test.go — cursor 分页编码/解析的单元测试。
 package pagination
 
 import (
@@ -113,10 +110,6 @@ func TestDecode_MalformedReturnsInvalidRequest(t *testing.T) {
 }
 
 func TestDecode_ValidBase64InvalidJSON(t *testing.T) {
-	// "hello" in base64url (not valid JSON)
-	// base64url("hello") = "aGVsbG8"
-	//
-	// "hello" 的 base64url 编码（不是合法 JSON）
 	var v struct{ ID string }
 	err := DecodeCursor("aGVsbG8", &v)
 	if !errors.Is(err, errorsdomain.ErrInvalidRequest) {

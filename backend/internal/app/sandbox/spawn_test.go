@@ -1,14 +1,3 @@
-// spawn_test.go — end-to-end tests for Service.Spawn / SpawnLongLived /
-// Shutdown. Uses an in-memory SQLite store and a fake EnvManager that
-// resolves bin names via $PATH (echo / cat / sleep) so the suite stays
-// portable. Real EnvManager + real mise spawn is exercised in the D9
-// pipeline suite.
-//
-// spawn_test.go ——Service.Spawn / SpawnLongLived / Shutdown 端到端测试。
-// 用内存 SQLite store + fake EnvManager 通过 $PATH 解析 bin 名（echo /
-// cat / sleep）保持可移植。真 EnvManager + 真 mise spawn 在 D9 pipeline
-// 套覆盖。
-
 package sandbox
 
 import (
@@ -31,14 +20,6 @@ import (
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 )
 
-// fakeEnvManager satisfies sandboxdomain.EnvManager by resolving binary
-// names via $PATH (so tests can spawn echo / cat / sleep without a real
-// mise install). Kind() returns the construction-time tag so multiple
-// fake managers can coexist.
-//
-// fakeEnvManager 通过 $PATH 解析 binary 名满足 sandboxdomain.EnvManager
-// （让测试不真起 mise 就能 spawn echo / cat / sleep）。Kind() 返构造时
-// tag 让多 fake manager 共存。
 type fakeEnvManager struct{ kind string }
 
 func (f fakeEnvManager) Kind() string                                            { return f.kind }
@@ -54,14 +35,6 @@ func (fakeEnvManager) EnvBin(_ string, binName string) string {
 }
 func (fakeEnvManager) EnvDir(envPath string) string { return envPath }
 
-// newServiceWithEnv builds a Service backed by in-memory SQLite, marks
-// it ready, registers a fake EnvManager for the given runtime kind, and
-// pre-seeds a Runtime + Env row so Spawn can resolve owner → env. Returns
-// the service + the seeded owner.
-//
-// newServiceWithEnv 起内存 SQLite 支持的 Service，标 ready，给指定 runtime
-// kind 注册 fake EnvManager，预填 Runtime + Env 行让 Spawn 能解析 owner →
-// env。返 service + 预填的 owner。
 func newServiceWithEnv(t *testing.T, kind string) (*Service, sandboxdomain.Owner) {
 	t.Helper()
 	db, err := dbinfra.Open(dbinfra.Config{LogLevel: gormlogger.Silent})
@@ -98,19 +71,11 @@ func newServiceWithEnv(t *testing.T, kind string) (*Service, sandboxdomain.Owner
 	if err := repo.CreateEnv(ctx, env); err != nil {
 		t.Fatalf("seed env: %v", err)
 	}
-	// Production EnsureEnv mkdirs envPath; test bypasses EnsureEnv, so do
-	// it here — exec.Cmd.Dir on a missing directory produces a misleading
-	// "no such file or directory" error attributed to the binary.
-	//
-	// 生产 EnsureEnv mkdir envPath；测试绕过 EnsureEnv 这里手动 mkdir——
-	// exec.Cmd.Dir 设不存在目录会报"no such file or directory"误归到 binary。
 	if err := os.MkdirAll(filepath.Join(svc.SandboxRoot(), envRel), 0o755); err != nil {
 		t.Fatalf("mkdir env path: %v", err)
 	}
 	return svc, owner
 }
-
-// ── Spawn ─────────────────────────────────────────────────────────────
 
 func TestServiceSpawn_HappyPath(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -134,7 +99,7 @@ func TestServiceSpawn_HappyPath(t *testing.T) {
 
 func TestServiceSpawn_NotReady_Errors(t *testing.T) {
 	svc, owner := newServiceWithEnv(t, "fake-py")
-	svc.bootstrapped.Store(false) // simulate degraded mode
+	svc.bootstrapped.Store(false)
 	_, err := svc.Spawn(context.Background(), owner, sandboxdomain.SpawnOpts{Cmd: "echo"})
 	if err == nil {
 		t.Fatal("want error in degraded mode, got nil")
@@ -174,8 +139,6 @@ func TestServiceSpawn_AbsoluteCmd_BypassesEnvBin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("look up echo: %v", err)
 	}
-	// Pass absolute path; resolveCmd should skip EnvBin lookup and use it directly.
-	// 传绝对路径；resolveCmd 跳过 EnvBin 直接用。
 	res, err := svc.Spawn(context.Background(), owner, sandboxdomain.SpawnOpts{
 		Cmd:  echoBin,
 		Args: []string{"absolute"},
@@ -193,8 +156,6 @@ func TestServiceSpawn_EnvOverlay(t *testing.T) {
 		t.Skip("uses sh + env command")
 	}
 	svc, owner := newServiceWithEnv(t, "fake-py")
-	// Use sh -c to print the var so we exercise mergeEnv end-to-end.
-	// 用 sh -c 打印变量端到端验证 mergeEnv。
 	shBin, err := exec.LookPath("sh")
 	if err != nil {
 		t.Fatalf("look up sh: %v", err)
@@ -211,8 +172,6 @@ func TestServiceSpawn_EnvOverlay(t *testing.T) {
 		t.Errorf("env overlay broken: stdout = %q, want overlay-works", got)
 	}
 }
-
-// ── SpawnLongLived ───────────────────────────────────────────────────
 
 func TestServiceSpawnLongLived_RegistersHandle(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -233,8 +192,6 @@ func TestServiceSpawnLongLived_RegistersHandle(t *testing.T) {
 		t.Errorf("after SpawnLongLived count = %d, want 1", c)
 	}
 
-	// Close stdin → cat exits → Wait returns → handle un-registers.
-	// 关 stdin → cat 退 → Wait 返 → handle 反注册。
 	_ = handle.Stdin().Close()
 	_, _ = io.Copy(io.Discard, handle.Stdout())
 	if err := handle.Wait(); err != nil {
@@ -265,10 +222,8 @@ func TestServiceSpawnLongLived_KillUnregisters(t *testing.T) {
 	if c := svc.ActiveHandleCountForTest(); c != 0 {
 		t.Errorf("after Kill count = %d, want 0", c)
 	}
-	_ = handle.Wait() // reap
+	_ = handle.Wait()
 }
-
-// ── Shutdown ──────────────────────────────────────────────────────────
 
 func TestServiceShutdown_KillsAllActiveHandles(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -297,8 +252,6 @@ func TestServiceShutdown_KillsAllActiveHandles(t *testing.T) {
 		t.Errorf("Shutdown: %v", err)
 	}
 
-	// All handles should be killed; reap them so the test doesn't leak.
-	// 所有 handle 应被杀；reap 防测试 leak。
 	for _, h := range handles {
 		_ = h.Wait()
 	}

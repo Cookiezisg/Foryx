@@ -1,22 +1,6 @@
-// Package skill (app/tool/skill) hosts the two LLM-facing system tools
-// for Anthropic Agent Skills: search_skills (discovery / L1 catalog
-// query) + activate_skill (load body, set permissions, dispatch to
-// subagent if context=fork).
+// Package skill hosts the LLM-facing system tools for Anthropic Agent Skills (search + activate).
 //
-// Tools split per §S12 (one tool family in one nested package):
-//
-//	skill.go    — SkillTools(svc) factory (DI entry point for main.go)
-//	search.go   — SearchSkills implementation (9 methods + schema)
-//	activate.go — ActivateSkill implementation (9 methods + schema)
-//
-// Aliases (§S13 nested-subpackage rule): consumers import as `skilltool`
-// (parent app/tool family alias is `tool`; this nested package follows
-// the `<sub>tool` form).
-//
-// Package skill（app/tool/skill）—— Anthropic Agent Skills 的 2 个 LLM-
-// facing 系统工具：search_skills（发现 / L1 catalog 查询）+
-// activate_skill（加载 body、设权限、fork 模式派 subagent）。子包结构
-// 同 §S12 嵌套规则；调用方按 `skilltool` 别名引用（§S13）。
+// Package skill 提供 Anthropic Agent Skills 的 LLM-facing 系统工具（search + activate）。
 package skill
 
 import (
@@ -25,12 +9,9 @@ import (
 	skilldomain "github.com/sunweilin/forgify/backend/internal/domain/skill"
 )
 
-// SkillTools returns the SearchSkills + ActivateSkill pair wired against
-// svc. Called once during DI assembly in main.go (and harness.go for
-// pipeline tests).
+// SkillTools returns SearchSkills + ActivateSkill wired against svc.
 //
-// SkillTools 返回接到 svc 的 SearchSkills + ActivateSkill。main.go（与
-// harness.go pipeline）DI 装配时调一次。
+// SkillTools 返回接到 svc 的 SearchSkills + ActivateSkill。
 func SkillTools(svc *skillapp.Service) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchSkills{svc: svc},
@@ -38,10 +19,9 @@ func SkillTools(svc *skillapp.Service) []toolapp.Tool {
 	}
 }
 
-// SkillExecutionTools constructs the 2 D22 execution-log tools wired
-// with the skill_executions Repository. E15 main.go wires the GORM Store.
+// SkillExecutionTools constructs the skill execution-log tools wired with the Repository.
 //
-// SkillExecutionTools 装配 2 个 D22 执行日志工具。
+// SkillExecutionTools 装配 skill 执行日志工具。
 func SkillExecutionTools(repo skilldomain.ExecutionRepository) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchSkillExecutions{repo: repo},

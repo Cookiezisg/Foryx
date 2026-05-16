@@ -1,8 +1,3 @@
-// apikey_test.go — unit tests for Service (CRUD, KeyProvider, MaskKey)
-// using a fake Repository + fake ConnectivityTester + real AES-GCM Encryptor.
-//
-// apikey_test.go — Service 单测（CRUD、KeyProvider、MaskKey）：
-// fake Repository + fake ConnectivityTester + 真 AES-GCM Encryptor。
 package apikey
 
 import (
@@ -19,9 +14,6 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// fakeRepo is an in-memory apikeydomain.Repository for unit tests.
-//
-// fakeRepo 是单测用的内存版 apikeydomain.Repository。
 type fakeRepo struct {
 	items map[string]*apikeydomain.APIKey
 }
@@ -132,8 +124,6 @@ func providersOf(ks []*apikeydomain.APIKey) []string {
 	return out
 }
 
-// ---- Create ----
-
 func TestService_Create_Success(t *testing.T) {
 	svc, repo := newTestService(t, &fakeTester{})
 	ctx := ctxFor("u-alice")
@@ -224,8 +214,6 @@ func TestService_Create_UsesCustomBaseURLAndAPIFormat(t *testing.T) {
 	}
 }
 
-// ---- Update ----
-
 func TestService_Update_PartialFields(t *testing.T) {
 	svc, _ := newTestService(t, &fakeTester{})
 	ctx := ctxFor("u")
@@ -256,8 +244,6 @@ func TestService_Update_NotFound(t *testing.T) {
 	}
 }
 
-// ---- Delete ----
-
 func TestService_Delete_RemovesEntry(t *testing.T) {
 	svc, repo := newTestService(t, &fakeTester{})
 	ctx := ctxFor("u")
@@ -277,8 +263,6 @@ func TestService_Delete_NotFound(t *testing.T) {
 		t.Errorf("err = %v, want ErrNotFound", err)
 	}
 }
-
-// ---- Test (connectivity) ----
 
 func TestService_Test_Success_WritesOKStatus(t *testing.T) {
 	tester := &fakeTester{result: &TestResult{OK: true, Message: "ok", LatencyMs: 42}}
@@ -350,8 +334,6 @@ func TestService_Test_NotFound(t *testing.T) {
 	}
 }
 
-// ---- List ----
-
 func TestService_List_FiltersByProvider(t *testing.T) {
 	svc, _ := newTestService(t, &fakeTester{})
 	ctx := ctxFor("u")
@@ -366,8 +348,6 @@ func TestService_List_FiltersByProvider(t *testing.T) {
 		t.Errorf("got %v, want exactly 1 openai", providersOf(got))
 	}
 }
-
-// ---- KeyProvider ----
 
 func TestService_ResolveCredentials_DecryptsAndMergesDefaultBaseURL(t *testing.T) {
 	svc, _ := newTestService(t, &fakeTester{})
@@ -433,8 +413,6 @@ func TestService_MarkInvalid_NoKeyForProvider(t *testing.T) {
 	}
 }
 
-// ---- DI guard ----
-
 func TestNewService_NilLogger_Panics(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
@@ -443,8 +421,6 @@ func TestNewService_NilLogger_Panics(t *testing.T) {
 	}()
 	_ = NewService(newFakeRepo(), nil, &fakeTester{}, nil)
 }
-
-// ---- MaskKey ----
 
 func TestMaskKey(t *testing.T) {
 	cases := []struct {

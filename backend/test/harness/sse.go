@@ -1,30 +1,5 @@
 //go:build pipeline
 
-// sse.go — SSE collector for pipeline tests. Subscribes to BOTH new endpoints
-// and reconstructs Message + Block state in memory:
-//
-//   - GET /api/v1/eventlog?conversationId=X for the recursive event-log
-//     stream (5 events × 6 block types). Reconstructed into message/block
-//     snapshots so tests keep working with `LastMessage().Blocks` style.
-//
-//   - GET /api/v1/notifications for global broadcasts. Conversation snapshots
-//     (type="conversation") are merged into a Conversation field so autoTitle
-//     tests still work via WaitForConversation.
-//
-// Old entity-snapshot stream (chat.message / forge / conversation) is gone;
-// reconstruction here mirrors what the frontend chat.js does over the wire.
-//
-// sse.go — pipeline 测试用 SSE 收集器。同时订阅两个新端点：
-//
-//   - GET /api/v1/eventlog?conversationId=X 走递归事件日志（5 events × 6
-//     block types）。在内存里重构 message/block 快照，让测试继续用
-//     `LastMessage().Blocks` 风格。
-//
-//   - GET /api/v1/notifications 走全局广播。type="conversation" 的快照合
-//     入 Conversation 字段，autoTitle 测试经 WaitForConversation 仍工作。
-//
-// 旧 entity-snapshot 流（chat.message / forge / conversation）已废；重构
-// 逻辑镜像 frontend chat.js 在 wire 上做的事。
 package harness
 
 import (
@@ -45,9 +20,9 @@ import (
 
 // RawEvent is one parsed SSE event from either endpoint.
 //
-// RawEvent 是来自任一端点的一条解析过的 SSE 事件。
+// RawEvent 是任一端点解析后的一条 SSE 事件。
 type RawEvent struct {
-	Source string // "eventlog" | "notifications"
+	Source string
 	ID     string
 	Type   string
 	Data   []byte
@@ -56,7 +31,7 @@ type RawEvent struct {
 
 // SSESub holds reconstructed message + block state plus raw event log.
 //
-// SSESub 持重构出的 message + block 状态以及原始事件日志。
+// SSESub 持重构的 message + block 状态与原始事件日志。
 type SSESub struct {
 	t              *testing.T
 	cancelEventLog context.CancelFunc
@@ -80,11 +55,9 @@ type SSESub struct {
 	streamNFdone chan struct{}
 }
 
-// SubscribeSSE opens both eventlog (filtered to conversationID) and
-// notifications subscriptions. Cleanup is registered on t.
+// SubscribeSSE opens eventlog (filtered to conversationID) + notifications subscriptions; cleanup on t.
 //
-// SubscribeSSE 同时开 eventlog（按 conversationID 过滤）和 notifications
-// 订阅。清理注册到 t。
+// SubscribeSSE 同时开 eventlog + notifications 订阅，清理挂 t。
 func (h *Harness) SubscribeSSE(t *testing.T, conversationID string) *SSESub {
 	t.Helper()
 	sub := &SSESub{
@@ -150,9 +123,9 @@ func (h *Harness) SubscribeSSE(t *testing.T, conversationID string) *SSESub {
 	return sub
 }
 
-// Close terminates both subscriptions and waits for read loops to exit.
+// Close terminates both subscriptions and waits for read loops.
 //
-// Close 终止两个订阅并等读循环退出。
+// Close 终止两个订阅，等读循环退出。
 func (s *SSESub) Close() {
 	s.mu.Lock()
 	if s.closed {
@@ -227,18 +200,12 @@ func (s *SSESub) applyEventLog(e RawEvent) {
 			s.t.Logf("SSE: malformed message_start: %v", err)
 			return
 		}
-		attrsJSON := ""
-		if len(ev.Attrs) > 0 {
-			if b, err := json.Marshal(ev.Attrs); err == nil {
-				attrsJSON = string(b)
-			}
-		}
 		m := &chatdomain.Message{
 			ID:             ev.ID,
 			ConversationID: ev.ConversationID,
 			ParentBlockID:  ev.ParentBlockID,
 			Role:           ev.Role,
-			Attrs:          attrsJSON,
+			Attrs:          ev.Attrs,
 			Status:         chatdomain.StatusStreaming,
 		}
 		if _, seen := s.messages[m.ID]; !seen {
@@ -269,19 +236,13 @@ func (s *SSESub) applyEventLog(e RawEvent) {
 			s.t.Logf("SSE: malformed block_start: %v", err)
 			return
 		}
-		attrsJSON := ""
-		if len(ev.Attrs) > 0 {
-			if b, err := json.Marshal(ev.Attrs); err == nil {
-				attrsJSON = string(b)
-			}
-		}
 		blk := &chatdomain.Block{
 			ID:             ev.ID,
 			ConversationID: ev.ConversationID,
 			MessageID:      ev.MessageID,
 			ParentBlockID:  ev.ParentID,
 			Type:           ev.BlockType,
-			Attrs:          attrsJSON,
+			Attrs:          ev.Attrs,
 			Status:         chatdomain.StatusStreaming,
 		}
 		s.blocks[blk.ID] = blk
@@ -318,12 +279,9 @@ func (s *SSESub) applyEventLog(e RawEvent) {
 	}
 }
 
-// syncBlockIntoMessage finds the (potentially mutated) block in its parent
-// message's Blocks slice and refreshes the entry. Required because Blocks
-// stores values, not pointers.
+// syncBlockIntoMessage refreshes the block entry in parent message.Blocks (values, not pointers).
 //
-// syncBlockIntoMessage 在父 message.Blocks 切片中找到该 block 并刷新该项。
-// Blocks 存值非指针，故须同步。
+// syncBlockIntoMessage 把 block 同步回父 message.Blocks（存值非指针）。
 func (s *SSESub) syncBlockIntoMessage(blk *chatdomain.Block) {
 	m := s.messages[blk.MessageID]
 	if m == nil {
@@ -337,9 +295,6 @@ func (s *SSESub) syncBlockIntoMessage(blk *chatdomain.Block) {
 	}
 }
 
-// notification envelope shape: {type, id, data, conversationId?}.
-//
-// notification envelope 形状: {type, id, data, conversationId?}。
 type notificationEnvelope struct {
 	Type           string          `json:"type"`
 	ID             string          `json:"id"`
@@ -365,7 +320,7 @@ func (s *SSESub) applyNotification(e RawEvent) {
 
 // AllMessages returns reconstructed Message snapshots in arrival order.
 //
-// AllMessages 按到达顺序返回重构出的 Message 快照。
+// AllMessages 按到达顺序返重构的 Message 快照。
 func (s *SSESub) AllMessages() []*chatdomain.Message {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -376,9 +331,9 @@ func (s *SSESub) AllMessages() []*chatdomain.Message {
 	return out
 }
 
-// LastMessage returns the most-recently-started Message, or nil.
+// LastMessage returns the most recently started Message, or nil.
 //
-// LastMessage 返回最近开始的 Message，无则 nil。
+// LastMessage 返最近开始的 Message，无则 nil。
 func (s *SSESub) LastMessage() *chatdomain.Message {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -390,15 +345,14 @@ func (s *SSESub) LastMessage() *chatdomain.Message {
 
 // MessageByID returns the reconstructed Message for id, or nil.
 //
-// MessageByID 返指定 id 的重构 Message，无则 nil。
+// MessageByID 返 id 对应的重构 Message，无则 nil。
 func (s *SSESub) MessageByID(id string) *chatdomain.Message {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return copyMessage(s.messages[id])
 }
 
-// Conversation returns the latest conversation snapshot from notifications,
-// or nil if none has arrived.
+// Conversation returns the latest conversation snapshot from notifications, or nil.
 //
 // Conversation 返 notifications 收到的最新 conversation 快照，无则 nil。
 func (s *SSESub) Conversation() *convdomain.Conversation {
@@ -413,7 +367,7 @@ func (s *SSESub) Conversation() *convdomain.Conversation {
 
 // RawEvents returns a copy of every event seen across both streams.
 //
-// RawEvents 返两条流上每条事件的拷贝。
+// RawEvents 返两条流上所有事件的拷贝。
 func (s *SSESub) RawEvents() []RawEvent {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -422,10 +376,9 @@ func (s *SSESub) RawEvents() []RawEvent {
 	return out
 }
 
-// WaitForMessage polls the reconstructed messages until predicate is true.
-// Fails the test on timeout.
+// WaitForMessage polls reconstructed messages until predicate is true; fatals on timeout.
 //
-// WaitForMessage 轮询重构的 messages 直到 predicate 真；超时 fail。
+// WaitForMessage 轮询 messages 至 predicate 真，超时 fatal。
 func (s *SSESub) WaitForMessage(predicate func(*chatdomain.Message) bool, timeout time.Duration) *chatdomain.Message {
 	s.t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -446,10 +399,9 @@ func (s *SSESub) WaitForMessage(predicate func(*chatdomain.Message) bool, timeou
 	return nil
 }
 
-// WaitForMessageStatus waits for a specific id to reach status. status="" means
-// any non-streaming terminal status.
+// WaitForMessageStatus waits for id to reach status; "" means any terminal.
 //
-// WaitForMessageStatus 等指定 id 的 message 达到 status；status="" 任意终态。
+// WaitForMessageStatus 等 id 达到 status；"" 表示任意终态。
 func (s *SSESub) WaitForMessageStatus(id, status string, timeout time.Duration) *chatdomain.Message {
 	s.t.Helper()
 	return s.WaitForMessage(func(m *chatdomain.Message) bool {
@@ -465,10 +417,9 @@ func (s *SSESub) WaitForMessageStatus(id, status string, timeout time.Duration) 
 	}, timeout)
 }
 
-// WaitForAssistantTerminal waits for any assistant message to reach a
-// non-streaming terminal status.
+// WaitForAssistantTerminal waits for any assistant message to reach a terminal status.
 //
-// WaitForAssistantTerminal 等任意 assistant 消息进入非 streaming 终态。
+// WaitForAssistantTerminal 等任意 assistant 消息进入终态。
 func (s *SSESub) WaitForAssistantTerminal(timeout time.Duration) *chatdomain.Message {
 	s.t.Helper()
 	return s.WaitForMessage(func(m *chatdomain.Message) bool {
@@ -480,11 +431,8 @@ func (s *SSESub) WaitForAssistantTerminal(timeout time.Duration) *chatdomain.Mes
 }
 
 // WaitForConversation polls for a conversation snapshot matching predicate.
-// Conversation snapshots arrive via the notifications stream (autoTitle
-// completion, future Create/Update/Delete).
 //
-// WaitForConversation 等满足 predicate 的 conversation 快照。conversation
-// 快照走 notifications 流（autoTitle 完成、未来 Create/Update/Delete）。
+// WaitForConversation 等满足 predicate 的 conversation 快照。
 func (s *SSESub) WaitForConversation(predicate func(*convdomain.Conversation) bool, timeout time.Duration) *convdomain.Conversation {
 	s.t.Helper()
 	deadline := time.Now().Add(timeout)
@@ -515,10 +463,9 @@ func copyMessage(m *chatdomain.Message) *chatdomain.Message {
 	return &c
 }
 
-// FormatRawEvents returns a multi-line debug string of every raw event seen,
-// truncated for readability.
+// FormatRawEvents returns a multi-line debug string of every raw event (truncated).
 //
-// FormatRawEvents 返多行 debug 字符串列每条原始事件（适当截断）。
+// FormatRawEvents 返每条原始事件的多行 debug 字符串（截断）。
 func (s *SSESub) FormatRawEvents() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()

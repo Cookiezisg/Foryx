@@ -1,5 +1,3 @@
-// get_call.go — get_handler_call system tool (D22).
-
 package handler
 
 import (

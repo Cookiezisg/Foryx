@@ -1,20 +1,6 @@
-// fakeserver — minimal stdio MCP server used by pipeline tests.
+// Command fakeserver is a minimal stdio MCP server for pipeline tests; exposes echo/fail/crash tools.
 //
-// Exposes 3 tools that drive every code path the production stdio
-// Client cares about:
-//
-//   - echo:  returns its input verbatim (happy path)
-//   - fail:  always responds with isError:true (drives the §5.6
-//            consecutive-failure → degraded transition)
-//   - crash: writes a marker to stderr then os.Exit(1)s before
-//            responding (drives subprocess-death detection)
-//
-// Built once per `go test` invocation (TestMain in the sibling
-// _test.go) so the binary launches cheaply across scenarios.
-//
-// fakeserver ——pipeline 测试用的最小 stdio MCP server。3 个 tool 覆盖生产
-// Client 关心的全部码径：echo 顺路、fail 累失败 → degraded 转换、crash 子
-// 进程死。每次 `go test` 由相邻 _test.go 的 TestMain 一次性 build。
+// Command fakeserver 是 pipeline 测试用的最小 stdio MCP server，暴露 echo/fail/crash 三 tool。
 package main
 
 import (

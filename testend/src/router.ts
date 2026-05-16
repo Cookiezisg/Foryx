@@ -28,6 +28,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/current/todos', component: () => import('@/views/current/Todos.vue') },
   { path: '/current/asks', component: () => import('@/views/current/AsksPending.vue') },
   { path: '/current/attachments', component: () => import('@/views/current/Attachments.vue') },
+  { path: '/current/compaction', component: () => import('@/views/current/Compaction.vue') },
 
   /* forge */
   { path: '/forge/functions', component: () => import('@/views/forge/Functions.vue') },
@@ -58,6 +59,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/config/skills', component: () => import('@/views/config/Skills.vue') },
   { path: '/config/mcp', component: () => import('@/views/config/MCPServers.vue') },
   { path: '/config/sandbox', component: () => import('@/views/config/Sandbox.vue') },
+  { path: '/config/memory', component: () => import('@/views/config/Memory.vue') },
 
   /* dev */
   { path: '/dev/sql', component: () => import('@/views/dev/SQL.vue') },

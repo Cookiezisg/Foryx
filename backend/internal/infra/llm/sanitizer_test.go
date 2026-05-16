@@ -1,11 +1,3 @@
-// sanitizer_test.go — exercise the message-history sanitizer that
-// guards against orphan tool blocks (the failure mode that locks
-// Claude Code conversations into permanent 400 traps when a tool call
-// is interrupted before its result returns).
-//
-// sanitizer_test.go ——演练消息历史 sanitizer，防 orphan tool block 把
-// 对话永久锁进 400 陷阱（Claude Code 真实事故）。
-
 package llm
 
 import (
@@ -27,22 +19,11 @@ func TestSanitize_NoOpOnWellFormed(t *testing.T) {
 	}
 }
 
-// TestSanitize_MissingToolMessage_StubInserted is the headline failure
-// scenario: assistant emits tool_calls but is interrupted before the
-// tool result arrives. Without the sanitizer, the next request 400s
-// with "tool_calls must be followed by tool messages" and the
-// conversation is permanently stuck.
-//
-// TestSanitize_MissingToolMessage_StubInserted：标志性事故场景。
-// assistant 发出 tool_calls 但 tool 结果还没到就被中断；无 sanitizer
-// 下次请求 400 锁死。
 func TestSanitize_MissingToolMessage_StubInserted(t *testing.T) {
 	in := []LLMMessage{
 		{Role: RoleAssistant, ToolCalls: []LLMToolCall{
 			{ID: "call_X", Name: "search", Arguments: "{}"},
 		}},
-		// User retries / sends new message — no tool result for call_X.
-		// 用户重试或发新消息——没有 call_X 的 tool result。
 		{Role: RoleUser, Content: "what happened?"},
 	}
 	out := SanitizeMessages(in)
@@ -57,11 +38,6 @@ func TestSanitize_MissingToolMessage_StubInserted(t *testing.T) {
 	}
 }
 
-// TestSanitize_PartialMissing_StubsForUnpaired covers the case of a
-// parallel tool call where one tool returned but the other didn't.
-// Only the missing one should get a stub.
-//
-// 并行工具调用部分缺失场景：只给缺的合成 stub。
 func TestSanitize_PartialMissing_StubsForUnpaired(t *testing.T) {
 	in := []LLMMessage{
 		{Role: RoleAssistant, ToolCalls: []LLMToolCall{
@@ -69,7 +45,6 @@ func TestSanitize_PartialMissing_StubsForUnpaired(t *testing.T) {
 			{ID: "call_B", Name: "tool_b"},
 		}},
 		{Role: RoleTool, ToolCallID: "call_A", Content: "A result"},
-		// call_B never returned.
 	}
 	out := SanitizeMessages(in)
 	if len(out) != 3 {
@@ -83,11 +58,6 @@ func TestSanitize_PartialMissing_StubsForUnpaired(t *testing.T) {
 	}
 }
 
-// TestSanitize_StrayToolMessageDropped: a tool message whose ID has no
-// matching prior assistant.tool_calls is unusable — the LLM has nothing
-// to anchor it to. Drop silently.
-//
-// 游离 tool message（ID 无匹配 tool_call）→ 丢。
 func TestSanitize_StrayToolMessageDropped(t *testing.T) {
 	in := []LLMMessage{
 		{Role: RoleUser, Content: "hi"},
@@ -105,11 +75,6 @@ func TestSanitize_StrayToolMessageDropped(t *testing.T) {
 	}
 }
 
-// TestSanitize_IDMismatchInRunDropped: tool message whose ID doesn't
-// match any of the preceding assistant's tool_calls (despite being in
-// the right position) is dropped, and the actual tool_call gets a stub.
-//
-// 段内 ID 不匹配的 tool message → 丢；真 tool_call 仍补 stub。
 func TestSanitize_IDMismatchInRunDropped(t *testing.T) {
 	in := []LLMMessage{
 		{Role: RoleAssistant, ToolCalls: []LLMToolCall{
@@ -127,13 +92,6 @@ func TestSanitize_IDMismatchInRunDropped(t *testing.T) {
 	}
 }
 
-// TestSanitize_Idempotent: running sanitize twice on already-sanitized
-// input produces identical output. Important because the function is
-// called on every request build — must not amplify or mutate
-// previously-stubbed messages.
-//
-// 幂等性：sanitize 已 sanitize 过的输入结果不变。每次 build 都调，必须
-// 不能放大或改动已合成的 stub。
 func TestSanitize_Idempotent(t *testing.T) {
 	in := []LLMMessage{
 		{Role: RoleAssistant, ToolCalls: []LLMToolCall{{ID: "call_1"}}},
@@ -146,7 +104,6 @@ func TestSanitize_Idempotent(t *testing.T) {
 	}
 }
 
-// TestSanitize_EmptyInput: paranoid edge case.
 func TestSanitize_EmptyInput(t *testing.T) {
 	out := SanitizeMessages(nil)
 	if len(out) != 0 {

@@ -1,5 +1,3 @@
-// webhook_test.go — Listener tests against an httptest server.
-
 package webhook
 
 import (

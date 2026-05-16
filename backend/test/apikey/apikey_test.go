@@ -1,11 +1,8 @@
 //go:build pipeline
 
-// apikey_test.go — end-to-end tests for the 5 /api/v1/api-keys/* endpoints.
-// All tests run offline (no external network). Connectivity tests use
-// FakeLLMServer's /v1/models endpoint to simulate provider responses.
+// Package apikey runs end-to-end tests for /api/v1/api-keys/* endpoints.
 //
-// apikey_test.go — /api/v1/api-keys/* 5 个端点的端到端测试。
-// 全部离线运行，connectivity test 用 FakeLLMServer 的 /v1/models 模拟 provider。
+// Package apikey 跑 /api/v1/api-keys/* 端到端测试。
 package apikey
 
 import (
@@ -16,12 +13,9 @@ import (
 	th "github.com/sunweilin/forgify/backend/test/harness"
 )
 
-// ── 1. CRUD round-trip ───────────────────────────────────────────────────────
-
 func TestAPIKey_CRUD_Roundtrip(t *testing.T) {
 	h := th.New(t)
 
-	// Create
 	var createResp struct {
 		Data struct {
 			ID          string `json:"id"`
@@ -50,7 +44,6 @@ func TestAPIKey_CRUD_Roundtrip(t *testing.T) {
 	}
 	keyID := createResp.Data.ID
 
-	// List — should contain exactly the created key
 	var listResp struct {
 		Data    []struct{ ID string `json:"id"` } `json:"data"`
 		HasMore *bool                              `json:"hasMore"`
@@ -66,7 +59,6 @@ func TestAPIKey_CRUD_Roundtrip(t *testing.T) {
 		t.Error("hasMore should be false for a single-item list")
 	}
 
-	// Update displayName
 	newName := "renamed-key"
 	var updateResp struct {
 		Data struct {
@@ -78,17 +70,13 @@ func TestAPIKey_CRUD_Roundtrip(t *testing.T) {
 		t.Errorf("displayName after PATCH=%q, want %q", updateResp.Data.DisplayName, newName)
 	}
 
-	// Delete → 204
 	h.Delete("/api/v1/api-keys/" + keyID)
 
-	// List again → empty
 	h.GetJSON("/api/v1/api-keys", &listResp)
 	if len(listResp.Data) != 0 {
 		t.Errorf("list after delete: got %d items, want 0", len(listResp.Data))
 	}
 }
-
-// ── 2. Invalid provider → 400 ─────────────────────────────────────────────
 
 func TestAPIKey_Create_InvalidProvider_Returns400(t *testing.T) {
 	h := th.New(t)
@@ -105,14 +93,10 @@ func TestAPIKey_Create_InvalidProvider_Returns400(t *testing.T) {
 	}
 }
 
-// ── 3. Connectivity test → 200 ok=true ────────────────────────────────────
-
 func TestAPIKey_Test_FakeServer_Success_Returns200(t *testing.T) {
-	fake := th.NewFakeLLMServer(t) // GET /v1/models returns 200 by default
+	fake := th.NewFakeLLMServer(t)
 	h := th.New(t)
 
-	// Create a key pointing at the fake server's /v1 base URL.
-	// 创建指向 fake server /v1 base URL 的 key。
 	var createResp struct {
 		Data struct{ ID string `json:"id"` } `json:"data"`
 	}
@@ -140,11 +124,9 @@ func TestAPIKey_Test_FakeServer_Success_Returns200(t *testing.T) {
 	}
 }
 
-// ── 4. Connectivity test → 422 on 401 from provider ───────────────────────
-
 func TestAPIKey_Test_FakeServer_Auth401_Returns422(t *testing.T) {
 	fake := th.NewFakeLLMServer(t)
-	fake.SetModelsStatus(http.StatusUnauthorized) // 401 → connectivity test fails
+	fake.SetModelsStatus(http.StatusUnauthorized)
 
 	h := th.New(t)
 	var createResp struct {
@@ -168,13 +150,9 @@ func TestAPIKey_Test_FakeServer_Auth401_Returns422(t *testing.T) {
 	}
 }
 
-// ── 5. Cursor pagination ────────────────────────────────────────────────────
-
 func TestAPIKey_CursorPagination_ExhaustPages(t *testing.T) {
 	h := th.New(t)
 
-	// Seed 7 keys; with limit=3 we expect pages: 3 + 3 + 1.
-	// 插入 7 个 key；limit=3 预期分页：3 + 3 + 1。
 	for i := range 7 {
 		h.PostJSON("/api/v1/api-keys", map[string]any{
 			"provider":    "deepseek",

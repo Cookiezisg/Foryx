@@ -1,10 +1,3 @@
-// dispatch_http.go — HTTPDispatcher. Reads node.Config keys `method` /
-// `url` / `headers` / `body` and calls net/http with SSRF guard
-// (loopback / link-local / private network refusal — Plan 05 §3.2 http).
-//
-// dispatch_http.go —— HTTPDispatcher;net/http GET/POST/...,SSRF 守卫
-// 拒 loopback/link-local/private。
-
 package scheduler
 
 import (
@@ -21,23 +14,21 @@ import (
 	"time"
 )
 
-// DefaultHTTPTimeout is the per-request timeout used when node.Config
-// doesn't specify one. Same default as the spec'd 30s for http nodes.
+// DefaultHTTPTimeout is the per-request timeout used when node.Config doesn't specify one.
 //
-// DefaultHTTPTimeout 默认 30s(spec §6.8 http 节点默认)。
+// DefaultHTTPTimeout 节点未指定时的默认 per-request timeout。
 const DefaultHTTPTimeout = 30 * time.Second
 
-// HTTPDispatcher bridges workflow http nodes to net/http with SSRF guard.
+// HTTPDispatcher bridges workflow http nodes to net/http with an SSRF guard.
 //
-// HTTPDispatcher 桥接 workflow http 节点到 net/http(带 SSRF 守卫)。
+// HTTPDispatcher 把 workflow http 节点桥接到 net/http，并带 SSRF 守卫。
 type HTTPDispatcher struct {
 	client *http.Client
 }
 
-// NewHTTPDispatcher constructs HTTPDispatcher. Pass a custom *http.Client
-// for test wiring (timeout / transport mocking).
+// NewHTTPDispatcher constructs HTTPDispatcher; pass a custom client for test wiring.
 //
-// NewHTTPDispatcher 构造 HTTPDispatcher;测试时可传 mock client。
+// NewHTTPDispatcher 构造 HTTPDispatcher，测试可传自定义 client。
 func NewHTTPDispatcher(client *http.Client) *HTTPDispatcher {
 	if client == nil {
 		client = &http.Client{Timeout: DefaultHTTPTimeout}
@@ -92,7 +83,7 @@ func (d *HTTPDispatcher) Dispatch(ctx context.Context, in DispatchInput) Dispatc
 		return DispatchOutput{Error: fmt.Errorf("http node %q: do: %w", in.Node.ID, err)}
 	}
 	defer resp.Body.Close()
-	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024)) // 10MB cap
+	respBody, err := io.ReadAll(io.LimitReader(resp.Body, 10*1024*1024))
 	if err != nil {
 		return DispatchOutput{Error: fmt.Errorf("http node %q: read response: %w", in.Node.ID, err)}
 	}
@@ -109,11 +100,6 @@ func (d *HTTPDispatcher) Dispatch(ctx context.Context, in DispatchInput) Dispatc
 	}}
 }
 
-// ssrfGuard rejects URLs that resolve to loopback / link-local / private
-// addresses. Defence-in-depth: the http client may still fall through to
-// public DNS but we block obvious internal targets up front.
-//
-// ssrfGuard 拒 loopback / link-local / private 地址(防 SSRF)。
 func ssrfGuard(rawURL string) error {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -131,8 +117,6 @@ func ssrfGuard(rawURL string) error {
 	}
 	ips, err := net.LookupIP(host)
 	if err != nil {
-		// Resolution failure — let the HTTP client surface the real error.
-		// DNS 解析失败 — 让 client 自报真错。
 		return nil
 	}
 	for _, ip := range ips {

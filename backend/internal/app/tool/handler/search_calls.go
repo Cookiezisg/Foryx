@@ -1,5 +1,3 @@
-// search_calls.go — search_handler_calls system tool (D22).
-
 package handler
 
 import (

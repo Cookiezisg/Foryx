@@ -1,11 +1,8 @@
 //go:build pipeline
 
-// conversation_test.go — end-to-end tests for the 4
-// /api/v1/conversations/* endpoints. Covers CRUD, soft-delete behaviour, 404
-// on missing IDs, and cursor pagination. All tests run offline.
+// Package conversation runs end-to-end tests for /api/v1/conversations/* endpoints.
 //
-// conversation_test.go — /api/v1/conversations/* 4 个端点的端到端测试。
-// 覆盖 CRUD、软删行为、404、cursor 分页，全部离线。
+// Package conversation 跑 /api/v1/conversations/* 端到端测试。
 package conversation
 
 import (
@@ -16,12 +13,9 @@ import (
 	th "github.com/sunweilin/forgify/backend/test/harness"
 )
 
-// ── 1. CRUD round-trip ───────────────────────────────────────────────────────
-
 func TestConversation_CRUD_Roundtrip(t *testing.T) {
 	h := th.New(t)
 
-	// Create
 	var createResp struct {
 		Data struct {
 			ID         string `json:"id"`
@@ -41,7 +35,6 @@ func TestConversation_CRUD_Roundtrip(t *testing.T) {
 	}
 	convID := createResp.Data.ID
 
-	// List — one item
 	var listResp struct {
 		Data    []struct{ ID string `json:"id"` } `json:"data"`
 		HasMore *bool                              `json:"hasMore"`
@@ -51,7 +44,6 @@ func TestConversation_CRUD_Roundtrip(t *testing.T) {
 		t.Fatalf("list: got %d, want 1", len(listResp.Data))
 	}
 
-	// Rename (PATCH)
 	var renameResp struct {
 		Data struct {
 			Title string `json:"title"`
@@ -62,24 +54,17 @@ func TestConversation_CRUD_Roundtrip(t *testing.T) {
 		t.Errorf("title after rename=%q, want renamed", renameResp.Data.Title)
 	}
 
-	// Delete → 204
 	h.Delete("/api/v1/conversations/" + convID)
 
-	// List again → empty (soft-delete hides the row)
-	// 再 list → 空（软删隐藏行）
 	h.GetJSON("/api/v1/conversations", &listResp)
 	if len(listResp.Data) != 0 {
 		t.Errorf("list after delete: got %d items, want 0", len(listResp.Data))
 	}
 }
 
-// ── 2. Soft-delete hides the deleted conversation but leaves others ──────────
-
 func TestConversation_SoftDelete_HidesFromList(t *testing.T) {
 	h := th.New(t)
 
-	// Create three conversations.
-	// 创建三个对话。
 	var ids [3]string
 	for i := range 3 {
 		var resp struct {
@@ -89,8 +74,6 @@ func TestConversation_SoftDelete_HidesFromList(t *testing.T) {
 		ids[i] = resp.Data.ID
 	}
 
-	// Delete the middle one.
-	// 删除中间那个。
 	h.Delete("/api/v1/conversations/" + ids[1])
 
 	var listResp struct {
@@ -108,8 +91,6 @@ func TestConversation_SoftDelete_HidesFromList(t *testing.T) {
 	}
 }
 
-// ── 3. Delete non-existent → 404 ─────────────────────────────────────────────
-
 func TestConversation_Delete_NotFound_Returns404(t *testing.T) {
 	h := th.New(t)
 	var errResp th.ErrEnvelope
@@ -122,13 +103,9 @@ func TestConversation_Delete_NotFound_Returns404(t *testing.T) {
 	}
 }
 
-// ── 4. Cursor pagination exhausts all pages ──────────────────────────────────
-
 func TestConversation_CursorPagination_ExhaustPages(t *testing.T) {
 	h := th.New(t)
 
-	// Seed 7 conversations; with limit=3 expect pages: 3 + 3 + 1.
-	// 插入 7 个对话；limit=3 预期 3 + 3 + 1 三页。
 	for i := range 7 {
 		h.PostJSON("/api/v1/conversations", map[string]any{
 			"title": fmt.Sprintf("conv-%02d", i),

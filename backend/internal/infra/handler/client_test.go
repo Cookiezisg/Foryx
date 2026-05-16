@@ -1,10 +1,3 @@
-// client_test.go — wire-format + state-machine tests for the stdio client.
-// Uses io.Pipe to simulate the subprocess; the test "driver" runs in a
-// goroutine reading the client's outbound JSON lines and writing the
-// scripted responses.
-//
-// client_test.go — stdio 客户端的协议 + 状态机测试。
-// 用 io.Pipe 模拟 subprocess,测试 driver goroutine 读 client 出站行 + 写脚本响应。
 package handler
 
 import (
@@ -19,22 +12,19 @@ import (
 	"time"
 )
 
-// fakeDriver wraps the two io.Pipe pairs the test uses to play subprocess.
-//
-// fakeDriver 包两组 io.Pipe 当 subprocess。
 type fakeDriver struct {
 	t          *testing.T
-	clientIn   *io.PipeWriter // client writes here (subprocess stdin)
-	clientInR  *io.PipeReader // driver reads here
-	clientOut  *io.PipeReader // client reads here (subprocess stdout)
-	clientOutW *io.PipeWriter // driver writes here
+	clientIn   *io.PipeWriter
+	clientInR  *io.PipeReader
+	clientOut  *io.PipeReader
+	clientOutW *io.PipeWriter
 	driverIn   *bufio.Reader
 }
 
 func newFakeDriver(t *testing.T) (Client, *fakeDriver) {
 	t.Helper()
-	pr1, pw1 := io.Pipe() // client → driver (client.stdin)
-	pr2, pw2 := io.Pipe() // driver → client (client.stdout)
+	pr1, pw1 := io.Pipe()
+	pr2, pw2 := io.Pipe()
 
 	fd := &fakeDriver{
 		t:          t,
@@ -54,15 +44,11 @@ func newFakeDriver(t *testing.T) (Client, *fakeDriver) {
 	return c, fd
 }
 
-// writeCloser adapts io.PipeWriter (which has Close) to io.WriteCloser.
 type writeCloser struct{ w *io.PipeWriter }
 
 func (w writeCloser) Write(p []byte) (int, error) { return w.w.Write(p) }
 func (w writeCloser) Close() error                { return w.w.Close() }
 
-// readMsg pulls one JSON line from the client and decodes it.
-//
-// readMsg 从 client 读一行 JSON 并解码。
 func (fd *fakeDriver) readMsg() map[string]any {
 	fd.t.Helper()
 	line, err := fd.driverIn.ReadString('\n')
@@ -76,9 +62,6 @@ func (fd *fakeDriver) readMsg() map[string]any {
 	return msg
 }
 
-// writeMsg writes one JSON line to the client's stdout.
-//
-// writeMsg 写一行 JSON 到 client 的 stdout。
 func (fd *fakeDriver) writeMsg(msg map[string]any) {
 	fd.t.Helper()
 	raw, err := json.Marshal(msg)
@@ -90,14 +73,9 @@ func (fd *fakeDriver) writeMsg(msg map[string]any) {
 	}
 }
 
-// killSubprocess closes the stdout pipe to simulate crash.
-//
-// killSubprocess 关 stdout 模拟 subprocess 崩溃。
 func (fd *fakeDriver) killSubprocess() {
 	_ = fd.clientOutW.Close()
 }
-
-// ── Init ─────────────────────────────────────────────────────────────────────
 
 func TestInit_HappyPath(t *testing.T) {
 	c, fd := newFakeDriver(t)
@@ -145,7 +123,7 @@ func TestInit_CrashedSubprocess(t *testing.T) {
 
 	go func() {
 		_ = fd.readMsg()
-		fd.killSubprocess() // close stdout without responding
+		fd.killSubprocess()
 	}()
 
 	err := c.Init(context.Background(), map[string]any{})
@@ -157,17 +135,13 @@ func TestInit_CrashedSubprocess(t *testing.T) {
 	}
 }
 
-// ── Call ─────────────────────────────────────────────────────────────────────
-
 func TestCall_HappyPath(t *testing.T) {
 	c, fd := newFakeDriver(t)
 
 	go func() {
-		// init
 		_ = fd.readMsg()
 		fd.writeMsg(map[string]any{"type": MsgReady})
 
-		// call
 		msg := fd.readMsg()
 		if msg["type"] != MsgCall {
 			t.Errorf("expected call, got %v", msg["type"])
@@ -220,8 +194,6 @@ func TestCall_RemoteException(t *testing.T) {
 	}
 }
 
-// ── StreamCall ───────────────────────────────────────────────────────────────
-
 func TestStreamCall_ProgressThenReturn(t *testing.T) {
 	c, fd := newFakeDriver(t)
 
@@ -231,7 +203,6 @@ func TestStreamCall_ProgressThenReturn(t *testing.T) {
 
 		msg := fd.readMsg()
 		id := msg["id"]
-		// 2 progress yields, then return.
 		fd.writeMsg(map[string]any{"type": MsgProgress, "id": id, "data": "chunk-1"})
 		fd.writeMsg(map[string]any{"type": MsgProgress, "id": id, "data": "chunk-2"})
 		fd.writeMsg(map[string]any{"type": MsgReturn, "id": id, "data": "final"})
@@ -253,16 +224,13 @@ func TestStreamCall_ProgressThenReturn(t *testing.T) {
 	}
 }
 
-// ── Ctx cancel ───────────────────────────────────────────────────────────────
-
 func TestCall_CtxCancel(t *testing.T) {
 	c, fd := newFakeDriver(t)
 
-	// driver init then never responds to call
 	go func() {
 		_ = fd.readMsg()
 		fd.writeMsg(map[string]any{"type": MsgReady})
-		_ = fd.readMsg() // read the call, don't respond
+		_ = fd.readMsg()
 	}()
 	_ = c.Init(context.Background(), nil)
 
@@ -277,11 +245,9 @@ func TestCall_CtxCancel(t *testing.T) {
 	}
 }
 
-// ── Shutdown ─────────────────────────────────────────────────────────────────
-
 func TestShutdown_Idempotent(t *testing.T) {
 	c, fd := newFakeDriver(t)
-	_ = fd // suppress unused warning
+	_ = fd
 
 	if err := c.Shutdown(context.Background()); err != nil {
 		t.Fatalf("Shutdown: %v", err)
@@ -290,7 +256,6 @@ func TestShutdown_Idempotent(t *testing.T) {
 		t.Fatalf("second Shutdown: %v", err)
 	}
 
-	// Subsequent calls error.
 	if _, e := c.Call(context.Background(), "x", nil); !errors.Is(e, ErrShutdownAlready) {
 		t.Errorf("expected ErrShutdownAlready from Call after Shutdown; got %v", e)
 	}

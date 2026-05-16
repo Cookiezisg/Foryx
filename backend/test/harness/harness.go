@@ -1,19 +1,8 @@
 //go:build pipeline
 
-// Package harness is the whole-stack pipeline test harness. It boots the same
-// DI graph as cmd/server/main.go (real Bridge, real LLM client, real Python
-// sandbox) but with in-memory SQLite and an httptest server, so tests can drive
-// the system through HTTP and observe SSE without ceremony.
+// Package harness boots the production DI graph against in-memory SQLite + httptest for pipeline tests.
 //
-// By default, tests use FakeLLMServer (no external network). Pass
-// WithFakeLLMBaseURL to route the injected apikey's BaseURL to the fake server.
-// Tests that need a real provider use RequireDeepSeekKey and the "Live_" naming
-// prefix.
-//
-// Package harness 是 pipeline 测试脚手架。DI 图与 cmd/server/main.go 一致
-// （真 Bridge / 真 LLM 客户端 / 真 Python sandbox），区别在于内存 SQLite +
-// httptest server。默认走 FakeLLMServer（无外网）；需真实 provider 的测试
-// 用 RequireDeepSeekKey + "Live_" 前缀命名。
+// Package harness 用内存 SQLite + httptest 启生产 DI 图给 pipeline 测试。
 package harness
 
 import (
@@ -36,10 +25,12 @@ import (
 	askapp "github.com/sunweilin/forgify/backend/internal/app/ask"
 	catalogapp "github.com/sunweilin/forgify/backend/internal/app/catalog"
 	chatapp "github.com/sunweilin/forgify/backend/internal/app/chat"
+	contextmgrapp "github.com/sunweilin/forgify/backend/internal/app/contextmgr"
 	convapp "github.com/sunweilin/forgify/backend/internal/app/conversation"
 	functionapp "github.com/sunweilin/forgify/backend/internal/app/function"
 	handlerapp "github.com/sunweilin/forgify/backend/internal/app/handler"
 	mcpapp "github.com/sunweilin/forgify/backend/internal/app/mcp"
+	memoryapp "github.com/sunweilin/forgify/backend/internal/app/memory"
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
 	skillapp "github.com/sunweilin/forgify/backend/internal/app/skill"
@@ -51,6 +42,7 @@ import (
 	functiontool "github.com/sunweilin/forgify/backend/internal/app/tool/function"
 	handlertool "github.com/sunweilin/forgify/backend/internal/app/tool/handler"
 	mcptool "github.com/sunweilin/forgify/backend/internal/app/tool/mcp"
+	memorytool "github.com/sunweilin/forgify/backend/internal/app/tool/memory"
 	searchtool "github.com/sunweilin/forgify/backend/internal/app/tool/search"
 	shelltool "github.com/sunweilin/forgify/backend/internal/app/tool/shell"
 	skilltool "github.com/sunweilin/forgify/backend/internal/app/tool/skill"
@@ -67,6 +59,7 @@ import (
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	handlerdomain "github.com/sunweilin/forgify/backend/internal/domain/handler"
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
+	memorydomain "github.com/sunweilin/forgify/backend/internal/domain/memory"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
@@ -86,6 +79,7 @@ import (
 	convstore "github.com/sunweilin/forgify/backend/internal/infra/store/conversation"
 	functionstore "github.com/sunweilin/forgify/backend/internal/infra/store/function"
 	handlerstore "github.com/sunweilin/forgify/backend/internal/infra/store/handler"
+	memorystore "github.com/sunweilin/forgify/backend/internal/infra/store/memory"
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
@@ -95,6 +89,7 @@ import (
 	skillexecstore "github.com/sunweilin/forgify/backend/internal/infra/store/skillexec"
 	eventlogpkg "github.com/sunweilin/forgify/backend/internal/pkg/eventlog"
 	forgepkg "github.com/sunweilin/forgify/backend/internal/pkg/forge"
+	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	notificationspkg "github.com/sunweilin/forgify/backend/internal/pkg/notifications"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	routerhttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/router"
@@ -102,7 +97,7 @@ import (
 
 // Option configures the Harness at construction time.
 //
-// Option 在构造时配置 Harness。
+// Option 构造时配置 Harness。
 type Option func(*options)
 
 type options struct {
@@ -111,52 +106,35 @@ type options struct {
 	sandboxDataDir  string
 }
 
-// WithFakeLLMBaseURL routes the injected DeepSeek apikey's BaseURL to the
-// given fake server URL instead of the real provider. Use together with
-// NewFakeLLMServer to test chat flows without network calls.
+// WithFakeLLMBaseURL routes the injected apikey to a fake LLM server.
 //
-// WithFakeLLMBaseURL 把注入的 DeepSeek apikey 的 BaseURL 指向 fake server
-// 而非真实 provider。配合 NewFakeLLMServer 做无网络 chat 测试。
+// WithFakeLLMBaseURL 把 apikey BaseURL 指向 fake LLM server。
 func WithFakeLLMBaseURL(url string) Option {
 	return func(o *options) { o.fakeLLMBaseURL = url }
 }
 
-// WithCuratedRegistry swaps the in-memory test registry (everything +
-// sqlite-test) for the production CuratedRegistrySource so curated
-// marketplace pipeline tests can install / handshake any of the 21
-// real entries by their slug.
+// WithCuratedRegistry swaps the in-memory test registry for the production CuratedRegistrySource.
 //
-// WithCuratedRegistry 把内存测试 registry 换成生产 CuratedRegistrySource，
-// 让 curated 21 条 pipeline 测试能按 slug 走真装 / 真握手。
+// WithCuratedRegistry 把测试 registry 换成生产 CuratedRegistrySource。
 func WithCuratedRegistry() Option {
 	return func(o *options) { o.curatedRegistry = true }
 }
 
-// WithSandboxDataDir overrides the default per-test t.TempDir() with a
-// caller-provided directory. Lets pipeline runs share mise + npm + uv
-// caches across multiple harness instances (production reality: one
-// persistent ~/.forgify/sandbox/ warmed once); without it every test
-// re-extracts mise (~65MB) and re-downloads node@22 (~50MB) — the
-// 5-minute first-install cost dominates wall time.
+// WithSandboxDataDir overrides the per-test t.TempDir() to share mise/npm/uv caches across runs.
 //
-// WithSandboxDataDir 用调用方提供的目录覆盖 per-test t.TempDir()。让
-// pipeline 多个 harness 实例共享 mise + npm + uv 缓存（生产现实：单一
-// ~/.forgify/sandbox/ 只 warmup 一次）。否则每个 test 重解 mise + 重下
-// node@22，5min 冷启动主导墙钟。
+// WithSandboxDataDir 用指定目录共享 mise/npm/uv 缓存，避免每测重下载。
 func WithSandboxDataDir(dir string) Option {
 	return func(o *options) { o.sandboxDataDir = dir }
 }
 
-// Harness is a booted in-process backend ready to drive over HTTP.
+// Harness is a booted in-process backend driveable over HTTP.
 //
-// Harness 是 boot 完成、可通过 HTTP 驱动的 in-process 后端。
+// Harness 是可通过 HTTP 驱动的 in-process 后端。
 type Harness struct {
 	t      *testing.T
 	server *httptest.Server
 	log    *zap.Logger
 
-	// fakeLLMBaseURL is stored so SeedDeepSeek can inject it into the apikey.
-	// fakeLLMBaseURL 存这里让 SeedDeepSeek 注入到 apikey 里。
 	fakeLLMBaseURL string
 
 	DB                  *gorm.DB
@@ -170,6 +148,8 @@ type Harness struct {
 	MCP                 *mcpapp.Service
 	Skill               *skillapp.Service
 	Catalog             *catalogapp.Service
+	Memory              *memoryapp.Service
+	ContextManager      *contextmgrapp.Manager
 
 	APIKey       *apikeyapp.Service
 	Model        *modelapp.Service
@@ -184,17 +164,9 @@ type Harness struct {
 	Tools        []toolapp.Tool
 }
 
-// New boots a fresh harness backed by an in-memory SQLite. The httptest server
-// is started, the same migrations as production are applied, and the DI graph
-// matches main.go. Cleanup (server stop + DB close) is registered on t.
+// New boots a fresh harness with in-memory SQLite + httptest server; cleanup is registered on t.
 //
-// Pass WithFakeLLMBaseURL to redirect LLM calls to a FakeLLMServer so tests
-// run without external network access. Without it the harness is wired for
-// real provider calls (requires SeedDeepSeek with a live key).
-//
-// New 启动内存 SQLite + httptest server 的全新 harness，迁移 + DI 图与
-// main.go 对齐，清理注册到 t。传 WithFakeLLMBaseURL 把 LLM 调用路由到
-// FakeLLMServer，无需外网；不传则需真实 apikey。
+// New 启动内存 SQLite + httptest 的 harness，清理挂到 t。
 func New(t *testing.T, opts ...Option) *Harness {
 	t.Helper()
 
@@ -205,7 +177,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 
 	log := zaptest.NewLogger(t)
 
-	gdb, err := dbinfra.Open(dbinfra.Config{DataDir: ""}) // in-memory
+	gdb, err := dbinfra.Open(dbinfra.Config{DataDir: ""})
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -215,10 +187,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		}
 	})
 
-	// SQLite :memory: gives each connection its own independent DB instance.
-	// Force a single connection so all goroutines share the migrated tables.
-	//
-	// SQLite :memory: 每个连接独立实例；强制单连接让所有 goroutine 共享迁移后的表。
+	// SQLite :memory: per-connection isolation; force single connection so goroutines share tables.
 	if sqlDB, err := gdb.DB(); err == nil {
 		sqlDB.SetMaxOpenConns(1)
 	}
@@ -232,8 +201,10 @@ func New(t *testing.T, opts ...Option) *Harness {
 		&chatdomain.Attachment{},
 		&functiondomain.Function{},
 		&functiondomain.Version{},
+		&functiondomain.Execution{},
 		&handlerdomain.Handler{},
 		&handlerdomain.Version{},
+		&handlerdomain.Call{},
 		&workflowdomain.Workflow{},
 		&workflowdomain.Version{},
 		&flowrundomain.FlowRun{},
@@ -243,16 +214,12 @@ func New(t *testing.T, opts ...Option) *Harness {
 		&sandboxdomain.Runtime{},
 		&sandboxdomain.Env{},
 		&tododomain.Todo{},
+		&memorydomain.Memory{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	// Crypto: the encryptor uses a deterministic test fingerprint so each
-	// harness instance can decrypt keys it inserted itself. Production
-	// derives from MachineFingerprint (os/hardware identity).
-	//
-	// crypto：用确定性测试指纹，让 harness 实例能解开自己插入的 key。
-	// 生产从 MachineFingerprint（OS/硬件身份）派生。
+	// Deterministic test fingerprint so harness can decrypt keys it inserted.
 	encryptor, err := cryptoinfra.NewAESGCMEncryptor(
 		cryptoinfra.DeriveKey("forgify-pipeline-test-fingerprint"),
 	)
@@ -270,27 +237,13 @@ func New(t *testing.T, opts ...Option) *Harness {
 
 	llmFactory := llminfra.NewFactory()
 
-	// PluginSandbox v2 — same DI as cmd/server/main.go but rooted at a per-test
-	// tempdir. Bootstrap extracts the embedded mise binary; if unavailable for
-	// the host platform (e.g. CI without `make resources`), bootstrap fails →
-	// degraded mode → runtime ops return ErrSandboxUnavailable. Tests that
-	// need a working sandbox should gate themselves with sandboxapp.Service
-	// .IsReady().
-	//
-	// PluginSandbox v2 ——与 main.go 同 DI 图但根目录是 per-test tempdir。
-	// Bootstrap 解 embed mise；当前平台没有就 degraded mode；需要 sandbox 的
-	// 测试自己用 IsReady() 守卫。
+	// PluginSandbox v2 rooted at per-test tempdir; Bootstrap failure → degraded mode.
 	var dataDir string
 	if cfg.sandboxDataDir != "" {
 		dataDir = cfg.sandboxDataDir
 	} else {
 		dataDir = t.TempDir()
 	}
-	// Bridges + publisher must be live before sandbox / chat / etc. so
-	// constructors that publish on state change can wire to a real
-	// notifier instead of nil.
-	// Bridge + publisher 必须先于 sandbox / chat 等就位，让发状态变更通知
-	// 的构造函数能接真 notifier 不 nil。
 	eventLogBridge := eventloginfra.NewBridge(log)
 	notificationsBridge := notificationsinfra.NewBridge(log)
 	notificationsPub := notificationspkg.New(notificationsBridge, log)
@@ -332,12 +285,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		handlerService.Shutdown(context.Background())
 	})
 
-	// Workflow service — Plan 04 third leg of trinity. CapabilityChecker
-	// gets function + handler now; Skill + MCP filled in after their
-	// services exist below.
-	//
-	// Workflow service —— Plan 04 trinity 第三条腿。CapabilityChecker 先填
-	// function + handler;Skill + MCP 在下方各服务构造后回填。
+	// Skill + MCP backfilled below once those services exist.
 	workflowChecker := &workflowapp.ProductionChecker{
 		Function: functionService,
 		Handler:  handlerService,
@@ -363,10 +311,6 @@ func New(t *testing.T, opts ...Option) *Harness {
 		log,
 	)
 
-	// PathGuard for filesystem tools — NewDefault deny-list is fine for tests
-	// (tests use t.TempDir paths which aren't on the deny list).
-	// 文件系统 tool 的 PathGuard——NewDefault 黑名单足够测试用（t.TempDir 路径
-	// 不在黑名单里）。
 	pathGuard := pathguardpkg.NewDefault()
 
 	tools := functiontool.FunctionTools(
@@ -380,12 +324,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 	)...)
 	tools = append(tools, fstool.FilesystemTools(pathGuard)...)
 	tools = append(tools, searchtool.SearchTools(pathGuard, log)...)
-	// WebTools wired without MCP router in pipeline harness — tests that
-	// need MCP routing should construct WebSearch directly with a fake
-	// MCPSearchRouter. nil router = no MCP tier (BYOK + Bing CN only).
-	//
-	// 测试 harness 不接 MCP router——需要 MCP 路由的测试自己构造 WebSearch
-	// + fake router。nil 路由器 = 无 MCP 层（仅 BYOK + Bing CN）。
+	// nil MCP router in harness = BYOK + Bing CN only; tests that need MCP construct WebSearch directly.
 	tools = append(tools, webtool.WebTools(modelService, apikeyService, llmFactory, nil, log)...)
 	shells := shelltool.NewShellTools(sandboxSvc)
 	t.Cleanup(shells.Manager.Stop)
@@ -394,6 +333,9 @@ func New(t *testing.T, opts ...Option) *Harness {
 	tools = append(tools, todotool.TodoTools(todoService)...)
 	askService := askapp.NewService()
 	tools = append(tools, asktool.AskTools(askService)...)
+
+	memoryService := memoryapp.New(memorystore.New(gdb), notificationsPub, log)
+	tools = append(tools, memorytool.MemoryTools(memoryService)...)
 
 	subagentService := subagentapp.New(
 		chatRepo,
@@ -406,22 +348,8 @@ func New(t *testing.T, opts ...Option) *Harness {
 	tools = append(tools, subagenttool.SubagentTools(subagentService)...)
 	subagentService.SetTools(tools)
 
-	// MCP: configPath inside the per-test tempdir so we never touch
-	// real ~/.forgify/mcp.json. Service.Start with no config = no-op
-	// (instant boot); pipeline tests that need MCP servers seed
-	// mcp.json + register fakeClient via the test seam separately.
-	//
-	// MCP：configPath 在 per-test tempdir 内，永不动真 ~/.forgify/mcp.json。
-	// 无配置时 Service.Start 是 no-op（瞬时启动）；需要 MCP server 的
-	// pipeline 测试通过 test seam 单独灌 mcp.json + 注册 fakeClient。
+	// per-test tempdir for mcp.json + in-memory registry (curated swapped in via WithCuratedRegistry).
 	mcpConfigPath := filepath.Join(dataDir, "mcp.json")
-	// In-memory test RegistrySource — production uses CuratedRegistrySource
-	// (21 hand-picked servers); tests need predictable controllable entries
-	// for install paths (the `everything` ref server + a forced-arg sample).
-	//
-	// 内存测试 RegistrySource——生产用 CuratedRegistrySource（21 条精选）；
-	// 测试要可控固定 entry 跑 install 路径（`everything` 参考 server + 强制
-	// 必填 arg 的样本）。
 	var mcpRegistrySource mcpdomain.RegistrySource
 	if cfg.curatedRegistry {
 		mcpRegistrySource = mcpinfra.NewCuratedRegistrySource()
@@ -467,20 +395,9 @@ func New(t *testing.T, opts ...Option) *Harness {
 	if err := mcpService.Start(context.Background()); err != nil {
 		t.Logf("mcp start: %v (continuing — pipeline tests that need it will skip)", err)
 	}
-	// V3 (2026-05-09): MCPTools no longer takes LLM deps — list_mcp_marketplace
-	// returns the curated catalog directly without LLM rerank.
-	// V3：MCPTools 不再要 LLM 依赖——list_mcp_marketplace 直返 curated。
 	tools = append(tools, mcptool.MCPTools(mcpService)...)
 
-	// Skill: per-test tempdir SkillsDir so we never touch real
-	// ~/.forgify/skills/. Tests that need skills installed seed them
-	// into h.Skill.SkillsDir() then either call h.Skill.Scan(ctx) for
-	// immediate effect or rely on the 1s polling loop (D9 dynamic-update
-	// pattern).
-	//
-	// Skill：per-test tempdir SkillsDir，永不动真 ~/.forgify/skills/。
-	// 需 skill 的测试自己往 h.Skill.SkillsDir() 写 + 调 h.Skill.Scan
-	// 立即生效，或靠 1s 轮询（D9 动态更新模式）。
+	// per-test tempdir SkillsDir; tests seed and either call Scan or rely on 1s polling.
 	skillsDir := filepath.Join(dataDir, "skills")
 	if err := os.MkdirAll(skillsDir, 0o755); err != nil {
 		t.Fatalf("mkdir skills: %v", err)
@@ -500,34 +417,9 @@ func New(t *testing.T, opts ...Option) *Harness {
 	t.Cleanup(skillService.Stop)
 	tools = append(tools, skilltool.SkillTools(skillService)...)
 
-	// Capability Catalog: per-test tempdir for the cache file so we
-	// never touch real ~/.forgify/.catalog.json. Tests that exercise
-	// catalog drive it explicitly via h.Catalog.Refresh; the polling
-	// loop is started so SSE-style timing tests are realistic.
-	//
-	// Capability Catalog：per-test tempdir cache 文件，永不动真
-	// ~/.forgify/.catalog.json。需 catalog 的测试经 h.Catalog.Refresh
-	// 显式驱动；polling loop 启 让 SSE 类时序测试逼真。
+	// per-test cache; no SetGenerator → mechanical-fallback only (avoids FIFO script queue contention).
 	catalogCachePath := filepath.Join(dataDir, ".catalog.json")
 	catalogService := catalogapp.New(catalogCachePath, notificationsPub, log)
-	// Deliberately NOT calling SetGenerator in the test harness:
-	// production main.go wires LLMGenerator, but the FakeLLMServer's
-	// FIFO script queue is a test-only abstraction (real LLM endpoints
-	// handle concurrent requests fine). Background catalog regen
-	// competing for queued scripts caused test/chat to regress after
-	// D8. Solution: catalog uses mechanical-fallback only in pipelines
-	// — content is still populated, Coverage map still complete, just
-	// no LLM-generated 'Notes on choosing' prose. D9 + test/catalog
-	// scenarios all assert against mechanical-fallback markers and
-	// pass either way.
-	//
-	// 故意不在 harness 里 SetGenerator：生产 main.go 接 LLMGenerator，
-	// 但 FakeLLMServer 的 FIFO 脚本队列是测试基础设施才有的限制（真
-	// LLM endpoint 处理并发请求没问题）。后台 catalog regen 抢队列脚本
-	// D8 后让 test/chat 回归。方案：pipeline 里 catalog 走 mechanical-
-	// fallback——内容仍 populate、Coverage 仍全，只少 LLM 生成的"Notes
-	// on choosing" prose。D9 + test/catalog 场景全针对 mechanical 标记
-	// 断言，都通过。
 	catalogService.RegisterSource(functionService.AsCatalogSource())
 	catalogService.RegisterSource(handlerService.AsCatalogSource())
 	catalogService.RegisterSource(skillService.AsCatalogSource())
@@ -535,24 +427,25 @@ func New(t *testing.T, opts ...Option) *Harness {
 	if err := catalogService.Start(context.Background()); err != nil {
 		t.Logf("catalog start: %v", err)
 	}
-	// catalogService.Stop blocks until the polling goroutine fully
-	// drains — without this, a tick mid-saveToDisk could race with
-	// t.TempDir's RemoveAll and fail tests with "directory not empty".
-	//
-	// catalogService.Stop 阻塞到 polling goroutine 完全 drain——没有
-	// 它的话，mid-saveToDisk 的 tick 与 t.TempDir 的 RemoveAll 竞态会
-	// 让测试以 "directory not empty" 失败。
+	// Stop must drain before t.TempDir RemoveAll to avoid "directory not empty" race.
 	t.Cleanup(catalogService.Stop)
 	chatService.SetSystemPromptProvider(catalogService)
+	chatService.SetMemoryProvider(memoryService)
 
-	// Skill + MCP services now exist — backfill the workflow CapabilityChecker.
-	// 此时 Skill + MCP 就位,回填 workflow CapabilityChecker。
+	cheapLLMResolver := func(ctx context.Context) (llminfra.Client, string, string, string, error) {
+		bundle, err := llmclientpkg.ResolveForWebSummary(ctx, modelService, apikeyService, llmFactory)
+		if err != nil {
+			return nil, "", "", "", err
+		}
+		return bundle.Client, bundle.ModelID, bundle.Key, bundle.BaseURL, nil
+	}
+	contextManager := contextmgrapp.New(
+		chatRepo, convstore.New(gdb), chatEmitter, notificationsPub, cheapLLMResolver, log)
+	chatService.SetContextCompactor(contextManager)
+
 	workflowChecker.Skill = skillService
 	workflowChecker.MCP = mcpService
 
-	// Plan 05 execution plane wire-up (mirror main.go). flowrun + trigger +
-	// scheduler + D22 stores.
-	// Plan 05 执行 plane 装配(镜像 main.go)。
 	flowrunRepo := flowrunstore.New(gdb)
 	mcpCallRepo := mcpcallstore.New(gdb)
 	skillExecRepo := skillexecstore.New(gdb)
@@ -610,6 +503,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		MCPService:          mcpService,
 		SkillService:        skillService,
 		CatalogService:      catalogService,
+		MemoryService:       memoryService,
 		Dev:                 false,
 		Tools:               tools,
 		LLMFactory:          llmFactory,
@@ -647,17 +541,15 @@ func New(t *testing.T, opts ...Option) *Harness {
 		Trigger:             triggerService,
 		FlowRunRepo:         flowrunRepo,
 		Chat:                chatService,
+		Memory:              memoryService,
+		ContextManager:      contextManager,
 		Tools:               tools,
 	}
 }
 
-// registerSandboxStack mirrors cmd/server/main.go::registerSandboxStack so
-// the harness wires the same v1 PluginSandbox runtime/env matrix. Mise-
-// independent installers (dotnet/static) are registered up front; mise-
-// managed ones are skipped if Bootstrap failed (degraded mode).
+// registerSandboxStack mirrors cmd/server/main.go::registerSandboxStack.
 //
-// registerSandboxStack 镜像 main.go 的同名 helper——curated marketplace 仅
-// npm + pypi，故仅注册 python + node + uv runtime / python + node EnvManager。
+// registerSandboxStack 镜像 main.go 的同名 helper。
 func registerSandboxStack(svc *sandboxapp.Service) {
 	miseBin := svc.MiseBin()
 	if miseBin == "" {
@@ -674,46 +566,45 @@ func registerSandboxStack(svc *sandboxapp.Service) {
 	svc.RegisterEnvManager(sandboxinfra.NewNodeEnvManager())
 }
 
-// URL returns the test server's base URL (e.g. "http://127.0.0.1:54321").
+// URL returns the test server's base URL.
 //
-// URL 返回 test server 的 base URL。
+// URL 返回 test server base URL。
 func (h *Harness) URL() string { return h.server.URL }
 
-// HTTPClient returns a client suitable for short-lived requests against the
-// harness. SSE long-lived streams should construct their own request via
-// SubscribeSSE.
+// HTTPClient returns a client for short-lived requests; SSE uses SubscribeSSE.
 //
-// HTTPClient 返回适合短请求的 client；SSE 长连接走 SubscribeSSE。
+// HTTPClient 返回短请求 client；SSE 走 SubscribeSSE。
 func (h *Harness) HTTPClient() *http.Client {
 	return &http.Client{Timeout: 30 * time.Second}
 }
 
-// PostJSON POSTs body as JSON to path (relative to URL()) and decodes the
-// response into out. Fails the test on non-2xx or transport errors.
+// PostJSON POSTs body as JSON and decodes into out; fatals on non-2xx.
 //
-// PostJSON 把 body 编为 JSON POST 到 path（相对 URL()），结果解到 out。
-// 非 2xx / 传输错误直接 fail。
+// PostJSON POST JSON 解到 out，非 2xx 直接 fatal。
 func (h *Harness) PostJSON(path string, body, out any) *http.Response {
 	h.t.Helper()
 	return h.requestJSON("POST", path, body, out)
 }
 
 // GetJSON GETs path and decodes into out.
-// GetJSON 取 path 并解到 out。
+//
+// GetJSON GET path 解到 out。
 func (h *Harness) GetJSON(path string, out any) *http.Response {
 	h.t.Helper()
 	return h.requestJSON("GET", path, nil, out)
 }
 
-// PatchJSON PATCH's body to path and decodes into out.
-// PatchJSON 把 body PATCH 到 path 并解到 out。
+// PatchJSON PATCHes body to path and decodes into out.
+//
+// PatchJSON PATCH body 到 path 解到 out。
 func (h *Harness) PatchJSON(path string, body, out any) *http.Response {
 	h.t.Helper()
 	return h.requestJSON("PATCH", path, body, out)
 }
 
-// Delete DELETEs path. Fails the test on non-2xx or transport errors.
-// Delete DELETE 请求；非 2xx / 传输错误 fail。
+// Delete DELETEs path; fatals on non-2xx.
+//
+// Delete DELETE path，非 2xx 直接 fatal。
 func (h *Harness) Delete(path string) *http.Response {
 	h.t.Helper()
 	return h.requestJSON("DELETE", path, nil, nil)
@@ -756,12 +647,9 @@ func (h *Harness) requestJSON(method, path string, body, out any) *http.Response
 	return resp
 }
 
-// RequireDeepSeekKey returns the DeepSeek API key from env or skips the test.
-// All chat-touching pipeline tests should call this at the top so missing keys
-// fail clean rather than mid-run.
+// RequireDeepSeekKey returns DEEPSEEK_API_KEY from env or skips the test.
 //
-// RequireDeepSeekKey 返回环境里的 DEEPSEEK_API_KEY，缺则 skip。
-// 所有触 chat 的 pipeline 测试在开头调它，让缺 key 时直接 skip 而非中途失败。
+// RequireDeepSeekKey 返回 env 中的 DEEPSEEK_API_KEY，缺则 skip。
 func RequireDeepSeekKey(t *testing.T) string {
 	t.Helper()
 	key := os.Getenv("DEEPSEEK_API_KEY")

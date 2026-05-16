@@ -1,32 +1,6 @@
-// Package subagent provides the Subagent system tool — the LLM-facing
-// entry point that lets the parent LLM spawn an isolated sub-runner with
-// its own context window and a curated tool list, and receive the
-// sub-runner's last message as the tool_result.
+// Package subagent provides the Subagent system tool for spawning isolated sub-runners.
 //
-// Imported as `subagenttool` per §S13 nested sub-package alias rule.
-//
-// Recursion defense is two-layered (subagent.md §8):
-//
-//  1. structural — Service.Spawn filters the tool list to drop "Subagent"
-//     itself before calling loop.Run, so the sub-LLM physically cannot
-//     see the tool name. This is the primary defense.
-//  2. runtime — Execute checks reqctxpkg.GetSubagentDepth(ctx) ≥ 1 and
-//     refuses with ErrRecursionAttempt. Belt-and-suspenders catch in
-//     case a future bridge bug or test path leaks Subagent into a
-//     sub-runner's tool list.
-//
-// Failure paths follow the §S18 / ask.go pattern: max-turns / cancelled
-// terminations are converted to friendly tool_result strings so the
-// parent LLM can read the situation and decide how to proceed; only
-// hard sentinels (recursion / unknown type) escape as Go errors.
-//
-// Package subagent 提供 Subagent 系统工具——LLM 入口，父 LLM 起一个隔离
-// sub-runner（独立 context window + 精选 tool 列表），sub-runner 的最后
-// 一条 message 作为 tool_result 返。
-//
-// 双保险防递归：结构性（Service.Spawn 过滤 tool 列表）+ 运行时
-// （Execute 查 ctx depth）。失败路径按 §S18 / ask.go：max-turns / cancelled
-// 转友好 tool_result 字符串；hard sentinel（recursion / 未知类型）走 Go err。
+// Package subagent 提供 Subagent 系统工具，起隔离的 sub-runner。
 package subagent
 
 import (
@@ -42,19 +16,19 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// ── Validation sentinels ─────────────────────────────────────────────
 
 var (
-	// ErrEmptyPrompt — `prompt` arg missing or whitespace.
+	// ErrEmptyPrompt: prompt missing or whitespace.
+	//
 	// ErrEmptyPrompt：prompt 缺失或全空白。
 	ErrEmptyPrompt = errors.New("prompt is required and must be non-empty")
 
-	// ErrEmptyType — `subagent_type` arg missing or empty.
+	// ErrEmptyType: subagent_type missing or empty.
+	//
 	// ErrEmptyType：subagent_type 缺失或为空。
 	ErrEmptyType = errors.New("subagent_type is required and must be non-empty")
 )
 
-// ── Description & schema ─────────────────────────────────────────────
 
 const subagentDescription = `Spawn a specialized subagent to handle a focused subtask in isolation. The subagent has its own context window and a curated tool list; the parent context is not consumed. Returns the subagent's final message as a string. Available subagent_type values are listed in the schema.`
 
@@ -77,11 +51,10 @@ var subagentSchema = json.RawMessage(`{
 	}
 }`)
 
-// ── Tool struct & 9 methods ──────────────────────────────────────────
 
 // SubagentTool implements the Subagent system tool.
 //
-// SubagentTool struct 是 Subagent 系统工具。
+// SubagentTool 是 Subagent 系统工具的实现。
 type SubagentTool struct {
 	svc *subagentapp.Service
 }
@@ -95,30 +68,17 @@ func SubagentTools(svc *subagentapp.Service) []toolapp.Tool {
 	}
 }
 
-// Identity --------------------------------------------------------------------
-
 func (t *SubagentTool) Name() string                { return "Subagent" }
 func (t *SubagentTool) Description() string         { return subagentDescription }
 func (t *SubagentTool) Parameters() json.RawMessage { return subagentSchema }
 
-// Static metadata -------------------------------------------------------------
-
-// IsReadOnly is conservatively false because a sub-runner can invoke
-// Write/Edit/Bash etc. (general-purpose inherits the full registry).
-//
-// IsReadOnly 保守取 false——sub-runner 可调 Write/Edit/Bash 等
-// （general-purpose 继承全注册表）。
 func (t *SubagentTool) IsReadOnly() bool        { return false }
 func (t *SubagentTool) NeedsReadFirst() bool    { return false }
 func (t *SubagentTool) RequiresWorkspace() bool { return false }
 
-// ── Args-dependent hooks ─────────────────────────────────────────────
-
-// ValidateInput rejects empty subagent_type / prompt pre-Execute. Type
-// existence is checked inside Service.Spawn (returns ErrTypeNotFound).
+// ValidateInput rejects empty subagent_type / prompt pre-Execute; type existence is checked in Service.Spawn.
 //
-// ValidateInput 在 Execute 前拒绝空 subagent_type / prompt。类型存在性
-// 由 Service.Spawn 检查（返 ErrTypeNotFound）。
+// ValidateInput 在 Execute 前拒绝空 subagent_type / prompt；类型存在性由 Service.Spawn 检查。
 func (t *SubagentTool) ValidateInput(args json.RawMessage) error {
 	var a struct {
 		SubagentType string `json:"subagent_type"`
@@ -140,22 +100,10 @@ func (t *SubagentTool) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionM
 	return toolapp.PermissionAllow
 }
 
-// ── Execute ──────────────────────────────────────────────────────────
 
-// Execute checks the runtime recursion guard, parses the args, calls
-// Service.Spawn, and converts terminal status into the right tool_result
-// shape:
+// Execute checks recursion guard, calls Service.Spawn, and maps terminal status to a tool_result.
 //
-//   - completed → return run.Result (the last assistant message text)
-//   - max_turns → return run.Result + "[note: subagent hit max turns]"
-//   - cancelled → return run.Result + "[note: subagent was cancelled]"
-//   - failed    → return body + ErrorMsg note (or just ErrorMsg if no body)
-//   - recursion / unknown type → return Go err (sanitized at framework
-//     boundary in loop/tools.go before reaching the LLM)
-//
-// Execute 检查运行时递归守卫、解析 args、调 Service.Spawn、按终态产出
-// tool_result 形状。recursion / 未知类型走 Go err；framework boundary
-// （loop/tools.go）剥 §S16 wrap 链。
+// Execute 查递归守卫 / 调 Service.Spawn / 按终态产出 tool_result。
 func (t *SubagentTool) Execute(ctx context.Context, argsJSON string) (string, error) {
 	if depth := reqctxpkg.GetSubagentDepth(ctx); depth >= 1 {
 		return "", fmt.Errorf("SubagentTool.Execute: %w (depth=%d)",
@@ -175,13 +123,6 @@ func (t *SubagentTool) Execute(ctx context.Context, argsJSON string) (string, er
 		MaxTurns: args.MaxTurns,
 	})
 	if err != nil {
-		// Hard errors: type not found, persist failure, LLM resolve
-		// failure. Spawn wraps with %w so errors.Is upstream matches
-		// sentinels; framework sanitizer strips §S16 prefix before the
-		// LLM sees the inner reason.
-		// Hard error：未知类型 / 持久化失败 / LLM 解析失败。Spawn 用 %w
-		// 包好让上游 errors.Is 匹配 sentinel；framework sanitizer 剥
-		// §S16 前缀让 LLM 仅看里层原因。
 		return "", err
 	}
 
@@ -200,12 +141,6 @@ func (t *SubagentTool) Execute(ctx context.Context, argsJSON string) (string, er
 	}
 }
 
-// appendNote tacks a "[note: …]" line onto the body, separated by a
-// blank line so the LLM clearly distinguishes its own assistant text
-// from our framework annotation.
-//
-// appendNote 在正文后加 "[note: …]" 行，空行分隔让 LLM 清楚区分自身
-// assistant 文本与框架注释。
 func appendNote(body, note string) string {
 	body = strings.TrimSpace(body)
 	if body == "" {
@@ -214,6 +149,5 @@ func appendNote(body, note string) string {
 	return body + "\n\n[note: " + note + "]"
 }
 
-// ── Compile-time checks ──────────────────────────────────────────────
 
 var _ toolapp.Tool = (*SubagentTool)(nil)

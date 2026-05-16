@@ -2,12 +2,9 @@ package reqctx
 
 import "context"
 
-// Locale is the user's preferred language for AI-generated content
-// (prompts, titles, summaries). NOT used for backend error messages —
-// those stay English; frontend localizes by error code.
+// Locale is the user's preferred language for AI-generated content; not used for error messages.
 //
-// Locale 是用户偏好的 AI 生成内容语言（提示 / 标题 / 摘要）。
-// 不用于后端错误消息——后端保持英文，前端按 error code 本地化。
+// Locale 是用户偏好的 AI 生成内容语言；不用于后端错误消息。
 type Locale string
 
 const (
@@ -32,10 +29,9 @@ func SetLocale(ctx context.Context, l Locale) context.Context {
 	return context.WithValue(ctx, localeKey{}, l)
 }
 
-// GetLocale returns the locale or DefaultLocale (preference, not identity —
-// always returns a usable value).
+// GetLocale returns the locale or DefaultLocale; always usable.
 //
-// GetLocale 返回 locale 或 DefaultLocale（偏好而非身份，总返回可用值）。
+// GetLocale 返回 locale 或 DefaultLocale；总返回可用值。
 func GetLocale(ctx context.Context) Locale {
 	if l, ok := ctx.Value(localeKey{}).(Locale); ok && l.IsSupported() {
 		return l

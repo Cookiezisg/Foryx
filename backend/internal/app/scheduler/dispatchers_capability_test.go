@@ -1,9 +1,3 @@
-// dispatchers_capability_test.go — E7 capability dispatcher tests
-// (trigger / function / handler / mcp / skill / llm). Uses fake LLMCaller
-// + node.Config-driven verification. function/handler/mcp/skill dispatch
-// is exercised via real Service in pipeline tests (E16);here we hit the
-// thin config-parse + error paths.
-
 package scheduler
 
 import (
@@ -31,8 +25,6 @@ func mkInput(node workflowdomain.NodeSpec, run *flowrundomain.FlowRun) DispatchI
 	}
 }
 
-// ── TriggerDispatcher ────────────────────────────────────────────────────────
-
 func TestTriggerDispatcher_PassesTriggerInput(t *testing.T) {
 	d := NewTriggerDispatcher()
 	run := &flowrundomain.FlowRun{ID: "fr1", TriggerInput: map[string]any{"k": "v"}}
@@ -48,8 +40,6 @@ func TestTriggerDispatcher_PassesTriggerInput(t *testing.T) {
 	}
 }
 
-// ── FunctionDispatcher config error ──────────────────────────────────────────
-
 func TestFunctionDispatcher_MissingFunctionId(t *testing.T) {
 	d := NewFunctionDispatcher(nil)
 	in := mkInput(workflowdomain.NodeSpec{ID: "fn", Type: workflowdomain.NodeTypeFunction},
@@ -63,8 +53,6 @@ func TestFunctionDispatcher_MissingFunctionId(t *testing.T) {
 		t.Errorf("error text = %q", out.Error.Error())
 	}
 }
-
-// ── HandlerDispatcher config errors ──────────────────────────────────────────
 
 func TestHandlerDispatcher_MissingHandlerName(t *testing.T) {
 	d := NewHandlerDispatcher(nil)
@@ -88,8 +76,6 @@ func TestHandlerDispatcher_MissingMethod(t *testing.T) {
 	}
 }
 
-// ── MCPDispatcher config errors ──────────────────────────────────────────────
-
 func TestMCPDispatcher_MissingServerName(t *testing.T) {
 	d := NewMCPDispatcher(nil)
 	in := mkInput(workflowdomain.NodeSpec{ID: "m", Type: workflowdomain.NodeTypeMCP,
@@ -112,8 +98,6 @@ func TestMCPDispatcher_MissingTool(t *testing.T) {
 	}
 }
 
-// ── SkillDispatcher config error ─────────────────────────────────────────────
-
 func TestSkillDispatcher_MissingSkillName(t *testing.T) {
 	d := NewSkillDispatcher(nil)
 	in := mkInput(workflowdomain.NodeSpec{ID: "s", Type: workflowdomain.NodeTypeSkill},
@@ -124,8 +108,6 @@ func TestSkillDispatcher_MissingSkillName(t *testing.T) {
 		t.Errorf("expected skillName-required error, got %v", out.Error)
 	}
 }
-
-// ── LLMDispatcher (with fake caller) ─────────────────────────────────────────
 
 type fakeLLMCaller struct {
 	gotScenario string

@@ -9,10 +9,6 @@ import (
 	handlerdomain "github.com/sunweilin/forgify/backend/internal/domain/handler"
 )
 
-// TestApplyOps_FullClassAssembly walks set_meta → set_imports → set_init →
-// add_method → add_method → final validation passes.
-//
-// TestApplyOps_FullClassAssembly 走完整 ops 序列;final 通过。
 func TestApplyOps_FullClassAssembly(t *testing.T) {
 	s := &Service{}
 	rawMeta, _ := json.Marshal(map[string]any{"name": "pg_handler", "description": "PG handler"})
@@ -225,7 +221,6 @@ func TestApplyOps_SetInitArgsSchema(t *testing.T) {
 	}
 }
 
-// Just confirms ParseOps wires through correctly.
 func TestParseOps_PreservesDiscriminator(t *testing.T) {
 	wire := []byte(`[{"op":"set_meta","name":"x"},{"op":"add_method","method":{"name":"m","args":[],"body":"pass"}}]`)
 	ops, err := ParseOps(wire)
@@ -240,5 +235,4 @@ func TestParseOps_PreservesDiscriminator(t *testing.T) {
 	}
 }
 
-// Compile-time consumer of handlerdomain.MethodSpec to avoid unused-import.
 var _ handlerdomain.MethodSpec

@@ -1,11 +1,3 @@
-// kill.go — KillShell system tool: terminate a background shell process
-// started by Bash. Sends SIGKILL (best-effort) and removes the registry
-// entry. Idempotent: killing an unknown ID returns a clear "not found"
-// message rather than failing.
-//
-// kill.go — KillShell 系统工具：终止 Bash 启动的后台 shell 进程。
-// 发 SIGKILL（尽力而为）后从注册表删条目。幂等：杀未知 ID 返清晰
-// "not found" 而非失败。
 package shell
 
 import (
@@ -38,7 +30,7 @@ var killSchema = json.RawMessage(`{
 
 // KillShell implements the KillShell system tool.
 //
-// KillShell struct 是 KillShell 系统工具。
+// KillShell 是 KillShell 系统工具的实现。
 type KillShell struct {
 	mgr *ProcessManager
 }
@@ -71,10 +63,9 @@ func (t *KillShell) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionMode
 	return toolapp.PermissionAllow
 }
 
-// Execute kills the named process (if running) and removes it from the
-// registry. Returns a friendly status string in all cases.
+// Execute kills the named process if running and removes it from the registry; idempotent.
 //
-// Execute 杀掉命名进程（若 running）并从注册表删除；任何情况都返友好状态串。
+// Execute 杀掉命名进程（若 running）并从注册表删除；幂等。
 func (t *KillShell) Execute(_ context.Context, argsJSON string) (string, error) {
 	var args struct {
 		BashID string `json:"bash_id"`
@@ -90,9 +81,6 @@ func (t *KillShell) Execute(_ context.Context, argsJSON string) (string, error) 
 
 	wasRunning := false
 	if proc.Cmd != nil && proc.Cmd.Process != nil {
-		// Best-effort; kill on already-exited proc returns ESRCH which we
-		// treat as "already done" rather than user-facing error.
-		// 尽力而为；杀已退出进程返 ESRCH，当成"已结束"不向用户报错。
 		if err := proc.Cmd.Process.Kill(); err == nil {
 			wasRunning = true
 		}
@@ -105,6 +93,5 @@ func (t *KillShell) Execute(_ context.Context, argsJSON string) (string, error) 
 	return fmt.Sprintf("Background shell %s already finished; removed from registry.", args.BashID), nil
 }
 
-// ── Compile-time checks ───────────────────────────────────────────────────────
 
 var _ toolapp.Tool = (*KillShell)(nil)

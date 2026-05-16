@@ -1,10 +1,3 @@
-// Integration tests for infra/llm. These tests hit the real DeepSeek API
-// and require DEEPSEEK_API_KEY to be set (or the constant below).
-// Run with: go test -v -run TestIntegration ./internal/infra/llm/...
-//
-// infra/llm 集成测试，直接调用真实 DeepSeek API。
-// 需设置 DEEPSEEK_API_KEY 环境变量（或使用下方常量）。
-// 运行：go test -v -run TestIntegration ./internal/infra/llm/...
 package llm
 
 import (
@@ -15,20 +8,9 @@ import (
 	"testing"
 )
 
-// requireKey returns the DeepSeek API key from env, or skips the test when
-// it is absent. Per §T3: integration tests that hit real upstream APIs must
-// be env-gated and skip gracefully so plain `go test ./...` (no .env load)
-// does not produce noisy auth failures.
+// requireKey returns DEEPSEEK_API_KEY or skips the test if unset (§T3).
 //
-// Use `make test-unit` to skip all TestIntegration_* tests; use
-// `make test-pipeline` (sources .env) to run them when keys exist.
-//
-// requireKey 从 env 取 DeepSeek API key，缺失则 t.Skip。按 §T3：调真实
-// 上游 API 的集成测试必须 env 门控、缺失优雅 skip——这样 `go test ./...`
-// 在没 source .env 时不会刷一堆假 auth 失败。
-//
-// `make test-unit` 跳过所有 TestIntegration_*；`make test-pipeline`（自动
-// source .env）才在 key 存在时跑这些 live 集成测试。
+// requireKey 取 DEEPSEEK_API_KEY；未设则 t.Skip（§T3）。
 func requireKey(t *testing.T) string {
 	t.Helper()
 	k := os.Getenv("DEEPSEEK_API_KEY")
@@ -38,9 +20,6 @@ func requireKey(t *testing.T) string {
 	return k
 }
 
-// TestIntegration_TextStream verifies that text tokens are streamed correctly.
-//
-// TestIntegration_TextStream 验证文字 token 流式传输正确。
 func TestIntegration_TextStream(t *testing.T) {
 	ctx := context.Background()
 	factory := NewFactory()
@@ -92,9 +71,6 @@ func TestIntegration_TextStream(t *testing.T) {
 	t.Logf("tokens: in=%d out=%d", 0, 0)
 }
 
-// TestIntegration_Generate verifies the Generate helper (non-streaming).
-//
-// TestIntegration_Generate 验证 Generate helper（非流式调用）。
 func TestIntegration_Generate(t *testing.T) {
 	ctx := context.Background()
 	factory := NewFactory()
@@ -119,11 +95,6 @@ func TestIntegration_Generate(t *testing.T) {
 	t.Logf("Generate result: %q", result)
 }
 
-// TestIntegration_ToolCall verifies that tool call events are emitted in order:
-// EventToolStart (name known) before EventToolDelta (arguments).
-//
-// TestIntegration_ToolCall 验证 tool call 事件按顺序发出：
-// EventToolStart（name 已知）先于 EventToolDelta（arguments）。
 func TestIntegration_ToolCall(t *testing.T) {
 	ctx := context.Background()
 	factory := NewFactory()
@@ -213,10 +184,6 @@ func TestIntegration_ToolCall(t *testing.T) {
 	t.Logf("tool: %s, args: %s", toolName, args)
 }
 
-// TestIntegration_MultiTurn verifies that conversation history is correctly
-// passed back to the LLM (the model should remember the previous exchange).
-//
-// TestIntegration_MultiTurn 验证对话历史被正确回传（模型应记得上一轮）。
 func TestIntegration_MultiTurn(t *testing.T) {
 	ctx := context.Background()
 	factory := NewFactory()
@@ -245,10 +212,6 @@ func TestIntegration_MultiTurn(t *testing.T) {
 	t.Logf("multi-turn result: %q", result)
 }
 
-// TestIntegration_ContextCancel verifies that cancelling the context stops
-// the stream without hanging.
-//
-// TestIntegration_ContextCancel 验证取消 ctx 能干净停止流，不挂起。
 func TestIntegration_ContextCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()

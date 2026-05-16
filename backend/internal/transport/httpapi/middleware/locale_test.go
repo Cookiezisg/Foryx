@@ -1,13 +1,3 @@
-// locale_test.go — tests for InjectLocale middleware.
-//
-// Round-trip and fallback behavior of SetLocale/GetLocale is in
-// reqctx/locale_test.go. Here we verify the middleware's wiring:
-// parsing Accept-Language correctly and stamping the right Locale.
-//
-// locale_test.go — InjectLocale 中间件的测试。
-//
-// SetLocale/GetLocale 的往返和 fallback 行为在 reqctx/locale_test.go 测过。
-// 这里验证中间件本身：是否正确解析 Accept-Language 并塞入对应 Locale。
 package middleware
 
 import (
@@ -23,15 +13,15 @@ func TestInjectLocale_ParsesAcceptLanguage(t *testing.T) {
 		header string
 		want   reqctxpkg.Locale
 	}{
-		{"", reqctxpkg.LocaleZhCN},               // no header → default
-		{"zh-CN", reqctxpkg.LocaleZhCN},          // exact
-		{"zh-CN,en;q=0.9", reqctxpkg.LocaleZhCN}, // zh primary
-		{"en", reqctxpkg.LocaleEn},               // english
-		{"en-US", reqctxpkg.LocaleEn},            // english regional
+		{"", reqctxpkg.LocaleZhCN},
+		{"zh-CN", reqctxpkg.LocaleZhCN},
+		{"zh-CN,en;q=0.9", reqctxpkg.LocaleZhCN},
+		{"en", reqctxpkg.LocaleEn},
+		{"en-US", reqctxpkg.LocaleEn},
 		{"en-US,en;q=0.9,zh;q=0.8", reqctxpkg.LocaleEn},
-		{"EN", reqctxpkg.LocaleEn},      // case-insensitive
-		{"fr-FR", reqctxpkg.LocaleZhCN}, // unsupported → default
-		{"de", reqctxpkg.LocaleZhCN},    // unsupported → default
+		{"EN", reqctxpkg.LocaleEn},
+		{"fr-FR", reqctxpkg.LocaleZhCN},
+		{"de", reqctxpkg.LocaleZhCN},
 	}
 
 	for _, c := range cases {
@@ -55,8 +45,6 @@ func TestInjectLocale_ParsesAcceptLanguage(t *testing.T) {
 }
 
 func TestInjectLocale_DoesNotAffectResponse(t *testing.T) {
-	// Middleware must be transparent to the HTTP response.
-	// 中间件对 HTTP 响应必须透明。
 	handler := InjectLocale(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 		_, _ = w.Write([]byte("brew"))

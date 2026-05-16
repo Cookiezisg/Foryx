@@ -1,24 +1,3 @@
-// curated_registry.go — production RegistrySource backed by a
-// hand-picked, hardcoded list of 21 high-value MCP servers. Replaces
-// the "fetch the entire upstream registry" approach (5000+ entries of
-// mostly broken / API-key-required / abandoned servers) with a
-// curated catalog where every entry has been verified to install + run
-// out of the box.
-//
-// Curation criteria (all entries must satisfy):
-//   - Runtime is npm or pypi (no docker / go / rust / java).
-//   - Either zero-config, or one API key with a clear free-tier signup,
-//     or OAuth device-code flow handled by the package itself.
-//   - Listed on a major registry, actively maintained.
-//   - Either an official vendor server or widely-recognised third-party.
-//
-// Each entry's Name is a short kebab-case slug we choose — used as the
-// LLM's install lookup id AND the mcp.json key (no separate alias). The
-// real npm/pypi package identifier lives in InstallCmd.Args.
-//
-// curated_registry.go ——硬编码 21 条精选 MCP 的 RegistrySource。每条 Name
-// 是我们写好的短 slug——同时是 LLM install lookup id 和 mcp.json key（无
-// 独立 alias 概念）；真包名留在 InstallCmd.Args。
 package mcp
 
 import (
@@ -30,19 +9,18 @@ import (
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
 )
 
-// CuratedRegistrySource implements mcpdomain.RegistrySource against the
-// hardcoded curated catalog (see curatedEntries below).
+// CuratedRegistrySource is the hardcoded-curated implementation of mcpdomain.RegistrySource.
 //
-// CuratedRegistrySource 用 hardcoded curated 目录实现 RegistrySource。
+// CuratedRegistrySource 用硬编码精选目录实现 mcpdomain.RegistrySource。
 type CuratedRegistrySource struct {
 	mu     sync.RWMutex
 	byName map[string]mcpdomain.RegistryEntry
 	all    []mcpdomain.RegistryEntry
 }
 
-// NewCuratedRegistrySource constructs the source. No I/O, never fails.
+// NewCuratedRegistrySource constructs the source; no I/O, never fails.
 //
-// NewCuratedRegistrySource 构造 source。无 I/O，永不失败。
+// NewCuratedRegistrySource 构造 source；无 I/O，永不失败。
 func NewCuratedRegistrySource() *CuratedRegistrySource {
 	src := &CuratedRegistrySource{
 		byName: make(map[string]mcpdomain.RegistryEntry, len(curatedEntries)),
@@ -52,10 +30,6 @@ func NewCuratedRegistrySource() *CuratedRegistrySource {
 		src.byName[e.Name] = e
 		src.all = append(src.all, e)
 	}
-	// Stable sort by tier then name so Search results have predictable
-	// "easiest first" ordering when relevance ties.
-	//
-	// 按 tier+name 稳排，让 Search tied 时按"易上手优先"返。
 	sort.Slice(src.all, func(i, j int) bool {
 		if src.all[i].Tier != src.all[j].Tier {
 			return src.all[i].Tier < src.all[j].Tier
@@ -65,11 +39,9 @@ func NewCuratedRegistrySource() *CuratedRegistrySource {
 	return src
 }
 
-// List returns every entry in the curated catalog, copied so callers
-// can't mutate internal state. Order matches the tier-asc + name-asc
-// sort applied at construction.
+// List returns a copy of all curated entries (tier asc, then name asc).
 //
-// List 返 curated 目录全部条目（拷贝防外部 mutate）。顺序与构造时排序一致。
+// List 返回所有 curated 条目的拷贝（tier 升序，name 升序）。
 func (c *CuratedRegistrySource) List(_ context.Context) ([]mcpdomain.RegistryEntry, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -78,10 +50,9 @@ func (c *CuratedRegistrySource) List(_ context.Context) ([]mcpdomain.RegistryEnt
 	return out, nil
 }
 
-// Get returns the entry matching name; ErrRegistryEntryNotFound when
-// the name isn't in the curated list.
+// Get returns the entry by name, or ErrRegistryEntryNotFound if absent.
 //
-// Get 返 name 对应条目；不在 curated 列表返 ErrRegistryEntryNotFound。
+// Get 按 name 查条目，不存在返 ErrRegistryEntryNotFound。
 func (c *CuratedRegistrySource) Get(_ context.Context, name string) (*mcpdomain.RegistryEntry, error) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
@@ -93,25 +64,9 @@ func (c *CuratedRegistrySource) Get(_ context.Context, name string) (*mcpdomain.
 	return &cp, nil
 }
 
-// Compile-time check.
-//
-// 编译期检查。
 var _ mcpdomain.RegistrySource = (*CuratedRegistrySource)(nil)
 
-// ── Curated entries ──────────────────────────────────────────────────
-//
-// Order doesn't matter (Search re-sorts). Group by category for human
-// review. Every entry MUST set Name / Description / Runtime / InstallCmd
-// / Category / Tier. SetupURL on env requirements is mandatory when
-// Tier >= 1. Notes is mandatory whenever there's a non-obvious gotcha
-// (first-run download, OAuth flow, version dep).
-//
-// 顺序无所谓（Search 自己排）。按 category 人读分组。每条必填 Name /
-// Description / Runtime / InstallCmd / Category / Tier。Tier >= 1 的 env
-// 必带 SetupURL。有"陷阱"必填 Notes。
-
 var curatedEntries = []mcpdomain.RegistryEntry{
-	// ── Browser & web automation ─────────────────────────────────
 	{
 		Name:        "playwright",
 		Description: "Browser automation: click, fill forms, screenshot, scrape JS-rendered pages. Microsoft official, the de-facto standard MCP for browser control.",
@@ -169,7 +124,6 @@ var curatedEntries = []mcpdomain.RegistryEntry{
 		Notes: "Free tier: 500 credits (each scrape costs 1, each crawl costs 1 per page). Heavy crawling burns credits fast.",
 	},
 
-	// ── Code, version control, error tracking ────────────────────
 	{
 		Name:        "context7",
 		Description: "Fetch the latest documentation for any library by name (e.g. 'show me current React docs'). Solves the LLM-stuck-on-old-training-data problem.",
@@ -222,7 +176,6 @@ var curatedEntries = []mcpdomain.RegistryEntry{
 		Notes: "AI-powered search tools (search_events / search_issues) require an LLM provider configured on the Sentry side. Non-search tools work without it.",
 	},
 
-	// ── Databases ────────────────────────────────────────────────
 	{
 		Name:        "dbhub",
 		Description: "Token-efficient database MCP supporting PostgreSQL, MySQL, SQL Server, SQLite, and MariaDB through a single server.",
@@ -264,7 +217,6 @@ var curatedEntries = []mcpdomain.RegistryEntry{
 		Notes: "PAT scopes the MCP to your Supabase account; project ref pins to one project. The token is account-wide — treat it like a password.",
 	},
 
-	// ── Project management ───────────────────────────────────────
 	{
 		Name:        "linear",
 		Description: "Linear: issues, projects, cycles, comments — the dev-team tracker most YC startups use.",
@@ -295,7 +247,6 @@ var curatedEntries = []mcpdomain.RegistryEntry{
 		Notes: "One API token covers both Jira and Confluence. For Atlassian Cloud the URL is https://<org>.atlassian.net (Jira) and https://<org>.atlassian.net/wiki (Confluence).",
 	},
 
-	// ── Docs, collaboration, design ──────────────────────────────
 	{
 		Name:        "notion",
 		Description: "Notion official: pages, databases, comments, blocks. 22 tools covering most of the Notion API.",
@@ -360,7 +311,6 @@ var curatedEntries = []mcpdomain.RegistryEntry{
 		Notes: "Free tier: 100 hours of sandbox compute / month. Each sandbox is ephemeral — state doesn't persist across calls unless you mount data via E2B's filesystem APIs.",
 	},
 
-	// ── Email / office ───────────────────────────────────────────
 	{
 		Name:        "google-workspace",
 		Description: "Full Google Workspace suite: Gmail, Drive, Calendar, Docs, Sheets, Slides, Forms, Tasks, Contacts, Chat. The most feature-complete community Workspace MCP server (no official Google one exists).",

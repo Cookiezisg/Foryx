@@ -1,6 +1,3 @@
-// scheduler_test.go — StartRun gate-order + Cancel + stub execute path.
-// E6 will add executeRun tests once the real state machine lands.
-
 package scheduler
 
 import (
@@ -18,8 +15,6 @@ import (
 	notificationspkg "github.com/sunweilin/forgify/backend/internal/pkg/notifications"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
-
-// ── fakes ────────────────────────────────────────────────────────────────────
 
 type fakeRepo struct {
 	mu       sync.Mutex
@@ -138,8 +133,6 @@ func mkVersion() *workflowdomain.Version {
 		GraphParsed: &workflowdomain.Graph{Name: "wf"},
 	}
 }
-
-// ── tests ────────────────────────────────────────────────────────────────────
 
 func TestStartRun_MissingUserID(t *testing.T) {
 	s := newSvc(t, newFakeRepo(), &fakeWorkflowReader{wf: mkEnabledWorkflow(), ver: mkVersion()})

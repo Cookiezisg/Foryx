@@ -16,7 +16,6 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// ── Test helpers ──────────────────────────────────────────────────────────────
 
 // allowAll is a PathGuard that permits every path. Used in tests that focus
 // on Read behavior independent of the safety guard.
@@ -76,7 +75,6 @@ func callExecute(t *testing.T, r *Read, ctx context.Context, args map[string]any
 	return r.Execute(ctx, string(raw))
 }
 
-// ── Identity / static metadata ────────────────────────────────────────────────
 
 func TestRead_IdentityAndMetadata(t *testing.T) {
 	r := newRead(allowAll{})
@@ -113,7 +111,6 @@ func TestRead_CheckPermissionsAlwaysAllow(t *testing.T) {
 	}
 }
 
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestValidateInput_Empty(t *testing.T) {
 	err := newRead(allowAll{}).ValidateInput(json.RawMessage(`{}`))
@@ -156,7 +153,6 @@ func TestValidateInput_HappyPath(t *testing.T) {
 	}
 }
 
-// ── Execute: success paths ────────────────────────────────────────────────────
 
 func TestExecute_BasicTextFile(t *testing.T) {
 	path := writeTempFile(t, "hello.txt", "first\nsecond\nthird\n")
@@ -290,7 +286,6 @@ func TestExecute_NoTrailingNewlineLastLine(t *testing.T) {
 	}
 }
 
-// ── Execute: error / edge paths ───────────────────────────────────────────────
 
 func TestExecute_FileNotFound(t *testing.T) {
 	ctx, _ := ctxWithState()
@@ -387,7 +382,6 @@ func TestExecute_OffsetBeyondEOF(t *testing.T) {
 	}
 }
 
-// ── Defaults normalisation ────────────────────────────────────────────────────
 
 func TestExecute_DefaultLimitAppliedWhenZero(t *testing.T) {
 	// Build > defaultLimit lines to confirm default kicks in (2000+1).
@@ -415,6 +409,5 @@ func TestExecute_DefaultLimitAppliedWhenZero(t *testing.T) {
 	}
 }
 
-// ── Compile-time checks ───────────────────────────────────────────────────────
 
 var _ toolapp.Tool = (*Read)(nil)

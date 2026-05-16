@@ -16,11 +16,6 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// helper: build ctx with user + conv + msg + emitter wired up.
-// Bridge keys by user_id (D-redo-2); conv + msg sit in payload for client demux.
-//
-// helper:ctx 注 user + conv + msg + emitter。Bridge 按 user_id key
-// (D-redo-2);conv + msg 在 payload 里给 client demux。
 func setupCtx(t *testing.T) (context.Context, *eventloginfra.Bridge, Emitter) {
 	t.Helper()
 	br := eventloginfra.NewBridge(nil)
@@ -33,10 +28,6 @@ func setupCtx(t *testing.T) (context.Context, *eventloginfra.Bridge, Emitter) {
 	return ctx, br, em
 }
 
-// subCtxFor returns a context with the same user_id setupCtx uses, suitable
-// for Bridge.Subscribe in tests.
-//
-// subCtxFor 给测试的 Bridge.Subscribe 提供带 user_id 的 ctx。
 func subCtxFor(parent context.Context) context.Context {
 	return reqctxpkg.SetUserID(parent, "u_test")
 }
@@ -44,7 +35,6 @@ func subCtxFor(parent context.Context) context.Context {
 func TestEmitter_StartBlockReadsParentFromCtx(t *testing.T) {
 	ctx, br, em := setupCtx(t)
 
-	// Subscribe to capture published events.
 	subCtx, cancel := context.WithCancel(subCtxFor(context.Background()))
 	defer cancel()
 	ch, cancelSub, _ := br.Subscribe(subCtx, 0)
@@ -71,7 +61,7 @@ func TestEmitter_StartBlockReadsParentFromCtx(t *testing.T) {
 }
 
 func TestEmitter_StartBlockFallsBackToMessageID(t *testing.T) {
-	ctx, br, em := setupCtx(t) // no WithParent — falls back to messageID
+	ctx, br, em := setupCtx(t)
 
 	subCtx, cancel := context.WithCancel(subCtxFor(context.Background()))
 	defer cancel()
@@ -120,7 +110,7 @@ func TestEmitter_StopBlockWithError(t *testing.T) {
 	defer cancelSub()
 
 	blockID := em.StartBlock(ctx, eventlogdomain.BlockTypeText, nil)
-	<-ch // start
+	<-ch
 	em.StopBlock(ctx, blockID, eventlogdomain.StatusError, errors.New("boom"))
 	env := <-ch
 	bs := env.Event.(eventlogdomain.BlockStop)
@@ -135,27 +125,18 @@ func TestEmitter_StopBlockWithError(t *testing.T) {
 func TestEmitter_MissingConversationIDSkipsEmit(t *testing.T) {
 	br := eventloginfra.NewBridge(nil)
 	em := New(br, nil, nil)
-	ctx := context.Background() // no convID
-	// EmitBlockStart with no convID in ctx should silently no-op.
+	ctx := context.Background()
 	em.EmitBlockStart(ctx, "blk_t1", "msg_t1", "msg_t1", eventlogdomain.BlockTypeText, nil)
-	// (Nothing to assert positively; the test passes if Bridge isn't called.
-	// Bridge with no Subscribe doesn't expose a "calls" counter, so this
-	// is a smoke test ensuring no panic / no nil-deref.)
 	_ = br
 }
 
 func TestFrom_ReturnsNoopWhenAbsent(t *testing.T) {
 	em := From(context.Background())
-	// no panic, no emit — no-op
 	em.DeltaBlock(context.Background(), "blk_x", "ignored")
 	em.StopBlock(context.Background(), "blk_x", eventlogdomain.StatusCompleted, nil)
 	em.StopMessage(context.Background(), "msg_x", eventlogdomain.StatusCompleted, "", "", "", 0, 0)
 }
 
-// ── DB dual-write (Phase 2B) ─────────────────────────────────────────
-
-// helper: build ctx + emitter wired to a real BlockV2Store backed by
-// in-memory SQLite. Returns ctx, repo, and emitter.
 func setupDBCtx(t *testing.T) (context.Context, *chatstore.Store, Emitter) {
 	t.Helper()
 	database, err := dbinfra.Open(dbinfra.Config{LogLevel: gormlogger.Silent})
@@ -275,25 +256,9 @@ func TestEmitter_AttrsJSONMarshalled(t *testing.T) {
 	}
 }
 
-// ── Contract test: full simulated chat round (Phase 5) ────────────────
-//
-// Drives the Emitter through a realistic message lifecycle (message_start
-// → text block → tool_call block → tool_result block → message_stop),
-// observes via the Bridge, and asserts the protocol invariants from
-// CLAUDE.md §S21:
-//   - seq strictly monotonic, no gaps
-//   - block_start.parentId references entities that already exist
-//   - block.status flows streaming → terminal monotonically
-//   - tool_call block ID = caller-supplied (LLM tc_id), not minted
-//   - DB rows for blocks reflect content + status correctly
-//
-// 完整模拟一轮 chat 协议契约测试。
-
 func TestProtocolContract_ChatRoundtrip(t *testing.T) {
 	ctx, repo, em := setupDBCtx(t)
 
-	// Need to subscribe to bridge to capture events. setupDBCtx wires a
-	// fresh Bridge inside; we have to recreate state here for clarity.
 	br := em.(*emitter).bridge
 	subCtx, cancel := context.WithCancel(reqctxpkg.SetUserID(context.Background(), "u_db"))
 	defer cancel()
@@ -303,24 +268,20 @@ func TestProtocolContract_ChatRoundtrip(t *testing.T) {
 	}
 	defer cancelSub()
 
-	// Drive the sequence.
 	em.EmitMessageStart(ctx, "msg_db", "assistant", "", nil)
 
-	// text block (top-level under message)
 	textID := "blk_text_1"
 	em.EmitBlockStart(ctx, textID, "msg_db", "msg_db", eventlogdomain.BlockTypeText, nil)
 	em.DeltaBlock(ctx, textID, "Hello, ")
 	em.DeltaBlock(ctx, textID, "world.")
 	em.StopBlock(ctx, textID, eventlogdomain.StatusCompleted, nil)
 
-	// tool_call block (LLM-supplied id, top-level under message)
 	tcID := "tc_abc123"
 	em.EmitBlockStart(ctx, tcID, "msg_db", "msg_db", eventlogdomain.BlockTypeToolCall,
 		map[string]any{"tool": "Read"})
 	em.DeltaBlock(ctx, tcID, `{"path":"/etc/hosts"}`)
 	em.StopBlock(ctx, tcID, eventlogdomain.StatusCompleted, nil)
 
-	// tool_result block (nested under the tool_call)
 	resultID := "blk_result_1"
 	em.EmitBlockStart(ctx, resultID, tcID, "msg_db", eventlogdomain.BlockTypeToolResult, nil)
 	em.DeltaBlock(ctx, resultID, "127.0.0.1 localhost\n")
@@ -328,9 +289,6 @@ func TestProtocolContract_ChatRoundtrip(t *testing.T) {
 
 	em.StopMessage(ctx, "msg_db", eventlogdomain.StatusCompleted, "end_turn", "", "", 100, 200)
 
-	// Collect envelopes (5 stops + 5 starts + 4 deltas + 1 msg_start + 1 msg_stop = ?)
-	// Count: 1 (msg_start) + 3 (text: start/delta/delta/stop = 4 actually) ...
-	// Let me recount: msg_start=1, text(start+2 delta+stop)=4, tc(start+1 delta+stop)=3, result(start+delta+stop)=3, msg_stop=1 → total 12
 	expected := 12
 	got := make([]eventlogdomain.Envelope, 0, expected)
 	for i := 0; i < expected; i++ {
@@ -342,7 +300,6 @@ func TestProtocolContract_ChatRoundtrip(t *testing.T) {
 		}
 	}
 
-	// ── Invariant 1: seq strict monotonic 1..N ──
 	for i, env := range got {
 		want := int64(i + 1)
 		if env.Seq != want {
@@ -350,7 +307,6 @@ func TestProtocolContract_ChatRoundtrip(t *testing.T) {
 		}
 	}
 
-	// ── Invariant 2: known entities exist before being referenced ──
 	known := map[string]bool{}
 	for i, env := range got {
 		switch e := env.Event.(type) {
@@ -381,7 +337,6 @@ func TestProtocolContract_ChatRoundtrip(t *testing.T) {
 		}
 	}
 
-	// ── Invariant 3: tool_call block ID is caller-supplied (LLM tc_id) ──
 	var foundToolCallStart bool
 	for _, env := range got {
 		if bs, ok := env.Event.(eventlogdomain.BlockStart); ok &&
@@ -396,7 +351,6 @@ func TestProtocolContract_ChatRoundtrip(t *testing.T) {
 		t.Error("never saw tool_call BlockStart")
 	}
 
-	// ── Invariant 4: tool_result has parent = tool_call ID ──
 	for _, env := range got {
 		if bs, ok := env.Event.(eventlogdomain.BlockStart); ok &&
 			bs.BlockType == eventlogdomain.BlockTypeToolResult {
@@ -406,7 +360,6 @@ func TestProtocolContract_ChatRoundtrip(t *testing.T) {
 		}
 	}
 
-	// ── Invariant 5: DB rows reflect final state ──
 	textRow, err := repo.GetBlock(ctx, textID)
 	if err != nil {
 		t.Fatalf("get text block: %v", err)

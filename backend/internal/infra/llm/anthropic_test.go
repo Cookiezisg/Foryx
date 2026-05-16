@@ -1,8 +1,3 @@
-// anthropic_test.go — unit tests for the Anthropic native SSE parser and
-// request builder. No network calls — all input is synthetic SSE text.
-//
-// anthropic_test.go — Anthropic 原生 SSE 解析器和请求构建器的单元测试。
-// 不发网络请求——输入全部为合成 SSE 文本。
 package llm
 
 import (
@@ -141,8 +136,6 @@ data: {"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"outpu
 		t.Errorf("text events = %+v", texts)
 	}
 }
-
-// ── Request builder ───────────────────────────────────────────────────────────
 
 func TestBuildAnthropicBody_SystemField(t *testing.T) {
 	req := Request{

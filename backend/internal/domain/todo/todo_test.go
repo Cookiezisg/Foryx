@@ -1,9 +1,3 @@
-// todo_test.go — unit tests for status validation contract: every value
-// returned by ListStatuses must pass IsValidStatus, and known statuses
-// stay supported.
-//
-// todo_test.go — 状态校验契约的单测：ListStatuses 每项都通过 IsValidStatus，
-// 已知状态保持支持。
 package todo
 
 import (

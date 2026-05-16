@@ -1,12 +1,3 @@
-// skill_test.go — domain-layer unit tests: Frontmatter YAML round-trip
-// (cross-vendor field names like 'allowed-tools' / 'when_to_use' must
-// parse correctly), Skill JSON round-trip (camelCase wire shape per N3),
-// sentinel uniqueness (each error must remain distinguishable for
-// errors.Is at the transport layer).
-//
-// skill_test.go ——domain 层单测：Frontmatter YAML round-trip（跨厂字段
-// 名 allowed-tools / when_to_use 等必须正确解析）、Skill JSON round-trip
-// （camelCase 线协议 N3）、sentinel 唯一性（让 transport 层 errors.Is 区分）。
 package skill
 
 import (

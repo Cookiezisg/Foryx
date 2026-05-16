@@ -1,8 +1,3 @@
-// validate_test.go — unit tests for ValidateGraph. Covers each rule in
-// 04-workflow.md §7.3 + the recursive container body path.
-//
-// validate_test.go —— ValidateGraph 单测;覆盖 §7.3 各规则 + 容器 body 递归。
-
 package workflow
 
 import (

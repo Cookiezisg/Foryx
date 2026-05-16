@@ -1,6 +1,3 @@
-// aesgcm_test.go — unit tests for the AES-GCM Encryptor implementation.
-//
-// aesgcm_test.go — AES-GCM Encryptor 实现的单元测试。
 package crypto
 
 import (
@@ -12,8 +9,6 @@ import (
 	cryptodomain "github.com/sunweilin/forgify/backend/internal/domain/crypto"
 )
 
-// testKey is a deterministic 32-byte key used across tests.
-// 所有测试共用的确定性 32 字节密钥。
 var testKey = DeriveKey("test-fingerprint")
 
 func newTestEncryptor(t *testing.T) *AESGCMEncryptor {
@@ -26,8 +21,6 @@ func newTestEncryptor(t *testing.T) *AESGCMEncryptor {
 }
 
 func TestAESGCMEncryptor_SatisfiesInterface(t *testing.T) {
-	// Compile-time check: AESGCMEncryptor must implement domain Encryptor.
-	// 编译期检查：AESGCMEncryptor 必须实现 domain Encryptor。
 	var _ cryptodomain.Encryptor = (*AESGCMEncryptor)(nil)
 }
 
@@ -71,10 +64,6 @@ func TestAESGCMEncryptor_CiphertextHasV1Prefix(t *testing.T) {
 }
 
 func TestAESGCMEncryptor_CiphertextIsNonDeterministic(t *testing.T) {
-	// IND-CPA: two encryptions of the same plaintext must produce different
-	// ciphertexts (random nonce).
-	//
-	// IND-CPA 安全：同一明文两次加密必须产生不同密文（随机 nonce）。
 	e := newTestEncryptor(t)
 	ctx := context.Background()
 
@@ -86,10 +75,6 @@ func TestAESGCMEncryptor_CiphertextIsNonDeterministic(t *testing.T) {
 }
 
 func TestAESGCMEncryptor_DifferentKeyFailsDecryption(t *testing.T) {
-	// A ciphertext encrypted with one key must NOT decrypt with another.
-	// GCM's authentication tag catches this.
-	//
-	// 用一个密钥加密的密文**不得**被另一个密钥解密。GCM 的认证 tag 会检测到。
 	e1, _ := NewAESGCMEncryptor(DeriveKey("machine-A"))
 	e2, _ := NewAESGCMEncryptor(DeriveKey("machine-B"))
 	ctx := context.Background()
@@ -102,9 +87,6 @@ func TestAESGCMEncryptor_DifferentKeyFailsDecryption(t *testing.T) {
 }
 
 func TestAESGCMEncryptor_UnsupportedVersionPrefix(t *testing.T) {
-	// Future v2 ciphertext fed to v1 decryptor → ErrUnsupportedVersion.
-	//
-	// 把未来的 v2 密文送到 v1 解密器 → ErrUnsupportedVersion。
 	e := newTestEncryptor(t)
 	_, err := e.Decrypt(context.Background(), []byte("v2:anything-here"))
 	if !errors.Is(err, ErrUnsupportedVersion) {
@@ -121,13 +103,9 @@ func TestAESGCMEncryptor_MissingPrefixRejected(t *testing.T) {
 }
 
 func TestAESGCMEncryptor_ShortCiphertextReturnsError(t *testing.T) {
-	// Regression guard for the old code's bug: `if len < nonceSize { return nil, err }`
-	// where err was nil, falsely signaling success. We must return a real error.
-	//
-	// 老代码的 bug 回归守卫：老实现 `if len < nonceSize { return nil, err }`
-	// 其中 err 为 nil，伪装成功。我们必须返回真正的错误。
+	// Regression: short ciphertext must return real error, not nil.
+	// 回归：过短密文必须返回真错误，不能返回 nil。
 	e := newTestEncryptor(t)
-	// "v1:" + base64("shrt") = "v1:c2hydA=="
 	short := []byte("v1:c2hydA==")
 	plaintext, err := e.Decrypt(context.Background(), short)
 	if err == nil {
@@ -139,16 +117,12 @@ func TestAESGCMEncryptor_ShortCiphertextReturnsError(t *testing.T) {
 }
 
 func TestAESGCMEncryptor_TamperedCiphertextRejected(t *testing.T) {
-	// Flipping any byte in the ciphertext must cause decrypt to fail (GCM auth).
-	//
-	// 翻转密文任何一个字节，解密都必须失败（GCM 认证保护）。
 	e := newTestEncryptor(t)
 	ctx := context.Background()
 	ct, _ := e.Encrypt(ctx, []byte("verify me"))
 	if len(ct) < 10 {
 		t.Skip("ciphertext too short for tampering test")
 	}
-	// Flip last byte. 翻转最后一字节。
 	tampered := append([]byte(nil), ct...)
 	tampered[len(tampered)-1] ^= 0xff
 	_, err := e.Decrypt(ctx, tampered)

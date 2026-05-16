@@ -1,11 +1,3 @@
-// run.go — run_function system tool: executes a function with given args.
-// Wraps the Service call in a progress block; env sync stage progress (if env
-// is not yet ready) streams through via the eventlog Emitter that Service
-// already uses for syncEnvSync.
-//
-// run.go —— run_function 系统工具:用给定参数执行 function。开 progress block
-// 包住 Service 调用;env sync 阶段进度(env 未就绪时)由 Service 经 Emitter 推。
-
 package function
 
 import (

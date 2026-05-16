@@ -107,6 +107,8 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 | `ATTACHMENT_TOO_LARGE` | 413 | `chatdomain.ErrAttachmentTooLarge` | 附件超过 50MB | ✅ |
 | `ATTACHMENT_TYPE_UNSUPPORTED` | 415 | `chatdomain.ErrAttachmentTypeUnsupported` | 无法处理的文件格式 | ✅ |
 | `ATTACHMENT_PARSE_FAILED` | 422 | `chatdomain.ErrAttachmentParseFailed` | 文件损坏或解析失败 | ✅ |
+| `ATTACHMENT_NOT_FOUND` | 404 | `chatdomain.ErrAttachmentNotFound` | 附件 ID 不存在或不属于当前 user | ✅ |
+| `EMPTY_CONTENT` | 400 | `chatdomain.ErrEmptyContent` | 消息 content 为空/空白且无附件——拒绝以避免触发无意义的 ~25k token LLM 调用 | ✅ |
 | `LLM_AUTH_FAILED` | 401 | `llminfra.ErrAuthFailed` | LLM provider 返 401（API key 失效）；errors.Is 触发 apikey.MarkInvalid | ✅ |
 | `LLM_RATE_LIMITED` | 429 | `llminfra.ErrRateLimited` | LLM provider 返 429（速率限制）| ✅ |
 | `LLM_BAD_REQUEST` | 400 | `llminfra.ErrBadRequest` | LLM provider 返 400（请求体非法）| ✅ |
@@ -265,6 +267,21 @@ AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 
 | `ASK_TIMEOUT` | 504 | `ask.ErrTimeout` | （Service 内部）AskUserQuestion 工具 Wait 超过 5 分钟；当前实现工具内部转为友好字符串而非上抛，因此实际不到 handler——保留登记便于将来若改语义 | ✅ |
 
 > ASK_* 端点错误不属于任一 domain entity，归属 app/ask 服务（in-memory 会合，无持久化）。
+
+#### memory（V1.2 §2 final-sweep）✅
+详见 [`../service-design-documents/memory.md`](../service-design-documents/memory.md)。
+
+| Code | HTTP | Sentinel | 场景 | 状态 |
+|---|---|---|---|---|
+| `MEMORY_NOT_FOUND` | 404 | `memorydomain.ErrNotFound` | GET / PATCH / DELETE / :pin / :unpin 时 name 不存在；Get-by-ID 同样 | ✅ |
+| `MEMORY_NAME_CONFLICT` | 409 | `memorydomain.ErrNameConflict` | POST /api/v1/memories 时 name 已存在（HTTP create 严格 — write_memory tool 用 Upsert 不报此错）| ✅ |
+| `MEMORY_INVALID_NAME` | 400 | `memorydomain.ErrInvalidName` | name 违反 `^[a-z][a-z0-9_]{0,63}$`（lowercase 起头 + lowercase/digit/underscore + ≤64 字符）| ✅ |
+
+#### compaction（V1.2 §1 final-sweep）⏳
+
+| Code | HTTP | Sentinel | 场景 | 状态 |
+|---|---|---|---|---|
+| `COMPACTION_FAILED` | 503 | `contextmgrapp.ErrCompactFailed` | 仅 `Manager.ForceCompact` 路径（手动 :compact 端点未接）；自动后台 MaybeCompact 失败仅 log + 下轮 retry，不上抛 | ⏳ |
 
 ---
 

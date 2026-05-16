@@ -1,26 +1,3 @@
-// function.go — HTTP handlers for the function domain (forge_redesign Plan 01
-// Phase 5). 13 endpoints per spec/02-function.md §8:
-//
-//   POST   /api/v1/functions                          create (direct definition)
-//   GET    /api/v1/functions                          list (paginated)
-//   GET    /api/v1/functions/{id}                     detail (with pending + env)
-//   PATCH  /api/v1/functions/{id}                     update metadata
-//   DELETE /api/v1/functions/{id}                     soft-delete
-//   POST   /api/v1/functions/{idAction}               :run / :resync / :revert
-//   GET    /api/v1/functions/{id}/versions            list versions
-//   GET    /api/v1/functions/{id}/versions/{v}        version detail
-//   GET    /api/v1/functions/{id}/pending             fetch pending
-//   POST   /api/v1/functions/{id}/pending:accept      accept pending
-//   POST   /api/v1/functions/{id}/pending:reject      reject pending
-//
-// LLM-driven authoring (ops streams) goes through the LLM tool path
-// (create_function / edit_function), NOT POST /functions. The HTTP shape is
-// the direct definition for curl / UI / scripts.
-//
-// function.go —— function domain 的 HTTP handler(forge_redesign Plan 01
-// Phase 5)。13 端点 per 02-function.md §8。LLM 走 ops 流(create_function /
-// edit_function 工具);HTTP 走扁平 definition 给 curl/UI/script。
-
 package handlers
 
 import (
@@ -43,44 +20,25 @@ type FunctionHandler struct {
 	log *zap.Logger
 }
 
-// NewFunctionHandler wires handler dependencies.
-//
-// NewFunctionHandler 装配 handler 依赖。
 func NewFunctionHandler(svc *functionapp.Service, log *zap.Logger) *FunctionHandler {
 	return &FunctionHandler{svc: svc, log: log}
 }
 
-// Register mounts every function route on mux.
-//
-// Register 把所有 function 路由挂到 mux。
 func (h *FunctionHandler) Register(mux *http.ServeMux) {
-	// Collection
 	mux.HandleFunc("POST /api/v1/functions", h.Create)
 	mux.HandleFunc("GET /api/v1/functions", h.List)
-
-	// Resource
 	mux.HandleFunc("GET /api/v1/functions/{id}", h.Get)
 	mux.HandleFunc("PATCH /api/v1/functions/{id}", h.UpdateMeta)
 	mux.HandleFunc("DELETE /api/v1/functions/{id}", h.Delete)
-
-	// Resource actions (:run / :resync / :revert)
 	mux.HandleFunc("POST /api/v1/functions/{idAction}", h.postOnFunction)
-
-	// Versions
 	mux.HandleFunc("GET /api/v1/functions/{id}/versions", h.ListVersions)
 	mux.HandleFunc("GET /api/v1/functions/{id}/versions/{version}", h.GetVersion)
-
-	// Pending
 	mux.HandleFunc("GET /api/v1/functions/{id}/pending", h.GetPending)
 	mux.HandleFunc("POST /api/v1/functions/{id}/pending:accept", h.AcceptPending)
 	mux.HandleFunc("POST /api/v1/functions/{id}/pending:reject", h.RejectPending)
-
-	// Execution log (D22)
 	mux.HandleFunc("GET /api/v1/functions/{id}/executions", h.ListExecutions)
 	mux.HandleFunc("GET /api/v1/function-executions/{execId}", h.GetExecution)
 }
-
-// ── CRUD ──────────────────────────────────────────────────────────────────────
 
 func (h *FunctionHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -113,9 +71,6 @@ func (h *FunctionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	// Env sync is synchronous inside Service.Create (D-redo-9). v.EnvStatus
-	// is already terminal when we return — callers see ready/failed via the
-	// response body.
 	responsehttpapi.Created(w, map[string]any{"function": f, "version": v})
 }
 
@@ -173,13 +128,9 @@ func (h *FunctionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.NoContent(w)
 }
 
-// postOnFunction dispatches POST /api/v1/functions/{id}:<action>. Supports
-// :run and :revert. The legacy :resync action was removed in 2026-05-12
-// (D-redo-14) — to rebuild a stuck venv the LLM uses edit_function with
-// empty ops (D-redo-22).
+// postOnFunction dispatches POST /api/v1/functions/{id}:<action> (:run/:revert).
 //
-// postOnFunction 派发 POST /api/v1/functions/{id}:<action>。支持 :run / :revert。
-// :resync 已删(D-redo-14),重建 env 走 edit_function({ops:[]})(D-redo-22)。
+// postOnFunction 派发 POST /api/v1/functions/{id}:<action>(:run/:revert)。
 func (h *FunctionHandler) postOnFunction(w http.ResponseWriter, r *http.Request) {
 	id, action, ok := idAndAction(r, "idAction")
 	if !ok {
@@ -234,8 +185,6 @@ func (h *FunctionHandler) Revert(w http.ResponseWriter, r *http.Request, id stri
 	responsehttpapi.Success(w, http.StatusOK, v)
 }
 
-// ── Versions ──────────────────────────────────────────────────────────────────
-
 func (h *FunctionHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 	p, err := paginationpkg.Parse(r)
 	if err != nil {
@@ -258,7 +207,6 @@ func (h *FunctionHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	versionStr := r.PathValue("version")
 	versionN, err := strconv.Atoi(versionStr)
 	if err != nil {
-		// Treat as version ID (fnv_xxx) if not an integer.
 		v, gerr := h.svc.GetVersion(r.Context(), versionStr)
 		if gerr != nil {
 			responsehttpapi.FromDomainError(w, h.log, gerr)
@@ -274,8 +222,6 @@ func (h *FunctionHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	}
 	responsehttpapi.Success(w, http.StatusOK, v)
 }
-
-// ── Pending ───────────────────────────────────────────────────────────────────
 
 func (h *FunctionHandler) GetPending(w http.ResponseWriter, r *http.Request) {
 	v, err := h.svc.GetPending(r.Context(), r.PathValue("id"))
@@ -302,8 +248,6 @@ func (h *FunctionHandler) RejectPending(w http.ResponseWriter, r *http.Request) 
 	}
 	responsehttpapi.NoContent(w)
 }
-
-// ── Execution log (D22) ───────────────────────────────────────────────────────
 
 func (h *FunctionHandler) ListExecutions(w http.ResponseWriter, r *http.Request) {
 	p, err := paginationpkg.Parse(r)

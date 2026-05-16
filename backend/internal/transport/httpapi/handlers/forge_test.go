@@ -72,7 +72,6 @@ func TestForge_StreamDeliversAllEventTypes(t *testing.T) {
 			t.Errorf("event %d: got %s want %s", i, got[i].event, w)
 		}
 	}
-	// Scope nested in payload (D-redo-23).
 	if !strings.Contains(got[0].data, `"scope":{`) {
 		t.Errorf("forge_started missing nested scope: %q", got[0].data)
 	}

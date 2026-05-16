@@ -1,9 +1,3 @@
-// dispatch_wait.go — WaitDispatcher. Reads node.Config key `duration`
-// (millis) or `until` (RFC3339 timestamp) and sleeps until that point
-// or ctx.Done. Plan 05 §3.2 wait.
-//
-// dispatch_wait.go —— WaitDispatcher;sleep duration ms 或到 until 时间。
-
 package scheduler
 
 import (
@@ -12,10 +6,9 @@ import (
 	"time"
 )
 
-// WaitDispatcher pauses the dispatcher goroutine until duration / until
-// elapses or ctx is cancelled.
+// WaitDispatcher sleeps until duration/until elapses or ctx is cancelled.
 //
-// WaitDispatcher 睡 duration / 到 until,或 ctx 取消时退。
+// WaitDispatcher 睡到 duration/until 到点或 ctx 取消。
 type WaitDispatcher struct{}
 
 // NewWaitDispatcher constructs WaitDispatcher.
@@ -23,9 +16,9 @@ type WaitDispatcher struct{}
 // NewWaitDispatcher 构造 WaitDispatcher。
 func NewWaitDispatcher() *WaitDispatcher { return &WaitDispatcher{} }
 
-// Dispatch sleeps for the configured duration / until.
+// Dispatch sleeps for the configured duration or until.
 //
-// Dispatch 睡 duration / 到 until。
+// Dispatch 按 duration 或 until 睡眠。
 func (d *WaitDispatcher) Dispatch(ctx context.Context, in DispatchInput) DispatchOutput {
 	var sleep time.Duration
 
@@ -55,9 +48,6 @@ func (d *WaitDispatcher) Dispatch(ctx context.Context, in DispatchInput) Dispatc
 	}
 }
 
-// configInt tolerates int / int64 / float64 JSON shapes.
-//
-// configInt 容忍 int/int64/float64 三种 JSON 形状。
 func configInt(v any) (int64, bool) {
 	switch n := v.(type) {
 	case int:

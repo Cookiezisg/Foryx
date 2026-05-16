@@ -1,9 +1,3 @@
-// agent_test.go — pure-function unit tests for the SubagentTool. Spawn
-// end-to-end (real Service + LLM + bridge) lives in test/subagent/
-// pipeline tests (D4-5).
-//
-// agent_test.go ——SubagentTool 的纯函数单测。完整 Spawn（真 Service +
-// LLM + bridge）在 test/subagent/ pipeline 套（D4-5）。
 package subagent
 
 import (
@@ -18,7 +12,6 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// ── Identity ─────────────────────────────────────────────────────────
 
 func TestSubagentTool_Identity(t *testing.T) {
 	tt := &SubagentTool{}
@@ -46,7 +39,6 @@ func TestSubagentTool_StaticMetadata(t *testing.T) {
 	}
 }
 
-// ── Parameters schema ────────────────────────────────────────────────
 
 func TestSubagentTool_Schema_DeclaresRequiredFields(t *testing.T) {
 	var schema map[string]any
@@ -66,7 +58,6 @@ func TestSubagentTool_Schema_DeclaresRequiredFields(t *testing.T) {
 	}
 }
 
-// ── ValidateInput ────────────────────────────────────────────────────
 
 func TestValidateInput_HappyPath(t *testing.T) {
 	tt := &SubagentTool{}
@@ -108,7 +99,6 @@ func TestValidateInput_MalformedJSON(t *testing.T) {
 	}
 }
 
-// ── Permissions ──────────────────────────────────────────────────────
 
 func TestCheckPermissions_AlwaysAllow(t *testing.T) {
 	tt := &SubagentTool{}
@@ -123,7 +113,6 @@ func TestCheckPermissions_AlwaysAllow(t *testing.T) {
 	}
 }
 
-// ── Recursion guard ──────────────────────────────────────────────────
 
 // TestExecute_RecursionRefused covers subagent.md §8 layer-2 defense:
 // even if (somehow) a sub-runner ended up with a SubagentTool in its
@@ -152,7 +141,6 @@ func TestExecute_RecursionRefused_DepthGreaterThanOne(t *testing.T) {
 	}
 }
 
-// ── Execute parse failures ───────────────────────────────────────────
 
 // Execute parses argsJSON (a string parameter) — distinct from
 // ValidateInput which parses json.RawMessage. Both must reject malformed.
@@ -170,7 +158,6 @@ func TestExecute_MalformedJSON_NoSpawnCall(t *testing.T) {
 	}
 }
 
-// ── appendNote ───────────────────────────────────────────────────────
 
 func TestAppendNote_NonEmptyBody(t *testing.T) {
 	got := appendNote("here is the answer", "subagent hit max turns")

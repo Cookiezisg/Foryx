@@ -1,8 +1,3 @@
-// call_log.go — GORM impl of handlerdomain.CallRepository. Mirrors
-// functionstore.execution_log shape with handler-specific fields.
-//
-// call_log.go —— handlerdomain.CallRepository 的 GORM 实现。
-
 package handler
 
 import (
@@ -30,7 +25,7 @@ func (s *Store) SaveCall(ctx context.Context, c *handlerdomain.Call) error {
 
 // GetCallByID returns one call by id (scoped to caller).
 //
-// GetCallByID 按 id 取 call(按调用者过滤)。
+// GetCallByID 按 id 取 call（按调用者过滤）。
 func (s *Store) GetCallByID(ctx context.Context, id string) (*handlerdomain.Call, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -51,7 +46,7 @@ func (s *Store) GetCallByID(ctx context.Context, id string) (*handlerdomain.Call
 
 // ListCalls returns cursor-paginated calls newest-first matching filter.
 //
-// ListCalls 返按 filter 过滤的 cursor 分页(新→旧)。
+// ListCalls 返按 filter 过滤的分页（新→旧）。
 func (s *Store) ListCalls(ctx context.Context, filter handlerdomain.CallFilter) ([]*handlerdomain.Call, string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -148,9 +143,6 @@ func (s *Store) ComputeCallAggregates(ctx context.Context, filter handlerdomain.
 	return agg, nil
 }
 
-// applyCallFilter applies common filter fields to a query builder.
-//
-// applyCallFilter 把 filter 字段挂 query 上。
 func (s *Store) applyCallFilter(q *gorm.DB, uid string, filter handlerdomain.CallFilter) *gorm.DB {
 	q = q.Where("user_id = ?", uid)
 	if filter.HandlerID != "" {

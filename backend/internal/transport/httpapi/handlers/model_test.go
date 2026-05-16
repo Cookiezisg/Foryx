@@ -1,10 +1,3 @@
-// model_test.go — E2E contract tests for /api/v1/model-configs/* endpoints.
-// Full stack: in-memory SQLite → real Store → real Service → Handler,
-// wrapped by InjectUserID middleware.
-//
-// model_test.go — /api/v1/model-configs/* 端点的端到端契约测试。
-// 完整栈：内存 SQLite → 真 Store → 真 Service → Handler，
-// 用 InjectUserID 中间件包裹。
 package handlers
 
 import (
@@ -41,8 +34,6 @@ func newModelTestServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(middlewarehttpapi.InjectUserID(mux))
 }
 
-// ---- GET /api/v1/model-configs ----
-
 func TestModelHandler_List_EmptyReturnsArray(t *testing.T) {
 	srv := newModelTestServer(t)
 	defer srv.Close()
@@ -59,8 +50,6 @@ func TestModelHandler_List_EmptyReturnsArray(t *testing.T) {
 		t.Errorf("len(data) = %d, want 0", len(items))
 	}
 }
-
-// ---- PUT /api/v1/model-configs/{scenario} ----
 
 func TestModelHandler_Upsert_Success(t *testing.T) {
 	srv := newModelTestServer(t)
@@ -83,16 +72,12 @@ func TestModelHandler_Upsert_Success(t *testing.T) {
 	if got := d["modelId"].(string); got != "gpt-4o" {
 		t.Errorf("modelId = %q, want gpt-4o", got)
 	}
-	// UserID must not appear in response (json:"-").
-	// UserID 不得出现在响应里（json:"-"）。
 	if _, has := d["userId"]; has {
 		t.Error("userId leaked into response")
 	}
 }
 
 func TestModelHandler_Upsert_UpdateKeepsOneRow(t *testing.T) {
-	// Two PUTs to the same scenario must result in a single row.
-	// 同一 scenario 两次 PUT 必须只产生一条行。
 	srv := newModelTestServer(t)
 	defer srv.Close()
 

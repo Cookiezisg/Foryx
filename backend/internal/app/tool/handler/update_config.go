@@ -1,9 +1,3 @@
-// update_config.go — update_handler_config system tool (D-handler). Merges
-// partial config into stored ConfigEncrypted blob. Sensitive values per
-// schema get encrypted at rest; this tool's tool_result confirms the
-// configState transition (e.g. partially_configured → ready) without echoing
-// any plaintext values.
-
 package handler
 
 import (

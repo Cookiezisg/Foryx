@@ -1,15 +1,3 @@
-// fetch_test.go — unit tests for WebFetch. End-to-end Execute (which
-// calls a real LLM) is exercised in the W4 pipeline test; here we cover:
-//   - schema / metadata / identity
-//   - ValidateInput edge cases
-//   - SSRF guard (classifyIP + guardHostname)
-//   - Two-tier fetch behaviour against an httptest server (Jina path,
-//     direct-GET fallback when Jina returns 5xx, byte cap, non-2xx).
-//   - Helper utilities (truncate, buildSummaryPrompt).
-//
-// fetch_test.go — WebFetch 单元测试。需真 LLM 的 Execute 端到端放 W4
-// pipeline 测；本文件覆盖 schema / 校验 / SSRF / 两段抓取（含 fallback、
-// byte cap、非 2xx）/ 辅助函数。
 package web
 
 import (
@@ -24,7 +12,6 @@ import (
 	"testing"
 )
 
-// ── Identity / metadata / schema ──────────────────────────────────────────────
 
 func TestWebFetch_IdentityMethods(t *testing.T) {
 	tool := &WebFetch{}
@@ -75,7 +62,6 @@ func TestWebFetch_Schema_IsParsableObject(t *testing.T) {
 	}
 }
 
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestWebFetch_ValidateInput_RequiresURL(t *testing.T) {
 	tool := &WebFetch{}
@@ -124,7 +110,6 @@ func TestWebFetch_ValidateInput_AcceptsValidArgs(t *testing.T) {
 	}
 }
 
-// ── SSRF guard ────────────────────────────────────────────────────────────────
 
 func TestClassifyIP_AllowsPublic(t *testing.T) {
 	publics := []string{"8.8.8.8", "1.1.1.1", "104.16.0.1", "2001:4860:4860::8888"}
@@ -210,7 +195,6 @@ func TestGuardHostname_EmptyHost(t *testing.T) {
 	}
 }
 
-// ── Two-tier fetch ────────────────────────────────────────────────────────────
 
 // withJinaServer points jinaEndpoint at the given test server for the
 // duration of the test, restoring the original value after. The returned
@@ -334,7 +318,6 @@ func TestFetchContent_CapsBytes(t *testing.T) {
 	}
 }
 
-// ── Execute (network + SSRF only — no LLM, see W4 pipeline test) ──────────────
 
 func TestExecute_RejectsLoopbackBeforeFetch(t *testing.T) {
 	// Even with an LLM present, SSRF check must short-circuit before any
@@ -380,7 +363,6 @@ func TestExecute_ReportsBadURL(t *testing.T) {
 	}
 }
 
-// ── SSRF redirect guard ───────────────────────────────────────────────────────
 
 // Regression: pre-fix, fetchClient followed redirects without re-running
 // guardHostname, so a public URL that 302'd to http://127.0.0.1 would fetch
@@ -473,7 +455,6 @@ func TestSSRFCheckRedirect_RejectsAfterTenHops(t *testing.T) {
 	}
 }
 
-// ── Helper utilities ──────────────────────────────────────────────────────────
 
 func TestTruncate(t *testing.T) {
 	if got := truncate("short", 100); got != "short" {

@@ -1,11 +1,3 @@
-// edit.go — edit_workflow system tool: applies ops on top of current
-// pending (or active if no pending) under iterate-same-pending semantic
-// (D-redo-11). Workflow has no env install so unlike function / handler
-// edit, there's no env-fix loop — just ops apply + validate + save.
-//
-// edit.go —— edit_workflow:iterate-same-pending(D-redo-11);workflow 无
-// env 装,只跑 ops apply + validate + save。
-
 package workflow
 
 import (

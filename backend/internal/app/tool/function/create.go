@@ -1,15 +1,3 @@
-// create.go — create_function system tool: applies a sequence of ops to
-// create a new Function with an auto-accepted v1, runs synchronous env
-// install, and on env-fix failure enters the C2 LLM env-fix loop (up to
-// 3 attempts, main-chat-scenario model suggests revised deps). On final
-// success, AcceptPending flips the active version to the fixed pending so
-// the user sees a single "ready" function (the failed v1 stays in version
-// history). Per discussions/2026-05-12 §E.
-//
-// create.go —— create_function 系统工具:对空状态应用 ops 建 v1 + 同步装 env;
-// env 失败时跑 C2 内部 env-fix loop(最多 3 次,主 chat LLM 建议新 deps)。
-// 最终成功时调 AcceptPending 把修好的 pending 翻为 active(失败的 v1 留版本史)。
-
 package function
 
 import (
@@ -225,12 +213,9 @@ func (t *CreateFunction) Execute(ctx context.Context, argsJSON string) (string, 
 		result.FinalEnvStatus, result.FinalEnvError, result.AttemptsUsed, result.History, len(ops)), nil
 }
 
-// marshalCreateOutput is the single source of truth for the create_function
-// tool's wire shape — keeps the success path + each error fallback path
-// emitting the same JSON envelope.
+// marshalCreateOutput is the single source of truth for create_function's wire shape across success / fallback paths.
 //
-// marshalCreateOutput 是 create_function 工具线协议唯一源 — 成功 + 各 fallback
-// 都走同一个 envelope。
+// marshalCreateOutput 是 create_function 线协议唯一源；成功与 fallback 都走同一 envelope。
 func marshalCreateOutput(
 	id, versionID string,
 	versionN *int,

@@ -1,12 +1,6 @@
-// Package loop is the shared ReAct engine. chat and subagent consume it
-// through the Host interface today; future phases (Phase 4 workflow LLM
-// nodes) will join the same way. This is the single source of truth for
-// stream → tool dispatch → history extension → finalize. No service-
-// specific knowledge lives here.
+// Package loop is the shared ReAct engine (stream → tool dispatch → history → finalize).
 //
-// Package loop 是共享的 ReAct 引擎。chat / subagent 经 Host 接口使用，未来
-// Phase（Phase 4 workflow LLM 节点）以同样方式接入。是 stream → 工具调度
-// → 历史扩展 → 终态 这条链路的唯一事实源。本包不持有任何 service 特有知识。
+// Package loop 是共享的 ReAct 引擎（流 → 工具调度 → 历史 → 终态）。
 package loop
 
 import (
@@ -19,60 +13,28 @@ import (
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 )
 
-// Host is the per-run hook surface. chat implements it via chatHost
-// (writes the assistant Message row at terminal); subagent implements
-// it via subagentHost (writes the sub-Message row with parent_block_id
-// + attrs). Block writes happen real-time via the eventlog Emitter
-// (pkg/eventlog) — Host is NOT involved in block persistence.
+// Host is the per-run hook surface; block persistence happens via the eventlog Emitter, not Host.
 //
-// Host 是每次 run 的钩子面。chat 通过 chatHost 实现（终态时写 assistant
-// Message 行）；subagent 通过 subagentHost 实现（写 sub-Message 行含
-// parent_block_id + attrs）。Block 写实时走 eventlog Emitter
-// （pkg/eventlog）——Host 不参与 block 持久化。
+// Host 是每次 run 的钩子面；block 持久化走 eventlog Emitter，不经 Host。
 type Host interface {
-	// LoadHistory returns the LLM-wire history that seeds the first step.
-	//
-	// LoadHistory 返回种子第一步的 LLM 历史。
 	LoadHistory(ctx context.Context) ([]llminfra.LLMMessage, error)
-
-	// Tools returns the filtered tool registry for this run. chat returns
-	// the global registry; subagent returns the type-filtered subset.
-	//
-	// Tools 返回本次 run 的已过滤 tool 列表。chat 返全局；subagent 返按
-	// 类型过滤后的子集。
 	Tools() []toolapp.Tool
-
-	// WriteFinalize persists the terminal Message row + emits message_stop
-	// to the eventlog Bridge. Hosts must use a detached context for the
-	// persist write so a cancelled upstream ctx doesn't lose the terminal
-	// record.
-	//
-	// WriteFinalize 持久化终态 Message 行 + 给 eventlog Bridge 发
-	// message_stop。host 必须用 detached context 写盘防止上游 cancel 让
-	// 终态丢失。
 	WriteFinalize(ctx context.Context, blocks []chatdomain.Block, status, stopReason, errCode, errMsg string, in, out int)
 }
 
-// Result is what loop.Run hands back to the caller.
-//
-// Result 是 loop.Run 给调用方的回执。
 type Result struct {
 	Blocks      []chatdomain.Block
-	Status      string // completed / cancelled / error
+	Status      string
 	StopReason  string
 	TokensIn    int
 	TokensOut   int
 	Steps       int
-	LastMessage string // last assistant text content; subagent uses this as tool_result
+	LastMessage string
 }
 
-// Run executes the ReAct loop. baseReq.System and baseReq.Messages are
-// composed by Run (Messages from host.LoadHistory, Tools from host.Tools).
-// maxSteps caps the loop; pass 20 for the chat default. log is required.
+// Run executes the ReAct loop, composing baseReq.Messages from host.LoadHistory and Tools from host.Tools.
 //
-// Run 执行 ReAct 循环。baseReq.System 与 baseReq.Messages 由 Run 内部装配
-// （Messages 来自 host.LoadHistory，Tools 来自 host.Tools）。maxSteps 是循环
-// 上限，chat 默认传 20。log 必需。
+// Run 执行 ReAct 循环；baseReq.Messages 取自 host.LoadHistory，Tools 取自 host.Tools。
 func Run(
 	ctx context.Context,
 	host Host,
@@ -176,8 +138,6 @@ func Run(
 	}
 }
 
-// toolsByName indexes tools for O(1) dispatch lookup inside runTools.
-// toolsByName 给 runTools 做 O(1) 派发查表。
 func toolsByName(tools []toolapp.Tool) map[string]toolapp.Tool {
 	m := make(map[string]toolapp.Tool, len(tools))
 	for _, t := range tools {

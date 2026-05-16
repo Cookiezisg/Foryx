@@ -1,25 +1,3 @@
-// apply.go — method-level ops engine for Handler pending-version authoring.
-// Per spec D15, ops are method-level (vs Function's whole-file ops):
-//
-//   set_meta              — name/description/tags
-//   set_imports           — class top-level imports
-//   set_init              — __init__ body
-//   set_shutdown          — shutdown body (optional, no-op default)
-//   set_init_args_schema  — list of InitArgSpec
-//   add_method            — append a MethodSpec (name unique)
-//   update_method         — JSON Merge Patch (RFC 7396) on existing method
-//   delete_method         — remove by name
-//   set_dependencies      — PEP 508 deps list
-//   set_python_version    — PEP 440 spec
-//
-// LLM emits []Op, Service.ApplyOps runs each in order with per-op + final
-// validation. One progress block delta is emitted per op via the eventlog
-// Emitter in ctx (no-op if no progress block ID).
-//
-// apply.go —— Handler pending 版本编辑的 method-level ops 引擎(D15)。
-// LLM 发 []Op,Service.ApplyOps 按序应用 + per-op/final 校验,每 op emit 1
-// progress delta。
-
 package handler
 
 import (
@@ -31,20 +9,17 @@ import (
 	eventlogpkg "github.com/sunweilin/forgify/backend/internal/pkg/eventlog"
 )
 
-// Op is a discriminated union encoded as JSON. Type is the discriminator;
-// Raw holds the full body so each op handler self-decodes (consistent with
-// functionapp.Op).
+// Op is a JSON-discriminated union; Type is the discriminator, Raw holds the full body.
 //
-// Op JSON 判别 union。Type 判别;Raw 存完整 body 各 op handler 自取(跟 function 一致)。
+// Op 是 JSON 判别式 union；Type 判别，Raw 存完整 body。
 type Op struct {
 	Type string          `json:"op"`
 	Raw  json.RawMessage `json:"-"`
 }
 
-// VersionDraft is the accumulated mutable snapshot during ops apply. After
-// final validation, fields copy onto a persisted Version row.
+// VersionDraft is the accumulated mutable snapshot during ops apply.
 //
-// VersionDraft 是 ops 应用过程中的可变快照;final 通过后拷到 Version 行。
+// VersionDraft 是 ops 应用过程中的可变快照。
 type VersionDraft struct {
 	Name           string
 	Description    string
@@ -60,23 +35,16 @@ type VersionDraft struct {
 
 // OpResult is the per-op outcome surfaced back to the LLM via tool result.
 //
-// OpResult 是单 op 应用结果,经 tool result 返 LLM。
+// OpResult 是单 op 应用结果，经 tool result 返 LLM。
 type OpResult struct {
 	Index int    `json:"index"`
 	Type  string `json:"type"`
 	OK    bool   `json:"ok"`
 }
 
-// ApplyOps applies a series of ops to a base draft (nil = fresh draft).
-// Emits one progress delta per op via the eventlog Emitter in ctx.
+// ApplyOps applies a series of ops; per-op errors wrap ErrOpInvalid, final errors wrap ErrASTParseError.
 //
-// Per-op apply errors wrap ErrOpInvalid (400 FUNCTION_OP_INVALID-style);
-// final-validation errors wrap ErrASTParseError. Sentinel mapping happens
-// at handler/errmap, but we wrap here so errors.Is in the upper layers
-// matches without inspecting the message.
-//
-// ApplyOps 把 ops 应用到 base draft(nil = 空);per op 1 progress delta;
-// per-op 错误包 ErrOpInvalid,final 错误包 ErrASTParseError。
+// ApplyOps 按序应用 ops；per-op 错误包 ErrOpInvalid，final 错误包 ErrASTParseError。
 func (s *Service) ApplyOps(ctx context.Context, base *VersionDraft, ops []Op, progressBlockID string) (*VersionDraft, []OpResult, error) {
 	state := cloneDraft(base)
 	results := make([]OpResult, 0, len(ops))
@@ -104,9 +72,9 @@ func (s *Service) ApplyOps(ctx context.Context, base *VersionDraft, ops []Op, pr
 	return state, results, nil
 }
 
-// ParseOps decodes the LLM wire format into []Op. Mirrors functionapp.ParseOps.
+// ParseOps decodes the LLM wire format into []Op.
 //
-// ParseOps 把 LLM wire 格式解为 []Op(跟 functionapp.ParseOps 同)。
+// ParseOps 把 LLM wire 格式解码为 []Op。
 func ParseOps(raw json.RawMessage) ([]Op, error) {
 	var arr []json.RawMessage
 	if err := json.Unmarshal(raw, &arr); err != nil {
@@ -128,9 +96,6 @@ func ParseOps(raw json.RawMessage) ([]Op, error) {
 	return ops, nil
 }
 
-// applyOne mutates state per a single op.
-//
-// applyOne 单 op 应用到 state。
 func applyOne(state *VersionDraft, op Op) error {
 	switch op.Type {
 	case "set_meta":
@@ -260,9 +225,6 @@ func applyOne(state *VersionDraft, op Op) error {
 	return nil
 }
 
-// findMethodIdx returns the index of a method by name, or -1.
-//
-// findMethodIdx 按 name 找 method 索引;无则 -1。
 func findMethodIdx(methods []handlerdomain.MethodSpec, name string) int {
 	for i, m := range methods {
 		if m.Name == name {
@@ -272,13 +234,10 @@ func findMethodIdx(methods []handlerdomain.MethodSpec, name string) int {
 	return -1
 }
 
-// mergeMethodPatch applies a JSON Merge Patch (RFC 7396) to one MethodSpec.
-// Round-trip via JSON for the merge: marshal target → merge with patch → unmarshal.
+// mergeMethodPatch applies a JSON Merge Patch (RFC 7396) to one MethodSpec via JSON round-trip.
 //
-// mergeMethodPatch 对 MethodSpec 应用 JSON Merge Patch(RFC 7396)。
-// JSON round-trip 实现:marshal target → 合并 patch → unmarshal。
+// mergeMethodPatch 通过 JSON round-trip 对 MethodSpec 应用 RFC 7396 Merge Patch。
 func mergeMethodPatch(target handlerdomain.MethodSpec, patch json.RawMessage) (handlerdomain.MethodSpec, error) {
-	// 1. Marshal target to a generic map.
 	rawTarget, err := json.Marshal(target)
 	if err != nil {
 		return target, fmt.Errorf("marshal target: %w", err)
@@ -288,16 +247,13 @@ func mergeMethodPatch(target handlerdomain.MethodSpec, patch json.RawMessage) (h
 		return target, fmt.Errorf("target → map: %w", err)
 	}
 
-	// 2. Unmarshal patch as a map.
 	var patchMap map[string]any
 	if err := json.Unmarshal(patch, &patchMap); err != nil {
 		return target, fmt.Errorf("patch unmarshal: %w", err)
 	}
 
-	// 3. Apply per RFC 7396: patch values overwrite; nil deletes the key.
 	mergedMap := mergePatch(targetMap, patchMap)
 
-	// 4. Round-trip back to MethodSpec.
 	rawMerged, err := json.Marshal(mergedMap)
 	if err != nil {
 		return target, fmt.Errorf("marshal merged: %w", err)
@@ -309,10 +265,9 @@ func mergeMethodPatch(target handlerdomain.MethodSpec, patch json.RawMessage) (h
 	return merged, nil
 }
 
-// mergePatch implements RFC 7396 — patch values overwrite recursively; nil
-// values in patch delete the target key.
+// mergePatch implements RFC 7396 recursively; nil values delete the target key.
 //
-// mergePatch 实现 RFC 7396 — patch 值覆盖(递归);nil 值删 target 键。
+// mergePatch 递归实现 RFC 7396；patch 中 nil 值删除对应 key。
 func mergePatch(target, patch map[string]any) map[string]any {
 	if target == nil {
 		target = map[string]any{}
@@ -333,10 +288,6 @@ func mergePatch(target, patch map[string]any) map[string]any {
 	return target
 }
 
-// cloneDraft deep-copies a VersionDraft so ApplyOps can mutate without
-// affecting caller's base.
-//
-// cloneDraft 深拷贝 VersionDraft。
 func cloneDraft(d *VersionDraft) *VersionDraft {
 	if d == nil {
 		return &VersionDraft{}

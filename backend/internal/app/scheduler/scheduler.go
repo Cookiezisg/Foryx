@@ -1,17 +1,6 @@
-// Package scheduler is the workflow execution orchestrator. It reads a
-// Workflow's active version, persists a FlowRun, then drives the DAG
-// node-by-node (E6 executeRun + E7-E8 dispatchers fill the body).
+// Package scheduler orchestrates workflow execution: read active Version → persist FlowRun → drive DAG.
 //
-// The trigger domain calls scheduler.StartRun via the SchedulerStarter
-// port to fan-out listener fires; HTTP `:trigger` + LLM `trigger_workflow`
-// share the same entry point.
-//
-// See documents/version-1.2/adhoc-topic-documents/forge_redesign/05-execution-plane.md §3.
-//
-// Package scheduler 是 workflow 执行编排器。读 active Version → 持久化
-// FlowRun → DAG dispatch(E6 executeRun + E7-E8 dispatcher 后补)。
-// trigger 域经 SchedulerStarter 端口 fan-out 触发;HTTP `:trigger` + LLM
-// `trigger_workflow` 共享同一入口。
+// Package scheduler 编排 workflow 执行：读 active Version → 持久化 FlowRun → 推 DAG。
 package scheduler
 
 import (
@@ -30,22 +19,18 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// WorkflowReader is the read-only contract scheduler consumes from
-// workflowapp.Service. Decoupled via interface so unit tests can fake it.
+// WorkflowReader is the read-only contract the scheduler consumes from workflowapp.
 //
-// WorkflowReader 是 scheduler 从 workflowapp.Service 消费的只读契约;
-// 单测可 fake。
+// WorkflowReader 是 scheduler 从 workflowapp 消费的只读契约。
 type WorkflowReader interface {
 	GetActiveVersion(ctx context.Context, workflowID string) (*workflowdomain.Version, error)
 	GetWorkflow(ctx context.Context, workflowID string) (*workflowdomain.Workflow, error)
 	ListEnabled(ctx context.Context) ([]*workflowdomain.Workflow, error)
 }
 
-// Service orchestrates FlowRun execution. StartRun is the only entry
-// point (cron / fsnotify / webhook listeners + HTTP `:trigger` + LLM
-// `trigger_workflow` all funnel here).
+// Service orchestrates FlowRun execution; StartRun is the only entry point.
 //
-// Service 编排 FlowRun 执行;StartRun 是唯一入口。
+// Service 编排 FlowRun 执行；StartRun 是唯一入口。
 type Service struct {
 	repo         flowrundomain.Repository
 	workflowRead WorkflowReader
@@ -56,19 +41,12 @@ type Service struct {
 	cancelsMu sync.RWMutex
 	cancels   map[string]context.CancelFunc
 
-	// ExecuteFn is the per-run driver. Default: executeRun (real E6 DAG
-	// state machine). Tests / harness may override to stub timing.
-	//
-	// ExecuteFn 是 per-run 驱动;默认 executeRun(E6 真 DAG 状态机);
-	// 测试可 override。
 	ExecuteFn func(ctx context.Context, run *flowrundomain.FlowRun, graph *workflowdomain.Graph)
 }
 
-// NewService constructs Service. Panics on nil log / notif. workflowRead
-// + repo may be nil only in pre-wire tests that never call StartRun.
+// NewService constructs Service; panics on nil log/notif.
 //
-// NewService 构造 Service;nil log/notif panic;workflowRead+repo 仅
-// pre-wire 测试可 nil(不调 StartRun)。
+// NewService 构造 Service；nil log/notif 直接 panic。
 func NewService(
 	repo flowrundomain.Repository,
 	workflowRead WorkflowReader,
@@ -89,32 +67,20 @@ func NewService(
 		log:          log.Named("schedulerapp"),
 		cancels:      make(map[string]context.CancelFunc),
 	}
-	// E6: default ExecuteFn is the real DAG-driving body. Router starts
-	// empty — graphs with no nodes still complete OK;graphs with nodes
-	// of unregistered types fail with NO_DISPATCHER. E15 wires the 13
-	// real dispatchers; tests register only the types they exercise.
-	//
-	// E6:默认 ExecuteFn 走真 executeRun;Router 起空,空图照样 OK,
-	// 未注册类型的节点失败 NO_DISPATCHER。E15 接 13 个真 dispatcher,
-	// 测试只注册需要的类型。
 	s.ExecuteFn = s.executeRun
 	return s
 }
 
-// SetRouter swaps the Router. E15 main.go / harness calls this after
-// constructing the 13 production dispatchers.
+// SetRouter swaps the Router after constructing production dispatchers.
 //
-// SetRouter 替 Router;E15 主装配后调,接 13 个生产 dispatcher。
+// SetRouter 装配 dispatcher 后替换 Router。
 func (s *Service) SetRouter(r *Router) { s.router = r }
 
-// Router returns the current router (test helpers, observability).
+// RouterRef returns the current router for test helpers and observability.
 //
-// Router 返当前 router。
+// RouterRef 返回当前 router，供测试与观测使用。
 func (s *Service) RouterRef() *Router { return s.router }
 
-// Sentinel errors. Wire codes registered in transport/httpapi/response/errmap.go.
-//
-// 哨兵错误。
 var (
 	ErrWorkflowDisabled       = errors.New("scheduler: workflow disabled")
 	ErrWorkflowNeedsAttention = errors.New("scheduler: workflow needs attention")
@@ -122,20 +88,9 @@ var (
 	ErrWorkflowNotFound       = errors.New("scheduler: workflow not found")
 )
 
-// StartRun spawns a new FlowRun for a workflow trigger. Implements the
-// SchedulerStarter port consumed by app/trigger.
+// StartRun spawns a new FlowRun for a workflow trigger; implements SchedulerStarter.
 //
-// Gate order (Plan 05 §3.1):
-//  1. RequireUserID(ctx)
-//  2. GetWorkflow → ErrWorkflowNotFound (mapped to 404 by errmap)
-//  3. Enabled gate (§6.5) → ErrWorkflowDisabled
-//  4. NeedsAttention gate → ErrWorkflowNeedsAttention
-//  5. Serial concurrency (§6.3) → ErrConcurrencyLimit (skipped, caller
-//     logs + moves on; trigger listener treats as normal)
-//  6. GetActiveVersion → propagates workflow.ErrNoActiveVersion
-//  7. flowrun.Create + register cancel + go ExecuteFn
-//
-// StartRun 起新 FlowRun;7-gate 校验。
+// StartRun 为 workflow trigger 启动新 FlowRun，实现 SchedulerStarter。
 func (s *Service) StartRun(ctx context.Context, workflowID, triggerKind string, triggerInput map[string]any) (string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -187,11 +142,6 @@ func (s *Service) StartRun(ctx context.Context, workflowID, triggerKind string, 
 		return "", fmt.Errorf("schedulerapp.StartRun: Create: %w", err)
 	}
 
-	// Detached ctx so the run survives caller-cancel (HTTP request close,
-	// trigger goroutine drop, etc.). User identity propagated explicitly.
-	// runCtx is then made cancellable for explicit Service.Cancel.
-	// 起 detached ctx;caller-cancel 不挂掉 run(HTTP 关 / trigger goroutine
-	// 撤等);用户身份显式传;再外包一层 WithCancel 让 Service.Cancel 杀。
 	runCtx := reqctxpkg.SetUserID(context.Background(), uid)
 	runCtx, cancel := context.WithCancel(runCtx)
 	s.cancelsMu.Lock()
@@ -205,8 +155,6 @@ func (s *Service) StartRun(ctx context.Context, workflowID, triggerKind string, 
 			if r := recover(); r != nil {
 				s.log.Error("scheduler.executeRun panic",
 					zap.String("runID", run.ID), zap.Any("recover", r))
-				// finalize as failed so the row doesn't dangle running.
-				// finalize 失败标 failed,防 row 卡在 running。
 				_ = s.repo.UpdateStatus(runCtx, run.ID, flowrundomain.StatusFailed,
 					nil, "INTERNAL_PANIC", fmt.Sprintf("%v", r),
 					ptrNow(), 0)
@@ -221,12 +169,9 @@ func (s *Service) StartRun(ctx context.Context, workflowID, triggerKind string, 
 	return run.ID, nil
 }
 
-// Cancel cancels a running or paused FlowRun. The cancel func cascades
-// through every dispatcher's ctx so in-flight node calls abort. Cleanup
-// (handler instance destroy etc.) happens in executeRun's deferred path.
+// Cancel cancels a running or paused FlowRun; cleanup runs in executeRun's deferred path.
 //
-// Cancel 取消运行中/paused FlowRun;cancel ctx 一路串到 dispatcher,清理
-// 在 executeRun defer 路径。
+// Cancel 取消运行中或 paused FlowRun；清理在 executeRun defer 路径。
 func (s *Service) Cancel(_ context.Context, runID string) error {
 	s.cancelsMu.RLock()
 	cancel, ok := s.cancels[runID]
@@ -244,9 +189,6 @@ func (s *Service) releaseCancel(runID string) {
 	s.cancelsMu.Unlock()
 }
 
-// publish emits a `flowrun` entity notification (slim payload D-redo-6).
-//
-// publish 推 `flowrun` 通知;瘦身 payload(D-redo-6)。
 func (s *Service) publish(ctx context.Context, runID, workflowID, action string, extra map[string]any) {
 	payload := map[string]any{"action": action, "workflowId": workflowID}
 	for k, v := range extra {

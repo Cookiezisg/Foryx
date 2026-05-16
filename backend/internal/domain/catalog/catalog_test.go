@@ -1,11 +1,3 @@
-// catalog_test.go — domain-layer unit tests: Catalog JSON shape,
-// Granularity enum behavior + String() for log rendering, sentinel
-// uniqueness (errors.Is must distinguish them at the Service.Refresh
-// switch-arm).
-//
-// catalog_test.go ——domain 层单测：Catalog JSON 形状、Granularity 枚举 +
-// String() 给日志渲染、sentinel 唯一性（让 Service.Refresh switch-arm 经
-// errors.Is 区分）。
 package catalog
 
 import (
@@ -68,15 +60,8 @@ func TestGranularity_String(t *testing.T) {
 }
 
 func TestGranularity_EnumValuesStable(t *testing.T) {
-	// PerItem must remain 0 so a zero-value Granularity (e.g. struct
-	// init forgetting to set it) is the most permissive option (free
-	// merging) — that's the safest default for new sources we haven't
-	// thought about yet. Pinning the values here makes accidental
-	// reordering during refactor surface as a test fail.
-	//
-	// PerItem 必须保持 0 让零值 Granularity（struct 初始化忘设时）落到最
-	// 宽松选项（自由合并）——对未来新 source 是最安全默认。pin 值让重构
-	// 误重排被测试拦下。
+	// PerItem must stay 0 so zero-value defaults to most permissive merging.
+	// PerItem 必须保持 0，让零值落到最宽松合并选项。
 	if PerItem != 0 {
 		t.Errorf("PerItem = %d, want 0 (zero-value default)", PerItem)
 	}
@@ -102,8 +87,6 @@ func TestItem_JSONRoundTrip(t *testing.T) {
 		t.Errorf("round-trip mismatch: %+v vs %+v", out, in)
 	}
 
-	// Category is omitempty — empty value should not appear on wire.
-	// Category omitempty——空值不该出现在 wire 上。
 	noCategory := Item{Source: "skill", ID: "x", Name: "y", Description: "z"}
 	wire, _ := json.Marshal(noCategory)
 	if strings.Contains(string(wire), `"category"`) {

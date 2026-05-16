@@ -7,10 +7,6 @@ import (
 	"testing"
 )
 
-// TestSentinels_Unique pins exported sentinels — every message starts with
-// "workflow: " and messages are unique. Drift breaks errors.Is matching.
-//
-// TestSentinels_Unique 钉死导出 sentinel:全 workflow: 前缀 + 消息唯一。
 func TestSentinels_Unique(t *testing.T) {
 	all := []error{
 		ErrNotFound, ErrDuplicateName, ErrVersionNotFound, ErrPendingNotFound,
@@ -33,8 +29,6 @@ func TestSentinels_Unique(t *testing.T) {
 	}
 }
 
-// TestSentinels_ErrorsIsCompatible verifies sentinels unwrap through
-// fmt.Errorf("%w") chains (§S16).
 func TestSentinels_ErrorsIsCompatible(t *testing.T) {
 	wrapped := fmt.Errorf("workflowstore.GetWorkflow: %w",
 		fmt.Errorf("workflowapp.Get: %w", ErrNotFound))
@@ -43,7 +37,6 @@ func TestSentinels_ErrorsIsCompatible(t *testing.T) {
 	}
 }
 
-// TestNodeType_Whitelist pins the 13 V1 node types. Drift = protocol break.
 func TestNodeType_Whitelist(t *testing.T) {
 	valid := []string{
 		NodeTypeTrigger, NodeTypeFunction, NodeTypeHandler, NodeTypeMCP,
@@ -64,8 +57,6 @@ func TestNodeType_Whitelist(t *testing.T) {
 	}
 }
 
-// TestCapabilityNode_Subset — exactly 6 capability nodes
-// (function/handler/mcp/skill/llm/http) accept retry / onError / timeout.
 func TestCapabilityNode_Subset(t *testing.T) {
 	caps := []string{NodeTypeFunction, NodeTypeHandler, NodeTypeMCP, NodeTypeSkill, NodeTypeLLM, NodeTypeHTTP}
 	for _, nt := range caps {
@@ -81,7 +72,6 @@ func TestCapabilityNode_Subset(t *testing.T) {
 	}
 }
 
-// TestOnError_Whitelist — 3 values stop/continue/branch.
 func TestOnError_Whitelist(t *testing.T) {
 	for _, s := range []string{OnErrorStop, OnErrorContinue, OnErrorBranch} {
 		if !IsValidOnError(s) {
@@ -93,7 +83,6 @@ func TestOnError_Whitelist(t *testing.T) {
 	}
 }
 
-// TestVariableType_Whitelist — 6 values matching function.ParameterSpec.
 func TestVariableType_Whitelist(t *testing.T) {
 	for _, v := range []string{VarTypeString, VarTypeNumber, VarTypeInteger, VarTypeBoolean, VarTypeObject, VarTypeArray} {
 		if !IsValidVariableType(v) {

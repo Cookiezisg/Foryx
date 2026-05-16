@@ -17,6 +17,7 @@ import type {
   SandboxEnv,
   Catalog,
   ToolMeta,
+  Memory,
 } from '@/types/domain';
 
 /* ───────── providers (whitelist) ───────── */
@@ -41,7 +42,7 @@ export const apikeyAPI = {
     baseUrl?: string;
     key: string;
   }) => postJSON<APIKey>('/api/v1/api-keys', in_),
-  update: (id: string, patch: { displayName?: string; baseUrl?: string; key?: string }) =>
+  update: (id: string, patch: { displayName?: string; baseUrl?: string }) =>
     patchJSON<APIKey>(`/api/v1/api-keys/${id}`, patch),
   remove: (id: string) => deleteEmpty(`/api/v1/api-keys/${id}`),
   /** :test action — backend dispatches via `{idAction}` to live-probe the key. */
@@ -141,6 +142,41 @@ export const sandboxAPI = {
 export const catalogAPI = {
   get: () => getJSON<Catalog | null>('/api/v1/catalog'),
   refresh: () => postJSON<Catalog>('/api/v1/catalog:refresh'),
+};
+
+/* ───────── memory (cross-conv long-term facts) ───────── */
+export const memoryAPI = {
+  list: (filter?: { type?: string; pinned?: boolean }) => {
+    const q = new URLSearchParams();
+    if (filter?.type) q.set('type', filter.type);
+    if (filter?.pinned !== undefined) q.set('pinned', String(filter.pinned));
+    const qs = q.toString();
+    return getJSON<Memory[]>(`/api/v1/memories${qs ? '?' + qs : ''}`);
+  },
+  get: (name: string) => getJSON<Memory>(`/api/v1/memories/${encodeURIComponent(name)}`),
+  create: (in_: {
+    name: string;
+    type: Memory['type'];
+    description: string;
+    content: string;
+    pinned?: boolean;
+    metadata?: Record<string, unknown>;
+  }) => postJSON<Memory>('/api/v1/memories', in_),
+  update: (
+    name: string,
+    patch: {
+      type?: Memory['type'];
+      description?: string;
+      content?: string;
+      pinned?: boolean;
+      metadata?: Record<string, unknown>;
+    },
+  ) => patchJSON<Memory>(`/api/v1/memories/${encodeURIComponent(name)}`, patch),
+  remove: (name: string) => deleteEmpty(`/api/v1/memories/${encodeURIComponent(name)}`),
+  pin: (name: string) =>
+    postJSON<Memory>(`/api/v1/memories/${encodeURIComponent(name)}:pin`, {}),
+  unpin: (name: string) =>
+    postJSON<Memory>(`/api/v1/memories/${encodeURIComponent(name)}:unpin`, {}),
 };
 
 /* ───────── tool registry (dev) ───────── */

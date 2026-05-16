@@ -1,21 +1,12 @@
 //go:build pipeline
 
-// fake_llm_scripts.go — convenience factories for common LLM Script patterns.
-// Import this alongside fake_llm.go; add factories here as new test scenarios
-// need them.
-//
-// fake_llm_scripts.go — 常见 LLM Script 模式的快捷工厂函数。
-// 按需在这里增加新工厂，不要在 test body 里手写 ChunkAction 列表。
 package harness
 
 import "time"
 
-// ScriptText emits content split across multiple SSE chunks, guaranteeing that
-// the entity-state model delivers several monotonically-growing snapshots.
-// Suitable for any test that asserts on text content or streaming snapshots.
+// ScriptText splits content across multiple SSE chunks for streaming-snapshot tests.
 //
-// ScriptText 把 content 分成多帧发送，保证 entity-state 快照单调增长。
-// 适合断言文字内容或流式快照的所有测试。
+// ScriptText 把 content 分多帧发，给流式快照测试用。
 func ScriptText(content string) Script {
 	return Script{
 		Actions:      splitTextActions(content, 3),
@@ -25,12 +16,9 @@ func ScriptText(content string) Script {
 	}
 }
 
-// ScriptSlowText emits content as multiple chunks with chunkDelay between each.
-// Use for cancel-mid-stream tests where the client needs time to send the
-// cancel before the stream finishes.
+// ScriptSlowText splits content into chunks with chunkDelay between each for cancel tests.
 //
-// ScriptSlowText 把 content 分多帧发出，帧间插 chunkDelay 延迟。
-// 用于 cancel-mid-stream 测试，给客户端留出取消时间窗。
+// ScriptSlowText 多帧 + 帧间 chunkDelay，给 cancel 测试用。
 func ScriptSlowText(content string, chunkDelay time.Duration) Script {
 	chunks := splitTextActions(content, 8)
 	actions := make([]ChunkAction, 0, len(chunks)*2)
@@ -46,12 +34,9 @@ func ScriptSlowText(content string, chunkDelay time.Duration) Script {
 	}
 }
 
-// ScriptSingleToolCall emits one tool call (name + complete args in one delta),
-// finishing with finish_reason="tool_calls". argsJSON must be a valid JSON
-// object string; include "summary" if simulating a real LLM that injects it.
+// ScriptSingleToolCall emits one tool call with finish_reason=tool_calls; argsJSON must be valid JSON.
 //
-// ScriptSingleToolCall 发出一次 tool call（name + 完整 args 一次发），
-// finish_reason="tool_calls"。argsJSON 须是合法 JSON object 字符串。
+// ScriptSingleToolCall 发一次 tool call，argsJSON 必须是合法 JSON。
 func ScriptSingleToolCall(name, toolID, argsJSON string) Script {
 	return Script{
 		Actions: []ChunkAction{
@@ -64,22 +49,16 @@ func ScriptSingleToolCall(name, toolID, argsJSON string) Script {
 	}
 }
 
-// ScriptHTTPError returns a Script that causes the fake server to respond with
-// the given HTTP status code immediately (no streaming). Use to test LLM
-// provider error paths (401 invalid key, 429 rate limit, 502 upstream down).
+// ScriptHTTPError makes the fake server return status immediately without streaming.
 //
-// ScriptHTTPError 让 fake server 直接返回指定 HTTP 状态（不流式）。
-// 测试 LLM provider 错误路径（401 / 429 / 502 等）。
+// ScriptHTTPError 让 fake server 直接返指定 HTTP 状态，不流式。
 func ScriptHTTPError(status int) Script {
 	return Script{HTTPStatus: status}
 }
 
-// ScriptRawJSON emits a single text chunk containing payload verbatim.
-// Use for internal Generate() calls (ranking, auto-title) that need a
-// specific JSON payload back from the LLM.
+// ScriptRawJSON emits a single text chunk with payload verbatim.
 //
-// ScriptRawJSON 发出含 payload 的单帧 text chunk。
-// 用于内部 Generate() 调用（排名、自动标题等）需要特定 JSON 返回的场景。
+// ScriptRawJSON 单帧发出 payload。
 func ScriptRawJSON(payload string) Script {
 	return Script{
 		Actions:      []ChunkAction{{Kind: "text", Content: payload}},
@@ -89,7 +68,7 @@ func ScriptRawJSON(payload string) Script {
 	}
 }
 
-// ToolCallSpec describes one tool call for use with ScriptParallelToolCalls.
+// ToolCallSpec describes one tool call for ScriptParallelToolCalls.
 //
 // ToolCallSpec 描述 ScriptParallelToolCalls 里的一次 tool call。
 type ToolCallSpec struct {
@@ -98,12 +77,9 @@ type ToolCallSpec struct {
 	ArgsJSON string
 }
 
-// ScriptParallelToolCalls emits multiple tool calls in one LLM response
-// (different indexes), finishing with finish_reason="tool_calls".
-// The chat runner should batch all safe calls and execute them concurrently.
+// ScriptParallelToolCalls emits multiple tool calls in one response with finish_reason=tool_calls.
 //
-// ScriptParallelToolCalls 在一次 LLM 响应中发出多个 tool call（不同 index），
-// finish_reason="tool_calls"。chat runner 应把所有 safe call 打包并发执行。
+// ScriptParallelToolCalls 单次响应发多个并行 tool call。
 func ScriptParallelToolCalls(calls []ToolCallSpec) Script {
 	actions := make([]ChunkAction, 0, len(calls)*2)
 	for i, c := range calls {
@@ -120,9 +96,9 @@ func ScriptParallelToolCalls(calls []ToolCallSpec) Script {
 	}
 }
 
-// splitTextActions divides content into up to n roughly equal text chunk actions.
+// splitTextActions divides content into up to n equal text chunk actions.
 //
-// splitTextActions 把 content 分成最多 n 个大致等长的 text chunk action。
+// splitTextActions 把 content 分成最多 n 个等长 text chunk action。
 func splitTextActions(content string, n int) []ChunkAction {
 	runes := []rune(content)
 	total := len(runes)

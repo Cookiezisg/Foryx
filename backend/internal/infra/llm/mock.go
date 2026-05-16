@@ -1,25 +1,3 @@
-// mock.go — MockClient is a Client implementation that replays
-// pre-pushed scripts of StreamEvent sequences. Used by the dev
-// /dev/mock-llm/* endpoints (and corresponding testend tab) so
-// developers can drive chat scenarios without a real LLM provider:
-// you push a script via HTTP, send a chat message, the chat runner
-// resolves the "mock" provider's apikey + invokes Stream(), Stream
-// pops the next script and emits its events through the iterator
-// exactly as if a real LLM had streamed them.
-//
-// This is the production-side cousin of test/harness/fake_llm.go —
-// the test harness embeds an httptest server speaking the OpenAI
-// wire format; this lives inside the Factory dispatch and runs
-// in-process with no HTTP hop.
-//
-// mock.go ——MockClient 是回放预 push 脚本的 Client 实现。给 dev
-// /dev/mock-llm/* 端点（+ 对应 testend tab）用，让开发者无需真 LLM
-// provider 即可驱动 chat 场景：经 HTTP push 脚本，发 chat 消息，
-// chat runner 解析 "mock" provider 的 apikey 调 Stream，Stream 弹出
-// 下个脚本通过迭代器发事件，就像真 LLM 流过来的一样。
-//
-// 这是 test/harness/fake_llm.go 的生产端表亲——后者嵌 httptest server
-// 说 OpenAI wire 格式；这个住在 Factory dispatch 里 in-process 无 HTTP。
 package llm
 
 import (
@@ -29,34 +7,17 @@ import (
 	"sync"
 )
 
-// MockScript describes one canned response. Events fire in order
-// through the iterator returned by Stream. ErrAfter, when set,
-// causes the iterator to emit an EventError instead of the events
-// (simulates a provider transport failure).
+// MockScript is one canned response; ErrAfter replaces the entire script with a single error event.
 //
-// MockScript 描述一段预设响应。Events 按顺序从 Stream 返回的迭代器
-// 流出。ErrAfter 设了会让迭代器直接 emit EventError 而非 events
-// （模拟 provider 传输失败）。
+// MockScript 描述一段预设响应；ErrAfter 非 nil 时整段换成一个错误事件。
 type MockScript struct {
-	Events []StreamEvent
-
-	// ErrAfter, when non-nil, replaces the entire script with a single
-	// EventError carrying this error. Lets testers exercise error paths
-	// (LLM_STREAM_ERROR / 500 etc.) without crafting an event sequence.
-	//
-	// ErrAfter 非 nil 时整段 script 替换为单个 EventError 携此 error。
-	// 让测试无需手工编排事件即可触错误路径（LLM_STREAM_ERROR / 500 等）。
+	Events   []StreamEvent
 	ErrAfter error
 }
 
-// MockClient holds the FIFO script queue + last-request snapshot.
-// Concurrent-safe: every public method takes the mutex briefly. The
-// Stream iterator does NOT hold the mutex while yielding (blocking
-// the consumer would also block PushScript).
+// MockClient queues MockScripts FIFO and replays them through Stream; concurrent-safe.
 //
-// MockClient 持 FIFO script 队列 + 最近请求快照。并发安全：每个公共
-// 方法短持锁。Stream 迭代器在 yield 时不持锁（阻塞消费方会同时阻塞
-// PushScript）。
+// MockClient FIFO 队列化 MockScript，通过 Stream 回放；并发安全。
 type MockClient struct {
 	mu          sync.Mutex
 	queue       []MockScript
@@ -64,40 +25,34 @@ type MockClient struct {
 	callCount   int
 }
 
-// NewMockClient constructs an empty MockClient. Singleton in production
-// — see Factory.NewFactory which wires it once and returns it from
-// Build("mock").
+// NewMockClient constructs an empty MockClient (singleton in production).
 //
-// NewMockClient 构造空 MockClient。生产中是单例——Factory.NewFactory
-// 接一次 Build("mock") 时返同一个。
+// NewMockClient 构造空 MockClient（生产为单例）。
 func NewMockClient() *MockClient {
 	return &MockClient{}
 }
 
-// PushScript enqueues one script. Multiple Pushes accumulate into a
-// FIFO; consecutive Stream calls pop them in push order.
+// PushScript enqueues one script onto the FIFO.
 //
-// PushScript 入队一段 script。多次 Push 累 FIFO；连续 Stream 调用按
-// push 顺序弹。
+// PushScript 把一段 script 入队（FIFO）。
 func (m *MockClient) PushScript(s MockScript) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.queue = append(m.queue, s)
 }
 
-// QueueDepth returns the current number of unconsumed scripts.
+// QueueDepth returns the number of unconsumed scripts.
 //
-// QueueDepth 返回当前未消费的 script 数。
+// QueueDepth 返回未消费的 script 数。
 func (m *MockClient) QueueDepth() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return len(m.queue)
 }
 
-// Queue returns a copy of the current queue (defensive — callers
-// shouldn't mutate the internal slice).
+// Queue returns a defensive copy of the script queue.
 //
-// Queue 返当前队列的副本（防御性——调用方不该改内部 slice）。
+// Queue 返回 script 队列的防御性副本。
 func (m *MockClient) Queue() []MockScript {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -106,10 +61,9 @@ func (m *MockClient) Queue() []MockScript {
 	return out
 }
 
-// Clear empties the queue. Returns the number of scripts dropped so
-// the caller can confirm what happened.
+// Clear empties the queue and returns the number of scripts dropped.
 //
-// Clear 清空队列。返回丢掉的 script 数让调用方确认。
+// Clear 清空队列并返回丢掉的 script 数。
 func (m *MockClient) Clear() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -118,41 +72,27 @@ func (m *MockClient) Clear() int {
 	return n
 }
 
-// LastRequest returns the most recent Stream call's Request payload
-// (system prompt + messages + tool defs). Used by /dev/mock-llm/last-prompt
-// so testers can verify what the chat runner actually sent the LLM —
-// e.g. confirm the catalog block reached the wire.
+// LastRequest returns the most recent Stream call's Request payload.
 //
-// LastRequest 返最近一次 Stream 调用的 Request 载荷（system prompt +
-// messages + tool defs）。供 /dev/mock-llm/last-prompt 用让测试验
-// chat runner 真发了啥给 LLM——如确认 catalog 块进了 wire。
+// LastRequest 返最近一次 Stream 调用的 Request 载荷。
 func (m *MockClient) LastRequest() Request {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.lastRequest
 }
 
-// CallCount returns the total number of Stream calls received since
-// process start. Useful for asserting "the chat runner called the LLM
-// exactly N times" in interactive testing.
+// CallCount returns the total Stream invocations since process start.
 //
-// CallCount 返进程启动以来收到的 Stream 调用总数。让交互测试断言
-// "chat runner 调 LLM 正好 N 次"。
+// CallCount 返进程启动以来 Stream 调用总数。
 func (m *MockClient) CallCount() int {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.callCount
 }
 
-// Stream pops the next queued script + emits its events through the
-// iterator. Empty queue → emits a single EventError so the chat
-// runner surfaces it as LLM_STREAM_ERROR (matches what would happen
-// with a real provider returning 500). ctx cancellation stops the
-// iteration cleanly between events.
+// Stream pops the next script and emits its events; empty queue emits a single EventError.
 //
-// Stream 弹出下个 queued script + 通过迭代器发其事件。空队列 → 发
-// 单个 EventError 让 chat runner 浮出 LLM_STREAM_ERROR（同真 provider
-// 返 500 时的行为）。ctx 取消在 event 间隙干净停。
+// Stream 弹下个 script 并发其事件；队列空时只发一个 EventError。
 func (m *MockClient) Stream(ctx context.Context, req Request) iter.Seq[StreamEvent] {
 	m.mu.Lock()
 	m.lastRequest = req

@@ -1,9 +1,6 @@
-// Package crypto implements domain/crypto.Encryptor.
-// Current: AES-GCM with master key derived from machine fingerprint.
-// Future: envelope encryption backed by cloud KMS (for SaaS).
+// Package crypto implements domain/crypto.Encryptor (AES-GCM keyed by machine fingerprint).
 //
-// Package crypto 实现 domain/crypto.Encryptor。
-// 当前：AES-GCM，主密钥从机器指纹派生。未来：基于云 KMS 的信封加密（SaaS）。
+// Package crypto 实现 domain/crypto.Encryptor（AES-GCM，密钥从机器指纹派生）。
 package crypto
 
 import (
@@ -15,29 +12,14 @@ import (
 	"strings"
 )
 
-// ErrNoFingerprint is returned when MachineFingerprint cannot determine a
-// stable machine identity. Callers MUST refuse to proceed — sharing a
-// fallback key across users would be a critical security failure.
+// ErrNoFingerprint signals no stable machine identity; callers MUST refuse to proceed.
 //
-// ErrNoFingerprint 在 MachineFingerprint 无法确定稳定机器标识时返回。
-// 调用方**必须**拒绝继续——共享 fallback 密钥等于严重安全故障。
+// ErrNoFingerprint 表示拿不到稳定机器标识，调用方必须拒绝继续。
 var ErrNoFingerprint = errors.New("cannot determine machine fingerprint")
 
-// MachineFingerprint returns a stable per-machine identifier suitable for
-// deriving encryption keys. NEVER returns a hardcoded fallback.
+// MachineFingerprint returns a stable per-machine ID for key derivation; never returns a fallback.
 //
-// Platform sources:
-//   - darwin:  ioreg IOPlatformSerialNumber
-//   - windows: registry MachineGuid
-//   - linux:   /etc/machine-id
-//
-// MachineFingerprint 返回可用于派生加密密钥的稳定机器标识。
-// **永不**返回硬编码 fallback。
-//
-// 平台来源：
-//   - darwin:  ioreg IOPlatformSerialNumber
-//   - windows: 注册表 MachineGuid
-//   - linux:   /etc/machine-id
+// MachineFingerprint 返回稳定的机器标识用于派生密钥；永不返回 fallback。
 func MachineFingerprint() (string, error) {
 	switch runtime.GOOS {
 	case "darwin":

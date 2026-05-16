@@ -1,16 +1,9 @@
-// agentrun_test.go — unit tests for agent-run ID helpers
-// (conversationID / messageID / toolCallID).
-//
-// agentrun_test.go — agent-run ID helpers 的单元测试
-// （conversationID / messageID / toolCallID）。
 package reqctx
 
 import (
 	"context"
 	"testing"
 )
-
-// ── conversation ID ───────────────────────────────────────────────────────────
 
 func TestSetGetConversationID_RoundTrip(t *testing.T) {
 	ctx := WithConversationID(context.Background(), "cv_abc123")
@@ -35,8 +28,6 @@ func TestGetConversationID_MissingReturnsFalse(t *testing.T) {
 }
 
 func TestGetConversationID_EmptyStringReturnsFalse(t *testing.T) {
-	// Empty conversation ID treated as missing — same convention as GetUserID.
-	// 空 conversation ID 视同缺失——与 GetUserID 一致。
 	ctx := WithConversationID(context.Background(), "")
 	id, ok := GetConversationID(ctx)
 	if ok {
@@ -46,8 +37,6 @@ func TestGetConversationID_EmptyStringReturnsFalse(t *testing.T) {
 		t.Errorf("id: got %q, want empty", id)
 	}
 }
-
-// ── message ID ────────────────────────────────────────────────────────────────
 
 func TestSetGetMessageID_RoundTrip(t *testing.T) {
 	ctx := WithMessageID(context.Background(), "msg_xyz")
@@ -64,8 +53,6 @@ func TestGetMessageID_MissingReturnsFalse(t *testing.T) {
 	}
 }
 
-// ── tool-call ID ──────────────────────────────────────────────────────────────
-
 func TestSetGetToolCallID_RoundTrip(t *testing.T) {
 	ctx := WithToolCallID(context.Background(), "tc_001")
 	id, ok := GetToolCallID(ctx)
@@ -80,8 +67,6 @@ func TestGetToolCallID_MissingReturnsFalse(t *testing.T) {
 		t.Errorf("got %q ok=%v, want empty/false", id, ok)
 	}
 }
-
-// ── parent block ID ───────────────────────────────────────────────────────────
 
 func TestSetGetParentBlockID_RoundTrip(t *testing.T) {
 	ctx := WithParentBlockID(context.Background(), "blk_42")
@@ -98,14 +83,7 @@ func TestGetParentBlockID_MissingReturnsFalse(t *testing.T) {
 	}
 }
 
-// ── isolation between keys ────────────────────────────────────────────────────
-
 func TestAgentRunIDs_KeyIsolation(t *testing.T) {
-	// Stamping one ID must NOT leak into the other slots — each ID has its own
-	// private key. Otherwise SetConversationID could be read out via GetMessageID.
-	//
-	// 注入一个 ID 不得渗透到其他槽位——每个 ID 有自己的私有 key。
-	// 否则 SetConversationID 的值可能被 GetMessageID 读到。
 	ctx := WithConversationID(context.Background(), "cv_only")
 
 	if _, ok := GetMessageID(ctx); ok {
@@ -119,11 +97,7 @@ func TestAgentRunIDs_KeyIsolation(t *testing.T) {
 	}
 }
 
-// ── stacking ──────────────────────────────────────────────────────────────────
-
 func TestAgentRunIDs_StackedRoundTrip(t *testing.T) {
-	// All three IDs can coexist on the same ctx.
-	// 三个 ID 可同时栖于同一 ctx。
 	ctx := WithConversationID(context.Background(), "cv_1")
 	ctx = WithMessageID(ctx, "msg_2")
 	ctx = WithToolCallID(ctx, "tc_3")
@@ -139,11 +113,7 @@ func TestAgentRunIDs_StackedRoundTrip(t *testing.T) {
 	}
 }
 
-// ── private key isolation from string keys ────────────────────────────────────
-
 func TestAgentRunIDs_PrivateKeyIsolation(t *testing.T) {
-	// External code with raw string keys must not collide with our private keys.
-	// 外部代码用裸 string key 不得与我们的私有 key 冲突。
 	//lint:ignore SA1029 intentional: simulating external code that uses a raw string key
 	ctx := context.WithValue(context.Background(), "conversationID", "attacker")
 	if _, ok := GetConversationID(ctx); ok {
@@ -152,8 +122,6 @@ func TestAgentRunIDs_PrivateKeyIsolation(t *testing.T) {
 }
 
 func TestSetWithConversationID_CopiesContext(t *testing.T) {
-	// With* must return a NEW ctx — parent untouched.
-	// With* 必须返回新 ctx，父 ctx 不变。
 	parent := context.Background()
 	_ = WithConversationID(parent, "child")
 

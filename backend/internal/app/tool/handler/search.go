@@ -1,6 +1,3 @@
-// search.go — search_handler system tool: LLM ranks the handler library by
-// relevance to a query.
-
 package handler
 
 import (

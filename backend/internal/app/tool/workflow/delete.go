@@ -1,9 +1,3 @@
-// delete.go — delete_workflow system tool: soft-deletes a workflow.
-// Double-writes forge_started + forge_completed for UI sync (workflow
-// detail panels can react to deletion).
-//
-// delete.go —— delete_workflow:软删 workflow;双写 forge 事件。
-
 package workflow
 
 import (

@@ -1,11 +1,6 @@
-// Package skillexec (infra/store/skillexec) is the GORM-backed
-// implementation of skilldomain.ExecutionRepository. Separate package
-// from skill's existing infra (filesystem-backed skills/ scanner).
+// Package skillexec is the GORM-backed skilldomain.ExecutionRepository.
 //
-// Importers alias as `skillexecstore`.
-//
-// Package skillexec(infra/store/skillexec)是 skill_executions 表的 GORM
-// 实现;跟 skill 现有 fs 扫描 infra 分包。
+// Package skillexec 是 skilldomain.ExecutionRepository 的 GORM 实现。
 package skillexec
 
 import (
@@ -31,14 +26,11 @@ type Store struct{ db *gorm.DB }
 // New 构造 Store。
 func New(db *gorm.DB) *Store { return &Store{db: db} }
 
-// Compile-time interface assertion.
-//
-// 编译期断言。
 var _ skilldomain.ExecutionRepository = (*Store)(nil)
 
 // AutoMigrateModels returns the GORM models to register.
 //
-// AutoMigrateModels 返 AutoMigrate model。
+// AutoMigrateModels 返 AutoMigrate 用的 model。
 func AutoMigrateModels() []interface{} {
 	return []interface{}{&skilldomain.Execution{}}
 }

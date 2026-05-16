@@ -1,9 +1,3 @@
-// get_execution.go — get_function_execution system tool (D22). Returns one
-// full Execution row + machine-derived hints (outputEmpty, significantlySlower)
-// so the LLM doesn't have to recompute these signals.
-//
-// get_execution.go —— get_function_execution 系统工具(D22)。
-
 package function
 
 import (

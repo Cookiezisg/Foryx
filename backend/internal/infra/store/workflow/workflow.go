@@ -1,13 +1,6 @@
-// Package workflow (infra/store/workflow) is the GORM-backed implementation
-// of the domain workflow Repository port. All methods scope by ctx userID —
-// callers MUST run InjectUserID middleware first.
+// Package workflow is the GORM-backed workflowdomain.Repository, scoped by ctx userID.
 //
-// Shares its name with domain/workflow by design; importers alias as
-// `workflowstore`.
-//
-// Package workflow(infra/store/workflow)是 domain workflow Repository 的
-// GORM 实现。所有方法按 ctx userID 过滤;调用方先跑 InjectUserID 中间件。
-// 包名跟 domain/workflow 同名是刻意的;外部 import 起别名 workflowstore。
+// Package workflow 是 workflowdomain.Repository 的 GORM 实现，按 ctx userID 过滤。
 package workflow
 
 import (
@@ -37,15 +30,11 @@ func New(db *gorm.DB) *Store {
 	return &Store{db: db}
 }
 
-// Compile-time interface assertion.
-//
-// 编译期接口兼容性断言。
 var _ workflowdomain.Repository = (*Store)(nil)
 
-// AutoMigrateModels returns the GORM models to register in db.AutoMigrate
-// (called from cmd/server/main.go).
+// AutoMigrateModels returns the GORM models to register in db.AutoMigrate.
 //
-// AutoMigrateModels 返回 cmd/server/main.go 注册 AutoMigrate 用的 GORM models。
+// AutoMigrateModels 返 AutoMigrate 用的 GORM models。
 func AutoMigrateModels() []interface{} {
 	return []interface{}{
 		&workflowdomain.Workflow{},
@@ -53,12 +42,9 @@ func AutoMigrateModels() []interface{} {
 	}
 }
 
-// ── Workflow CRUD ─────────────────────────────────────────────────────────────
-
-// SaveWorkflow upserts by primary key. UNIQUE violation on (user_id, name)
-// WHERE deleted_at IS NULL → ErrDuplicateName.
+// SaveWorkflow upserts by PK; partial-UNIQUE name violation maps to ErrDuplicateName.
 //
-// SaveWorkflow 按主键 upsert;name 重复(partial UNIQUE)返 ErrDuplicateName。
+// SaveWorkflow 按主键 upsert；name partial UNIQUE 违反返 ErrDuplicateName。
 func (s *Store) SaveWorkflow(ctx context.Context, w *workflowdomain.Workflow) error {
 	if err := s.db.WithContext(ctx).Save(w).Error; err != nil {
 		if isWorkflowDuplicateName(err) {
@@ -69,9 +55,9 @@ func (s *Store) SaveWorkflow(ctx context.Context, w *workflowdomain.Workflow) er
 	return nil
 }
 
-// GetWorkflow fetches by id, scoped to caller. ErrNotFound on miss.
+// GetWorkflow fetches by id; ErrNotFound on miss.
 //
-// GetWorkflow 按 id 查,按调用者过滤;未命中返 ErrNotFound。
+// GetWorkflow 按 id 查；未命中返 ErrNotFound。
 func (s *Store) GetWorkflow(ctx context.Context, id string) (*workflowdomain.Workflow, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -88,9 +74,9 @@ func (s *Store) GetWorkflow(ctx context.Context, id string) (*workflowdomain.Wor
 	return &w, nil
 }
 
-// GetWorkflowByName fetches by name, scoped to caller. ErrNotFound on miss.
+// GetWorkflowByName fetches by name; ErrNotFound on miss.
 //
-// GetWorkflowByName 按 name 查;未命中返 ErrNotFound。
+// GetWorkflowByName 按 name 查；未命中返 ErrNotFound。
 func (s *Store) GetWorkflowByName(ctx context.Context, name string) (*workflowdomain.Workflow, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -107,10 +93,9 @@ func (s *Store) GetWorkflowByName(ctx context.Context, name string) (*workflowdo
 	return &w, nil
 }
 
-// GetWorkflowsByIDs fetches multiple Workflows by ID slice, preserving
-// input order. Skips IDs not found (caller handles missing).
+// GetWorkflowsByIDs batch fetches by id slice, preserving input order; misses skipped.
 //
-// GetWorkflowsByIDs 批量按 id 查,保留输入顺序;未命中跳过(调用方处理)。
+// GetWorkflowsByIDs 批量按 id 查，保留输入顺序；未命中跳过。
 func (s *Store) GetWorkflowsByIDs(ctx context.Context, ids []string) ([]*workflowdomain.Workflow, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -136,11 +121,9 @@ func (s *Store) GetWorkflowsByIDs(ctx context.Context, ids []string) ([]*workflo
 	return out, nil
 }
 
-// ListWorkflows returns a cursor-paginated page. Order: updated_at DESC, id
-// DESC (deterministic tie-breaker). EnabledOnly filters out disabled.
+// ListWorkflows returns a cursor-paginated page; updated_at DESC, id DESC.
 //
-// ListWorkflows 返 cursor 分页;updated_at DESC + id DESC 确定排序。
-// EnabledOnly=true 过滤掉 disabled。
+// ListWorkflows 返分页；updated_at DESC + id DESC；EnabledOnly 过滤 disabled。
 func (s *Store) ListWorkflows(ctx context.Context, filter workflowdomain.ListFilter) ([]*workflowdomain.Workflow, string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -185,11 +168,9 @@ func (s *Store) ListWorkflows(ctx context.Context, filter workflowdomain.ListFil
 	return out, next, nil
 }
 
-// ListAllWorkflows returns every live workflow for current user, no
-// pagination. Used by SearchWorkflow (LLM ranking) + future scheduler.
+// ListAllWorkflows returns every live workflow for current user (no pagination).
 //
-// ListAllWorkflows 返当前用户全部活跃 workflow,无分页;SearchWorkflow + 未来
-// scheduler 用。
+// ListAllWorkflows 返当前用户全部活跃 workflow（无分页）。
 func (s *Store) ListAllWorkflows(ctx context.Context) ([]*workflowdomain.Workflow, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -207,9 +188,9 @@ func (s *Store) ListAllWorkflows(ctx context.Context) ([]*workflowdomain.Workflo
 	return out, nil
 }
 
-// DeleteWorkflow soft-deletes by id, scoped to caller. ErrNotFound on miss.
+// DeleteWorkflow soft-deletes by id; ErrNotFound on miss.
 //
-// DeleteWorkflow 按 id 软删,按调用者过滤;未命中返 ErrNotFound。
+// DeleteWorkflow 按 id 软删；未命中返 ErrNotFound。
 func (s *Store) DeleteWorkflow(ctx context.Context, id string) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -226,10 +207,9 @@ func (s *Store) DeleteWorkflow(ctx context.Context, id string) error {
 	return nil
 }
 
-// SetActiveVersion atomically updates Workflow.ActiveVersionID. Used by
-// accept-pending and revert.
+// SetActiveVersion atomically updates Workflow.ActiveVersionID (accept / revert flows).
 //
-// SetActiveVersion 原子更新 ActiveVersionID(accept / revert 时用)。
+// SetActiveVersion 原子更新 ActiveVersionID（accept / revert 用）。
 func (s *Store) SetActiveVersion(ctx context.Context, workflowID, versionID string) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -248,10 +228,8 @@ func (s *Store) SetActiveVersion(ctx context.Context, workflowID, versionID stri
 }
 
 // SetNeedsAttention atomically updates NeedsAttention + AttentionReason.
-// Service uses this when D20 capability deletion or LLM accept-pending fixes
-// state.
 //
-// SetNeedsAttention 原子更新 NeedsAttention + AttentionReason(D20)。
+// SetNeedsAttention 原子更新 NeedsAttention + AttentionReason。
 func (s *Store) SetNeedsAttention(ctx context.Context, workflowID string, needs bool, reason string) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -272,11 +250,9 @@ func (s *Store) SetNeedsAttention(ctx context.Context, workflowID string, needs 
 	return nil
 }
 
-// ── Versions ─────────────────────────────────────────────────────────────────
-
-// SaveVersion upserts a WorkflowVersion by primary key.
+// SaveVersion upserts a Version by primary key.
 //
-// SaveVersion 按主键 upsert WorkflowVersion。
+// SaveVersion 按主键 upsert Version。
 func (s *Store) SaveVersion(ctx context.Context, v *workflowdomain.Version) error {
 	if err := s.db.WithContext(ctx).Save(v).Error; err != nil {
 		return fmt.Errorf("workflowstore.SaveVersion: %w", err)
@@ -284,9 +260,9 @@ func (s *Store) SaveVersion(ctx context.Context, v *workflowdomain.Version) erro
 	return nil
 }
 
-// GetVersion fetches by version id. ErrVersionNotFound if absent.
+// GetVersion fetches by version id; ErrVersionNotFound if absent.
 //
-// GetVersion 按 version id 查;未命中返 ErrVersionNotFound。
+// GetVersion 按 version id 查；未命中返 ErrVersionNotFound。
 func (s *Store) GetVersion(ctx context.Context, versionID string) (*workflowdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, err
@@ -313,7 +289,6 @@ func (s *Store) GetVersionByNumber(ctx context.Context, workflowID string, versi
 	if err != nil {
 		return nil, err
 	}
-	// Confirm workflow ownership first.
 	var wf workflowdomain.Workflow
 	if err := s.db.WithContext(ctx).Select("id").Where("id = ? AND user_id = ?", workflowID, uid).
 		First(&wf).Error; err != nil {
@@ -333,16 +308,14 @@ func (s *Store) GetVersionByNumber(ctx context.Context, workflowID string, versi
 	return &v, nil
 }
 
-// ListVersions returns cursor-paginated versions for a workflow, newest
-// first. Filter.Status filters by pending / accepted / rejected.
+// ListVersions returns cursor-paginated versions for a workflow, newest first.
 //
-// ListVersions 返某 workflow 版本 cursor 分页(新→旧),可按 status 过滤。
+// ListVersions 返某 workflow 版本的分页（新→旧）；可按 status 过滤。
 func (s *Store) ListVersions(ctx context.Context, workflowID string, filter workflowdomain.VersionListFilter) ([]*workflowdomain.Version, string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
 		return nil, "", err
 	}
-	// Confirm workflow ownership first.
 	var wf workflowdomain.Workflow
 	if err := s.db.WithContext(ctx).Select("id").Where("id = ? AND user_id = ?", workflowID, uid).
 		First(&wf).Error; err != nil {
@@ -390,16 +363,14 @@ func (s *Store) ListVersions(ctx context.Context, workflowID string, filter work
 	return out, next, nil
 }
 
-// GetPending returns the active pending version (at most one);
-// ErrPendingNotFound if none.
+// GetPending returns the active pending version (at most one); ErrPendingNotFound if none.
 //
-// GetPending 返当前 pending(至多一个);无返 ErrPendingNotFound。
+// GetPending 返当前 pending（至多一个）；无返 ErrPendingNotFound。
 func (s *Store) GetPending(ctx context.Context, workflowID string) (*workflowdomain.Version, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
 		return nil, err
 	}
-	// Confirm workflow ownership.
 	var wf workflowdomain.Workflow
 	if err := s.db.WithContext(ctx).Select("id").Where("id = ? AND user_id = ?", workflowID, uid).
 		First(&wf).Error; err != nil {
@@ -420,10 +391,9 @@ func (s *Store) GetPending(ctx context.Context, workflowID string) (*workflowdom
 	return &v, nil
 }
 
-// UpdateVersionStatus transitions a version's status. versionN must be
-// non-nil when transitioning to accepted; nil otherwise.
+// UpdateVersionStatus transitions status; versionN non-nil iff transitioning to accepted.
 //
-// UpdateVersionStatus 状态机转换;转 accepted 时 versionN 非 nil。
+// UpdateVersionStatus 状态机转换；转 accepted 时 versionN 非 nil。
 func (s *Store) UpdateVersionStatus(ctx context.Context, versionID, status string, versionN *int) error {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return err
@@ -443,11 +413,9 @@ func (s *Store) UpdateVersionStatus(ctx context.Context, versionID, status strin
 	return nil
 }
 
-// HardDeleteVersion physically deletes one Version row by ID. Used by
-// Service.RejectPending after destroying the pending (D-redo-12 mirror).
+// HardDeleteVersion physically deletes one Version row by ID.
 //
-// HardDeleteVersion 按 ID 物理删 Version 行。Service.RejectPending 用
-// (镜像 D-redo-12)。
+// HardDeleteVersion 按 ID 物理删 Version 行。
 func (s *Store) HardDeleteVersion(ctx context.Context, versionID string) error {
 	if err := s.db.WithContext(ctx).Where("id = ?", versionID).
 		Delete(&workflowdomain.Version{}).Error; err != nil {
@@ -456,11 +424,9 @@ func (s *Store) HardDeleteVersion(ctx context.Context, versionID string) error {
 	return nil
 }
 
-// HardDeleteOldestAccepted keeps `keep` newest accepted versions per
-// workflow and hard-deletes the rest. Called from service layer after
-// each new accept.
+// HardDeleteOldestAccepted keeps `keep` newest accepted versions, hard-deletes the rest.
 //
-// HardDeleteOldestAccepted 保留 keep 个最新 accepted 版本,其余 hard delete。
+// HardDeleteOldestAccepted 保留 keep 个最新 accepted 版本，其余物理删。
 func (s *Store) HardDeleteOldestAccepted(ctx context.Context, workflowID string, keep int) error {
 	if keep <= 0 {
 		keep = workflowdomain.AcceptedVersionCap
@@ -485,12 +451,6 @@ func (s *Store) HardDeleteOldestAccepted(ctx context.Context, workflowID string,
 	return nil
 }
 
-// ── helpers ──────────────────────────────────────────────────────────────────
-
-// assertVersionUser confirms the version's workflow belongs to the caller —
-// cross-user reads return ErrVersionNotFound (deny by obscurity).
-//
-// assertVersionUser 验 version 的 workflow 归属调用者;跨用户返 ErrVersionNotFound。
 func (s *Store) assertVersionUser(ctx context.Context, v *workflowdomain.Version) error {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -508,15 +468,6 @@ func (s *Store) assertVersionUser(ctx context.Context, v *workflowdomain.Version
 	return nil
 }
 
-// isWorkflowDuplicateName detects SQLite UNIQUE constraint violations on
-// workflows(user_id, name) — either the partial UNIQUE index from
-// schema_extras (idx_workflows_user_name_active) or the column-pair
-// message SQLite emits for the same constraint. modernc.org/sqlite
-// surfaces the latter form for partial indexes, hence both checks.
-//
-// isWorkflowDuplicateName 识别 SQLite UNIQUE 约束撞 partial UNIQUE。
-// modernc 对 partial 索引的 error 文本是 "workflows.user_id, workflows.name"
-// 形,两种都识。
 func isWorkflowDuplicateName(err error) bool {
 	if err == nil {
 		return false

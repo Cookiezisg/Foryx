@@ -1,12 +1,3 @@
-// skill_test.go — covers Scan + Get + List + Activate (non-fork +
-// fork-via-mock-subagent + nested-depth fork suppression) + substitute
-// placeholders. Search ranking against LLM is left to pipeline tests
-// where a real (or fake) LLM is wired; here we cover only the
-// short-circuit-when-≤-topK path.
-//
-// skill_test.go ——覆盖 Scan + Get + List + Activate（非 fork + 经 mock
-// subagent fork + 嵌套 depth 抑制 fork）+ 占位替换。Search 的 LLM 排序留
-// pipeline（接真/假 LLM 的环境），本文件只覆盖 ≤ topK 短路。
 package skill
 
 import (
@@ -25,8 +16,6 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// ── helpers ──────────────────────────────────────────────────────────
-
 func writeSkill(t *testing.T, dir, name, frontmatter, body string) {
 	t.Helper()
 	skillDir := filepath.Join(dir, name)
@@ -44,11 +33,6 @@ func newServiceWithDir(t *testing.T) *Service {
 	return New(t.TempDir(), nil, nil, nil, nil, nil, zaptest.NewLogger(t))
 }
 
-// fakeSubagent records the spawn call so fork-mode tests can assert
-// dispatch parameters without spinning up the real subagentapp.Service.
-//
-// fakeSubagent 记 spawn 调用让 fork 测试无需起真 subagentapp.Service 即
-// 可断言派发参数。
 type fakeSubagent struct {
 	gotType   string
 	gotPrompt string
@@ -70,8 +54,6 @@ func (f *fakeSubagent) Spawn(_ context.Context, typeName, prompt string, opts su
 		Result: f.returns,
 	}, nil
 }
-
-// ── Scan ─────────────────────────────────────────────────────────────
 
 func TestScan_EmptyDir_OK(t *testing.T) {
 	s := newServiceWithDir(t)
@@ -147,8 +129,6 @@ func TestScan_RejectsBadFrontmatter(t *testing.T) {
 			if err := s.Scan(context.Background()); err != nil {
 				t.Fatalf("Scan top-level: %v", err)
 			}
-			// Bad skill must be skipped (logged, not loaded). Catalog stays empty.
-			// 坏 skill 必须跳过（log，不加载）。catalog 保持空。
 			if got := len(s.List(context.Background())); got != 0 {
 				t.Errorf("bad skill loaded; want 0, got %d", got)
 			}
@@ -171,8 +151,6 @@ description: oversized body`, huge)
 
 func TestScan_DuplicateNameKeepsFirst(t *testing.T) {
 	s := newServiceWithDir(t)
-	// Two dirs whose frontmatter.name collide.
-	// 两目录 frontmatter.name 撞名。
 	writeSkill(t, s.skillsDir, "alpha-dir",
 		"name: shared\ndescription: first instance", "body 1")
 	writeSkill(t, s.skillsDir, "beta-dir",
@@ -184,14 +162,10 @@ func TestScan_DuplicateNameKeepsFirst(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Get shared: %v", err)
 	}
-	// One of the two is kept; both must have produced log warnings (not asserted here).
-	// 二者之一保留；两条都该 log 警告（此处不断言）。
 	if got.Description != "first instance" && got.Description != "second instance" {
 		t.Errorf("kept skill has unexpected description: %q", got.Description)
 	}
 }
-
-// ── splitFrontmatter ─────────────────────────────────────────────────
 
 func TestSplitFrontmatter_Modes(t *testing.T) {
 	cases := []struct {
@@ -262,8 +236,6 @@ func TestSplitFrontmatter_Modes(t *testing.T) {
 	}
 }
 
-// ── substitute ───────────────────────────────────────────────────────
-
 func TestSubstitute_AllPlaceholders(t *testing.T) {
 	body := `# Job for $1 with $ARGUMENTS
 Working in ${CLAUDE_SKILL_DIR}
@@ -292,9 +264,6 @@ PR: $pr_number`
 }
 
 func TestSubstitute_ArgumentsLongerThanPositional(t *testing.T) {
-	// Make sure $10 doesn't get pre-empted by $1 — strings.Replacer is
-	// longest-key-wins but we want explicit verification.
-	// 防 $10 被 $1 抢匹配——strings.Replacer 长 key 胜，但要验证。
 	args := make([]string, 11)
 	for i := range args {
 		args[i] = "ARG" + string(rune('A'+i))
@@ -312,8 +281,6 @@ func TestSubstitute_ArgumentsLongerThanPositional(t *testing.T) {
 		t.Errorf("$11 lost: %q", got)
 	}
 }
-
-// ── Activate ─────────────────────────────────────────────────────────
 
 func TestActivate_NonFork_ReturnsBodyAndSetsActiveSkill(t *testing.T) {
 	s := newServiceWithDir(t)
@@ -375,11 +342,6 @@ arguments:
 }
 
 func TestActivate_NestedFork_IgnoresForkDirective(t *testing.T) {
-	// Per skill.md §9.5: when called inside a subagent (depth ≥ 1), the
-	// fork directive is suppressed — body returned inline so the sub-LLM
-	// follows the instructions in its own context, no nested spawn.
-	// §9.5：在 subagent 里（depth ≥ 1）抑制 fork——body inline 返让子 LLM
-	// 在自己上下文执行，无嵌套 spawn。
 	fake := &fakeSubagent{returns: "should not be called"}
 	tmp := t.TempDir()
 	s := New(tmp, fake, nil, nil, nil, nil, zaptest.NewLogger(t))
@@ -407,11 +369,6 @@ agent: Explore`,
 }
 
 func TestActivate_ForkWithoutSubagentService_FailsClean(t *testing.T) {
-	// Production main.go always wires a subagent; tests sometimes don't
-	// (when subagent isn't relevant). A fork skill in that env must
-	// produce a clear error rather than nil-deref.
-	// 生产 main.go 永远接 subagent；测试有时不接（无关时）。该环境下
-	// fork skill 必须清晰报错而非 nil-deref。
 	tmp := t.TempDir()
 	s := New(tmp, nil, nil, nil, nil, nil, zaptest.NewLogger(t))
 	writeSkill(t, s.skillsDir, "k",
@@ -436,14 +393,7 @@ func TestActivate_Missing_ReturnsErrSkillNotFound(t *testing.T) {
 	}
 }
 
-// ── Search short-circuit ─────────────────────────────────────────────
-
 func TestSearch_LeqTopK_SkipsLLM(t *testing.T) {
-	// With ≤ topK skills loaded the Search must return everything alpha-
-	// sorted without consulting the LLM (modelPicker is nil here — would
-	// nil-deref if Search tried to resolve).
-	// ≤ topK 时不查 LLM 直接字母序全返（modelPicker 为 nil——若 Search 尝试
-	// resolve 会 nil-deref）。
 	s := newServiceWithDir(t)
 	writeSkill(t, s.skillsDir, "alpha", "name: alpha\ndescription: a", "x")
 	writeSkill(t, s.skillsDir, "beta", "name: beta\ndescription: b", "x")

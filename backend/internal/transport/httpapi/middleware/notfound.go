@@ -6,12 +6,9 @@ import (
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
-// NotFound is the router's fallback handler for unmatched URLs.
-// Produces an N1-compliant envelope instead of Go's default plain
-// "404 page not found" text.
+// NotFound is the unmatched-URL fallback returning an N1 error envelope.
 //
-// NotFound 是路由的 fallback handler，处理未匹配 URL。返回符合 N1 的
-// envelope，取代 Go 默认的纯文本 "404 page not found"。
+// NotFound 是 unmatched URL 的兜底,返 N1 错误 envelope。
 func NotFound(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Error(w, http.StatusNotFound,
 		"NOT_FOUND",

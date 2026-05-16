@@ -1,9 +1,3 @@
-// subagent_test.go — pure-function unit tests for the registry, filter,
-// and prompt composer. Service.Spawn end-to-end (LLM + bridge + DB) lives
-// in test/subagent/ pipeline tests (D4-5).
-//
-// subagent_test.go ——registry / filter / prompt 合成的纯函数单测。
-// Service.Spawn 端到端（LLM + bridge + DB）在 test/subagent/ pipeline 套（D4-5）。
 package subagent
 
 import (
@@ -16,8 +10,6 @@ import (
 	subagentdomain "github.com/sunweilin/forgify/backend/internal/domain/subagent"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
-
-// ── Registry ─────────────────────────────────────────────────────────
 
 func TestRegistry_Get_BuiltInTypes(t *testing.T) {
 	r := NewRegistry()
@@ -83,12 +75,6 @@ func TestRegistry_Explore_WhitelistOnlyReadOnly(t *testing.T) {
 	}
 }
 
-// ── filterTools ──────────────────────────────────────────────────────
-
-// fakeTool satisfies toolapp.Tool with only Name() doing useful work; the
-// rest are no-op stubs sufficient to compile against the interface.
-//
-// fakeTool 满足 toolapp.Tool，只 Name() 有效，其余 no-op 足以编译。
 type fakeTool struct{ name string }
 
 func (f fakeTool) Name() string                                                              { return f.name }
@@ -111,15 +97,9 @@ func makeTools(names ...string) []toolapp.Tool {
 	return out
 }
 
-// TestFilterTools_DropsSubagentItself verifies the structural recursion
-// defense (subagent.md §8 保险 1): regardless of whitelist, a tool named
-// "Subagent" is removed from the per-spawn tool list.
-//
-// TestFilterTools_DropsSubagentItself 验证结构性防递归（§8 保险 1）：
-// 不论白名单如何，名为 "Subagent" 的工具都被移除。
 func TestFilterTools_DropsSubagentItself(t *testing.T) {
 	s := &Service{tools: makeTools("Read", "Subagent", "Bash")}
-	out := s.filterTools(subagentdomain.SubagentType{}) // empty whitelist = inherit
+	out := s.filterTools(subagentdomain.SubagentType{})
 	for _, tt := range out {
 		if tt.Name() == "Subagent" {
 			t.Error("filterTools left Subagent in the registry")
@@ -158,7 +138,7 @@ func TestFilterTools_NilWhitelistInheritsAll(t *testing.T) {
 func TestFilterTools_WhitelistedSubagentStillDropped(t *testing.T) {
 	s := &Service{tools: makeTools("Read", "Subagent")}
 	out := s.filterTools(subagentdomain.SubagentType{
-		AllowedTools: []string{"Read", "Subagent"}, // pointless inclusion
+		AllowedTools: []string{"Read", "Subagent"},
 	})
 	for _, tt := range out {
 		if tt.Name() == "Subagent" {
@@ -174,13 +154,6 @@ func TestFilterTools_EmptyRegistryReturnsNil(t *testing.T) {
 	}
 }
 
-// TestFilterTools_StripsWorkflowMutationOps verifies D21: sub-agents
-// cannot see workflow create/edit/delete/revert/trigger tools. Workflow
-// assembly + execution are the main agent's responsibility; sub-agents
-// forge atoms (Function / Handler) only.
-//
-// TestFilterTools_StripsWorkflowMutationOps 验 D21:sub-agent 看不到
-// workflow 突变 + 触发 tool。workflow 装配 + 执行是主 agent 职责。
 func TestFilterTools_StripsWorkflowMutationOps(t *testing.T) {
 	s := &Service{tools: makeTools(
 		"create_function", "call_handler",
@@ -208,12 +181,6 @@ func TestFilterTools_StripsWorkflowMutationOps(t *testing.T) {
 	}
 }
 
-// TestFilterTools_KeepsReadOnlyWorkflowTools — D21 carve-out: search +
-// get for workflow stay (read-only, no side effect; forger sub-agents
-// may reference existing workflow shape when authoring related entities).
-//
-// TestFilterTools_KeepsReadOnlyWorkflowTools D21 例外:read-only workflow
-// tool 留(无副作用;forger 子 agent 可参考现有 workflow 形状)。
 func TestFilterTools_KeepsReadOnlyWorkflowTools(t *testing.T) {
 	s := &Service{tools: makeTools("search_workflow", "get_workflow")}
 	out := s.filterTools(subagentdomain.SubagentType{})
@@ -222,13 +189,6 @@ func TestFilterTools_KeepsReadOnlyWorkflowTools(t *testing.T) {
 	}
 }
 
-// TestFilterTools_KeepsSelfTestTools — call_handler + run_function are
-// how sub-agents test the entity they just forged. Stripping these would
-// force every sub-agent to ship without self-validation, regressing
-// quality.
-//
-// TestFilterTools_KeepsSelfTestTools call_handler/run_function 留 — 子
-// agent 自测 forged entity 必需。
 func TestFilterTools_KeepsSelfTestTools(t *testing.T) {
 	s := &Service{tools: makeTools("call_handler", "run_function")}
 	out := s.filterTools(subagentdomain.SubagentType{})
@@ -236,8 +196,6 @@ func TestFilterTools_KeepsSelfTestTools(t *testing.T) {
 		t.Errorf("self-test tools dropped: got %d kept, want 2", len(out))
 	}
 }
-
-// ── composeSystemPrompt ──────────────────────────────────────────────
 
 func TestComposeSystemPrompt_PreambleAlwaysPresent(t *testing.T) {
 	out := composeSystemPrompt("explore the world", reqctxpkg.LocaleEn)

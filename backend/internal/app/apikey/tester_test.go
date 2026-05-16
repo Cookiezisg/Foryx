@@ -1,10 +1,3 @@
-// tester_test.go — httptest-backed coverage for HTTPTester.
-// Each case spins up an ephemeral httptest.Server that mimics one upstream
-// contract; no real LLM provider is ever reached.
-//
-// tester_test.go — 用 httptest 覆盖 HTTPTester。
-// 每个 case 起短暂的 httptest.Server 模拟一种上游契约；不触达真实 provider。
-
 package apikey
 
 import (
@@ -20,10 +13,6 @@ import (
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 )
 
-// newTester builds an HTTPTester with a short timeout so hung-server cases
-// fail fast.
-//
-// newTester 构造短超时的 HTTPTester，让挂起的 server case 快速失败。
 func newTester() *HTTPTester {
 	return NewHTTPTester(&http.Client{Timeout: 2 * time.Second})
 }
@@ -171,9 +160,6 @@ func TestHTTPTester_Google_Success(t *testing.T) {
 }
 
 func TestHTTPTester_Google_EscapesKeyInQuery(t *testing.T) {
-	// A key containing reserved characters must be URL-escaped so the
-	// server sees the raw value.
-	// 含保留字符的 key 必须 URL 转义，server 才能看到原值。
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.URL.Query().Get("key"); got != "a/b=c&d" {
 			t.Errorf("server got key=%q, want a/b=c&d (escaping broke round-trip)", got)
@@ -269,8 +255,6 @@ func TestHTTPTester_Custom_RoutesByAPIFormat(t *testing.T) {
 }
 
 func TestHTTPTester_NetworkError_SurfacesInResult(t *testing.T) {
-	// Start then immediately close: next request gets connection refused.
-	// 启动后立刻关闭：下一个请求被拒绝连接。
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	srv.Close()
 
@@ -306,11 +290,6 @@ func TestHTTPTester_ContextCancel_SurfacesInResult(t *testing.T) {
 }
 
 func TestHTTPTester_200_WithMalformedJSON_IsStillOK(t *testing.T) {
-	// Connectivity is what we're testing — if the server said 200, the
-	// provider accepted the key. Malformed body just means we can't
-	// enumerate models.
-	// 我们测的是连通性——server 返回 200 代表 provider 接受了 key。body
-	// 格式错误只意味着无法枚举模型。
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		_, _ = w.Write([]byte(`not json`))
 	}))
@@ -329,10 +308,6 @@ func TestHTTPTester_200_WithMalformedJSON_IsStillOK(t *testing.T) {
 }
 
 func TestHTTPTester_BaseURLTrailingSlash_DoesNotDoubleUp(t *testing.T) {
-	// A user-supplied baseURL with a trailing slash must not produce
-	// "//models" — Service may pass raw input and Tester should normalize.
-	// 用户传的 baseURL 带尾斜杠不得产生 "//models"——Service 可能直传
-	// 原始输入，Tester 需规范化。
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/models" {
 			t.Errorf("path = %q, want exactly /models (no double slash)", r.URL.Path)
@@ -357,10 +332,6 @@ func TestHTTPTester_UnknownProvider_ReturnsErrInvalidProvider(t *testing.T) {
 }
 
 func TestHTTPTester_OllamaMissingBaseURL_ReturnsErrBaseURLRequired(t *testing.T) {
-	// Ollama has no default baseURL and requires one; empty input must
-	// surface as a programmer-bug error, not a cryptic network failure.
-	// Ollama 无默认 baseURL 且必填；空输入必须作为程序 bug error 返回，
-	// 而不是模糊的网络失败。
 	_, err := newTester().Test(context.Background(), "ollama", "", "", "")
 	if err == nil {
 		t.Fatal("want error when Ollama baseURL is missing")
@@ -381,18 +352,6 @@ func TestHTTPTester_CustomMissingBaseURL_ReturnsErrBaseURLRequired(t *testing.T)
 }
 
 func TestHTTPTester_ProviderDefaultBaseURL_UsedWhenUserEmpty(t *testing.T) {
-	// When the user passes "", the provider's DefaultBaseURL should be
-	// used. We assert that by checking an OpenAI call WITHOUT a user
-	// override fails with a network error (trying api.openai.com)
-	// rather than ErrBaseURLRequired — i.e. we proceeded past the
-	// baseURL check and actually tried the upstream.
-	// 用户传 "" 时应使用 provider 的 DefaultBaseURL。我们断言：不带
-	// 用户覆盖的 openai 调用以网络错误失败（打 api.openai.com），而不是
-	// ErrBaseURLRequired——即已越过 baseURL 校验并真的去试上游了。
-	//
-	// Use an unreachable-but-syntactically-valid DNS name via a 1ms timeout
-	// so the test stays fast and offline-safe.
-	// 用不可达的合法 DNS 名 + 1ms 超时，让测试快速且离线安全。
 	tester := NewHTTPTester(&http.Client{Timeout: 1 * time.Millisecond})
 	res, err := tester.Test(context.Background(), "openai", "k", "", "")
 	if err != nil {

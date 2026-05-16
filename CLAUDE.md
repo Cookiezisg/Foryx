@@ -162,69 +162,57 @@
 
 # §S11 注释规范（双语 + 节制）
 
-所有 `backend/` 代码注释必须遵守。**核心原则：每个导出符号一行说明 OK；展开成段 + 心路历程不行。**
+所有 `backend/` 代码注释必须遵守。**核心：只写为什么，不写是什么。**
 
-## 1. 双语格式
-
-- **包/类型/函数** 的 godoc 必须**英文在前、空行、中文在后**
-- 简单符号（≤ 2 行 godoc）允许 1+1 直译——成本低、grep 命中率高
-- 多行段（≥ 4 行）的中文段必须有信息增量，不能是英文段的字面翻译；写不出新信息就删掉中文段，单留英文
+## 1. 强制格式
 
 ```go
-// InjectUserID stamps DefaultLocalUserID into ctx (Phase 2 simplified auth).
+// English one-liner.
 //
-// InjectUserID 给 ctx 塞入 DefaultLocalUserID（Phase 2 简化 auth）。
-func InjectUserID(next http.Handler) http.Handler { ... }
+// 中文一行说明。
+func Foo() { ... }
 ```
 
-## 2. 必须写
+每种语言**不超过一行（~80 字符）**——超出说明写啰嗦了，必须压缩。
 
-- ✅ **Package doc**（≤ 4 行）：一句话讲清包职责
-- ✅ **导出符号 godoc**：类型 / 函数 / 常量 / 变量——**默认 1+1 行**
-- ✅ **Non-obvious 的 WHY**：陷阱、跨字段不变量、并发约束、踩过的坑
-- ✅ **行为契约**：错误语义、生命周期、零值含义
+## 2. 内容规则
 
-## 3. 禁止写
+- **只写"为什么"，不写"是什么"** — 代码本身能看懂的不写
+- **一个逻辑点只注释一次** — 不要在相邻几行重复解释同一件事
+- **密度上限 1/3** — 连续代码块中，注释行数不超过代码行数的 1/3
+- **双语凝练同一意思** — 不是英文中文翻译两遍，是同一概念的双语对照；翻译式重复 = 红线
 
-- ❌ **设计意图段落** ("Design intent / Architecture / Lifecycle")：搬去 `documents/version-1.2/service-design-documents/<domain>.md`，package doc 留一句 "See: <path>" 即可
-- ❌ **决策叙事**："we deliberately did NOT…"、"This is intentional because…"、"(decision D11)"、"Phase 3 currently only wires X…"——只留结论，过程去 progress-record / git log
-- ❌ **历史/重构来源**："2026-04-27 重构后..."、"以前是 X，现在改成 Y"——git log 已经记了
-- ❌ **"为什么不选 A" 对比说明**：去设计文档
-- ❌ **章节横幅** `// ── X ──`：靠 `type/var` 分组 + 空行；要靠横幅切才能读 = 该拆文件
-- ❌ **架构哲学 / 团队约定 / 规范解释**：搬到本文件
-- ❌ **机械复述**：`// Set name sets the name`
-- ❌ **跑题猜测**："未来可能..."（除非真是 TODO）
+## 3. 位置规则
 
-## 4. 长度硬上限
-
-超出回头砍，砍不下去就拆文件 / 搬设计文档。
-
-| 注释类型 | 上限 | 触发拆分 |
+| 位置 | 是否写 | 内容 |
 |---|---|---|
-| Package doc 段（中英合计） | ≤ 4 行 | > 4 行 → 搬 design doc |
-| 简单导出符号 godoc | 1+1 行（中英各一） | — |
-| 复杂契约 godoc（多返回值 / 错误 / 并发 / 生命周期） | 中英各 ≤ 4 行 | 中英合计 > 8 行 → 红线 |
-| 内联注释 | 1 行 | 非平凡业务规则 ≤ 3 行 |
+| 类 / 接口 | ✅ | 一行职责 |
+| Public 方法 | ✅ | 用途 + 注意事项 |
+| 方法内部 | 仅非显然处 | 坑、约束、跨字段不变量 |
+| Package doc | ✅ 一行 | 包职责一句话 |
+| Private 方法 | ❌ | 靠命名表达 |
+| getter / setter | ❌ | 靠命名表达 |
+| 字段声明 | ❌ | 靠命名表达 |
 
-**红线**：任何注释段超过 8 行 = 红线，要么拆代码、要么搬 documents/。
+## 4. 禁止
 
-## 5. 字段 godoc 节制
+- ❌ 重复代码语义（`// Set name sets the name`）
+- ❌ 被注释掉的旧代码
+- ❌ 翻译式注释（英文中文字面互译两遍）
+- ❌ 设计意图段落（搬 `documents/version-1.2/service-design-documents/<domain>.md`）
+- ❌ 决策叙事 / 历史 / 重构来源（进 git log）
+- ❌ 章节横幅 `// ── X ──`（靠 `type/var` 分组 + 空行）
+- ❌ 跑题猜测（"未来可能…"，除非真是 TODO）
 
-- **不写**：自明字段。`Log *zap.Logger` / `DB *gorm.DB` / `Mu sync.Mutex` / `Port int`
-- **1+1 行**：字段名有歧义、零值有陷阱、有跨字段不变量、或字段角色与类型不一一对应（例：`APIKeyService *apikeyapp.Service` 这种"实现 X 接口给 Y 用"的角色信息）
-- **多行**：极少数"字段本身就是契约"的情况（例：`EventsBridge` 解释发布订阅契约）
+## 5. 长度硬上限
 
-## 6. 测试文件
+| 类型 | 上限 |
+|---|---|
+| 单注释段（英 + 空行 + 中） | 3 行 |
+| 内联注释 | 1 行 |
+| 字段 / 私有 / getter | 不写 |
 
-- 双语规则一致；长度上限放宽到 1.5×
-- "为什么测这个 corner case" 非显然时写一行，显然时省略
-- 测试名 `TestX_Scenario` 自解释 = 不写 godoc
-
-## 7. 迁移姿态
-
-- 本规矩生效后，老文件按 v1 写的"长篇 + 心路历程"视作历史债务
-- 渐进清理：跟代码改动顺手清理；常规情况不专门刷新整个 backend
-- 例外：本轮（2026-05）做一次专项清理，按 `pkg/ → domain/ → infra/ → app/ → transport/ → test/` 顺序逐域走
+超出 = 红线，要么拆代码、要么搬 documents/。
 
 ---
 

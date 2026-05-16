@@ -7,12 +7,9 @@ import (
 	"time"
 )
 
-// CORSConfig configures the CORS middleware. AllowedOrigins is a strict
-// whitelist — "*" is deliberately unsupported so the middleware stays
-// compatible with credentialed requests (browsers reject "*" + credentials).
+// CORSConfig configures the CORS middleware; AllowedOrigins is a strict whitelist.
 //
-// CORSConfig 配置 CORS 中间件。AllowedOrigins 是严格白名单——**不支持** "*"，
-// 保持与带凭证请求兼容（浏览器规范拒绝 "*" + credentials）。
+// CORSConfig 配置 CORS;AllowedOrigins 严格白名单(不支持 "*")。
 type CORSConfig struct {
 	AllowedOrigins []string
 	AllowedMethods []string
@@ -20,14 +17,13 @@ type CORSConfig struct {
 	MaxAge         time.Duration
 }
 
-// DefaultCORSConfig returns Forgify's standard dev/prod origins and REST
-// methods.
+// DefaultCORSConfig returns Forgify's standard dev/prod origins and methods.
 //
-// DefaultCORSConfig 返回 Forgify 标准的 dev/prod origin 和 REST 方法。
+// DefaultCORSConfig 返回 Forgify 标准 dev/prod origin 和方法。
 func DefaultCORSConfig() CORSConfig {
 	return CORSConfig{
 		AllowedOrigins: []string{
-			"http://localhost:5173", // Vite dev server
+			"http://localhost:5173",
 			"http://localhost:3000",
 			"http://127.0.0.1:5173",
 			"http://127.0.0.1:3000",
@@ -38,19 +34,9 @@ func DefaultCORSConfig() CORSConfig {
 	}
 }
 
-// CORS returns a middleware handling browser cross-origin requests:
-//   - Preflight (OPTIONS + Access-Control-Request-Method) → 204 with
-//     full CORS headers; does NOT call next.
-//   - Allowed Origin on normal request → adds Allow-Origin, passes through.
-//   - Disallowed Origin → no CORS headers; passes through (browser blocks).
-//   - No Origin header → pass through untouched.
+// CORS handles browser cross-origin requests; preflight returns 204.
 //
-// CORS 返回处理跨域请求的中间件：
-//   - Preflight（OPTIONS + Access-Control-Request-Method）→ 204 + 全套
-//     CORS 头，**不**调用 next。
-//   - 合法 Origin 普通请求 → 加 Allow-Origin 透传。
-//   - 非法 Origin → 不加 CORS 头透传（由浏览器拦截）。
-//   - 无 Origin 头 → 原样透传。
+// CORS 处理浏览器跨域请求;preflight 返 204。
 func CORS(cfg CORSConfig) func(http.Handler) http.Handler {
 	allowed := make(map[string]struct{}, len(cfg.AllowedOrigins))
 	for _, o := range cfg.AllowedOrigins {

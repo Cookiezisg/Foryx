@@ -1,10 +1,3 @@
-// search_executions.go — search_function_executions system tool (D22).
-// Filters function execution history by status / function id / conversation /
-// flowrun / time range and returns previews + aggregates so the LLM can
-// diagnose without fetching every full row.
-//
-// search_executions.go —— search_function_executions 系统工具(D22)。
-
 package function
 
 import (

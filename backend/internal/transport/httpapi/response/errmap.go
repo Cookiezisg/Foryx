@@ -27,28 +27,26 @@ import (
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	handlerinfra "github.com/sunweilin/forgify/backend/internal/infra/handler"
+	memorydomain "github.com/sunweilin/forgify/backend/internal/domain/memory"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// errMapping pairs a sentinel with its HTTP status and stable wire code.
+// errMapping pairs a sentinel with HTTP status + stable wire code.
 //
-// errMapping 把 sentinel 错误与 HTTP 状态码和对外错误码配对。
+// errMapping 把 sentinel 与 HTTP 状态码和对外错误码配对。
 type errMapping struct {
 	Status int
 	Code   string
 }
 
 // errTable is the single source of truth for domain → HTTP translation.
-// Adding a new domain error: declare sentinel in domain/<name>/errors.go,
-// add a row here, done.
 //
-// errTable 是 domain → HTTP 翻译的唯一事实源。新增 domain 错误：
-// 在 domain/<name>/errors.go 声明 sentinel，在本表加一行即可。
+// errTable 是 domain → HTTP 翻译的唯一事实源。
 var errTable = map[error]errMapping{
 	errorsdomain.ErrInvalidRequest: {http.StatusBadRequest, "INVALID_REQUEST"},
 
-	// apikey domain / apikey domain 层
+	// apikey
 	apikeydomain.ErrNotFound:            {http.StatusNotFound, "API_KEY_NOT_FOUND"},
 	apikeydomain.ErrNotFoundForProvider: {http.StatusNotFound, "API_KEY_PROVIDER_NOT_FOUND"},
 	apikeydomain.ErrInvalidProvider:     {http.StatusBadRequest, "INVALID_PROVIDER"},
@@ -56,25 +54,26 @@ var errTable = map[error]errMapping{
 	apikeydomain.ErrAPIFormatRequired:   {http.StatusBadRequest, "API_FORMAT_REQUIRED"},
 	apikeydomain.ErrKeyRequired:         {http.StatusBadRequest, "KEY_REQUIRED"},
 
-	// conversation domain / conversation domain 层
+	// conversation
 	convdomain.ErrNotFound: {http.StatusNotFound, "CONVERSATION_NOT_FOUND"},
 
-	// chat domain / chat domain 层
+	// chat
 	chatdomain.ErrMessageNotFound:           {http.StatusNotFound, "MESSAGE_NOT_FOUND"},
 	chatdomain.ErrStreamNotFound:            {http.StatusNotFound, "STREAM_NOT_FOUND"},
 	chatdomain.ErrStreamInProgress:          {http.StatusConflict, "STREAM_IN_PROGRESS"},
 	chatdomain.ErrAttachmentTooLarge:        {http.StatusRequestEntityTooLarge, "ATTACHMENT_TOO_LARGE"},
 	chatdomain.ErrAttachmentTypeUnsupported: {http.StatusUnsupportedMediaType, "ATTACHMENT_TYPE_UNSUPPORTED"},
 	chatdomain.ErrAttachmentParseFailed:     {http.StatusUnprocessableEntity, "ATTACHMENT_PARSE_FAILED"},
+	chatdomain.ErrAttachmentNotFound:        {http.StatusNotFound, "ATTACHMENT_NOT_FOUND"},
+	chatdomain.ErrEmptyContent:              {http.StatusBadRequest, "EMPTY_CONTENT"},
 
-	// model domain / model domain 层
+	// model
 	modeldomain.ErrNotConfigured:    {http.StatusUnprocessableEntity, "MODEL_NOT_CONFIGURED"},
 	modeldomain.ErrInvalidScenario:  {http.StatusBadRequest, "INVALID_SCENARIO"},
 	modeldomain.ErrProviderRequired: {http.StatusBadRequest, "PROVIDER_REQUIRED"},
 	modeldomain.ErrModelIDRequired:  {http.StatusBadRequest, "MODEL_ID_REQUIRED"},
 
-	// function domain (forge_redesign trinity — primary Python tool surface) /
-	// function domain
+	// function
 	functiondomain.ErrNotFound:             {http.StatusNotFound, "FUNCTION_NOT_FOUND"},
 	functiondomain.ErrDuplicateName:        {http.StatusConflict, "FUNCTION_NAME_DUPLICATE"},
 	functiondomain.ErrVersionNotFound:      {http.StatusNotFound, "FUNCTION_VERSION_NOT_FOUND"},
@@ -89,8 +88,7 @@ var errTable = map[error]errMapping{
 	functiondomain.ErrOpInvalid:            {http.StatusBadRequest, "FUNCTION_OP_INVALID"},
 	functiondomain.ErrExecutionNotFound:    {http.StatusNotFound, "FUNCTION_EXECUTION_NOT_FOUND"},
 
-	// handler domain (forge_redesign Plan 02 trinity second leg) /
-	// handler domain (Plan 02 trinity 第二条腿)
+	// handler
 	handlerdomain.ErrNotFound:            {http.StatusNotFound, "HANDLER_NOT_FOUND"},
 	handlerdomain.ErrDuplicateName:       {http.StatusConflict, "HANDLER_NAME_DUPLICATE"},
 	handlerdomain.ErrMethodNotFound:      {http.StatusNotFound, "HANDLER_METHOD_NOT_FOUND"},
@@ -111,23 +109,14 @@ var errTable = map[error]errMapping{
 	handlerdomain.ErrConfigDecryptFailed: {http.StatusInternalServerError, "HANDLER_CONFIG_DECRYPT_FAILED"},
 	handlerdomain.ErrCallNotFound:        {http.StatusNotFound, "HANDLER_CALL_NOT_FOUND"},
 
-	// handler infra subprocess errors (cross-layer per §S17). User-forged
-	// Python raising an exception → ErrCallFailed; subprocess crash →
-	// ErrCrashed; protocol mismatch → ErrProtocol; init failure (e.g.
-	// missing init_args, broken init() body) → ErrInitFailed. All 422 — the
-	// REQUEST was well-formed; the handler's USER CODE was broken / threw.
-	//
-	// 用户锻造的 Python 抛异常 → ErrCallFailed;子进程崩 → ErrCrashed;
-	// 协议错位 → ErrProtocol;init 失败(漏 init_arg、init 体本身炸) →
-	// ErrInitFailed。都 422 (请求合法,handler 用户代码错)。
+	// handler infra subprocess errors
 	handlerinfra.ErrCallFailed:     {http.StatusUnprocessableEntity, "HANDLER_CALL_FAILED"},
 	handlerinfra.ErrInitFailed:     {http.StatusUnprocessableEntity, "HANDLER_INIT_FAILED"},
 	handlerinfra.ErrCrashed:        {http.StatusUnprocessableEntity, "HANDLER_INSTANCE_CRASHED_INFRA"},
 	handlerinfra.ErrProtocol:       {http.StatusInternalServerError, "HANDLER_PROTOCOL_ERROR"},
 	handlerinfra.ErrShutdownAlready: {http.StatusUnprocessableEntity, "HANDLER_SHUTDOWN_ALREADY"},
 
-	// flowrun + trigger + scheduler domains (Plan 05 execution plane).
-	// flowrun + trigger + scheduler domain(Plan 05 执行 plane)。
+	// flowrun + trigger + scheduler
 	flowrundomain.ErrNotFound:                {http.StatusNotFound, "FLOWRUN_NOT_FOUND"},
 	flowrundomain.ErrNotCancellable:          {http.StatusUnprocessableEntity, "FLOWRUN_NOT_CANCELLABLE"},
 	flowrundomain.ErrNotPaused:               {http.StatusUnprocessableEntity, "FLOWRUN_NOT_PAUSED"},
@@ -145,10 +134,7 @@ var errTable = map[error]errMapping{
 	schedulerapp.ErrConcurrencyLimit:       {http.StatusConflict, "FLOWRUN_CONCURRENCY_LIMIT"},
 	schedulerapp.ErrWorkflowNotFound:       {http.StatusNotFound, "WORKFLOW_NOT_FOUND_FOR_TRIGGER"},
 
-	// workflow domain (forge_redesign Plan 04 trinity third leg — DAG authoring) /
-	// workflow domain (Plan 04 trinity 第三条腿 — DAG authoring)
-	// ErrPendingConflict is absent by design (iterate-same-pending per D-redo-11).
-	// Trigger / flowrun execution sentinels live in Plan 05.
+	// workflow
 	workflowdomain.ErrNotFound:              {http.StatusNotFound, "WORKFLOW_NOT_FOUND"},
 	workflowdomain.ErrDuplicateName:         {http.StatusConflict, "WORKFLOW_NAME_DUPLICATE"},
 	workflowdomain.ErrVersionNotFound:       {http.StatusNotFound, "WORKFLOW_VERSION_NOT_FOUND"},
@@ -161,13 +147,12 @@ var errTable = map[error]errMapping{
 	workflowdomain.ErrCapabilityNotFound:    {http.StatusUnprocessableEntity, "WORKFLOW_CAPABILITY_NOT_FOUND"},
 	workflowdomain.ErrMCPServerNotInstalled: {http.StatusUnprocessableEntity, "WORKFLOW_MCP_SERVER_NOT_INSTALLED"},
 
-	// todo domain / todo domain 层
+	// todo
 	tododomain.ErrNotFound:        {http.StatusNotFound, "TODO_NOT_FOUND"},
 	tododomain.ErrSubjectRequired: {http.StatusBadRequest, "TODO_SUBJECT_REQUIRED"},
 	tododomain.ErrInvalidStatus:   {http.StatusBadRequest, "TODO_INVALID_STATUS"},
 
-	// sandbox domain / sandbox domain 层
-	// 8 sentinels per sandbox.md §5; status mapping follows error-codes.md table.
+	// sandbox
 	sandboxdomain.ErrRuntimeNotSupported:  {http.StatusUnprocessableEntity, "SANDBOX_RUNTIME_NOT_SUPPORTED"},
 	sandboxdomain.ErrRuntimeInstallFailed: {http.StatusBadGateway, "SANDBOX_RUNTIME_INSTALL_FAILED"},
 	sandboxdomain.ErrEnvNotFound:          {http.StatusNotFound, "SANDBOX_ENV_NOT_FOUND"},
@@ -178,51 +163,17 @@ var errTable = map[error]errMapping{
 	sandboxdomain.ErrEnvInUse:             {http.StatusConflict, "SANDBOX_ENV_IN_USE"},
 	sandboxdomain.ErrInvalidOwnerID:       {http.StatusBadRequest, "SANDBOX_INVALID_OWNER_ID"},
 	sandboxdomain.ErrCmdRequired:          {http.StatusBadRequest, "SANDBOX_CMD_REQUIRED"},
-	// Phase 5 docker sentinels — pre-registered so future docker-runtime
-	// integration won't trigger "unmapped domain error" warnings on first
-	// touch. 0 current consumers; sentinels live in domain/sandbox/sandbox.go.
-	//
-	// Phase 5 docker sentinel——预登记防未来 docker-runtime 接入时触发
-	// "unmapped domain error"。当前 0 消费者；sentinel 在
-	// domain/sandbox/sandbox.go。
 	sandboxdomain.ErrDockerNotInstalled: {http.StatusUnprocessableEntity, "SANDBOX_DOCKER_NOT_INSTALLED"},
 	sandboxdomain.ErrDockerDaemonDown:   {http.StatusServiceUnavailable, "SANDBOX_DOCKER_DAEMON_DOWN"},
 
-	// subagent domain / subagent domain 层
-	// Only these two are real Go sentinels reaching handlers. Max-turns
-	// + cancellation surface as `subagentapp.StatusMaxTurns` /
-	// `StatusCancelled` string constants on `SpawnResult.Status`, not
-	// errors — SubagentTool.Execute renders them as friendly tool_result
-	// text, so they never enter the error path / errmap.
-	//
-	// 只有这两个是真 Go sentinel 会到 handler。Max-turns + 取消是
-	// `subagentapp.StatusMaxTurns` / `StatusCancelled` 字符串常量挂
-	// `SpawnResult.Status`，不是 error；SubagentTool.Execute 渲染为
-	// 友好 tool_result 文本，不进 error 路径 / errmap。
+	// subagent
 	subagentdomain.ErrTypeNotFound:     {http.StatusNotFound, "SUBAGENT_TYPE_NOT_FOUND"},
 	subagentdomain.ErrRecursionAttempt: {http.StatusUnprocessableEntity, "SUBAGENT_RECURSION"},
 
-	// catalog domain / catalog domain 层
-	// Reachable via POST /api/v1/catalog:refresh. ErrCoverageIncomplete
-	// + ErrGenerationFailed are absorbed inside Service.Refresh
-	// (mechanical fallback) — they never reach handler. Only
-	// ErrAllSourcesFailed surfaces when every configured source errors
-	// simultaneously.
-	//
-	// catalog domain 层。POST /api/v1/catalog:refresh 触达。
-	// ErrCoverageIncomplete + ErrGenerationFailed 在 Service.Refresh 内
-	// 被 mechanical fallback 吞掉，不到 handler。只有 ErrAllSourcesFailed
-	// 在所有 source 同时挂时上抛。
+	// catalog
 	catalogdomain.ErrAllSourcesFailed: {http.StatusServiceUnavailable, "CATALOG_ALL_SOURCES_FAILED"},
 
-	// mcp domain / mcp domain 层
-	// 5 runtime sentinels (Server* / Tool*) + 5 Registry-flow sentinels.
-	// `ErrToolCallFailed` / `ErrInstallFailed` use 502 because the
-	// failure originates outside our process (server subprocess /
-	// package manager). Per mcp.md §11.
-	//
-	// 5 个 runtime sentinel + 5 个 Registry-flow sentinel。ErrToolCallFailed
-	// / ErrInstallFailed 用 502——失败来源在进程外（server 子进程 / 包管理器）。
+	// mcp
 	mcpdomain.ErrServerNotFound:        {http.StatusNotFound, "MCP_SERVER_NOT_FOUND"},
 	mcpdomain.ErrServerNotConnected:    {http.StatusConflict, "MCP_SERVER_NOT_CONNECTED"},
 	mcpdomain.ErrToolNotFound:          {http.StatusNotFound, "MCP_TOOL_NOT_FOUND"},
@@ -232,79 +183,44 @@ var errTable = map[error]errMapping{
 	mcpdomain.ErrRequiredEnvMissing:    {http.StatusUnprocessableEntity, "MCP_REQUIRED_ENV_MISSING"},
 	mcpdomain.ErrRequiredArgsMissing:   {http.StatusUnprocessableEntity, "MCP_REQUIRED_ARGS_MISSING"},
 	mcpdomain.ErrInstallFailed:         {http.StatusBadGateway, "MCP_INSTALL_FAILED"},
-	// Marketplace V2 (2026-05-08): added when official MCP Registry was wired in.
-	// Marketplace V2（2026-05-08）：接入官方 MCP Registry 时加。
 	mcpdomain.ErrAlreadyInstalled: {http.StatusConflict, "MCP_ALREADY_INSTALLED"},
 
-	// skill domain (V1.2 D7) / skill domain
+	// skill
 	skilldomain.ErrSkillNotFound:      {http.StatusNotFound, "SKILL_NOT_FOUND"},
 	skilldomain.ErrInvalidFrontmatter: {http.StatusUnprocessableEntity, "SKILL_INVALID_FRONTMATTER"},
 	skilldomain.ErrBodyTooLarge:       {http.StatusUnprocessableEntity, "SKILL_BODY_TOO_LARGE"},
 	skilldomain.ErrNameConflict:       {http.StatusConflict, "SKILL_NAME_CONFLICT"},
 	skilldomain.ErrInvalidName:        {http.StatusUnprocessableEntity, "SKILL_INVALID_NAME"},
 
-	// ask service (AskUserQuestion answer-delivery handler) /
-	// ask service（AskUserQuestion 答案投递 handler）
+	// memory
+	memorydomain.ErrNotFound:     {http.StatusNotFound, "MEMORY_NOT_FOUND"},
+	memorydomain.ErrNameConflict: {http.StatusConflict, "MEMORY_NAME_CONFLICT"},
+	memorydomain.ErrInvalidName:  {http.StatusBadRequest, "MEMORY_INVALID_NAME"},
+
+	// ask
 	askapp.ErrNoPendingQuestion: {http.StatusNotFound, "ASK_NO_PENDING_QUESTION"},
 	askapp.ErrTimeout:           {http.StatusGatewayTimeout, "ASK_TIMEOUT"},
 
-	// Cross-cutting: explicitly registered to suppress the "unmapped domain
-	// error" warning while still returning 500. Both represent server-side
-	// state that the user can't recover from.
-	//
-	// 跨层 sentinel：显式登记以抑制"unmapped domain error"警告，
-	// 同时仍返回 500。两者都代表用户无法自行恢复的服务端状态。
+	// cross-cutting infra sentinels (always 500)
 	reqctxpkg.ErrMissingUserID:         {http.StatusInternalServerError, "INTERNAL_ERROR"},
 	reqctxpkg.ErrMissingConversationID: {http.StatusInternalServerError, "INTERNAL_ERROR"},
 	cryptoinfra.ErrUnsupportedVersion:  {http.StatusInternalServerError, "INTERNAL_ERROR"},
 
-	// LLM provider HTTP-status sentinels — wrapped by classifyHTTPError +
-	// in-stream chunk.Error path in infra/llm. Letting callers
-	// errors.Is() these enables paths like apikey.MarkInvalid on 401/403
-	// (key auto-flips to "error" in UI) and provider-specific UX.
-	//
-	// LLM provider HTTP 状态分类 sentinel——infra/llm 的 classifyHTTPError +
-	// 流内 chunk.Error 包装。调用方 errors.Is() 能力让 401/403 触发
-	// apikey.MarkInvalid（UI 自动翻"error"）等路径成立。
+	// LLM provider classification sentinels
 	llminfra.ErrAuthFailed:    {http.StatusUnauthorized, "LLM_AUTH_FAILED"},
 	llminfra.ErrRateLimited:   {http.StatusTooManyRequests, "LLM_RATE_LIMITED"},
 	llminfra.ErrBadRequest:    {http.StatusBadRequest, "LLM_BAD_REQUEST"},
 	llminfra.ErrModelNotFound: {http.StatusNotFound, "LLM_MODEL_NOT_FOUND"},
 	llminfra.ErrProviderError: {http.StatusBadGateway, "LLM_PROVIDER_ERROR"},
 
-	// BYOK web-search providers (Brave / Serper / Tavily / Bocha) sentinels
-	// (webtool.ErrAuthFailed / ErrRateLimited / ErrUpstreamHTTP) are
-	// control-flow only — `WebSearch.Execute::tryBYOKProvider` catches
-	// them internally to fall through to the next provider / MCP tier.
-	// They never reach FromDomainError, so no errmap registration is
-	// needed (D-redo fix 2026-05-11 removed prior entries).
-	//
-	// BYOK web 搜索 provider sentinel 是控制流 sentinel——`WebSearch.Execute`
-	// 内部 catch 后落到下一 provider / MCP。永不到 FromDomainError，故
-	// 不需 errmap 注册（D-redo fix 2026-05-11 删除原条目）。
-
-	// Standard library context errors. Browser hard-refresh / tab close
-	// cancels r.Context(), which propagates up through every store call
-	// and reaches handlers as ctx-canceled. These are NOT bugs — the
-	// client just left — so they must be mapped (suppress the "unmapped
-	// domain error" alarm) but the response goes nowhere either way.
-	// 499 (nginx convention) = client closed request; 504 = upstream
-	// timeout we couldn't beat. Both surfaced here as no-op responses
-	// that at least avoid log noise pretending we have an internal bug.
-	//
-	// 标准库 context 错误。浏览器 hard refresh / 关 tab 取消 r.Context()，
-	// 一路冒泡到 handler。不是 bug——客户端走了——但需要登记免触发
-	// "unmapped domain error" 警报。响应反正没人收。
+	// stdlib context (client closed / upstream timeout)
 	context.Canceled:         {499, "CLIENT_CLOSED"},
 	context.DeadlineExceeded: {http.StatusGatewayTimeout, "REQUEST_TIMEOUT"},
 }
 
-// FromDomainError translates a domain error to an HTTP envelope via errTable.
-// Unmapped errors → 500 INTERNAL_ERROR; raw message is suppressed to
-// prevent leaking implementation details.
+// FromDomainError maps via errTable; unmapped → 500 with suppressed message.
 //
-// FromDomainError 通过 errTable 把 domain 错误翻译为 HTTP envelope。
-// 未映射的错误 → 500 INTERNAL_ERROR；原始消息被隐藏，防止泄漏实现细节。
+// FromDomainError 通过 errTable 映射;未登记 → 500 并隐藏原文。
 func FromDomainError(w http.ResponseWriter, log *zap.Logger, err error) {
 	m, matched := lookup(err)
 	msg := err.Error()
@@ -318,9 +234,6 @@ func FromDomainError(w http.ResponseWriter, log *zap.Logger, err error) {
 	Error(w, m.Status, m.Code, msg, nil)
 }
 
-// lookup walks errTable with errors.Is so wrapped errors still match.
-//
-// lookup 用 errors.Is 遍历 errTable，包裹过的错误也能匹配。
 func lookup(err error) (errMapping, bool) {
 	for sentinel, m := range errTable {
 		if stderrors.Is(err, sentinel) {

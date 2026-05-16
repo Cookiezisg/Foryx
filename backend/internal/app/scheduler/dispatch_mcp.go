@@ -1,10 +1,3 @@
-// dispatch_mcp.go — MCPDispatcher. Reads node.Config keys `serverName`
-// + `tool` + `args` and calls mcpapp.Service.CallTool. Result is a raw
-// JSON string (MCP wire format) returned on the default "out" port.
-//
-// dispatch_mcp.go —— MCPDispatcher;CallTool 返 raw JSON string,挂 "out"
-// port。
-
 package scheduler
 
 import (
@@ -17,7 +10,7 @@ import (
 
 // MCPDispatcher bridges workflow mcp nodes to mcpapp.Service.CallTool.
 //
-// MCPDispatcher 桥接 workflow mcp 节点到 mcpapp.CallTool。
+// MCPDispatcher 把 workflow mcp 节点桥接到 mcpapp.CallTool。
 type MCPDispatcher struct {
 	svc *mcpapp.Service
 }
@@ -29,9 +22,9 @@ func NewMCPDispatcher(svc *mcpapp.Service) *MCPDispatcher {
 	return &MCPDispatcher{svc: svc}
 }
 
-// Dispatch reads serverName + tool + args from node.Config.
+// Dispatch reads serverName + tool + args and invokes the MCP tool.
 //
-// Dispatch 读 serverName + tool + args 调 MCP。
+// Dispatch 读 serverName + tool + args 并调用 MCP tool。
 func (d *MCPDispatcher) Dispatch(ctx context.Context, in DispatchInput) DispatchOutput {
 	serverName, _ := in.Node.Config["serverName"].(string)
 	tool, _ := in.Node.Config["tool"].(string)

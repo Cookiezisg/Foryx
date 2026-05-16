@@ -1,16 +1,6 @@
-// Package handler provides the 8 system tools the LLM uses to interact with
-// the user's handler library: search/get/create/edit/revert/delete/call_handler
-// + update_handler_config.
+// Package handler provides system tools for the LLM to interact with the user's handler library.
 //
-// Per §S13 nested sub-package alias rule, importers alias as `handlertool`
-// (distinct from `handlerapp` and `handlerdomain`).
-//
-// Streaming model:
-//   - create_handler / edit_handler — ops engine emits 1 progress delta per op
-//   - call_handler — Service.Call's OnProgress fires for each Python yield
-//   - search/get/revert/delete/update_config — one-shot tool_result
-//
-// Package handler 提供 8 个 system tool。alias 按 §S13 用 `handlertool`。
+// Package handler 提供操作用户 handler 库的 system tool。
 package handler
 
 import (
@@ -24,12 +14,9 @@ import (
 	forgepkg "github.com/sunweilin/forgify/backend/internal/pkg/forge"
 )
 
-// HandlerTools constructs the 10 handler system tools wired with their
-// dependencies. forge is the C4 forge-stream Publisher; pass noop
-// (forgepkg.New(nil, log)) in tests / unwired services.
+// HandlerTools constructs handler system tools; pass a noop forge Publisher to disable double-write in tests.
 //
-// HandlerTools 构造装配好依赖的 10 个 handler system tool。forge 是 C4
-// forge-stream Publisher;测试 / 未接线传 noop。
+// HandlerTools 构造 handler system tool；测试 / 未接线时传 noop forge Publisher 关闭双写。
 func HandlerTools(
 	svc *handlerapp.Service,
 	picker modeldomain.ModelPicker,

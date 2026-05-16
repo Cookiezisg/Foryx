@@ -1,6 +1,3 @@
-// recover_test.go — unit tests for the Recover middleware.
-//
-// recover_test.go — Recover 中间件的单元测试。
 package middleware
 
 import (
@@ -15,20 +12,12 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 )
 
-// newObservedLogger returns a logger writing to an in-memory observable sink
-// plus the observer that test code reads entries from.
-//
-// newObservedLogger 返回一个写入内存可观测接收器的 logger，以及测试代码用来
-// 读取日志条目的 observer。
 func newObservedLogger(t *testing.T) (*zap.Logger, *observer.ObservedLogs) {
 	t.Helper()
 	core, obs := observer.New(zap.DebugLevel)
 	return zap.New(core), obs
 }
 
-// handlerThatPanics makes a handler that panics with the given value.
-//
-// handlerThatPanics 构造一个会用给定值 panic 的 handler。
 func handlerThatPanics(v any) http.Handler {
 	return http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		panic(v)
@@ -92,13 +81,8 @@ func TestRecover_ErrorPanic(t *testing.T) {
 	if len(entries) != 1 {
 		t.Fatalf("expected 1 panic log entry, got %d", len(entries))
 	}
-	// zap stringifies errors; exact representation varies, but must mention "db died"
-	//
-	// zap 会把 error 字符串化；具体表达各异，但必须含 "db died"
 	panicVal := entries[0].ContextMap()["panic"]
 	if s, ok := panicVal.(string); !ok || !strings.Contains(s, "db died") {
-		// zap may also preserve as error; both acceptable
-		// zap 也可能保留为 error；两种都可以接受
 		if e, ok := panicVal.(error); !ok || !strings.Contains(e.Error(), "db died") {
 			t.Errorf("panic value does not carry 'db died': %v (%T)", panicVal, panicVal)
 		}
@@ -106,11 +90,6 @@ func TestRecover_ErrorPanic(t *testing.T) {
 }
 
 func TestRecover_RuntimePanic(t *testing.T) {
-	// Slice out-of-range is a runtime.Error, exercising the path where the
-	// panic value is a typed error rather than a string or custom error.
-	//
-	// 切片越界会产生 runtime.Error，用于覆盖 panic 值是运行时类型错误
-	// 而非字符串或自定义 error 的路径。
 	log, obs := newObservedLogger(t)
 	handler := Recover(log)(http.HandlerFunc(func(_ http.ResponseWriter, _ *http.Request) {
 		xs := []int{}
@@ -176,9 +155,6 @@ func TestRecover_LogsRequestContext(t *testing.T) {
 	}
 }
 
-// assertEnvelope500 checks the response is a 500 with INTERNAL_ERROR envelope.
-//
-// assertEnvelope500 校验响应是 500 + INTERNAL_ERROR envelope。
 func assertEnvelope500(t *testing.T, rec *httptest.ResponseRecorder) {
 	t.Helper()
 	if rec.Code != http.StatusInternalServerError {

@@ -1,24 +1,8 @@
-// multi_agent_prompt.go — main chat agent's multi-agent forging
-// instruction (Plan 06 F2). Appended to every conversation's system
-// prompt by runner.buildSystemPrompt so the main LLM knows when to
-// spawn parallel forger sub-agents vs. forge in-place, and that
-// workflow assembly + trigger are exclusively the main agent's job
-// (D21 — sub-agents have no workflow mutation/trigger tools).
-//
-// Kept as a standalone file so the section is grep-able and easy to
-// iterate without touching runner.go. The string is static text, not
-// templated;runner.go appends it after the catalog summary block.
-//
-// multi_agent_prompt.go —— 主 chat agent 多 agent 锻造教学(F2)。runner.
-// buildSystemPrompt 每对话拼;教主 LLM 何时并发 spawn forger 子 agent +
-// workflow 装配+触发归主 agent(D21)。
-
 package chat
 
-// multiAgentForgingPromptSection is the standalone教学段 appended after
-// the Capability Catalog summary in every conversation's system prompt.
+// multiAgentForgingPromptSection is the multi-agent forging teaching block appended to every system prompt.
 //
-// multiAgentForgingPromptSection 是 catalog summary 后追加的教学段。
+// multiAgentForgingPromptSection 是拼到每个 system prompt 末尾的多 agent 锻造教学段。
 const multiAgentForgingPromptSection = `## Multi-agent forging
 
 You have multi-agent forging capability via the Subagent tool. When the

@@ -1,22 +1,3 @@
-// registry.go — in-memory Instance registry implementing caller-owns lifetime
-// per spec D3 + user-clarified model (2026-05-12):
-//
-//   - chat scope:       per-call (NOT tracked in registry; Service.Call
-//                       branches and spawns+destroys in one go)
-//   - workflow / test / session scope:
-//                       persistent instance (handler_name) per owner;
-//                       destroyed by DestroyOwner hook on scope end
-//
-// No idle GC — chat is per-call so no idle handles accumulate; workflow/test/
-// session terminate cleanly via explicit scope-end hooks.
-//
-// Owner.Kind values: "workflow" / "flowrun" / "test" / "session"; chat handler
-// calls don't pass through the registry at all.
-//
-// registry.go —— in-memory Instance registry,实现 caller-owns lifetime。
-// chat 不进 registry;workflow/test/session = persistent,scope 结束时
-// DestroyOwner 显式调。无 idle GC。
-
 package handler
 
 import (
@@ -27,32 +8,25 @@ import (
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 )
 
-// Owner identifies a caller-context scope for instance lifetime. Kind is the
-// scope type ("workflow"/"flowrun"/"test"/"session"); ID is the scope instance
-// id (run id / test id / session id). chat scope handlers don't appear in the
-// registry — Service.Call branches before reaching here.
+// Owner identifies a caller-context scope for instance lifetime.
 //
-// Owner 标识 caller-context scope。Kind = scope 类型;ID = scope 实例 id。
-// chat 不进 registry。
+// Owner 标识用于 instance 生命周期的 caller-context scope。
 type Owner struct {
 	Kind string `json:"kind"`
 	ID   string `json:"id"`
 }
 
-// Instance is one live HandlerInstance subprocess + its RPC client.
+// Instance is one live HandlerInstance subprocess plus its RPC client.
 //
-// Instance 是单个活的 HandlerInstance subprocess + 其 RPC 客户端。
+// Instance 是一个活的 HandlerInstance 子进程加其 RPC 客户端。
 type Instance struct {
-	ID         string                // hdi_<16hex>
-	HandlerID  string                // hd_<16hex>
-	Owner      Owner                 // owning scope
-	Client     handlerinfra.Client   // stdio JSON-line client
-	Kill       func() error          // kills the subprocess (registry-set wrapper around handle.Kill)
+	ID        string
+	HandlerID string
+	Owner     Owner
+	Client    handlerinfra.Client
+	Kill      func() error
 }
 
-// instanceRegistry tracks persistent instances per (owner, handlerName).
-//
-// instanceRegistry 按 (owner, handlerName) 跟踪 persistent instance。
 type instanceRegistry struct {
 	mu        sync.Mutex
 	instances map[Owner]map[string]*Instance
@@ -64,20 +38,14 @@ func newInstanceRegistry() *instanceRegistry {
 	}
 }
 
-// SpawnFn is the callback Acquire invokes when no live instance exists for
-// (owner, handlerName). It must build a fresh Instance — registry doesn't
-// know how to spawn (Service injects this with sandbox + config + client
-// factory baked in).
+// SpawnFn builds a fresh Instance when Acquire has no live one.
 //
-// SpawnFn 是 Acquire 在 (owner, handlerName) 没有活实例时调的回调,
-// 由 Service 注入(带 sandbox + config + client factory 闭包)。
+// SpawnFn 在 Acquire 找不到活 instance 时构造新 Instance。
 type SpawnFn func(ctx context.Context) (*Instance, error)
 
-// Acquire returns the live instance for (owner, handlerName), spawning via
-// spawnFn if none exists or the existing one crashed.
+// Acquire returns the live instance for (owner, handlerName), spawning if missing or crashed.
 //
-// Acquire 返 (owner, handlerName) 的活 instance;不存在或已 crashed 时
-// 用 spawnFn 起一个。
+// Acquire 返 (owner, handlerName) 的活 instance；不存在或 crashed 时调 spawnFn。
 func (r *instanceRegistry) Acquire(ctx context.Context, owner Owner, handlerName string, spawnFn SpawnFn) (*Instance, error) {
 	r.mu.Lock()
 	if om, ok := r.instances[owner]; ok {
@@ -85,8 +53,6 @@ func (r *instanceRegistry) Acquire(ctx context.Context, owner Owner, handlerName
 			r.mu.Unlock()
 			return inst, nil
 		}
-		// crashed → drop reference; we'll respawn below.
-		// 已 crashed → 丢引用,下面重建。
 		if inst, ok := om[handlerName]; ok {
 			_ = inst.Client.Shutdown(ctx)
 			_ = inst.Kill()
@@ -100,11 +66,8 @@ func (r *instanceRegistry) Acquire(ctx context.Context, owner Owner, handlerName
 		return nil, err
 	}
 
-	// Race resolution: another goroutine may have spawned concurrently.
-	// If so, prefer the registered one and discard our fresh spawn.
-	//
-	// 竞态消解:可能有并发 goroutine 已 spawn;若有,优先用已注册的,
-	// 丢弃我们的。
+	// Race: another goroutine may have spawned concurrently; prefer the registered one.
+	// 竞态：并发 goroutine 可能已注册一份，优先用已注册的。
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	om, ok := r.instances[owner]
@@ -113,8 +76,6 @@ func (r *instanceRegistry) Acquire(ctx context.Context, owner Owner, handlerName
 		r.instances[owner] = om
 	}
 	if existing, ok := om[handlerName]; ok && !existing.Client.Crashed() {
-		// Discard our fresh spawn — someone else won the race.
-		// 丢弃,别人赢竞态。
 		go func() {
 			_ = inst.Client.Shutdown(context.Background())
 			_ = inst.Kill()
@@ -125,11 +86,9 @@ func (r *instanceRegistry) Acquire(ctx context.Context, owner Owner, handlerName
 	return inst, nil
 }
 
-// DestroyOwner destroys every instance scoped to the given owner. Called by
-// workflow.run.End / test.End / session.Release lifecycle hooks.
+// DestroyOwner destroys every instance scoped to the given owner.
 //
-// DestroyOwner 销毁 owner 下全部 instance;workflow run end / test end /
-// session release 钩子调。
+// DestroyOwner 销毁某 owner 下的所有 instance。
 func (r *instanceRegistry) DestroyOwner(ctx context.Context, owner Owner) {
 	r.mu.Lock()
 	om := r.instances[owner]
@@ -142,10 +101,9 @@ func (r *instanceRegistry) DestroyOwner(ctx context.Context, owner Owner) {
 	}
 }
 
-// DestroyEverything tears down every live instance across all owners. Called
-// at process shutdown to release subprocesses cleanly.
+// DestroyEverything tears down every live instance across all owners.
 //
-// DestroyEverything 关停全部 owner 全部 instance;进程退出时调。
+// DestroyEverything 销毁所有 owner 的全部活 instance。
 func (r *instanceRegistry) DestroyEverything(ctx context.Context) {
 	r.mu.Lock()
 	owners := make([]Owner, 0, len(r.instances))
@@ -159,11 +117,9 @@ func (r *instanceRegistry) DestroyEverything(ctx context.Context) {
 	}
 }
 
-// Snapshot returns a copy of the (owner → handlerName → InstanceID) map for
-// observability endpoints. Not a hot path — locks once and returns scalar
-// strings (no live Client / Kill references).
+// Snapshot returns a (owner → handlerName → InstanceID) copy for observability.
 //
-// Snapshot 返 (owner → handlerName → InstanceID) 的拷贝,给观察类端点用。
+// Snapshot 返 (owner → handlerName → InstanceID) 的拷贝供观测使用。
 func (r *instanceRegistry) Snapshot() map[Owner]map[string]string {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -178,19 +134,18 @@ func (r *instanceRegistry) Snapshot() map[Owner]map[string]string {
 	return out
 }
 
-// CountForOwner returns the live instance count for one owner (Snapshot tells
-// us this, but Snapshot allocates the whole copy; this is the cheap variant).
+// CountForOwner returns the live instance count for one owner.
 //
-// CountForOwner 返单 owner 的活 instance 数(便宜版,不拷整 map)。
+// CountForOwner 返某 owner 的活 instance 数。
 func (r *instanceRegistry) CountForOwner(owner Owner) int {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return len(r.instances[owner])
 }
 
-// NewInstanceID mints a fresh Instance ID with the per-§S15 prefix `hdi_`.
+// NewInstanceID mints a fresh Instance ID with the `hdi_` prefix.
 //
-// NewInstanceID 用 §S15 前缀 `hdi_` 生成 Instance ID。
+// NewInstanceID 用 `hdi_` 前缀生成新 Instance ID。
 func NewInstanceID() string {
 	return idgenpkg.New("hdi")
 }

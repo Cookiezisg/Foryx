@@ -1,10 +1,3 @@
-// handler.go — HTTP handlers for the handler domain (forge_redesign Plan 02
-// Phase 6). 17 endpoints per spec/03-handler.md §8.2.
-//
-// LLM-driven authoring (ops streams) goes through the LLM tool path
-// (create_handler / edit_handler / call_handler), not POST /handlers. The
-// HTTP shape is the direct flat definition for curl / UI / scripts.
-
 package handlers
 
 import (
@@ -44,12 +37,9 @@ func (h *HandlerHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/handlers/{id}/config", h.UpdateConfig)
 	mux.HandleFunc("DELETE /api/v1/handlers/{id}/config", h.ClearConfig)
 
-	// Call log (D22)
 	mux.HandleFunc("GET /api/v1/handlers/{id}/calls", h.ListCalls)
 	mux.HandleFunc("GET /api/v1/handler-calls/{callId}", h.GetCall)
 }
-
-// ── CRUD ─────────────────────────────────────────────────────────────────────
 
 func (h *HandlerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
@@ -143,9 +133,6 @@ func (h *HandlerHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.NoContent(w)
 }
 
-// postOnHandler dispatches POST /api/v1/handlers/{id}:action.
-//
-// postOnHandler 派发 POST /api/v1/handlers/{id}:action。
 func (h *HandlerHandler) postOnHandler(w http.ResponseWriter, r *http.Request) {
 	id, action, ok := idAndAction(r, "idAction")
 	if !ok {
@@ -175,17 +162,11 @@ func (h *HandlerHandler) Call(w http.ResponseWriter, r *http.Request, id string)
 		responsehttpapi.Error(w, http.StatusBadRequest, "INVALID_REQUEST", "method required", nil)
 		return
 	}
-	// HTTP scope = "session" — explicit per-call from the API. Each HTTP
-	// request spawns + calls + destroys (effectively per-call too, since
-	// we don't have a session lifecycle endpoint yet).
-	//
-	// HTTP scope = "session";V1 没 session lifecycle 端点,实际等同于
-	// per-call(spawn+call+destroy)。
 	result, err := h.svc.Call(r.Context(), handlerapp.CallInput{
 		HandlerID: id,
 		Method:    req.Method,
 		Args:      req.Args,
-		Owner:     handlerapp.Owner{Kind: "chat"}, // per-call lifetime
+		Owner:     handlerapp.Owner{Kind: "chat"},
 	})
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
@@ -209,8 +190,6 @@ func (h *HandlerHandler) Revert(w http.ResponseWriter, r *http.Request, id strin
 	}
 	responsehttpapi.Success(w, http.StatusOK, v)
 }
-
-// ── Versions ─────────────────────────────────────────────────────────────────
 
 func (h *HandlerHandler) ListVersions(w http.ResponseWriter, r *http.Request) {
 	p, err := paginationpkg.Parse(r)
@@ -250,8 +229,6 @@ func (h *HandlerHandler) GetVersion(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.Success(w, http.StatusOK, v)
 }
 
-// ── Pending ──────────────────────────────────────────────────────────────────
-
 func (h *HandlerHandler) GetPending(w http.ResponseWriter, r *http.Request) {
 	v, err := h.svc.GetPending(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -278,12 +255,8 @@ func (h *HandlerHandler) RejectPending(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.NoContent(w)
 }
 
-// ── Config (D-handler) ───────────────────────────────────────────────────────
-
 func (h *HandlerHandler) GetConfig(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
-	// Resolve active version to find schema → mask appropriately.
-	// 拿 active 版本的 schema 做 mask。
 	hd, err := h.svc.Get(r.Context(), id)
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
@@ -335,8 +308,6 @@ func (h *HandlerHandler) ClearConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	responsehttpapi.NoContent(w)
 }
-
-// ── Call log (D22) ───────────────────────────────────────────────────────────
 
 func (h *HandlerHandler) ListCalls(w http.ResponseWriter, r *http.Request) {
 	p, err := paginationpkg.Parse(r)

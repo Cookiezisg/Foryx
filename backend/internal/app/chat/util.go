@@ -23,9 +23,6 @@ func truncate(s string, n int) string {
 	return s[:n] + "..."
 }
 
-// readAndEncode reads a file from disk and returns its base64-encoded content.
-//
-// readAndEncode 从磁盘读取文件并返回其 base64 编码内容。
 func readAndEncode(path string) (string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

@@ -1,6 +1,3 @@
-// conversation_test.go — unit tests for Service using a fake repository.
-//
-// conversation_test.go — Service 单测，使用 fake repository。
 package conversation
 
 import (
@@ -70,8 +67,6 @@ func newSvc(t *testing.T) *Service {
 	return NewService(newFakeRepo(), nil, zap.NewNop())
 }
 
-// --- NewService ---
-
 func TestNewService_NilLogger_Panics(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
@@ -80,8 +75,6 @@ func TestNewService_NilLogger_Panics(t *testing.T) {
 	}()
 	NewService(newFakeRepo(), nil, nil)
 }
-
-// --- Create ---
 
 func TestCreate_Success(t *testing.T) {
 	svc := newSvc(t)
@@ -124,8 +117,6 @@ func TestCreate_MissingUserID(t *testing.T) {
 	}
 }
 
-// --- Rename ---
-
 func TestRename_Success(t *testing.T) {
 	svc := newSvc(t)
 	ctx := ctxAlice()
@@ -137,12 +128,7 @@ func TestRename_Success(t *testing.T) {
 	if updated.Title != "New Title" {
 		t.Errorf("Title = %q, want New Title", updated.Title)
 	}
-	// `After` (strict >) flakes when Create + Rename land in the same
-	// microsecond tick on fast systems; `!Before` is the real semantic
-	// (the timestamp didn't regress).
-	//
-	// `After`（严格大于）在快机上 Create + Rename 命中同一微秒会抖；
-	// `!Before` 才是真正的语义（时间戳没有回退）。
+	// `After` (strict >) flakes on same-microsecond ticks; `!Before` is the real semantic.
 	if updated.UpdatedAt.Before(c.UpdatedAt) {
 		t.Error("UpdatedAt regressed")
 	}
@@ -155,8 +141,6 @@ func TestRename_NotFound(t *testing.T) {
 		t.Errorf("got %v, want ErrNotFound", err)
 	}
 }
-
-// --- Delete ---
 
 func TestDelete_Success(t *testing.T) {
 	svc := newSvc(t)
@@ -174,8 +158,6 @@ func TestDelete_NotFound(t *testing.T) {
 		t.Errorf("got %v, want ErrNotFound", err)
 	}
 }
-
-// --- List ---
 
 func TestList_AfterCreate(t *testing.T) {
 	svc := newSvc(t)

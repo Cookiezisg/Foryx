@@ -1,14 +1,3 @@
-// bash_route_test.go — pure-function tests for the Bash auto-route layer:
-// detectRuntime classification (AST-based), envBinDirsForKind per-OS path
-// derivation, prependPath env-var manipulation. The actual EnsureEnv path
-// (Bash.maybeAutoRoute → sandbox Service) is covered in the D9 pipeline
-// suite where a real sandbox can spin up.
-//
-// bash_route_test.go ——Bash auto-route 层 pure-function 测试：detectRuntime
-// 分类（AST-based）、envBinDirsForKind per-OS 路径推导、prependPath env var
-// 操作。真 EnsureEnv 路径（Bash.maybeAutoRoute → sandbox Service）由 D9
-// pipeline 套覆盖（真 sandbox 启动）。
-
 package shell
 
 import (
@@ -18,14 +7,12 @@ import (
 	"testing"
 )
 
-// ── detectRuntime ─────────────────────────────────────────────────────
 
 func TestDetectRuntime_Classification(t *testing.T) {
 	cases := []struct {
 		cmd  string
 		want string
 	}{
-		// ── Plain runtime invocations (covered by both first-token and AST) ──
 		// Python family
 		{"python script.py", "python"},
 		{"python3 script.py", "python"},
@@ -42,7 +29,6 @@ func TestDetectRuntime_Classification(t *testing.T) {
 		{"yarn add lodash", "node"},
 		{"pnpm add react", "node"},
 
-		// ── Other languages fall through to system shell ───────────────
 		{"cargo build --release", ""},
 		{"rustc main.rs", ""},
 		{"go build ./...", ""},
@@ -59,7 +45,6 @@ func TestDetectRuntime_Classification(t *testing.T) {
 		{"gradle build", ""},
 		{"dotnet build", ""},
 
-		// ── cd-prefix and chain handling (AST walks every CallExpr) ─────
 		{"cd /tmp && pip install pandas", "python"},
 		{"cd /workspace && npm test", "node"},
 		{"cd /workspace && cd nested && npm test", "node"},
@@ -68,19 +53,16 @@ func TestDetectRuntime_Classification(t *testing.T) {
 		{"pip install foo; npm install bar", "python"}, // first match wins
 		{"pip install foo | tee log.txt", "python"},
 
-		// ── Path prefix stripped (AST upgrade vs. first-token regex) ────
 		{"/usr/bin/python3 script.py", "python"},
 		{"/opt/homebrew/bin/pip install foo", "python"},
 		{"/usr/local/bin/node app.js", "node"},
 
-		// ── env wrapper / leading assignments (AST upgrade) ─────────────
 		{"FOO=bar pip install x", "python"},
 		{"PYTHONPATH=. python script.py", "python"},
 		{"env PYTHONPATH=. python script.py", "python"},
 		{"env -i CARGO_HOME=/tmp cargo build", ""},
 		{"FOO=bar BAZ=qux node app.js", "node"},
 
-		// ── Shell wrappers recurse into -c argument (AST upgrade) ───────
 		{`bash -c "pip install pandas"`, "python"},
 		{`sh -c 'npm install'`, "node"},
 		{`bash -c "cd /tmp && pip install foo"`, "python"},
@@ -89,7 +71,6 @@ func TestDetectRuntime_Classification(t *testing.T) {
 		{`bash -lc "pip install x"`, "python"}, // combined flag cluster handled
 		{`bash -cl "pip install x"`, "python"}, // c-first cluster also works
 
-		// ── Introspection commands route by argument (AST upgrade) ──────
 		{"which python3", "python"},
 		{"which npm", "node"},
 		{"type pip", "python"},
@@ -97,13 +78,11 @@ func TestDetectRuntime_Classification(t *testing.T) {
 		{"which ls", ""}, // not a runtime
 		{"which", ""},    // bare which, no arg
 
-		// ── Subshells / command substitution (Walk descends) ────────────
 		{"(pip install pandas)", "python"},
 		{"(cd /tmp && npm install)", "node"},
 		{"echo $(pip install pandas)", "python"},
 		{"`pip install pandas`", "python"},
 
-		// ── Plain shell — nil ───────────────────────────────────────────
 		{"ls -la", ""},
 		{"git status", ""},
 		{"cat README.md", ""},
@@ -113,7 +92,6 @@ func TestDetectRuntime_Classification(t *testing.T) {
 		{"git log --oneline -10", ""},
 		{"cat /tmp/file && grep foo /tmp/other", ""},
 
-		// ── Static-escape gotchas (parser CAN'T see; remain bypassed,
 		//    LLM warned in Bash.Description) ─────────────────────────────
 		{`eval "pip install pandas"`, ""},
 		{"source ./install.sh", ""},
@@ -144,7 +122,6 @@ func TestDetectRuntime_FirstTokenFallback(t *testing.T) {
 	}
 }
 
-// ── stripPath ────────────────────────────────────────────────────────
 
 func TestStripPath(t *testing.T) {
 	cases := []struct{ in, want string }{
@@ -164,7 +141,6 @@ func TestStripPath(t *testing.T) {
 	}
 }
 
-// ── envBinDirsForKind ────────────────────────────────────────────────
 
 func TestEnvBinDirsForKind(t *testing.T) {
 	envPath := "/data/envs/conv/cv_abc_python"
@@ -202,7 +178,6 @@ func TestEnvBinDirsForKind(t *testing.T) {
 	}
 }
 
-// ── prependPath ──────────────────────────────────────────────────────
 
 func TestPrependPath_PrependsToExistingPATH(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -260,7 +235,6 @@ func TestPrependPath_MultipleExtrasJoinedWithSeparator(t *testing.T) {
 	}
 }
 
-// ── helpers ──────────────────────────────────────────────────────────
 
 func slicesEqual(a, b []string) bool {
 	if len(a) != len(b) {

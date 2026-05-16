@@ -42,8 +42,6 @@ func TestGetAgentState_StateUsable(t *testing.T) {
 	got, _ := GetAgentState(ctx)
 	got.MarkRead("/abs/path", 1234)
 
-	// Verify state mutation propagates back through the original pointer.
-	// 验证通过 ctx 取出的指针修改能传回原指针。
 	if sz, ok := state.WasRead("/abs/path"); !ok || sz != 1234 {
 		t.Errorf("expected size=1234 ok=true, got size=%d ok=%v", sz, ok)
 	}

@@ -1,18 +1,3 @@
-// catalog_source.go — Function implements catalogdomain.CatalogSource so
-// app/catalog can include functions in the system-prompt summary. Per
-// forge_redesign D9 (and catalog.md §12 for the broader convention), function
-// items are PerItem granularity — the generator may freely group / merge into
-// "5 CSV-processing functions"-style descriptions.
-//
-// Description comes from Function.Description (LLM-generated at create_function
-// time); empty description falls back to joined tags so the catalog never
-// shows a blank entry. main.go registers AsCatalogSource() at boot.
-//
-// catalog_source.go —— Function 实现 catalogdomain.CatalogSource 让 app/catalog
-// 把 function 纳入 system-prompt summary。per forge_redesign D9: PerItem 粒度
-// (generator 可自由分组)。Description 取 Function.Description,空则退化到 tags
-// 拼接保证 catalog 永不显示空条目。
-
 package function
 
 import (
@@ -23,8 +8,6 @@ import (
 )
 
 // AsCatalogSource returns the CatalogSource port adapter for this Service.
-// main.go calls this once at boot and registers the result with
-// catalogapp.Service.RegisterSource.
 //
 // AsCatalogSource 返本 Service 的 CatalogSource port 适配器。
 func (s *Service) AsCatalogSource() catalogdomain.CatalogSource {

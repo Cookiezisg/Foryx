@@ -1,11 +1,3 @@
-// call.go — call_handler system tool. Invokes a method on a handler. For
-// chat-scope invocations (this tool from a chat conversation), the instance
-// lifetime is per-call (spawn → method → destroy). Workflow / test runners
-// invoke Service.Call directly with their own Owner.
-//
-// Streaming progress: if the Python method body uses yield, each yield value
-// is emitted as a progress block delta under the call_handler tool_call block.
-
 package handler
 
 import (

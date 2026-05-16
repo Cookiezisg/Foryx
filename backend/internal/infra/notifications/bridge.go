@@ -1,21 +1,6 @@
-// Package notifications provides the in-process Bridge for entity-
-// update notification events. Per D-redo-3 (forge_redesign 2026-05-12)
-// keying is per-user (read from ctx) — clients filter on payload Type /
-// ConversationID. Per-user seq monotonic; replay buffer + Last-Event-ID
-// reconnect; block-on-slow-subscriber semantic (entity snapshots
-// matter — losing them leaves UI showing stale state).
+// Package notifications is the in-process Bridge for entity-update events (per-user keyed).
 //
-// Mirrors infra/eventlog/bridge.go pattern (post-D-redo-2 both are
-// per-user); differences are notif payload type + smaller default
-// buffer (entity-state changes are less frequent than chat tokens).
-//
-// Package notifications 提供 entity-update 通知事件的进程内 Bridge。
-// 按 D-redo-3(forge_redesign 2026-05-12)key 改 per-user(从 ctx 读),
-// client 按 payload Type / ConversationID 过滤。per-user 单调 seq +
-// replay buffer + Last-Event-ID 重连 + 慢订阅者阻塞 publisher。
-//
-// 镜像 infra/eventlog/bridge.go(D-redo-2 后两边都 per-user);区别仅
-// payload type + 较小默认 buffer(entity 状态变化比 chat token 频率低)。
+// Package notifications 是 entity 更新事件的进程内 Bridge（按 user_id 分流）。
 package notifications
 
 import (
@@ -29,30 +14,19 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// Tunables. Sized for single-user desktop:
-//   - replayBufferSize: keeps last N events for reconnect. 1024 is
-//     generous; entity state changes are infrequent.
-//   - subscriberBufferSize: buffer per subscribe channel. Wide enough
-//     to hold a full replay burst plus live headroom.
-//
-// 调参,按单用户桌面;1024 足量;subscriber 容下完整 replay + 实时余量。
 const (
 	replayBufferSize     = 1024
-	subscriberBufferSize = 1280 // = replayBufferSize + 256 live headroom
+	subscriberBufferSize = 1280
 )
 
-// Bridge is the thread-safe in-process notification dispatcher keyed by
-// user_id (read from ctx).
+// Bridge is the thread-safe in-process notification dispatcher keyed by user_id.
 //
-// Bridge 是线程安全的进程内通知分发器,按 user_id key(从 ctx 读)。
+// Bridge 是线程安全的进程内通知分发器，按 user_id 分流。
 type Bridge struct {
 	mu    sync.Mutex
 	users map[string]*userState
 }
 
-// userState holds per-user seq counter + replay buffer + subs.
-//
-// userState 持有 per-user 的 seq 计数器 + replay buffer + sub。
 type userState struct {
 	mu     sync.Mutex
 	seq    int64
@@ -66,22 +40,15 @@ type subscription struct {
 	closed sync.Once
 }
 
-// NewBridge constructs an empty Bridge. The log parameter is accepted
-// for API symmetry with eventlog.NewBridge but is currently unused —
-// the bridge follows §S10's "synchronous primitive" rule (don't
-// self-log; let callers decide).
+// NewBridge constructs an empty Bridge; log is unused (synchronous primitive per §S10).
 //
-// NewBridge 构造空 Bridge。log 参数为 API 对称(与 eventlog.NewBridge 一致)
-// 保留,目前未用——bridge 按 §S10 同步原语原则不自打日志。
+// NewBridge 构造空 Bridge；log 暂未使用（§S10 同步原语不自打日志）。
 func NewBridge(_ *zap.Logger) *Bridge {
 	return &Bridge{
 		users: make(map[string]*userState),
 	}
 }
 
-// ensureUser returns the userState for id, creating it on first touch.
-//
-// ensureUser 返 id 的 userState;首次访问时创建。
 func (b *Bridge) ensureUser(id string) *userState {
 	b.mu.Lock()
 	defer b.mu.Unlock()
@@ -93,13 +60,9 @@ func (b *Bridge) ensureUser(id string) *userState {
 	return state
 }
 
-// Publish reads user_id from ctx, validates, assigns seq (per-user
-// monotonic), appends to replay buffer, and fans out to that user's
-// subscribers. Blocks if any subscriber buffer is full (intentional —
-// snapshots must not be lost).
+// Publish assigns per-user seq, buffers for replay, fans out; blocks on slow subscriber.
 //
-// Publish 从 ctx 读 user_id,校验、分配 per-user 单调 seq、追加 replay buffer、
-// 扇出给该用户订阅者。订阅者 buffer 满时阻塞(故意——快照不能丢)。
+// Publish 分配 per-user seq、入 replay buffer、扇出订阅者；订阅者满时阻塞。
 func (b *Bridge) Publish(ctx context.Context, e notificationsdomain.Event) (notificationsdomain.Envelope, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -125,7 +88,6 @@ func (b *Bridge) Publish(ctx context.Context, e notificationsdomain.Event) (noti
 		select {
 		case s.ch <- env:
 		case <-s.done:
-			// subscriber cancelled — skip
 		case <-ctx.Done():
 			return env, ctx.Err()
 		}
@@ -133,12 +95,9 @@ func (b *Bridge) Publish(ctx context.Context, e notificationsdomain.Event) (noti
 	return env, nil
 }
 
-// Subscribe registers a subscriber for the user_id read from ctx.
-// fromSeq>0 replays buffered envelopes with seq > fromSeq before live;
-// ErrSeqTooOld if fromSeq is older than the buffer's oldest entry.
+// Subscribe registers a subscriber for ctx's user_id; fromSeq>0 replays buffered envelopes first.
 //
-// Subscribe 按 ctx 中 user_id 注册订阅者。fromSeq>0 先 replay seq > fromSeq
-// 再投递实时;fromSeq 比 buffer 最旧还旧返 ErrSeqTooOld。
+// Subscribe 按 ctx 的 user_id 注册订阅者；fromSeq>0 先 replay 历史再上实时。
 func (b *Bridge) Subscribe(ctx context.Context, fromSeq int64) (<-chan notificationsdomain.Envelope, func(), error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -159,14 +118,6 @@ func (b *Bridge) Subscribe(ctx context.Context, fromSeq int64) (<-chan notificat
 		}
 		for _, env := range state.buffer {
 			if env.Seq > fromSeq {
-				// Non-blocking push — channel cap >= replayBufferSize
-				// guarantees this fits. Defensive default: if cap math
-				// ever drifts, surface as a distinct error (not
-				// ErrSeqTooOld which means "evicted from buffer" — wrong
-				// semantic for a buffer-overflow situation).
-				//
-				// 非阻塞 push;cap 保证装得下。防御 default:cap 计算出错
-				// 时用独立错误(不是 ErrSeqTooOld,那是被淘汰)。
 				select {
 				case sub.ch <- env:
 				default:
@@ -202,7 +153,4 @@ func (b *Bridge) Subscribe(ctx context.Context, fromSeq int64) (<-chan notificat
 	return sub.ch, cancel, nil
 }
 
-// Compile-time check.
-//
-// 编译期检查。
 var _ notificationsdomain.Bridge = (*Bridge)(nil)

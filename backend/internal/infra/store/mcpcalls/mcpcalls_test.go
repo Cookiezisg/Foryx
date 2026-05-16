@@ -1,6 +1,3 @@
-// mcpcalls_test.go — integration tests for mcpcallstore.Store using
-// in-memory SQLite.
-
 package mcpcalls
 
 import (
@@ -86,7 +83,6 @@ func TestList_PaginationAndFilter(t *testing.T) {
 	if len(rows) != 3 {
 		t.Errorf("page len = %d, want 3", len(rows))
 	}
-	// Filter by tool name.
 	rows, _, _ = s.ListCalls(ctx, mcpdomain.CallFilter{ToolName: "tool0"})
 	for _, r := range rows {
 		if r.ToolName != "tool0" {

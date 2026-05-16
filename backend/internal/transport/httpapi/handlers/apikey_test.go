@@ -1,14 +1,3 @@
-// apikey_test.go — E2E contract tests for the 5 /api/v1/api-keys/* endpoints.
-// Each test builds a full stack: in-memory SQLite → real Store → real
-// AES-GCM Encryptor → fake ConnectivityTester → Service → Handler, wrapped
-// by InjectUserID middleware so reqctx.GetUserID works. Only the external
-// LLM probe is faked — everything else is real code paths.
-//
-// apikey_test.go — /api/v1/api-keys/* 5 个端点的端到端契约测试。
-// 每个 case 起完整栈：内存 SQLite → 真 Store → 真 AES-GCM Encryptor →
-// fake ConnectivityTester → Service → Handler，用 InjectUserID 中间件包裹
-// 让 reqctx.GetUserID 能工作。只 mock 上游 LLM 探测，其他全是真代码路径。
-
 package handlers
 
 import (
@@ -32,9 +21,6 @@ import (
 	middlewarehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/middleware"
 )
 
-// fakeTester returns pre-canned TestResult / error.
-//
-// fakeTester 返回预设的 TestResult / error。
 type fakeTester struct {
 	result *apikeyapp.TestResult
 	err    error
@@ -44,9 +30,6 @@ func (t *fakeTester) Test(ctx context.Context, provider, key, baseURL, apiFormat
 	return t.result, t.err
 }
 
-// newTestServer spins up a full stack as an httptest.Server.
-//
-// newTestServer 起完整栈的 httptest.Server。
 func newTestServer(t *testing.T, tester apikeyapp.ConnectivityTester) *httptest.Server {
 	t.Helper()
 
@@ -71,14 +54,9 @@ func newTestServer(t *testing.T, tester apikeyapp.ConnectivityTester) *httptest.
 	mux := http.NewServeMux()
 	h.Register(mux)
 
-	// Wrap with InjectUserID so reqctx.GetUserID returns DefaultLocalUserID.
-	// 用 InjectUserID 包裹，让 reqctx.GetUserID 返回 DefaultLocalUserID。
 	return httptest.NewServer(middlewarehttpapi.InjectUserID(mux))
 }
 
-// do is a small helper: serialize body, fire request, decode envelope.
-//
-// do 是小工具：序列化 body、发请求、解 envelope。
 func do(t *testing.T, srv *httptest.Server, method, path string, body any) (int, map[string]any) {
 	t.Helper()
 	var reader *bytes.Reader
@@ -113,9 +91,6 @@ func do(t *testing.T, srv *httptest.Server, method, path string, body any) (int,
 	return resp.StatusCode, env
 }
 
-// dataMap extracts env["data"] as map (panics if unexpected shape).
-//
-// dataMap 提取 env["data"] 为 map（形状不对则 panic）。
 func dataMap(t *testing.T, env map[string]any) map[string]any {
 	t.Helper()
 	d, ok := env["data"].(map[string]any)
@@ -125,11 +100,6 @@ func dataMap(t *testing.T, env map[string]any) map[string]any {
 	return d
 }
 
-// dataSlice extracts env["data"] as slice (panics if unexpected shape).
-// Tolerates nil (returns []any{}) so callers can len() unconditionally.
-//
-// dataSlice 提取 env["data"] 为 slice（形状不对则 panic）。
-// 容忍 nil（返 []any{}）让调用方无脑 len()。
 func dataSlice(t *testing.T, env map[string]any) []any {
 	t.Helper()
 	if env["data"] == nil {
@@ -142,9 +112,6 @@ func dataSlice(t *testing.T, env map[string]any) []any {
 	return d
 }
 
-// errorCode extracts env["error"]["code"].
-//
-// errorCode 提取 env["error"]["code"]。
 func errorCode(t *testing.T, env map[string]any) string {
 	t.Helper()
 	e, ok := env["error"].(map[string]any)
@@ -154,7 +121,6 @@ func errorCode(t *testing.T, env map[string]any) string {
 	return e["code"].(string)
 }
 
-// ---- POST /api/v1/api-keys ----
 
 func TestAPIKeyHandler_Create_Success(t *testing.T) {
 	srv := newTestServer(t, &fakeTester{})
@@ -179,8 +145,6 @@ func TestAPIKeyHandler_Create_Success(t *testing.T) {
 	if got := d["testStatus"].(string); got != apikeydomain.TestStatusPending {
 		t.Errorf("testStatus = %q, want pending", got)
 	}
-	// KeyEncrypted must not leak on the wire (json:"-" tag).
-	// KeyEncrypted 不得泄漏到线上（json:"-" 标签）。
 	if _, hasCT := d["keyEncrypted"]; hasCT {
 		t.Error("keyEncrypted leaked into response — json:-\" tag broken")
 	}
@@ -241,14 +205,11 @@ func TestAPIKeyHandler_Create_MalformedJSON(t *testing.T) {
 	}
 }
 
-// ---- GET /api/v1/api-keys ----
 
 func TestAPIKeyHandler_List_Paged(t *testing.T) {
 	srv := newTestServer(t, &fakeTester{})
 	defer srv.Close()
 
-	// Seed two keys via the API.
-	// 通过 API 种入两条 Key。
 	for _, p := range []string{"openai", "anthropic"} {
 		if st, env := do(t, srv, "POST", "/api/v1/api-keys", map[string]any{
 			"provider": p, "key": "sk-" + p,
@@ -307,7 +268,6 @@ func TestAPIKeyHandler_List_InvalidLimit(t *testing.T) {
 	}
 }
 
-// ---- PATCH /api/v1/api-keys/{id} ----
 
 func TestAPIKeyHandler_Update_PartialFields(t *testing.T) {
 	srv := newTestServer(t, &fakeTester{})
@@ -344,7 +304,6 @@ func TestAPIKeyHandler_Update_NotFound(t *testing.T) {
 	}
 }
 
-// ---- DELETE /api/v1/api-keys/{id} ----
 
 func TestAPIKeyHandler_Delete_Success(t *testing.T) {
 	srv := newTestServer(t, &fakeTester{})
@@ -360,8 +319,6 @@ func TestAPIKeyHandler_Delete_Success(t *testing.T) {
 		t.Errorf("status = %d, want 204", status)
 	}
 
-	// Verify gone: second DELETE must 404.
-	// 验证已删：第二次 DELETE 必须 404。
 	status, env = do(t, srv, "DELETE", "/api/v1/api-keys/"+id, nil)
 	if status != http.StatusNotFound {
 		t.Errorf("second delete status = %d, want 404", status)
@@ -371,7 +328,6 @@ func TestAPIKeyHandler_Delete_Success(t *testing.T) {
 	}
 }
 
-// ---- POST /api/v1/api-keys/{id}:test ----
 
 func TestAPIKeyHandler_Test_Success(t *testing.T) {
 	tester := &fakeTester{result: &apikeyapp.TestResult{
@@ -422,8 +378,6 @@ func TestAPIKeyHandler_Test_ConnectivityFails_Returns422(t *testing.T) {
 	if code := errorCode(t, env); code != "API_KEY_TEST_FAILED" {
 		t.Errorf("code = %q, want API_KEY_TEST_FAILED", code)
 	}
-	// Details must carry latency for UI display.
-	// details 必须带 latency 给 UI 展示。
 	errObj := env["error"].(map[string]any)
 	details, ok := errObj["details"].(map[string]any)
 	if !ok {
@@ -451,8 +405,6 @@ func TestAPIKeyHandler_Test_UnknownAction_Returns404(t *testing.T) {
 	srv := newTestServer(t, &fakeTester{})
 	defer srv.Close()
 
-	// POST /{id}:rotate is not defined.
-	// POST /{id}:rotate 未定义。
 	status, env := do(t, srv, "POST", "/api/v1/api-keys/anyid:rotate", nil)
 	if status != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404", status)
@@ -462,7 +414,6 @@ func TestAPIKeyHandler_Test_UnknownAction_Returns404(t *testing.T) {
 	}
 }
 
-// ---- end-to-end roundtrip: create → test OK → verify test_status ----
 
 func TestAPIKeyHandler_RoundTrip_CreateTestListReflectsNewStatus(t *testing.T) {
 	tester := &fakeTester{result: &apikeyapp.TestResult{OK: true, Message: "ok"}}

@@ -1,12 +1,3 @@
-// uninstall_server.go — uninstall_mcp_server system tool: removes a
-// previously-installed MCP server from mcp.json + disconnects it. Symmetric
-// with install_mcp_server. Permission stays Allow because real user
-// consent runs through the LLM-driven ask flow (framework-level Ask
-// would pop a UI dialog, breaking the in-LLM orchestration).
-//
-// uninstall_server.go ——uninstall_mcp_server 系统工具：从 mcp.json 移除已装
-// MCP server + 断连。与 install_mcp_server 对称。权限留 Allow，因真用户
-// 同意走 LLM 驱动的 ask 流（框架级 Ask 会弹 UI 对话框，破坏 in-LLM 编排）。
 package mcp
 
 import (

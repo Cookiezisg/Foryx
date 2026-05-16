@@ -1,6 +1,3 @@
-// output_test.go — unit tests for the BashOutput system tool.
-//
-// output_test.go — BashOutput 系统工具单测。
 package shell
 
 import (
@@ -18,7 +15,6 @@ func newTestOutput() (*BashOutput, *ProcessManager) {
 	return &BashOutput{mgr: mgr}, mgr
 }
 
-// ── Identity / metadata / schema ──────────────────────────────────────────────
 
 func TestBashOutput_IdentityMethods(t *testing.T) {
 	tool, _ := newTestOutput()
@@ -56,7 +52,6 @@ func TestBashOutput_Schema_HasExpectedFields(t *testing.T) {
 	}
 }
 
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestBashOutput_ValidateInput_RequiresBashID(t *testing.T) {
 	tool, _ := newTestOutput()
@@ -83,7 +78,6 @@ func TestBashOutput_ValidateInput_AcceptsValid(t *testing.T) {
 	}
 }
 
-// ── Execute ───────────────────────────────────────────────────────────────────
 
 func TestBashOutput_Execute_UnknownID_FriendlyMessage(t *testing.T) {
 	tool, _ := newTestOutput()
@@ -157,7 +151,6 @@ func TestBashOutput_Execute_KilledStatusReported(t *testing.T) {
 	}
 }
 
-// ── Helper for filterLines ────────────────────────────────────────────────────
 
 func TestFilterLines_KeepsMatching(t *testing.T) {
 	re := regexp.MustCompile("foo")
@@ -180,7 +173,6 @@ func TestFilterLines_EmptyInput(t *testing.T) {
 	}
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
 
 func mustExecute(t *testing.T, tool *BashOutput, args string) string {
 	t.Helper()

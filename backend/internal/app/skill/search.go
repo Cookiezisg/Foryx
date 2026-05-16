@@ -1,11 +1,3 @@
-// search.go — Service.Search ranks skills by user query. Mirrors the
-// mcp.Search / forge.Search "mode A" pattern: if the catalog is already
-// small enough (≤ topK) skip the LLM and return everything; otherwise
-// build a numbered prompt and parse the LLM's index list.
-//
-// search.go ——Service.Search 按 query 排序 skill。复用 mcp.Search /
-// forge.Search "模式 A"：catalog 小（≤ topK）跳 LLM 全返；否则 prompt 编
-// 号 + 解析 LLM 返的 index 列表。
 package skill
 
 import (
@@ -24,12 +16,9 @@ import (
 	llmparsepkg "github.com/sunweilin/forgify/backend/internal/pkg/llmparse"
 )
 
-// Search returns at most topK skills matching query. Empty catalog returns
-// an empty slice; ≤ topK skills returns alpha-sorted; > topK invokes LLM
-// ranking and falls back to alpha order if parsing fails.
+// Search returns up to topK skills ranked for query; falls back to alpha order on parse fail.
 //
-// Search 返最多 topK 个匹配 query 的 skill。空 catalog 返空 slice；
-// ≤ topK 字母序全返；> topK 调 LLM 排序，解析失败回字母序。
+// Search 返回最多 topK 个排序后的 skill；解析失败回退字母序。
 func (s *Service) Search(ctx context.Context, query string, topK int) ([]*skilldomain.Skill, error) {
 	if topK <= 0 {
 		topK = 3
@@ -44,13 +33,6 @@ func (s *Service) Search(ctx context.Context, query string, topK int) ([]*skilld
 
 	prompt := buildRankingPrompt(query, all, topK)
 
-	// Surface this internal LLM rerank call as a progress block under the
-	// caller's tool_call (when search_skills is invoked from chat). The
-	// emitter is no-op when called outside a chat context (e.g. unit tests),
-	// so this is safe to always run.
-	//
-	// 把内部 LLM rerank 作为 progress block 挂在调用方 tool_call 下（chat 内
-	// 调 search_skills 时）。chat 外调用（单测）emitter 是 no-op，永远安全。
 	em := eventlogpkg.From(ctx)
 	progID := em.StartBlock(ctx, eventlogdomain.BlockTypeProgress,
 		map[string]any{"stage": "rerank", "tool": "search_skills", "candidates": len(all)})
@@ -76,11 +58,6 @@ func (s *Service) Search(ctx context.Context, query string, topK int) ([]*skilld
 
 	indices, err := parseRankedIndices(resp, len(all))
 	if err != nil {
-		// Ranking parse fail is non-fatal — return alpha-order top K so
-		// the LLM caller still gets something usable. Log so author can
-		// debug their catalog if it keeps happening.
-		// 排序解析失败非致命——返字母序前 K 让 LLM 调用方仍有可用结果。
-		// 持续发生时 author 可经 log 调 catalog。
 		s.log.Warn("skill search rank parse failed; falling back to alpha order",
 			zap.String("query", query),
 			zap.String("response_snippet", trimResp(resp, 200)),
@@ -104,12 +81,6 @@ func (s *Service) Search(ctx context.Context, query string, topK int) ([]*skilld
 	return out, nil
 }
 
-// buildRankingPrompt assembles the LLM prompt for skill ranking. Skills
-// are presented as numbered list with name + description (description
-// truncated at 200 chars to keep prompt size predictable on big catalogs).
-//
-// buildRankingPrompt 装 skill 排序 prompt。skill 编号列表 + name +
-// description（200 字符截断让大 catalog 的 prompt 大小可预测）。
 func buildRankingPrompt(query string, all []*skilldomain.Skill, topK int) string {
 	var sb strings.Builder
 	fmt.Fprintf(&sb, "Query: %s\n\nAvailable skills:\n", query)
@@ -126,11 +97,6 @@ func buildRankingPrompt(query string, all []*skilldomain.Skill, topK int) string
 	return sb.String()
 }
 
-// parseRankedIndices extracts the LLM-emitted index array. Tolerates
-// markdown-fenced output via llmparsepkg.ExtractJSON.
-//
-// parseRankedIndices 提取 LLM 发的 index 数组。经 llmparsepkg.ExtractJSON
-// 容忍 markdown 围栏。
 func parseRankedIndices(resp string, total int) ([]int, error) {
 	jsonStr, ok := llmparsepkg.ExtractJSON(resp)
 	if !ok {

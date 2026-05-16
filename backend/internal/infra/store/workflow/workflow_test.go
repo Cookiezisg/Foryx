@@ -1,9 +1,3 @@
-// workflow_test.go — integration tests for workflowstore.Store using
-// in-memory SQLite. Covers Workflow CRUD + user scoping + partial UNIQUE
-// + Version pending/accepted flow + HardDeleteOldestAccepted cap.
-//
-// workflow_test.go — workflowstore.Store 集成测试(内存 SQLite)。
-
 package workflow
 
 import (
@@ -62,7 +56,6 @@ func mkVersion(id, workflowID, status string) *workflowdomain.Version {
 	}
 }
 
-// ── Workflow CRUD ────────────────────────────────────────────────────────────
 
 func TestSaveWorkflow_HappyPath(t *testing.T) {
 	s := newStore(t)
@@ -100,8 +93,6 @@ func TestSaveWorkflow_SoftDeletedAllowsReuse(t *testing.T) {
 	if err := s.DeleteWorkflow(ctx, "wf1"); err != nil {
 		t.Fatalf("DeleteWorkflow: %v", err)
 	}
-	// Partial UNIQUE should allow reuse after soft-delete.
-	// partial UNIQUE 软删后允许复用同名。
 	if err := s.SaveWorkflow(ctx, mkWorkflow("wf2", userAlice, "name-x")); err != nil {
 		t.Errorf("re-create after soft-delete should succeed, got %v", err)
 	}
@@ -181,7 +172,6 @@ func TestSetActiveVersion_AndSetNeedsAttention(t *testing.T) {
 	}
 }
 
-// ── Versions ─────────────────────────────────────────────────────────────────
 
 func TestSaveVersion_AndGetPending(t *testing.T) {
 	s := newStore(t)
@@ -199,7 +189,6 @@ func TestSaveVersion_AndGetPending(t *testing.T) {
 		t.Errorf("pending.ID = %q, want wfv1", pending.ID)
 	}
 
-	// No pending after status change.
 	one := 1
 	if err := s.UpdateVersionStatus(ctx, "wfv1", workflowdomain.StatusAccepted, &one); err != nil {
 		t.Fatalf("UpdateVersionStatus: %v", err)
@@ -251,7 +240,6 @@ func TestHardDeleteOldestAccepted_TrimsToKeep(t *testing.T) {
 	ctx := ctxFor(userAlice)
 	_ = s.SaveWorkflow(ctx, mkWorkflow("wf1", userAlice, "n"))
 
-	// 6 accepted versions; keep=4 → trims 2 oldest.
 	for i := 1; i <= 6; i++ {
 		v := mkVersion(fmt.Sprintf("wfv%d", i), "wf1", workflowdomain.StatusAccepted)
 		n := i

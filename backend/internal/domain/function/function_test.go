@@ -7,10 +7,6 @@ import (
 	"testing"
 )
 
-// TestSentinels_Unique ensures all exported sentinels have distinct
-// human-readable messages and start with the "function:" prefix (§S16).
-//
-// TestSentinels_Unique 检查所有导出 sentinel 消息唯一 + "function:" 前缀。
 func TestSentinels_Unique(t *testing.T) {
 	all := []error{
 		ErrNotFound, ErrDuplicateName, ErrVersionNotFound, ErrPendingNotFound,
@@ -34,11 +30,6 @@ func TestSentinels_Unique(t *testing.T) {
 	}
 }
 
-// TestSentinels_ErrorsIsCompatible verifies sentinels work with errors.Is
-// through fmt.Errorf("%w") wrap chains (§S16 wrap discipline).
-//
-// TestSentinels_ErrorsIsCompatible 验证 sentinel 经过 fmt.Errorf "%w"
-// 包装链后 errors.Is 仍能 unwrap 到。
 func TestSentinels_ErrorsIsCompatible(t *testing.T) {
 	wrapped := fmt.Errorf("functionstore.Get: %w", ErrNotFound)
 	if !errors.Is(wrapped, ErrNotFound) {
@@ -51,10 +42,6 @@ func TestSentinels_ErrorsIsCompatible(t *testing.T) {
 	}
 }
 
-// TestStatusConstants_Stable pins the status enum string values — DB CHECK
-// constraint uses these literals;changing them breaks migrations.
-//
-// TestStatusConstants_Stable 钉死 status 枚举字符串(DB CHECK 用,改了破坏迁移)。
 func TestStatusConstants_Stable(t *testing.T) {
 	cases := map[string]string{
 		"StatusPending":  StatusPending,
@@ -73,9 +60,6 @@ func TestStatusConstants_Stable(t *testing.T) {
 	}
 }
 
-// TestEnvStatusConstants_Stable pins env-status enum.
-//
-// TestEnvStatusConstants_Stable 钉死 env-status 枚举。
 func TestEnvStatusConstants_Stable(t *testing.T) {
 	cases := map[string]string{
 		"EnvStatusPending": EnvStatusPending,
@@ -98,21 +82,18 @@ func TestEnvStatusConstants_Stable(t *testing.T) {
 	}
 }
 
-// TestDefaultPythonVersion checks the default PEP 440 spec.
 func TestDefaultPythonVersion(t *testing.T) {
 	if DefaultPythonVersion != ">=3.12" {
 		t.Errorf("DefaultPythonVersion = %q, want '>=3.12'", DefaultPythonVersion)
 	}
 }
 
-// TestAcceptedVersionCap pins the per-function accepted-version cap.
 func TestAcceptedVersionCap(t *testing.T) {
 	if AcceptedVersionCap != 50 {
 		t.Errorf("AcceptedVersionCap = %d, want 50", AcceptedVersionCap)
 	}
 }
 
-// TestFunctionTableName ensures GORM uses 'functions' (not 'function').
 func TestFunctionTableName(t *testing.T) {
 	if (Function{}).TableName() != "functions" {
 		t.Errorf("Function.TableName() = %q, want 'functions'", (Function{}).TableName())

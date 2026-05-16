@@ -1,9 +1,3 @@
-// store_test.go — integration tests for Store using an in-memory
-// SQLite. Covers CRUD, user scoping, pagination, and the GetByProvider
-// selection order.
-//
-// store_test.go — Store 的集成测试（内存 SQLite）。覆盖 CRUD、
-// 用户隔离、分页、GetByProvider 选择顺序。
 package apikey
 
 import (
@@ -24,9 +18,6 @@ const (
 	userBob   = "u-bob"
 )
 
-// newStore opens an in-memory DB, migrates APIKey, and returns a Store.
-//
-// newStore 打开内存 DB，迁移 APIKey 表，返回 Store。
 func newStore(t *testing.T) *Store {
 	t.Helper()
 	database, err := dbinfra.Open(dbinfra.Config{LogLevel: gormlogger.Silent})
@@ -44,9 +35,6 @@ func ctxFor(userID string) context.Context {
 	return reqctxpkg.SetUserID(context.Background(), userID)
 }
 
-// mkKey builds a minimal APIKey for insertion. Caller can override fields.
-//
-// mkKey 构造一个最小的 APIKey 用于插入。调用方可覆盖字段。
 func mkKey(id, userID, provider string) *apikeydomain.APIKey {
 	return &apikeydomain.APIKey{
 		ID:           id,
@@ -111,8 +99,6 @@ func TestGet_NotFound(t *testing.T) {
 }
 
 func TestGet_CrossUserIsolation(t *testing.T) {
-	// Alice's key must not be visible to Bob.
-	// Alice 的 key 对 Bob 必须不可见。
 	s := newStore(t)
 
 	if err := s.Save(ctxFor(userAlice), mkKey("k1", userAlice, "openai")); err != nil {
@@ -126,8 +112,6 @@ func TestGet_CrossUserIsolation(t *testing.T) {
 }
 
 func TestGet_MissingUserIDInCtx(t *testing.T) {
-	// A ctx without InjectUserID should produce a wiring error, not a 401.
-	// 未经 InjectUserID 的 ctx 应产生接线错误，而非 401。
 	s := newStore(t)
 	_, err := s.Get(context.Background(), "k1")
 	if err == nil {
@@ -169,8 +153,6 @@ func TestDelete_CrossUserIsolation(t *testing.T) {
 	if err := s.Delete(ctxFor(userBob), "k1"); !errors.Is(err, apikeydomain.ErrNotFound) {
 		t.Errorf("Bob deleting Alice's key: got %v, want ErrNotFound", err)
 	}
-	// Alice's key should still exist.
-	// Alice 的 key 仍应存在。
 	if _, err := s.Get(ctxFor(userAlice), "k1"); err != nil {
 		t.Errorf("Alice's key missing after Bob's failed delete: %v", err)
 	}
@@ -283,8 +265,6 @@ func TestList_Basic(t *testing.T) {
 		if err := s.Save(ctx, mkKey(id, userAlice, "openai")); err != nil {
 			t.Fatalf("Save %s: %v", id, err)
 		}
-		// Spread created_at so DESC ordering is deterministic.
-		// 拉开 created_at，让 DESC 排序确定。
 		time.Sleep(2 * time.Millisecond)
 	}
 
@@ -298,7 +278,6 @@ func TestList_Basic(t *testing.T) {
 	if next != "" {
 		t.Errorf("unexpected nextCursor: %q", next)
 	}
-	// Most recent first / 最新的在前.
 	if rows[0].ID != "c" || rows[2].ID != "a" {
 		t.Errorf("order wrong: got [%s %s %s], want [c b a]", rows[0].ID, rows[1].ID, rows[2].ID)
 	}
@@ -315,7 +294,6 @@ func TestList_PaginationWithCursor(t *testing.T) {
 		time.Sleep(2 * time.Millisecond)
 	}
 
-	// Page 1 / 第一页
 	page1, next, err := s.List(ctx, apikeydomain.ListFilter{Limit: 2})
 	if err != nil {
 		t.Fatalf("page1: %v", err)
@@ -324,7 +302,6 @@ func TestList_PaginationWithCursor(t *testing.T) {
 		t.Fatalf("page1: got %d rows next=%q, want 2 rows + cursor", len(page1), next)
 	}
 
-	// Page 2 / 第二页
 	page2, next2, err := s.List(ctx, apikeydomain.ListFilter{Limit: 2, Cursor: next})
 	if err != nil {
 		t.Fatalf("page2: %v", err)
@@ -333,7 +310,6 @@ func TestList_PaginationWithCursor(t *testing.T) {
 		t.Fatalf("page2: got %d rows next=%q, want 2 rows + cursor", len(page2), next2)
 	}
 
-	// No overlap between pages / 页间不应有重复.
 	for _, r1 := range page1 {
 		for _, r2 := range page2 {
 			if r1.ID == r2.ID {
@@ -342,7 +318,6 @@ func TestList_PaginationWithCursor(t *testing.T) {
 		}
 	}
 
-	// Page 3 (final) / 第三页（收尾）
 	page3, next3, err := s.List(ctx, apikeydomain.ListFilter{Limit: 2, Cursor: next2})
 	if err != nil {
 		t.Fatalf("page3: %v", err)

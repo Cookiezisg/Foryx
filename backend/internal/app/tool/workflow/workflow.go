@@ -1,20 +1,6 @@
-// Package workflow provides the 6 system tools the LLM uses to interact
-// with the user's workflow library: search / get / create / edit / revert /
-// delete. Trigger / executions tools (per Plan 04 spec §9) require Plan 05
-// scheduler / flowrun domains; deferred.
+// Package workflow provides system tools for the LLM to interact with the user's workflow library.
 //
-// Per §S13 nested sub-package alias rule, importers alias as `workflowtool`
-// (distinct from workflowapp / workflowdomain).
-//
-// Streaming model (CLAUDE.md §S18 + §E1 three-stream):
-//   - create_workflow / edit_workflow — ApplyOps emits one progress delta
-//     per op via the eventlog Emitter; the tool also double-writes
-//     forge_started + forge_completed on the forge bus (C4 D-redo-4).
-//   - search / get / revert / delete — one-shot tool_result, no streaming.
-//
-// Package workflow 提供 6 个 system tool;alias `workflowtool`;trigger /
-// executions 工具留 Plan 05(scheduler / flowrun)。create/edit 工具双写
-// chat eventlog progress block + forge bus forge_started/completed。
+// Package workflow 提供操作用户 workflow 库的 system tool。
 package workflow
 
 import (
@@ -26,15 +12,9 @@ import (
 	forgepkg "github.com/sunweilin/forgify/backend/internal/pkg/forge"
 )
 
-// WorkflowTools constructs the 6 workflow system tools wired with their
-// dependencies.
+// WorkflowTools constructs workflow system tools; pass a noop forge Publisher to disable double-write in tests.
 //
-// forge is the forge-stream Publisher (C4 D-redo-4) used by create / edit
-// to emit forge_started / forge_completed. Pass forgepkg.New(nil, log) in
-// tests / unwired services to disable forge double-write.
-//
-// WorkflowTools 装配 6 个 workflow system tool。forge 用于双写;测试 / 未
-// 接线传 noop 关闭双写。
+// WorkflowTools 构造 workflow system tool；测试 / 未接线时传 noop forge Publisher 关闭双写。
 func WorkflowTools(svc *workflowapp.Service, forge forgepkg.Publisher, log *zap.Logger) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchWorkflow{svc: svc, log: log},
@@ -46,13 +26,9 @@ func WorkflowTools(svc *workflowapp.Service, forge forgepkg.Publisher, log *zap.
 	}
 }
 
-// WorkflowExecutionTools constructs the 2 D22 execution-log tools wired
-// with the flowrun Repository (queries flowrun_nodes). Kept separate from
-// WorkflowTools so main.go / harness can wire them at different times
-// (flowrun repo lands after Plan 05 store init).
+// WorkflowExecutionTools constructs execution-log tools wired with the flowrun Repository.
 //
-// WorkflowExecutionTools 装配 2 个 D22 执行日志工具(查 flowrun_nodes)。
-// 跟 WorkflowTools 分开因为 flowrun repo 在 Plan 05 store 初始化之后才接。
+// WorkflowExecutionTools 用 flowrun Repository 装配执行日志工具。
 func WorkflowExecutionTools(repo flowrundomain.Repository) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchWorkflowExecutions{repo: repo},

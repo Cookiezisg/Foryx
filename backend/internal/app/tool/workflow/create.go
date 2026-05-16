@@ -1,13 +1,3 @@
-// create.go — create_workflow system tool: streams 1 progress delta per
-// op via the eventlog Emitter, double-writes forge_started + forge_completed
-// on the forge bus (C4 D-redo-4). Unlike create_function / handler there
-// is NO env install — workflow validation is graph-shape only — so no
-// env-fix loop (envfix). v1 auto-accepts on success.
-//
-// create.go —— create_workflow:每 op 推 progress delta,双写 forge bus
-// (forge_started + forge_completed)。workflow 无 env 装,无 envfix loop。
-// v1 自动 accept。
-
 package workflow
 
 import (

@@ -1,13 +1,3 @@
-// catalog_test.go — exercises the polling Service end-to-end with
-// fake CatalogSources + a stub Generator (or nil generator → mechanical
-// fallback path). Covers cold-start cache load, fingerprint short-
-// circuit, single-flight busy guard, source-failure isolation, lastFP
-// always-update invariant, and atomic disk write.
-//
-// catalog_test.go ——用 fake CatalogSource + stub Generator（或 nil →
-// mechanical fallback 路径）端到端验 polling Service。覆盖 cold-start cache
-// 加载、fingerprint 短路、single-flight busy guard、source 失败隔离、lastFP
-// always-update 不变量、原子 disk 写。
 package catalog
 
 import (
@@ -27,14 +17,6 @@ import (
 	catalogdomain "github.com/sunweilin/forgify/backend/internal/domain/catalog"
 )
 
-// ── fake source + stub generator ─────────────────────────────────────
-
-// fakeSource implements catalogdomain.CatalogSource. Tests mutate
-// items + listErr fields between Refresh calls to drive scenarios
-// (e.g. "first tick OK; second tick source errors").
-//
-// fakeSource 实现 catalogdomain.CatalogSource。测试在 Refresh 调用间改
-// items + listErr 驱动场景（如"首 tick OK；次 tick source 报错"）。
 type fakeSource struct {
 	mu        sync.Mutex
 	name      string
@@ -70,12 +52,6 @@ func (f *fakeSource) setErr(err error) {
 	f.listErr = err
 }
 
-// stubGenerator returns a catalog whose Summary marks it as LLM-generated
-// so tests can distinguish "Generator ran" from "mechanical fallback ran"
-// without parsing prose.
-//
-// stubGenerator 返 Summary 标 LLM 的 catalog 让测试无需解 prose 即可分清
-// "Generator 跑了" 与 "mechanical fallback 跑了"。
 type stubGenerator struct {
 	mu       sync.Mutex
 	called   int
@@ -101,14 +77,10 @@ func (g *stubGenerator) Generate(_ context.Context, items []catalogdomain.Item, 
 	}, nil
 }
 
-// ── helpers ──────────────────────────────────────────────────────────
-
 func newServiceForTest(t *testing.T) *Service {
 	t.Helper()
 	return New(filepath.Join(t.TempDir(), ".catalog.json"), nil, zaptest.NewLogger(t))
 }
-
-// ── New / RegisterSource / Get / GetForSystemPrompt ──────────────────
 
 func TestService_NewHasEmptyCacheAndPrompt(t *testing.T) {
 	s := newServiceForTest(t)
@@ -121,9 +93,6 @@ func TestService_NewHasEmptyCacheAndPrompt(t *testing.T) {
 }
 
 func TestService_RegisterSourceConcurrent(t *testing.T) {
-	// Tests don't exercise concurrent register in production (RegisterSource
-	// runs at boot before Start), but the mutex must still hold under it.
-	// 生产里 RegisterSource 在 Start 前 boot 跑，但 mutex 仍要扛得住。
 	s := newServiceForTest(t)
 	var wg sync.WaitGroup
 	for i := 0; i < 10; i++ {
@@ -138,8 +107,6 @@ func TestService_RegisterSourceConcurrent(t *testing.T) {
 		t.Errorf("registered = %d, want 10", got)
 	}
 }
-
-// ── Refresh: empty / single source / multi-source ───────────────────
 
 func TestRefresh_NoSources_NoOp(t *testing.T) {
 	s := newServiceForTest(t)
@@ -225,8 +192,6 @@ func TestRefresh_AllSourcesFail_KeepsCache(t *testing.T) {
 		{Source: "forge", ID: "f_a", Name: "csv-clean", Description: "Strip BOMs"},
 	}}
 	s.RegisterSource(src)
-	// First Refresh succeeds, populates cache.
-	// 首次 Refresh 成功，写入 cache。
 	if err := s.Refresh(context.Background()); err != nil {
 		t.Fatalf("first Refresh: %v", err)
 	}
@@ -235,9 +200,6 @@ func TestRefresh_AllSourcesFail_KeepsCache(t *testing.T) {
 		t.Fatal("first Refresh produced nil cache")
 	}
 
-	// Now source errors → all sources fail → Refresh returns err but
-	// cache stays as-is.
-	// 现在 source 报错 → 全 source 挂 → Refresh 返错但 cache 不动。
 	src.setErr(errors.New("transient"))
 	err := s.Refresh(context.Background())
 	if err == nil {
@@ -277,8 +239,6 @@ func TestRefresh_PartialFailure_OtherSourcesContinue(t *testing.T) {
 	}
 }
 
-// ── fingerprint short-circuit ────────────────────────────────────────
-
 func TestRefresh_FingerprintShortCircuits_SecondCall(t *testing.T) {
 	s := newServiceForTest(t)
 	gen := &stubGenerator{summary: "## llm"}
@@ -316,8 +276,6 @@ func TestRefresh_DescriptionChange_TriggersRegen(t *testing.T) {
 	}
 }
 
-// ── pollLoop / single-flight ─────────────────────────────────────────
-
 func TestPollLoop_FiresAtLeastOnce(t *testing.T) {
 	s := newServiceForTest(t)
 	s.SetPollInterval(20 * time.Millisecond)
@@ -332,8 +290,6 @@ func TestPollLoop_FiresAtLeastOnce(t *testing.T) {
 		t.Fatalf("Start: %v", err)
 	}
 
-	// Wait until ListItems was actually called at least once.
-	// 等 ListItems 至少被调一次。
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		if atomic.LoadInt32(&src.callCount) >= 1 {
@@ -351,8 +307,6 @@ func TestPollLoop_FiresAtLeastOnce(t *testing.T) {
 
 func TestTryRefresh_BusyGuard_SkipsConcurrent(t *testing.T) {
 	s := newServiceForTest(t)
-	// Generator that blocks until released, simulating a slow LLM call.
-	// generator 阻塞直到 release 模拟慢 LLM 调用。
 	release := make(chan struct{})
 	gen := &slowGenerator{release: release, summary: "## llm", entered: make(chan struct{})}
 	s.SetGenerator(gen)
@@ -361,21 +315,14 @@ func TestTryRefresh_BusyGuard_SkipsConcurrent(t *testing.T) {
 	}})
 
 	go s.tryRefresh(context.Background())
-	// Wait for the slow generator to hit the block.
-	// 等 slow generator 进阻塞。
 	select {
 	case <-gen.entered:
 	case <-time.After(time.Second):
 		t.Fatal("slow generator never entered")
 	}
 
-	// Concurrent tryRefresh must skip (busy guard) — generator should
-	// NOT be entered a second time.
-	// 并发 tryRefresh 必须跳（busy guard）——generator 不该被进二次。
 	s.tryRefresh(context.Background())
 
-	// Release the slow generator + give it a beat to finish.
-	// 释放 slow generator + 给点时间结束。
 	close(release)
 	time.Sleep(50 * time.Millisecond)
 
@@ -384,10 +331,6 @@ func TestTryRefresh_BusyGuard_SkipsConcurrent(t *testing.T) {
 	}
 }
 
-// slowGenerator blocks on first invocation until release closes; used
-// to test the single-flight busy guard.
-//
-// slowGenerator 首次调用阻塞直到 release 关闭；测 single-flight busy guard。
 type slowGenerator struct {
 	release  chan struct{}
 	entered  chan struct{} // signals first entry
@@ -415,8 +358,6 @@ func (g *slowGenerator) Generate(_ context.Context, items []catalogdomain.Item, 
 	}
 	return &catalogdomain.Catalog{Summary: g.summary, Coverage: cov, GeneratedBy: "llm"}, nil
 }
-
-// ── disk cache: cold-start load + corruption handling ───────────────
 
 func TestStart_LoadsExistingCache(t *testing.T) {
 	dir := t.TempDir()
@@ -446,8 +387,6 @@ func TestStart_LoadsExistingCache(t *testing.T) {
 	if got.Version != 7 {
 		t.Errorf("Version = %d, want 7 (preserved from disk)", got.Version)
 	}
-	// nextVersion should pick up at 8 (continue counting from disk).
-	// nextVersion 应从 8 继续（接着 disk 数）。
 	if v := s.nextVersion(); v != 8 {
 		t.Errorf("nextVersion after disk load = %d, want 8", v)
 	}
@@ -495,8 +434,6 @@ func TestRefresh_PersistsToDisk(t *testing.T) {
 	}
 }
 
-// ── fingerprint ──────────────────────────────────────────────────────
-
 func TestFingerprint_StableUnderShuffle(t *testing.T) {
 	a := []catalogdomain.Item{
 		{Source: "forge", ID: "f1", Name: "alpha", Description: "x"},
@@ -520,13 +457,6 @@ func TestFingerprint_ChangesOnDescription(t *testing.T) {
 }
 
 func TestFingerprint_IgnoresIDOnly(t *testing.T) {
-	// fingerprint is (source + name + description) — ID change alone
-	// must NOT trigger regen. This is intentional per catalog.md §6:
-	// summary text isn't affected by IDs, so polling shouldn't waste
-	// LLM call on an ID rename.
-	// fingerprint 是 (source + name + description)——只 ID 变不该触发
-	// regen。§6 故意：summary 文本不受 ID 影响，polling 不该 ID 重命名烧
-	// LLM。
 	a := []catalogdomain.Item{{Source: "forge", ID: "f1", Name: "x", Description: "y"}}
 	b := []catalogdomain.Item{{Source: "forge", ID: "f2", Name: "x", Description: "y"}}
 	if fingerprint(a) != fingerprint(b) {

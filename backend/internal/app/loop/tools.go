@@ -1,12 +1,3 @@
-// tools.go — Tool call execution within the ReAct loop.
-// Calls partition by LLM-supplied ExecutionGroup: same group = parallel batch;
-// different groups = sequential ascending. Calls without an explicit group
-// (≤ 0) get a unique auto-assigned group placed after all explicit ones, so
-// the safe default is "run alone, sequentially."
-//
-// tools.go — ReAct 循环内的工具调用执行。按 LLM 提供的 ExecutionGroup
-// 分组：同 group = 并行 batch；不同 group = 升序串行；无显式 group（≤ 0）
-// 获得自动 group 排在所有显式 group 之后——安全默认是"独自运行，串行"。
 package loop
 
 import (
@@ -27,29 +18,12 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// pkgMethodPrefix matches one or more "<word>.<word>: " segments at the
-// head of an error string — the §S16 wrap chain pattern. Used by
-// sanitizeToolErr to strip framework scaffolding before LLM exposure.
-//
-// pkgMethodPrefix 匹配错误串开头的一段或多段 "<word>.<word>: "（§S16 wrap
-// 格式）。供 sanitizeToolErr 在喂给 LLM 前剥框架脚手架。
+// pkgMethodPrefix matches the §S16 "<word>.<word>: " wrap-chain head used by sanitizeToolErr.
 var pkgMethodPrefix = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_]*(?:\.[a-zA-Z][a-zA-Z0-9_]*)+:\s+`)
 
-// sanitizeToolErr strips internal "<pkg>.<Method>: " wrap-chain prefixes
-// from err so the LLM sees user-meaningful error text only. Keeps the
-// innermost message intact.
+// sanitizeToolErr strips §S16 wrap-chain prefixes so the LLM sees only the innermost message.
 //
-// Example:
-//
-//	"subagent.Spawn: subagentapp.runReact: llm.Generate: deepseek api: 401 unauthorized"
-//	→ "deepseek api: 401 unauthorized"
-//
-// Errors without a §S16 prefix are returned unchanged (so already-friendly
-// messages like "permission denied" or sentinel text survive intact).
-//
-// sanitizeToolErr 剥 <pkg>.<Method>: 前缀链，留最里层。让 LLM 看用户语义
-// 错误而非框架内部 wrap 链。无 §S16 前缀的错误原样返回（让已友好的消息
-// 如 "permission denied" / sentinel 文本保留）。
+// sanitizeToolErr 剥 §S16 wrap-chain 前缀，让 LLM 只看最里层消息。
 func sanitizeToolErr(err error) string {
 	if err == nil {
 		return ""
@@ -61,14 +35,9 @@ func sanitizeToolErr(err error) string {
 	return msg
 }
 
-// runTools executes all tool calls in execution-group batches. Per-tool
-// emit (tool_result block_start/delta/stop) fires real-time inside
-// runOneTool — there is no snapshot publish path. Returns the
-// in-memory tool_result block slice for in-loop history extension.
+// runTools executes calls in execution-group batches and returns tool_result blocks.
 //
-// runTools 按 execution-group 分批执行所有 tool 调用。每个 tool 在
-// runOneTool 内部实时 emit (tool_result block_start/delta/stop)
-// ——无快照推送。返回内存 tool_result block 列表给循环内 history 扩展。
+// runTools 按 execution-group 分批执行 tool 调用，返 tool_result block 列表。
 func runTools(
 	ctx context.Context,
 	calls []chatdomain.ToolCallData,
@@ -107,16 +76,9 @@ func runTools(
 	return blocks
 }
 
-// runOneTool executes a single tool call: ValidateInput → CheckPermissions →
-// Execute, returning a tool_result block. Never errors — failures become
-// ok=false results so the LLM can react.
+// runOneTool runs ValidateInput → CheckPermissions → Execute and returns a tool_result block.
 //
-// runOneTool 执行单个 tool 调用：ValidateInput → CheckPermissions → Execute，
-// 返回 tool_result block。永不返 error——失败以 ok=false 呈现让 LLM 可响应。
-//
-// 事件日志 dual-write：用 WithParentBlockID 包工具 Execute 的 ctx，让工具
-// 内部 emit（progress / 嵌套 LLM 文本）自动挂 tool_call block 下。Execute
-// 返回后 emit 一个直挂 tool_call 下的 tool_result block。
+// runOneTool 跑 ValidateInput → CheckPermissions → Execute，返 tool_result block；失败 ok=false。
 func runOneTool(
 	ctx context.Context,
 	t toolapp.Tool,
@@ -124,25 +86,13 @@ func runOneTool(
 	seq int,
 	log *zap.Logger,
 ) chatdomain.Block {
-	// tc.Arguments is built by parseToolArgs from a map of basic types
-	// (string / number / bool / nested basic-type maps); Marshal cannot
-	// fail at runtime — discard err.
-	// tc.Arguments 由 parseToolArgs 从基本类型 map（字串/数字/布尔/嵌套
-	// 基本类型 map）构造，Marshal 运行时不可能失败——忽略 err。
 	argsJSON, _ := json.Marshal(tc.Arguments)
 
-	// reqctx for tool internals: ToolCallID + ParentBlockID (= tool_call's
-	// block ID, which is the LLM tool-call ID per stream.go convention).
-	//
-	// 给工具内部用的 reqctx：ToolCallID + ParentBlockID（= tool_call 的
-	// block ID，按 stream.go 约定即 LLM 的 tool-call ID）。
 	toolCtx := reqctxpkg.WithToolCallID(ctx, tc.ID)
 	toolCtx = reqctxpkg.WithParentBlockID(toolCtx, tc.ID)
 
 	output, errMsg, ok := executeTool(toolCtx, t, tc.Name, argsJSON, log)
 
-	// Event-log emit: tool_result is a child of tool_call.
-	// 事件日志 emit：tool_result 是 tool_call 的子。
 	em := eventlogpkg.From(ctx)
 	msgID, _ := reqctxpkg.GetMessageID(ctx)
 	resultBlockID := idgenpkg.New("blk")
@@ -162,19 +112,6 @@ func runOneTool(
 		em.StopBlock(ctx, resultBlockID, status, stopErr)
 	}
 
-	// In-memory block for in-loop history conversion. Only fields
-	// BlocksToAssistantLLM consumes for tool_result are filled: Content
-	// (result text, falls back to Error when ok=false) + ParentBlockID
-	// (= tc.ID, used to recover the LLM tool-call ID for the role=tool
-	// message). Status / CreatedAt assignments are dead — DB row's status
-	// comes from the eventlog Emitter's FinalizeStop, and history
-	// conversion ignores both fields.
-	//
-	// 内存 block 给循环内 history 转换。只填 BlocksToAssistantLLM 真读
-	// 的字段：Content（结果文本，ok=false 时回退到 Error）+ ParentBlockID
-	// （= tc.ID，让 BlocksToAssistantLLM 取回 LLM tool-call ID 给 role=tool
-	// 消息）。Status / CreatedAt 没人读——DB 行 status 由 Emitter
-	// FinalizeStop 写，history 转换两字段都忽略。
 	errVal := ""
 	if !ok {
 		errVal = errMsg
@@ -188,33 +125,16 @@ func runOneTool(
 	}
 }
 
-// stringErr is a tiny error wrapper that lets us pass a string through
-// the (error)-typed StopBlock parameter without importing errors here.
-//
-// stringErr 是 string → error 的小包装，让我们能把字符串透到 StopBlock
-// 的 (error) 参数，免去本包 import errors。
 type stringErr string
 
 func (e stringErr) Error() string { return string(e) }
 
-// executeTool runs the pre-Execute hooks then Execute. Phase 3+ uses
-// PermissionModeDefault; Phase 4+ scheduler will pass real modes.
+// executeTool runs pre-Execute hooks then Execute (PermissionModeDefault for now).
 //
-// executeTool 跑前置钩子再 Execute。Phase 3+ 用 PermissionModeDefault；
-// Phase 4+ scheduler 会传真实 mode。
+// executeTool 跑前置钩子再 Execute（当前固定 PermissionModeDefault）。
 func executeTool(ctx context.Context, t toolapp.Tool, name string, argsJSON []byte, log *zap.Logger) (string, string, bool) {
 	if t == nil {
-		// LLM picked a tool name not in the registry — wiring bug
-		// (catalog generated stale name / tool removed but catalog
-		// not refreshed). Log loudly so operator sees the misconfig
-		// at run-time; the LLM-facing msg + DB errMsg path stays
-		// unchanged so the conversation continues with a sensible
-		// "tool not found" hint.
-		//
-		// LLM 选了不在 registry 的 tool 名——wiring bug（catalog 生成
-		// 了陈旧名字 / tool 已删但 catalog 没刷新）。高声 log 让
-		// operator 运行时看到 misconfig；LLM 看的 msg + DB errMsg 不变
-		// 让对话能带着合理的"tool not found"提示继续。
+		// LLM picked a tool not in registry — likely wiring bug / stale catalog.
 		log.Warn("executeTool: tool not in registry — likely wiring bug or stale catalog",
 			zap.String("tool", name))
 		msg := fmt.Sprintf("tool %q not found", name)
@@ -223,37 +143,16 @@ func executeTool(ctx context.Context, t toolapp.Tool, name string, argsJSON []by
 
 	if err := t.ValidateInput(argsJSON); err != nil {
 		log.Warn("tool validate failed", zap.String("tool", name), zap.Error(err))
-		// LLM-facing text strips §S16 <pkg>.<Method>: wrap-chain so the
-		// model sees user-meaningful "<reason>" instead of "Tool.ValidateInput:
-		// inner: ...". errMsg (DB column) keeps the full chain for operator
-		// debugging; only the LLM-exposed string is sanitized.
-		//
-		// LLM 看的文本剥 §S16 <pkg>.<Method>: wrap 链——让模型看用户语义
-		// "<原因>"，而非 "Tool.ValidateInput: inner: ..."。errMsg（DB 列）
-		// 保留完整 chain 供 operator 调试；只清洗 LLM 暴露面。
+		// LLM sees sanitized inner reason; DB errMsg keeps the full §S16 wrap chain.
 		clean := sanitizeToolErr(err)
 		return "input validation failed: " + clean, err.Error(), false
 	}
 
-	// Skill pre-approval (skill.md §9): if an active skill on this
-	// conversation lists this tool in its allowed-tools, skip the
-	// per-tool CheckPermissions and treat as Allow. The check is
-	// centralized here so each Tool implementation doesn't repeat
-	// (per skill.md §9 line 385: "central in framework dispatch beats
-	// per-tool changes"). Bare-name patterns ('Read', 'Bash') and
-	// paren-form patterns ('Bash(git *)') are both honored — see
-	// pkg/agentstate/skill.go::matchAllowedTool.
-	//
-	// Skill 预授权（skill.md §9）：本对话有 active skill 且其 allowed-
-	// tools 列了本 tool → 跳过 per-tool CheckPermissions 当 Allow。集中
-	// 在 framework dispatch 比改每个 Tool 划算（§9 line 385）。bare-name
-	// 与 paren-form pattern 均支持——见 matchAllowedTool。
+	// Skill pre-approval (skill.md §9): active skill's allowed-tools bypass CheckPermissions.
 	if state, hasState := reqctxpkg.GetAgentState(ctx); hasState {
 		if state.IsToolPreApprovedBySkill(name, argsJSON) {
 			log.Debug("tool pre-approved by active skill",
 				zap.String("tool", name))
-			// Skip CheckPermissions entirely; proceed to Execute.
-			// 整个跳过 CheckPermissions；直接 Execute。
 			return executeAfterPermission(ctx, t, name, argsJSON, log)
 		}
 	}
@@ -263,33 +162,19 @@ func executeTool(ctx context.Context, t toolapp.Tool, name string, argsJSON []by
 		log.Warn("tool permission denied", zap.String("tool", name))
 		return "permission denied for this call", "permission denied", false
 	case toolapp.PermissionAsk:
-		// Phase 4+ user-gating UI will treat Ask as a real suspension. Phase 3+
-		// falls through (treat as Allow) — single-user local desktop has nobody
-		// to ask in real time anyway.
-		//
-		// Phase 4+ 带审批 UI 的 scheduler 会把 Ask 当真挂起。Phase 3+ 落到 Allow
-		// ——单用户本地桌面没真实询问通道。
+		// Phase 3+: treat as Allow (single-user local has no real-time approval channel).
 	}
 
 	return executeAfterPermission(ctx, t, name, argsJSON, log)
 }
 
-// executeAfterPermission runs t.Execute and shapes the return tuple.
-// Extracted so the skill-preapproval path and the normal CheckPermissions
-// path can share the post-permission codepath without duplication.
+// executeAfterPermission runs t.Execute and shapes the return tuple (shared by both permission paths).
 //
-// executeAfterPermission 跑 t.Execute + 整形返回三元组。抽出让 skill 预
-// 授权路径与正常 CheckPermissions 路径共用 post-permission 代码不重复。
+// executeAfterPermission 跑 t.Execute 并整形返回三元组（两条权限路径共用）。
 func executeAfterPermission(ctx context.Context, t toolapp.Tool, name string, argsJSON []byte, log *zap.Logger) (string, string, bool) {
 	output, err := t.Execute(ctx, string(argsJSON))
 	if err != nil {
 		log.Warn("tool execute failed", zap.String("tool", name), zap.Error(err))
-		// LLM-facing output strips §S16 <pkg>.<Method>: wrap chain when
-		// Execute returned only an err (no friendly output string). errMsg
-		// (DB column) keeps the full chain. See sanitizeToolErr.
-		//
-		// Execute 仅返 err（无友好 output 字符串）时，给 LLM 的文本剥
-		// §S16 wrap 链；errMsg（DB）保留完整 chain。
 		clean := sanitizeToolErr(err)
 		if output != "" {
 			return output, err.Error(), false
@@ -299,37 +184,20 @@ func executeAfterPermission(ctx context.Context, t toolapp.Tool, name string, ar
 	return output, "", true
 }
 
-// indexedCall pairs a tool call with its original index so block ordering
-// survives parallel scheduling.
-//
-// indexedCall 把 tool 调用与原索引绑定，让 block 顺序在并行调度后还能复原。
 type indexedCall struct {
 	idx int
 	tc  chatdomain.ToolCallData
 }
 
-// executionBatch is one set of calls that runs in parallel. Distinct batches
-// run sequentially in ascending group-number order.
-//
-// executionBatch 是一组并行调用。不同 batch 之间按 group 号升序串行。
 type executionBatch struct {
 	items []indexedCall
 }
 
-// autoGroupBase keeps auto-assigned groups visibly higher than typical
-// LLM-supplied numbers in logs while preserving sort order.
-//
-// autoGroupBase 让自动 group 在日志里显著高于 LLM 典型值，同时保持排序正确。
 const autoGroupBase = 1000
 
-// partitionByExecutionGroup buckets calls by ExecutionGroup. Calls with
-// ExecutionGroup ≤ 0 get unique auto-assigned groups starting at
-// max(maxExplicit+1, autoGroupBase) so unspecified calls run alone after
-// all explicit batches.
+// partitionByExecutionGroup buckets calls by ExecutionGroup; ≤0 get auto-assigned groups after explicit ones.
 //
-// partitionByExecutionGroup 按 ExecutionGroup 分桶。≤ 0 的调用获得唯一
-// 自动 group，从 max(maxExplicit+1, autoGroupBase) 起，让未指定的调用独自
-// 运行且都排在显式 batch 之后。
+// partitionByExecutionGroup 按 ExecutionGroup 分桶；≤0 获自动 group，排在显式 batch 之后。
 func partitionByExecutionGroup(calls []chatdomain.ToolCallData) []executionBatch {
 	if len(calls) == 0 {
 		return nil

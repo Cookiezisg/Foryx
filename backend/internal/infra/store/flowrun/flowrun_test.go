@@ -1,9 +1,3 @@
-// flowrun_test.go — integration tests for flowrunstore.Store using
-// in-memory SQLite. Covers FlowRun CRUD + user scoping + status
-// transitions + paused state round-trip + retention prune + Node CRUD.
-//
-// flowrun_test.go —— flowrunstore.Store 集成测试(内存 SQLite)。
-
 package flowrun
 
 import (
@@ -72,7 +66,6 @@ func mkNode(id, userID, flowrunID, nodeID, nodeType, status string) *flowrundoma
 	}
 }
 
-// ── FlowRun CRUD ─────────────────────────────────────────────────────────────
 
 func TestCreate_HappyPath(t *testing.T) {
 	s := newStore(t)
@@ -249,7 +242,6 @@ func TestHardDeleteOldest_TrimsToKeep(t *testing.T) {
 	}
 }
 
-// ── Node CRUD ────────────────────────────────────────────────────────────────
 
 func TestNode_CreateAndGet(t *testing.T) {
 	s := newStore(t)

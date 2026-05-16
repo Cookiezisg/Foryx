@@ -1,8 +1,3 @@
-// broadcast.go — dev-only log broadcaster: implements zapcore.Core and fans
-// log entries out to SSE subscribers with a 500-entry ring buffer for replay.
-//
-// broadcast.go — 仅 dev 模式使用的日志广播器：实现 zapcore.Core，通过
-// 500 条环形缓冲区支持回放，并扇出给所有 SSE 订阅者。
 package logger
 
 import (
@@ -18,7 +13,7 @@ const (
 	subBufCap = 128
 )
 
-// LogEntry is one structured log line sent over SSE.
+// LogEntry is one structured log line emitted over SSE.
 //
 // LogEntry 是通过 SSE 推送的单条结构化日志。
 type LogEntry struct {
@@ -34,27 +29,16 @@ type logSub struct {
 	done chan struct{}
 }
 
-// LogBroadcaster implements zapcore.Core and fans encoded log entries to
-// SSE subscribers. Ring buffer holds the most recent 500 entries for
-// replay on new connections. Drop-on-slow-subscriber semantic: log lines
-// are append-only and many; losing a few in a slow consumer is preferable
-// to back-pressuring the entire app's logger. Contrast infra/eventlog +
-// infra/notifications which BLOCK on slow subscribers because their
-// events carry state that mustn't be lost.
+// LogBroadcaster is a zapcore.Core that fans entries to SSE subscribers; drops on slow consumers.
 //
-// LogBroadcaster 实现 zapcore.Core，把编码后的日志条目扇出给 SSE 订阅者。
-// 环形缓冲区保留最近 500 条供新连接回放。慢订阅者丢失语义：log 是 append-
-// only 大量条目，慢消费者丢几条好过反向压回整个 app 的 logger。对比
-// infra/eventlog + infra/notifications——他们慢订阅者会阻塞，因事件载有
-// 不能丢的状态。
+// LogBroadcaster 实现 zapcore.Core，把日志扇出给 SSE 订阅者；慢订阅者丢条。
 type LogBroadcaster struct {
 	mu    sync.RWMutex
 	ring  [ringCap][]byte
-	head  int // next write position / 下一个写入位置
-	count int // total entries written / 已写入总条数
-
-	subs []*logSub
-	ctx  []zapcore.Field // pre-applied via With / 通过 With 预设的字段
+	head  int
+	count int
+	subs  []*logSub
+	ctx   []zapcore.Field
 }
 
 // NewLogBroadcaster returns a ready-to-use broadcaster.
@@ -64,9 +48,9 @@ func NewLogBroadcaster() *LogBroadcaster {
 	return &LogBroadcaster{}
 }
 
-// Ring returns all buffered entries in chronological order (oldest first).
+// Ring returns all buffered entries chronologically (oldest first).
 //
-// Ring 按时间顺序（最旧优先）返回所有缓冲条目。
+// Ring 按时间顺序返回所有缓冲条目（最旧在前）。
 func (b *LogBroadcaster) Ring() [][]byte {
 	b.mu.RLock()
 	defer b.mu.RUnlock()
@@ -83,11 +67,9 @@ func (b *LogBroadcaster) Ring() [][]byte {
 	return out
 }
 
-// Subscribe returns a channel of JSON-encoded LogEntry bytes and an
-// idempotent cancel function. Caller should drain the channel promptly.
+// Subscribe returns a JSON-bytes channel and an idempotent cancel; drain promptly.
 //
-// Subscribe 返回 JSON 编码的 LogEntry 字节 channel 和幂等取消函数。
-// 调用方应及时消费 channel，否则条目会被丢弃。
+// Subscribe 返回 JSON 字节 channel 和幂等 cancel；及时消费否则丢条。
 func (b *LogBroadcaster) Subscribe() (<-chan []byte, func()) {
 	sub := &logSub{
 		ch:   make(chan []byte, subBufCap),
@@ -117,14 +99,8 @@ func (b *LogBroadcaster) removeSub(target *logSub) {
 	}
 }
 
-// ── zapcore.Core ──────────────────────────────────────────────────────────────
-
-// Enabled reports true for all levels — dev broadcaster captures everything.
-// Enabled 对所有级别返回 true——dev 广播器捕获所有日志。
 func (b *LogBroadcaster) Enabled(zapcore.Level) bool { return true }
 
-// With returns a wrapper that prepends ctx fields to every Write call.
-// With 返回一个包装器，在每次 Write 调用时前置 ctx 字段。
 func (b *LogBroadcaster) With(fields []zapcore.Field) zapcore.Core {
 	return &broadcasterWith{
 		parent: b,
@@ -132,21 +108,14 @@ func (b *LogBroadcaster) With(fields []zapcore.Field) zapcore.Core {
 	}
 }
 
-// Check adds b to ce if the entry passes the level check.
 func (b *LogBroadcaster) Check(e zapcore.Entry, ce *zapcore.CheckedEntry) *zapcore.CheckedEntry {
 	return ce.AddCore(e, b)
 }
 
-// Write encodes the entry + fields as JSON, appends to the ring buffer,
-// and fans out to subscribers non-blocking.
-//
-// Write 把条目 + 字段编码为 JSON，追加到环形缓冲区，
-// 并非阻塞地扇出给所有订阅者。
 func (b *LogBroadcaster) Write(e zapcore.Entry, fields []zapcore.Field) error {
 	return b.write(e, append(b.ctx, fields...))
 }
 
-// Sync is a no-op — broadcaster is in-memory.
 func (b *LogBroadcaster) Sync() error { return nil }
 
 func (b *LogBroadcaster) write(e zapcore.Entry, fields []zapcore.Field) error {
@@ -166,7 +135,7 @@ func (b *LogBroadcaster) write(e zapcore.Entry, fields []zapcore.Field) error {
 
 	data, err := json.Marshal(entry)
 	if err != nil {
-		return nil // best-effort; never block the logger
+		return nil
 	}
 
 	b.mu.Lock()
@@ -182,17 +151,11 @@ func (b *LogBroadcaster) write(e zapcore.Entry, fields []zapcore.Field) error {
 		case s.ch <- data:
 		case <-s.done:
 		default:
-			// subscriber buffer full — drop silently
 		}
 	}
 	return nil
 }
 
-// broadcasterWith is a thin wrapper returned by With; it delegates writes
-// to the parent broadcaster with pre-set context fields.
-//
-// broadcasterWith 是 With 返回的薄包装器，把写入委托给父广播器，
-// 并携带预设的 context 字段。
 type broadcasterWith struct {
 	parent *LogBroadcaster
 	ctx    []zapcore.Field

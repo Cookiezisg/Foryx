@@ -7,12 +7,6 @@ import (
 	"testing"
 )
 
-// TestSentinels_Unique pins exported sentinels: every message starts with
-// "handler:" and messages are unique. Drift breaks errors.Is matching after
-// future renames.
-//
-// TestSentinels_Unique 钉死导出 sentinel:全 handler: 前缀 + 消息唯一。
-// 改名漂移会破 errors.Is 匹配。
 func TestSentinels_Unique(t *testing.T) {
 	all := []error{
 		ErrNotFound, ErrDuplicateName, ErrMethodNotFound, ErrVersionNotFound,
@@ -38,10 +32,6 @@ func TestSentinels_Unique(t *testing.T) {
 	}
 }
 
-// TestSentinels_ErrorsIsCompatible verifies sentinels work through %w wrap
-// chains (§S16 wrap discipline).
-//
-// TestSentinels_ErrorsIsCompatible 验证 sentinel 经 %w wrap 链 errors.Is 通。
 func TestSentinels_ErrorsIsCompatible(t *testing.T) {
 	wrapped := fmt.Errorf("handlerstore.Get: %w", ErrNotFound)
 	if !errors.Is(wrapped, ErrNotFound) {
@@ -53,7 +43,6 @@ func TestSentinels_ErrorsIsCompatible(t *testing.T) {
 	}
 }
 
-// TestStatusConstants_Stable pins status enum strings (DB CHECK literal).
 func TestStatusConstants_Stable(t *testing.T) {
 	cases := map[string]string{
 		"StatusPending":  StatusPending,
@@ -72,7 +61,6 @@ func TestStatusConstants_Stable(t *testing.T) {
 	}
 }
 
-// TestEnvStatusConstants_Stable pins env-status enum strings.
 func TestEnvStatusConstants_Stable(t *testing.T) {
 	cases := map[string]string{
 		"EnvStatusPending": EnvStatusPending,
@@ -95,7 +83,6 @@ func TestEnvStatusConstants_Stable(t *testing.T) {
 	}
 }
 
-// TestConfigStateConstants_Stable pins computed ConfigState enum.
 func TestConfigStateConstants_Stable(t *testing.T) {
 	cases := map[string]string{
 		"ConfigStateUnconfigured":        ConfigStateUnconfigured,
@@ -114,21 +101,18 @@ func TestConfigStateConstants_Stable(t *testing.T) {
 	}
 }
 
-// TestDefaultPythonVersion checks the default PEP 440 spec.
 func TestDefaultPythonVersion(t *testing.T) {
 	if DefaultPythonVersion != ">=3.12" {
 		t.Errorf("DefaultPythonVersion = %q, want '>=3.12'", DefaultPythonVersion)
 	}
 }
 
-// TestAcceptedVersionCap pins the per-handler accepted-version cap.
 func TestAcceptedVersionCap(t *testing.T) {
 	if AcceptedVersionCap != 50 {
 		t.Errorf("AcceptedVersionCap = %d, want 50", AcceptedVersionCap)
 	}
 }
 
-// TestTableNames pins GORM table names.
 func TestTableNames(t *testing.T) {
 	if (Handler{}).TableName() != "handlers" {
 		t.Errorf("Handler.TableName() = %q, want 'handlers'", (Handler{}).TableName())

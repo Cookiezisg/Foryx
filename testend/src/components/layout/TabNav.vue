@@ -45,6 +45,7 @@ const sections: NavSection[] = [
       { label: 'Todos', path: '/current/todos', hint: 'conv-scoped todos' },
       { label: 'Asks pending', path: '/current/asks', hint: 'waiting AskUserQuestions' },
       { label: 'Attachments', path: '/current/attachments', hint: 'uploaded files' },
+      { label: 'Compaction', path: '/current/compaction', hint: 'summary + block roles (V1.2 §1)' },
     ],
   },
   {
@@ -87,6 +88,7 @@ const sections: NavSection[] = [
       { label: 'Skills', path: '/config/skills' },
       { label: 'MCP servers', path: '/config/mcp' },
       { label: 'Sandbox', path: '/config/sandbox' },
+      { label: 'Memory', path: '/config/memory', hint: 'cross-conv long-term facts (V1.2 §2)' },
     ],
   },
   {

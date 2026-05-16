@@ -1,5 +1,3 @@
-// pause_test.go — approval pause + ResumeApproval + RehydrateOnBoot.
-
 package scheduler
 
 import (
@@ -12,11 +10,6 @@ import (
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
 )
-
-// Extend fakeRepo to keep PausedState in memory + record SetPausedState
-// calls (need helpers since the fakeRepo defined in scheduler_test.go is
-// minimal). We avoid adding fields to the existing fakeRepo (used by
-// other tests) by introducing a separate type.
 
 type pauseFakeRepo struct {
 	*fakeRepo
@@ -62,8 +55,6 @@ func (r *pauseFakeRepo) ListPaused(context.Context) ([]*flowrundomain.FlowRun, e
 	return out, nil
 }
 
-// ── Approval pause path ─────────────────────────────────────────────────────
-
 func TestApprovalNode_PausesRun(t *testing.T) {
 	repo := newPauseFakeRepo()
 	graph := mkGraph(
@@ -106,8 +97,6 @@ func TestApprovalNode_PausesRun(t *testing.T) {
 	}
 	t.Fatalf("run did not pause within 2s")
 }
-
-// ── ResumeApproval ──────────────────────────────────────────────────────────
 
 func TestResumeApproval_InvalidDecision(t *testing.T) {
 	repo := newPauseFakeRepo()
@@ -212,8 +201,6 @@ func TestResumeApproval_EndToEnd_FinishesRun(t *testing.T) {
 	t.Fatalf("run did not complete after resume")
 }
 
-// ── RehydrateOnBoot ─────────────────────────────────────────────────────────
-
 func TestRehydrateOnBoot_RegistersCancelForPaused(t *testing.T) {
 	repo := newPauseFakeRepo()
 	run := mkRun("fr1", "u1", "wf1", flowrundomain.StatusPaused)
@@ -243,7 +230,6 @@ func TestRehydrateOnBoot_IgnoresRunningRuns(t *testing.T) {
 	}
 }
 
-// helper
 
 func newSvcWithPauseRepo(t *testing.T, repo *pauseFakeRepo, reader *fakeWorkflowReader) *Service {
 	t.Helper()

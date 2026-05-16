@@ -1,10 +1,3 @@
-// get.go — get_workflow system tool: full details + active graph + pending
-// if any. Returns the parsed Graph (nodes / edges / variables) so the LLM
-// can reason about the current shape before edit_workflow.
-//
-// get.go —— get_workflow:完整详情 + active graph + 有则 pending。返解析
-// 后的 Graph 让 LLM edit 前先看当前形态。
-
 package workflow
 
 import (

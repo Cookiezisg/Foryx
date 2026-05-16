@@ -1,18 +1,3 @@
-// edit.go — edit_function system tool: applies a sequence of ops on top of
-// the current pending (or active, when no pending) version. Iterate-same-
-// pending semantics (D-redo-11): a second edit while a pending exists
-// rewrites the same row instead of erroring with PendingConflict.
-//
-// On env install failure, enters the C2 env-fix loop: up to 3 attempts where
-// the main-chat LLM revises the dependency list. Unlike create_function the
-// tool does NOT auto-accept on success — Edit's contract is "leave a pending
-// for the user to review", so the final tool result reports the pending and
-// its terminal env state.
-//
-// edit.go —— edit_function 工具:在 pending(或 active 无 pending 时)之上应用
-// ops;iterate-same-pending 不返冲突。env 装失败时跑 env-fix loop(同 create);
-// 跟 create 不同的是不 auto-accept(Edit 契约是留 pending 给用户审)。
-
 package function
 
 import (
@@ -196,12 +181,9 @@ func (t *EditFunction) Execute(ctx context.Context, argsJSON string) (string, er
 		result.AttemptsUsed, result.History, len(ops)), nil
 }
 
-// marshalEditOutput is the single source of truth for the edit_function tool's
-// wire shape. Distinct from create_function's envelope because Edit does not
-// flip active version — the result is a pending awaiting user accept.
+// marshalEditOutput is edit_function's wire-shape source; unlike create, returns a pending awaiting user accept.
 //
-// marshalEditOutput edit_function 工具线协议;跟 create 不同 — 不翻 active,
-// 返一个待用户审的 pending。
+// marshalEditOutput edit_function 线协议；不像 create 翻 active，返待审 pending。
 func marshalEditOutput(
 	pendingID string,
 	envStatus, envError string,

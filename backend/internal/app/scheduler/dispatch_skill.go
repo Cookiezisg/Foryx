@@ -1,12 +1,3 @@
-// dispatch_skill.go — SkillDispatcher. Reads node.Config keys `skillName`
-// + `arguments` (string slice for $1..$N substitution per skill spec).
-// Calls skillapp.Service.Activate which returns the resolved skill body
-// text; the workflow downstream node consumes that as input. (V1 keeps
-// it simple — fork-mode subagent execution will come in Plan 06.)
-//
-// dispatch_skill.go —— SkillDispatcher;Activate 返替换 $1..$N 后的
-// skill body;下游节点当 input 用。V1 简化版,fork-mode 跑子 agent 留 Plan 06。
-
 package scheduler
 
 import (
@@ -18,7 +9,7 @@ import (
 
 // SkillDispatcher bridges workflow skill nodes to skillapp.Service.Activate.
 //
-// SkillDispatcher 桥接 workflow skill 节点到 skillapp.Activate。
+// SkillDispatcher 把 workflow skill 节点桥接到 skillapp.Activate。
 type SkillDispatcher struct {
 	svc *skillapp.Service
 }
@@ -30,10 +21,9 @@ func NewSkillDispatcher(svc *skillapp.Service) *SkillDispatcher {
 	return &SkillDispatcher{svc: svc}
 }
 
-// Dispatch reads skillName + arguments from node.Config and resolves the
-// skill body via Activate.
+// Dispatch reads skillName + arguments and resolves the skill body via Activate.
 //
-// Dispatch 读 skillName + arguments 调 Activate 拿 skill body。
+// Dispatch 读 skillName + arguments 并通过 Activate 解析 skill body。
 func (d *SkillDispatcher) Dispatch(ctx context.Context, in DispatchInput) DispatchOutput {
 	name, _ := in.Node.Config["skillName"].(string)
 	if name == "" {

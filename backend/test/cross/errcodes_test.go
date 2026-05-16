@@ -1,18 +1,8 @@
 //go:build pipeline
 
-// errcodes_test.go — sweeps sentinel error codes to verify each maps
-// to the correct HTTP status + envelope code via a real HTTP path.
+// Package cross sweeps sentinel error codes to verify HTTP status + envelope mappings.
 //
-// Coverage notes:
-//   - LLM_PROVIDER_ERROR:   covered by TestChat_LLMStreamError_StatusError
-//   - STREAM_IN_PROGRESS:   covered by TestChatQueue_Full_Returns409
-//   - API_KEY_TEST_FAILED:  covered by TestAPIKey_Test_FakeServer_Auth401_Returns422
-//   - MODEL_NOT_CONFIGURED: covered by TestChat_MissingModelConfig_ErrorCodePersisted
-//   - API_KEY_PROVIDER_NOT_FOUND: covered by TestChat_MissingAPIKey_ErrorCodePersisted
-//   - Function codes: in TestErrCodes_FunctionDomain below
-//
-// errcodes_test.go — 扫描 sentinel 错误码，验证每个通过真实 HTTP 路径
-// 映射到正确的 HTTP 状态 + envelope code。
+// Package cross 扫 sentinel 错误码验证 HTTP 状态 + envelope 映射。
 package cross
 
 import (
@@ -22,13 +12,9 @@ import (
 	th "github.com/sunweilin/forgify/backend/test/harness"
 )
 
-// ── Main sweep (no sandbox required) ─────────────────────────────────────────
-
 func TestErrCodes_Sweep(t *testing.T) {
 	h := th.New(t)
 
-	// Pre-create a conversation to use in STREAM_NOT_FOUND test.
-	// 预建对话用于 STREAM_NOT_FOUND 测试。
 	var convResp struct {
 		Data struct{ ID string `json:"id"` } `json:"data"`
 	}
@@ -43,8 +29,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 		want   int
 		code   string
 	}{
-		// INVALID_REQUEST — unknown JSON field rejected by DisallowUnknownFields.
-		// INVALID_REQUEST — DisallowUnknownFields 拒绝未知字段。
 		{
 			"INVALID_REQUEST",
 			"POST", "/api/v1/conversations",
@@ -52,16 +36,12 @@ func TestErrCodes_Sweep(t *testing.T) {
 			http.StatusBadRequest, "INVALID_REQUEST",
 		},
 
-		// NOT_FOUND — request to an unregistered route.
-		// NOT_FOUND — 请求未注册的路由。
 		{
 			"NOT_FOUND",
 			"GET", "/api/v1/this_route_does_not_exist",
 			nil, http.StatusNotFound, "NOT_FOUND",
 		},
 
-		// API_KEY_NOT_FOUND — PATCH on a non-existent key id.
-		// API_KEY_NOT_FOUND — 对不存在的 key id PATCH。
 		{
 			"API_KEY_NOT_FOUND",
 			"PATCH", "/api/v1/api-keys/aki_doesnotexist000000",
@@ -69,8 +49,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 			http.StatusNotFound, "API_KEY_NOT_FOUND",
 		},
 
-		// INVALID_PROVIDER — unsupported provider name.
-		// INVALID_PROVIDER — 不支持的 provider 名。
 		{
 			"INVALID_PROVIDER",
 			"POST", "/api/v1/api-keys",
@@ -78,8 +56,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 			http.StatusBadRequest, "INVALID_PROVIDER",
 		},
 
-		// BASE_URL_REQUIRED — ollama requires a baseUrl.
-		// BASE_URL_REQUIRED — ollama 必须提供 baseUrl。
 		{
 			"BASE_URL_REQUIRED",
 			"POST", "/api/v1/api-keys",
@@ -87,8 +63,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 			http.StatusBadRequest, "BASE_URL_REQUIRED",
 		},
 
-		// KEY_REQUIRED — empty key string.
-		// KEY_REQUIRED — key 字符串为空。
 		{
 			"KEY_REQUIRED",
 			"POST", "/api/v1/api-keys",
@@ -96,8 +70,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 			http.StatusBadRequest, "KEY_REQUIRED",
 		},
 
-		// API_FORMAT_REQUIRED — custom provider needs apiFormat.
-		// API_FORMAT_REQUIRED — custom provider 必须提供 apiFormat。
 		{
 			"API_FORMAT_REQUIRED",
 			"POST", "/api/v1/api-keys",
@@ -105,8 +77,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 			http.StatusBadRequest, "API_FORMAT_REQUIRED",
 		},
 
-		// INVALID_SCENARIO — unrecognised model scenario.
-		// INVALID_SCENARIO — 未知 model scenario。
 		{
 			"INVALID_SCENARIO",
 			"PUT", "/api/v1/model-configs/not-a-real-scenario",
@@ -114,8 +84,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 			http.StatusBadRequest, "INVALID_SCENARIO",
 		},
 
-		// PROVIDER_REQUIRED — empty provider in model upsert.
-		// PROVIDER_REQUIRED — model upsert provider 为空。
 		{
 			"PROVIDER_REQUIRED",
 			"PUT", "/api/v1/model-configs/chat",
@@ -123,8 +91,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 			http.StatusBadRequest, "PROVIDER_REQUIRED",
 		},
 
-		// MODEL_ID_REQUIRED — empty modelId in model upsert.
-		// MODEL_ID_REQUIRED — model upsert modelId 为空。
 		{
 			"MODEL_ID_REQUIRED",
 			"PUT", "/api/v1/model-configs/chat",
@@ -132,8 +98,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 			http.StatusBadRequest, "MODEL_ID_REQUIRED",
 		},
 
-		// CONVERSATION_NOT_FOUND — PATCH non-existent conversation.
-		// CONVERSATION_NOT_FOUND — PATCH 不存在的对话。
 		{
 			"CONVERSATION_NOT_FOUND",
 			"PATCH", "/api/v1/conversations/cv_doesnotexist000000",
@@ -141,8 +105,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 			http.StatusNotFound, "CONVERSATION_NOT_FOUND",
 		},
 
-		// STREAM_NOT_FOUND — DELETE /stream on a conversation with no active stream.
-		// STREAM_NOT_FOUND — 对没有活跃流的对话 DELETE /stream。
 		{
 			"STREAM_NOT_FOUND",
 			"DELETE", "/api/v1/conversations/" + convID + "/stream",
@@ -165,8 +127,6 @@ func TestErrCodes_Sweep(t *testing.T) {
 		})
 	}
 }
-
-// ── Function errcodes (no sandbox required — pure validation) ───────────────
 
 func TestErrCodes_FunctionDomain(t *testing.T) {
 	h := th.New(t)

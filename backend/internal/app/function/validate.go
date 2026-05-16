@@ -1,17 +1,3 @@
-// validate.go — incremental + final validation for VersionDraft.
-//
-// Incremental rules run after each ops application (cumulative state must be
-// self-consistent: name char-set, parameter name uniqueness, parameter types).
-// Final rules run once after all ops are applied (required fields, AST scan,
-// signature consistency per D14). Final-only checks would falsely flag mid-
-// edit states where the LLM has not yet emitted `set_code`.
-//
-// validate.go —— VersionDraft 的 incremental + final 校验。
-//
-// incremental 每 op 应用后跑(累积态需自洽:name 字符集 / 参数名唯一 / 参数
-// 类型);final 全部 ops 应用完跑一次(必填字段 + AST 扫 + 签名一致性 D14)。
-// 把 final-only check 提前会误伤 LLM 还没 emit `set_code` 的中间态。
-
 package function
 
 import (
@@ -22,10 +8,6 @@ import (
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 )
 
-// validateIncremental runs after each op application — checks state is
-// internally coherent without requiring all ops applied.
-//
-// validateIncremental 每 op 应用后跑——检查累积态自洽,但不要求全部 ops 完成。
 func validateIncremental(d *VersionDraft) error {
 	if d.Name != "" {
 		if !validNameRe.MatchString(d.Name) {
@@ -50,11 +32,6 @@ func validateIncremental(d *VersionDraft) error {
 	return nil
 }
 
-// validateFinal runs after all ops applied — required for the entity to be
-// persisted. Includes Python AST scan + parameters/code consistency check.
-//
-// validateFinal 全部 ops 应用完跑——entity 持久化的前置条件。包括 Python AST
-// 扫 + parameters/code 签名一致性校验(D14)。
 func validateFinal(d *VersionDraft) error {
 	if d.Name == "" {
 		return fmt.Errorf("name is required")
@@ -81,19 +58,6 @@ func isValidParamType(t string) bool {
 	return false
 }
 
-// scanPythonAST validates code contains at least one top-level def and has
-// no Handler-client imports (D7 blacklist). V1 uses simple substring scan;
-// V1.5 switches to real `python -c 'import ast; ast.parse(...)'` in sandbox
-// for accuracy (multi-line defs / decorator stacks would fool the V1 scan).
-//
-// Entity Name is intentionally decoupled from the Python identifier — the
-// sandbox driver extracts the def name from the code itself (extractFuncName
-// in sandbox_adapter.go), so users can pick friendly names like "my-pdf-
-// converter" while their def is `def convert_pdf(...)`. The `name` argument
-// is kept on the signature for backward compatibility but is not used.
-//
-// scanPythonAST V1 用字符串扫(至少含一个 def + 不 import handler);name 入参
-// 不再强制匹配——sandbox 自行 extractFuncName。V1.5 切 sandbox 真 ast.parse。
 func scanPythonAST(code, name string) error {
 	_ = name
 	if !strings.Contains(code, "\ndef ") && !strings.HasPrefix(code, "def ") {
@@ -112,12 +76,6 @@ var handlerImportBlacklist = []string{
 	"import forgify_handler",
 }
 
-// checkParamConsistency cross-checks declared ParameterSpec against the
-// Python function signature. V1 returns nil — implementation tracked as
-// Task 10b (switch to sandbox real AST per D14).
-//
-// checkParamConsistency 比对 declared ParameterSpec 跟 Python 函数签名。
-// V1 占位返 nil;真实现走 Task 10b(切 sandbox 真 AST per D14)。
 func checkParamConsistency(code, name string, params []functiondomain.ParameterSpec) error {
 	_ = code
 	_ = name

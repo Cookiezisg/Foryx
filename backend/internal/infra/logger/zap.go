@@ -10,13 +10,9 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-// New builds a zap logger. dev=true: colored console (for local dev).
-// dev=false: JSON to stdout with ISO8601 timestamps (for prod).
-// Optional extras (e.g. LogBroadcaster) are tee'd alongside the main core.
+// New builds a zap logger; dev=true → colored console, else JSON; extras tee alongside.
 //
-// New 构造 zap logger。dev=true：彩色控制台（本地开发）。
-// dev=false：JSON 输出到 stdout 带 ISO8601 时间戳（生产）。
-// 可选的 extras（如 LogBroadcaster）与主 core tee 并行输出。
+// New 构造 zap logger；dev=true 用彩色控制台，否则 JSON；extras 与主 core 并行输出。
 func New(dev bool, extras ...zapcore.Core) (*zap.Logger, error) {
 	var cfg zap.Config
 	if dev {

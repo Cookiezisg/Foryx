@@ -1,12 +1,3 @@
-// spawn_test.go — end-to-end tests for SpawnOnce / SpawnLongLived using
-// stdlib commands (echo / cat / sleep) so the suite stays portable.
-// Windows runs are skipped where the test relies on a unix shell command;
-// Job Object validation belongs in the D14 Windows pipeline run.
-//
-// spawn_test.go ——SpawnOnce / SpawnLongLived 端到端测试，用 stdlib 命令
-// （echo / cat / sleep）保持套件可移植。靠 unix shell 命令的测试在 Windows
-// skip；Job Object 验证归 D14 Windows pipeline 跑。
-
 package sandbox
 
 import (
@@ -22,12 +13,6 @@ import (
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 )
 
-// echoBin returns a (cmd, args) tuple that prints msg to stdout in a
-// portable way. On Windows we'd want PowerShell; v1 demo runs on
-// macOS so we just skip Windows here.
-//
-// echoBin 返一个 (cmd, args) 元组，跨平台地把 msg 打到 stdout。
-// Windows 上要 PowerShell；v1 demo 跑 macOS 这里直接 skip windows。
 func echoBin(t *testing.T, msg string) (string, []string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
@@ -69,9 +54,6 @@ func TestSpawnOnce_NonZeroExit_ReturnsOkFalseNotError(t *testing.T) {
 		t.Fatalf("look up false: %v", err)
 	}
 	res, err := SpawnOnce(context.Background(), SpawnOptions{Cmd: bin})
-	// Non-zero exit must NOT bubble up as a Go error — caller passes Ok=false
-	// straight to the LLM as a tool_result.
-	// 非零退出**不**该上抛 Go error——调用方把 Ok=false 直接当 tool_result 传 LLM。
 	if err != nil {
 		t.Fatalf("SpawnOnce returned Go error for non-zero exit: %v", err)
 	}
@@ -137,16 +119,10 @@ func TestSpawnOnce_CtxCancelKillsProcess(t *testing.T) {
 	})
 	elapsed := time.Since(start)
 
-	// Without ctx-cancel propagation, sleep 30 would block 30s; with it,
-	// killProcessGroup fires and the call returns near the timeout.
-	// 无 ctx-cancel 传播，sleep 30 会阻塞 30s；有了 killProcessGroup 调
-	// 在 timeout 附近返。
 	if elapsed > 5*time.Second {
 		t.Errorf("ctx-cancel did not kill subprocess: elapsed %v", elapsed)
 	}
 }
-
-// ── SpawnLongLived ────────────────────────────────────────────────────
 
 func TestSpawnLongLived_StdinStdoutEcho(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -165,8 +141,6 @@ func TestSpawnLongLived_StdinStdoutEcho(t *testing.T) {
 		t.Error("PID = 0 after Start; want non-zero")
 	}
 
-	// Write a line, expect cat to echo it back.
-	// 写一行，期 cat 回显。
 	go func() {
 		_, _ = handle.Stdin().Write([]byte("ping\n"))
 		_ = handle.Stdin().Close()

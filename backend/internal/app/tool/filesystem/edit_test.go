@@ -14,7 +14,6 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// ── Test helpers (most reused from read_test.go / write_test.go) ──────────────
 
 func newEdit() *Edit { return &Edit{pathGuard: allowAll{}} }
 
@@ -30,7 +29,6 @@ func callEdit(t *testing.T, e *Edit, ctx context.Context, args map[string]any) (
 	return e.Execute(ctx, string(raw))
 }
 
-// ── Identity / static metadata ────────────────────────────────────────────────
 
 func TestEdit_IdentityAndMetadata(t *testing.T) {
 	e := newEdit()
@@ -66,7 +64,6 @@ func TestEdit_CheckPermissionsAlwaysAllow(t *testing.T) {
 	}
 }
 
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestEditValidateInput_EmptyFilePath(t *testing.T) {
 	err := newEdit().ValidateInput(json.RawMessage(`{"old_string":"a","new_string":"b"}`))
@@ -123,7 +120,6 @@ func TestEditValidateInput_HappyPath(t *testing.T) {
 	}
 }
 
-// ── Execute: success paths ────────────────────────────────────────────────────
 
 // readWriteSetup creates a file, marks it as Read in a fresh AgentState,
 // returns ctx + path. Used by every Edit success-path test.
@@ -276,7 +272,6 @@ func TestEditExecute_MarkReadUpdatedAfterEdit(t *testing.T) {
 	}
 }
 
-// ── Execute: error paths ──────────────────────────────────────────────────────
 
 func TestEditExecute_FileNotFound(t *testing.T) {
 	ctx, _ := ctxWithState()
@@ -424,7 +419,6 @@ func TestEditExecute_MultipleMatchesWithoutReplaceAll(t *testing.T) {
 	}
 }
 
-// ── Atomic / mode preservation ────────────────────────────────────────────────
 
 func TestEditExecute_PreservesFileMode(t *testing.T) {
 	dir := t.TempDir()
@@ -450,7 +444,6 @@ func TestEditExecute_PreservesFileMode(t *testing.T) {
 	}
 }
 
-// ── Defense against Claude Code #51986 (markdown bold + space) ────────────────
 
 func TestEditExecute_MarkdownBoldReplaceAll_NoSilentSkip(t *testing.T) {
 	// CC #51986: replace_all on patterns near markdown bold close (e.g.

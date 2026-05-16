@@ -1,12 +1,3 @@
-// client_test.go — pure-function unit tests for the stdio Client
-// helpers (joinContent / composeEnv / ringBuffer). Full subprocess
-// integration (real Initialize → ListTools → CallTool round-trip)
-// lives in the D6-5 pipeline suite once the fake stdio MCP server
-// fixture is in place.
-//
-// client_test.go ——stdio Client helper 的纯函数单测（joinContent /
-// composeEnv / ringBuffer）。完整子进程集成（真 Initialize → ListTools →
-// CallTool）在 D6-5 pipeline 套（待 fake stdio MCP server 就位）。
 package mcp
 
 import (
@@ -17,7 +8,6 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-// ── joinContent ──────────────────────────────────────────────────────
 
 func TestJoinContent_TextOnly(t *testing.T) {
 	got := joinContent([]mcpsdk.Content{
@@ -64,7 +54,6 @@ func TestJoinContent_EmptyArray(t *testing.T) {
 	}
 }
 
-// ── composeEnv ───────────────────────────────────────────────────────
 
 func TestComposeEnv_NilExtras_ReturnsNilForInherit(t *testing.T) {
 	if got := composeEnv(nil); got != nil {
@@ -123,7 +112,6 @@ func TestComposeEnv_OverrideInheritedKey(t *testing.T) {
 	}
 }
 
-// ── ringBuffer ───────────────────────────────────────────────────────
 
 func TestRingBuffer_Empty(t *testing.T) {
 	r := newRingBuffer(64)

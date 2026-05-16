@@ -1,9 +1,3 @@
-// create.go — TodoCreate system tool: add a new todo to the current
-// conversation's todo list. Returns the freshly-minted Todo as JSON so
-// the LLM has the assigned ID handy for follow-up TodoUpdate calls.
-//
-// create.go — TodoCreate 系统工具：往当前对话的 TODO 列表加一条；
-// 返回新铸 Todo 的 JSON，让 LLM 后续 TodoUpdate 时直接用上分配的 ID。
 package todo
 
 import (
@@ -46,7 +40,7 @@ var todoCreateSchema = json.RawMessage(`{
 
 // TodoCreate implements the TodoCreate system tool.
 //
-// TodoCreate struct 是 TodoCreate 系统工具。
+// TodoCreate 是 TodoCreate 系统工具的实现。
 type TodoCreate struct {
 	svc *todoapp.Service
 }
@@ -79,10 +73,9 @@ func (t *TodoCreate) CheckPermissions(_ json.RawMessage, _ toolapp.PermissionMod
 	return toolapp.PermissionAllow
 }
 
-// Execute creates the todo via Service and returns the new entity as
-// indented JSON.
+// Execute creates the todo via Service and returns the new entity as JSON.
 //
-// Execute 通过 Service 创建 todo，返新 entity 的缩进 JSON。
+// Execute 通过 Service 创建 todo，返新 entity 的 JSON。
 func (t *TodoCreate) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var args struct {
 		Subject     string   `json:"subject"`
@@ -105,16 +98,10 @@ func (t *TodoCreate) Execute(ctx context.Context, argsJSON string) (string, erro
 	return marshalIndent(created)
 }
 
-// ── shared helpers ───────────────────────────────────────────────────────────
 
-// classifyTodoErr converts a Service error into an LLM-friendly string.
-// Sentinels become recoverable hints; anything else falls back to a
-// generic prefix. err.Error() pass-through is fine because the framework
-// boundary (loop/tools.go) sanitizes §S16 wrap chains before LLM.
+// classifyTodoErr converts Service errors to LLM-friendly strings; sentinels become recoverable hints.
 //
-// classifyTodoErr 把 Service 错转友好字符串。sentinel 给可恢复提示；
-// 其他走通用前缀。err.Error() 透传无需手动剥前缀——framework boundary
-// （loop/tools.go）已清洗 §S16 wrap 链。
+// classifyTodoErr 把 Service 错转友好字符串；sentinel 给可恢复提示。
 func classifyTodoErr(err error, op string) string {
 	switch {
 	case errors.Is(err, tododomain.ErrNotFound):
@@ -127,10 +114,6 @@ func classifyTodoErr(err error, op string) string {
 	return fmt.Sprintf("Todo %s failed: %s", op, err.Error())
 }
 
-// marshalIndent emits the entity as pretty-printed JSON the LLM can
-// quote back if useful.
-//
-// marshalIndent 输出 entity 的缩进 JSON，方便 LLM 引用。
 func marshalIndent(v any) (string, error) {
 	body, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {

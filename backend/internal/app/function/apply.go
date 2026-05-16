@@ -1,20 +1,3 @@
-// apply.go — ops engine for Function pending-version authoring.
-//
-// LLM emits a sequence of Ops (set_meta / set_code / set_parameters /
-// set_return_schema / set_dependencies / set_python_version) and Service
-// applies them in order to a VersionDraft, running per-op + cumulative +
-// final validation. On success the resulting VersionDraft is persisted as
-// a pending FunctionVersion; on per-op failure the partial draft is
-// surfaced + index of the failing op (D5 — each trinity domain owns its
-// own apply.go without reuse).
-//
-// apply.go —— Function pending 版本编辑的 ops 引擎。
-//
-// LLM 发一串 Op,Service 按序应用到 VersionDraft 上,每 op 跑 per-op +
-// cumulative 校验,全部完成后跑 final 校验。成功则落库为 pending
-// FunctionVersion;per-op 失败时返部分 draft + 失败索引(D5——每个 trinity
-// 域各自维护 apply.go 不复用)。
-
 package function
 
 import (
@@ -27,24 +10,17 @@ import (
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 )
 
-// Op is a discriminated union encoded as JSON. LLM emits []Op, system applies
-// each in order with per-op + cumulative + final validation. Type lives in the
-// JSON `op` field; Raw holds the full body so each op handler self-decodes.
+// Op is a JSON-discriminated union; Type lives in the `op` field, Raw holds the full body.
 //
-// Op 是判别式 union(JSON 序列化)。LLM 发 []Op,系统按序 apply,每 op 后跑
-// per-op 校验,全部应用完跑 final 校验。Type 在 JSON `op` 字段;Raw 存完整
-// body 让各 op handler 自取字段。
+// Op 是 JSON 判别式 union；Type 在 `op` 字段，Raw 存完整 body。
 type Op struct {
 	Type string          `json:"op"`
 	Raw  json.RawMessage `json:"-"`
 }
 
-// VersionDraft is the in-memory snapshot accumulated during ops apply. After
-// final validation passes, fields are copied onto a persisted FunctionVersion
-// row by Service.CreatePending / Service.EditPending.
+// VersionDraft is the in-memory snapshot accumulated during ops apply.
 //
-// VersionDraft 是 ops 应用过程中的可变快照(累积态)。final 校验通过后,
-// 由 Service.CreatePending / EditPending 拷贝到持久化 FunctionVersion 行。
+// VersionDraft 是 ops 应用过程中累积的内存快照。
 type VersionDraft struct {
 	Name          string
 	Description   string
@@ -58,21 +34,16 @@ type VersionDraft struct {
 
 // OpResult is the per-op outcome surfaced back to the LLM via the tool result.
 //
-// OpResult 是单 op 应用结果,经 tool result 返给 LLM。
+// OpResult 是单 op 应用结果，经 tool result 返给 LLM。
 type OpResult struct {
 	Index int    `json:"index"`
 	Type  string `json:"type"`
 	OK    bool   `json:"ok"`
 }
 
-// ApplyOps applies a series of ops to a base draft. Emits one progress delta
-// per op via the eventlog Emitter in ctx (no-op if no progress block).
-// Returns the final draft + per-op outcomes. On per-op or final validation
-// failure, returns the partial draft (nil here, partial state internal) +
-// the wrapped error.
+// ApplyOps applies a series of ops to a base draft and emits one progress delta per op.
 //
-// ApplyOps 把一组 ops 应用到 base 草稿上。每 op emit 一个 progress delta。
-// 返最终 draft + per-op outcomes;失败时返 nil draft + 包装后错误。
+// ApplyOps 把一组 ops 应用到 base 草稿，每 op 推一个 progress delta。
 func (s *Service) ApplyOps(ctx context.Context, base *VersionDraft, ops []Op, progressBlockID string) (*VersionDraft, []OpResult, error) {
 	state := cloneDraft(base)
 	results := make([]OpResult, 0, len(ops))
@@ -97,9 +68,6 @@ func (s *Service) ApplyOps(ctx context.Context, base *VersionDraft, ops []Op, pr
 	return state, results, nil
 }
 
-// applyOne mutates state per a single op. Unknown op types are rejected.
-//
-// applyOne 单 op 应用到 state。未知 op 类型拒绝。
 func applyOne(state *VersionDraft, op Op) error {
 	switch op.Type {
 	case "set_meta":
@@ -166,14 +134,9 @@ func applyOne(state *VersionDraft, op Op) error {
 	return nil
 }
 
-// ParseOps decodes the wire format the LLM emits into []Op. Expects a JSON
-// array of objects each with an `op` discriminator field and op-specific
-// data fields. Each Op.Raw holds the full object body — apply handlers'
-// inner unmarshal ignores the extra `op` field.
+// ParseOps decodes the LLM wire format (JSON array with `op` discriminator) into []Op.
 //
-// ParseOps 把 LLM 发的线上格式解码为 []Op。期望 JSON 数组,每对象含 `op`
-// 判别字段 + 各 op 特有字段。Op.Raw 存完整 object body——apply handler
-// 内部 unmarshal 会忽略多余 `op` 字段。
+// ParseOps 把 LLM 线上格式（带 `op` 判别字段的 JSON 数组）解码为 []Op。
 func ParseOps(raw json.RawMessage) ([]Op, error) {
 	var arr []json.RawMessage
 	if err := json.Unmarshal(raw, &arr); err != nil {
@@ -195,11 +158,6 @@ func ParseOps(raw json.RawMessage) ([]Op, error) {
 	return ops, nil
 }
 
-// cloneDraft deep-copies a VersionDraft so ApplyOps can mutate without
-// affecting the caller's base. Nil input returns an empty draft.
-//
-// cloneDraft 深拷贝 VersionDraft,ApplyOps 改 state 不影响 caller 的 base。
-// nil 入参返空 draft。
 func cloneDraft(d *VersionDraft) *VersionDraft {
 	if d == nil {
 		return &VersionDraft{}

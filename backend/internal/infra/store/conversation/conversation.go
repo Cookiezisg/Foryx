@@ -1,8 +1,6 @@
-// Package conversation (infra/store/conversation) is the GORM-backed
-// implementation of the domain conversation Repository port.
+// Package conversation is the GORM-backed convdomain.Repository.
 //
-// Package conversation（infra/store/conversation）是 domain conversation
-// Repository port 的 GORM 实现。
+// Package conversation 是 convdomain.Repository 的 GORM 实现。
 package conversation
 
 import (
@@ -62,10 +60,9 @@ func (s *Store) Get(ctx context.Context, id string) (*convdomain.Conversation, e
 	return &c, nil
 }
 
-// List returns a page of conversations, newest first, using a
-// (created_at, id) tuple cursor for stable pagination.
+// List returns a page newest-first, using (created_at, id) tuple cursor.
 //
-// List 返回一页对话，最新优先，使用 (created_at, id) 元组 cursor 稳定分页。
+// List 返一页（最新优先），(created_at, id) 元组 cursor 稳定分页。
 func (s *Store) List(ctx context.Context, filter convdomain.ListFilter) ([]*convdomain.Conversation, string, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {

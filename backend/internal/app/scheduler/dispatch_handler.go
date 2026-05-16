@@ -1,11 +1,3 @@
-// dispatch_handler.go — HandlerDispatcher. Reads node.Config keys
-// `handlerName` + `method` + `args` and calls handlerapp.Service.Call
-// with Owner{Kind="flowrun", ID=runID} so handler instances live for
-// the whole FlowRun lifetime (cross-node state sharing).
-//
-// dispatch_handler.go —— HandlerDispatcher;Owner{Kind=flowrun,ID=runID}
-// 让 instance 跨节点共享状态;run 终态时 scheduler 统一 destroy。
-
 package scheduler
 
 import (
@@ -17,7 +9,7 @@ import (
 
 // HandlerDispatcher bridges workflow handler nodes to handlerapp.Service.Call.
 //
-// HandlerDispatcher 桥接 workflow handler 节点到 handlerapp.Call。
+// HandlerDispatcher 把 workflow handler 节点桥接到 handlerapp.Call。
 type HandlerDispatcher struct {
 	svc *handlerapp.Service
 }
@@ -29,10 +21,9 @@ func NewHandlerDispatcher(svc *handlerapp.Service) *HandlerDispatcher {
 	return &HandlerDispatcher{svc: svc}
 }
 
-// Dispatch reads handlerName + method + args from node.Config, calls the
-// handler method, returns the result on the default "out" port.
+// Dispatch reads handlerName + method + args and returns the result on "out".
 //
-// Dispatch 读 handlerName/method/args 调 handler method。
+// Dispatch 读 handlerName/method/args 并把结果挂 "out" port。
 func (d *HandlerDispatcher) Dispatch(ctx context.Context, in DispatchInput) DispatchOutput {
 	name, _ := in.Node.Config["handlerName"].(string)
 	method, _ := in.Node.Config["method"].(string)

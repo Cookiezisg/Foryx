@@ -1,11 +1,3 @@
-// mcp_test.go — unit tests for SearchMCP + CallMCP. Identity / static
-// metadata / schema / ValidateInput / Execute friendly-error mapping.
-// Service-level integration is covered in app/mcp/mcp_test.go;
-// end-to-end with a real subprocess lives in D6-5 pipeline.
-//
-// mcp_test.go ——SearchMCP + CallMCP 单测。Identity / 静态元数据 / schema /
-// ValidateInput / Execute 友好错误映射。Service 集成在 app/mcp/mcp_test.go；
-// 真子进程端到端在 D6-5 pipeline。
 package mcp
 
 import (
@@ -19,7 +11,6 @@ import (
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
 )
 
-// ── SearchMCP identity / metadata / schema ───────────────────────────
 
 func TestSearchMCP_Identity(t *testing.T) {
 	tt := &SearchMCP{}
@@ -56,7 +47,6 @@ func TestSearchMCP_Schema_RequiresQuery(t *testing.T) {
 	}
 }
 
-// ── SearchMCP.ValidateInput ──────────────────────────────────────────
 
 func TestSearchMCP_ValidateInput_Happy(t *testing.T) {
 	if err := (&SearchMCP{}).ValidateInput(json.RawMessage(`{"query":"github pr"}`)); err != nil {
@@ -97,7 +87,6 @@ func TestSearchMCP_CheckPermissions_Allow(t *testing.T) {
 	}
 }
 
-// ── SearchMCP.Execute parse failures ─────────────────────────────────
 
 func TestSearchMCP_Execute_MalformedArgsJSON(t *testing.T) {
 	tt := &SearchMCP{} // svc nil; Execute returns parse error before reaching svc
@@ -107,7 +96,6 @@ func TestSearchMCP_Execute_MalformedArgsJSON(t *testing.T) {
 	}
 }
 
-// ── CallMCP identity / metadata / schema ─────────────────────────────
 
 func TestCallMCP_Identity(t *testing.T) {
 	tt := &CallMCP{}
@@ -134,7 +122,6 @@ func TestCallMCP_Schema_RequiresServerToolArgs(t *testing.T) {
 	}
 }
 
-// ── CallMCP.ValidateInput ────────────────────────────────────────────
 
 func TestCallMCP_ValidateInput_Happy(t *testing.T) {
 	err := (&CallMCP{}).ValidateInput(json.RawMessage(`{"server":"gh","tool":"list_prs","args":{}}`))
@@ -164,7 +151,6 @@ func TestCallMCP_ValidateInput_WhitespaceServer(t *testing.T) {
 	}
 }
 
-// ── CallMCP.Execute parse failures ───────────────────────────────────
 
 func TestCallMCP_Execute_MalformedArgsJSON(t *testing.T) {
 	tt := &CallMCP{}
@@ -174,7 +160,6 @@ func TestCallMCP_Execute_MalformedArgsJSON(t *testing.T) {
 	}
 }
 
-// ── mapCallToolErrorToFriendly: every sentinel produces a readable string ─
 
 func TestMapCallToolErrorToFriendly_AllSentinelsCovered(t *testing.T) {
 	cases := []struct {
@@ -227,7 +212,6 @@ func TestMapCallToolErrorToFriendly_EmbedsServerToolNames(t *testing.T) {
 	}
 }
 
-// ── MCPTools factory ─────────────────────────────────────────────────
 
 func TestMCPTools_ReturnsAllInOrder(t *testing.T) {
 	// V3 (2026-05-09): MCPTools always returns 5 tools — list_mcp_marketplace

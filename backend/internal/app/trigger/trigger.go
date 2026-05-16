@@ -1,18 +1,6 @@
-// Package trigger (app layer) integrates the four V1 trigger listener
-// kinds (cron / fsnotify / webhook / manual) behind one Service surface.
-// Workflow accept/revert/delete events drive Register / Unregister calls;
-// listener firings turn into scheduler.StartRun via the SchedulerStarter
-// port.
+// Package trigger (app layer) integrates the four trigger listener kinds behind one Service.
 //
-// Manual triggers have no listener — HTTP `POST /workflows/{id}:trigger`
-// and the LLM `trigger_workflow` tool call SchedulerStarter directly.
-// Service tracks them via specs registry only (for State observability).
-//
-// Plan 05 §2 + §6.12.
-//
-// Package trigger(app 层)整合 4 种 listener。无 listener 的 manual 触发由
-// HTTP / LLM 工具直接调 SchedulerStarter;Service 仅在 specs 表注册便于 State
-// 观测。
+// Package trigger（app 层）把 4 种 trigger listener 整合到一个 Service。
 package trigger
 
 import (
@@ -31,12 +19,9 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// SchedulerStarter is the port Service uses to dispatch fires to the
-// scheduler. main.go wires *schedulerapp.Service through this interface
-// to break the trigger ↔ scheduler import cycle.
+// SchedulerStarter is the port Service uses to dispatch fires to the scheduler.
 //
-// SchedulerStarter 是 Service 触发 dispatch 用的端口;main.go 把
-// scheduler.Service 经此接口接,断 trigger ↔ scheduler 循环依赖。
+// SchedulerStarter 是 Service 派发 fire 到 scheduler 的端口。
 type SchedulerStarter interface {
 	StartRun(ctx context.Context, workflowID string, triggerKind string, input map[string]any) (string, error)
 }
@@ -49,17 +34,14 @@ type Service struct {
 	cron      *croninfra.Listener
 	fsnotify  *fsnotifyinfra.Listener
 	webhook   *webhookinfra.Listener
-	specs     map[string]map[string]triggerdomain.Spec // workflowID → nodeID → spec
+	specs     map[string]map[string]triggerdomain.Spec
 	scheduler SchedulerStarter
 	log       *zap.Logger
 }
 
-// New constructs Service with the given mux (for webhook handler attach).
-// scheduler may be nil at construct time; call SetScheduler after the
-// scheduler Service is built (avoids constructor cycle).
+// New constructs Service; scheduler may be nil and attached later via SetScheduler.
 //
-// New 构造 Service;mux 给 webhook 注路由;scheduler 可 nil(构造后用
-// SetScheduler 补,避免构造顺序循环)。
+// New 构造 Service；scheduler 可为 nil，构造后用 SetScheduler 补。
 func New(mux *http.ServeMux, log *zap.Logger) *Service {
 	if log == nil {
 		panic("triggerapp.New: nil log")
@@ -82,10 +64,6 @@ func New(mux *http.ServeMux, log *zap.Logger) *Service {
 				zap.String("nodeID", nodeID))
 			return
 		}
-		// Detached ctx with default local user — listener fires from
-		// background goroutine, no HTTP request context available.
-		// 后台 goroutine 来的 fire,无请求 ctx;用 detached ctx 注入 default
-		// local user。
 		ctx := reqctxpkg.SetUserID(context.Background(), reqctxpkg.DefaultLocalUserID)
 		kind := kindForNode(s, workflowID, nodeID)
 		runID, err := sched.StartRun(ctx, workflowID, kind, input)
@@ -109,10 +87,9 @@ func New(mux *http.ServeMux, log *zap.Logger) *Service {
 	return s
 }
 
-// SetScheduler attaches the scheduler post-construction. main.go calls
-// this after both Service and Scheduler are built (avoids ctor cycle).
+// SetScheduler attaches the scheduler after construction to avoid a ctor cycle.
 //
-// SetScheduler 后期挂 scheduler;main.go 在两 Service 构造完都调。
+// SetScheduler 构造后挂 scheduler，避免构造循环。
 func (s *Service) SetScheduler(starter SchedulerStarter) {
 	s.mu.Lock()
 	s.scheduler = starter
@@ -120,10 +97,8 @@ func (s *Service) SetScheduler(starter SchedulerStarter) {
 }
 
 // RegisterTrigger registers a trigger spec to its underlying listener.
-// Boot scan + workflow active-version-change both call this.
 //
-// RegisterTrigger 注册 trigger spec 到对应 listener;boot 扫和 workflow
-// active 翻新都调此。
+// RegisterTrigger 把 trigger spec 注册到对应 listener。
 func (s *Service) RegisterTrigger(spec triggerdomain.Spec) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -137,14 +112,10 @@ func (s *Service) RegisterTrigger(spec triggerdomain.Spec) error {
 	case triggerdomain.KindWebhook:
 		err = s.webhook.Register(spec)
 	case triggerdomain.KindManual:
-		// no listener
 	default:
 		return fmt.Errorf("triggerapp.RegisterTrigger: unknown kind %q", spec.Kind)
 	}
 
-	// Track spec even when err non-nil so State() can show the failed
-	// trigger to the user (fsnotify path-not-exist case § 6.11).
-	// 即使 listener Register 失败也存 spec,让 State() 暴露给用户(§6.11)。
 	if s.specs[spec.WorkflowID] == nil {
 		s.specs[spec.WorkflowID] = make(map[string]triggerdomain.Spec)
 	}
@@ -152,10 +123,9 @@ func (s *Service) RegisterTrigger(spec triggerdomain.Spec) error {
 	return err
 }
 
-// UnregisterByWorkflow removes all triggers for a workflow (called on
-// disable / delete / active version change).
+// UnregisterByWorkflow removes all triggers for a workflow.
 //
-// UnregisterByWorkflow 撤一个 workflow 关联的所有 trigger。
+// UnregisterByWorkflow 撤掉一个 workflow 关联的所有 trigger。
 func (s *Service) UnregisterByWorkflow(workflowID string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -172,10 +142,9 @@ func (s *Service) UnregisterByWorkflow(workflowID string) {
 	delete(s.specs, workflowID)
 }
 
-// State returns every registered trigger's State for a workflow. Powers
-// GET /api/v1/workflows/{id}/triggers (§6.12).
+// State returns every registered trigger's state for a workflow.
 //
-// State 返某 workflow 所有 trigger 的状态(§6.12)。
+// State 返回某 workflow 下所有已注册 trigger 的状态。
 func (s *Service) State(workflowID string) []triggerdomain.State {
 	s.mu.RLock()
 	specs := s.specs[workflowID]
@@ -201,18 +170,14 @@ func (s *Service) State(workflowID string) []triggerdomain.State {
 	return out
 }
 
-// Shutdown stops listeners. Call at process exit.
+// Shutdown stops listeners; call at process exit.
 //
-// Shutdown 关 listener。
+// Shutdown 停止 listener，进程退出前调用。
 func (s *Service) Shutdown() {
 	s.cron.Stop()
 	s.fsnotify.Stop()
 }
 
-// kindForNode looks up a trigger kind by (workflowID, nodeID). Returns
-// empty string if not found.
-//
-// kindForNode 按 (workflowID,nodeID) 查 trigger 种类。
 func kindForNode(s *Service, workflowID, nodeID string) string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -224,18 +189,14 @@ func kindForNode(s *Service, workflowID, nodeID string) string {
 	return triggerdomain.KindManual
 }
 
-// ErrSchedulerNotAttached is returned by manual fire paths if no
-// scheduler has been wired yet (impossible at runtime — defensive).
+// ErrSchedulerNotAttached is returned by manual fire when no scheduler has been wired yet.
 //
-// ErrSchedulerNotAttached 是 manual fire 路径在 scheduler 未挂时返
-// (运行时不应发生,防御性)。
+// ErrSchedulerNotAttached 是 scheduler 未挂时 manual fire 返回的错误。
 var ErrSchedulerNotAttached = errors.New("triggerapp: scheduler not attached")
 
-// FireManual is the manual-trigger entry point used by HTTP
-// `POST /workflows/{id}:trigger` and the LLM `trigger_workflow` tool.
-// Service forwards directly to the scheduler.
+// FireManual forwards a manual trigger directly to the scheduler.
 //
-// FireManual 是 HTTP / LLM 手动触发入口;Service 直接 forward 到 scheduler。
+// FireManual 把手动触发直接转发到 scheduler。
 func (s *Service) FireManual(ctx context.Context, workflowID string, input map[string]any) (string, error) {
 	s.mu.RLock()
 	sched := s.scheduler

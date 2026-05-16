@@ -1,11 +1,3 @@
-// output.go — BashOutput system tool: poll a background shell process
-// (started by Bash with run_in_background:true) for new stdout/stderr
-// since the last call, plus current status. Each call advances a per-
-// process read cursor so successive polls only see fresh bytes.
-//
-// output.go — BashOutput 系统工具：轮询后台 shell 进程（Bash 用
-// `run_in_background:true` 启动）自上次调用以来的新 stdout/stderr 与
-// 当前状态。每次调用推进读游标，连续轮询只看到新增字节。
 package shell
 
 import (
@@ -19,15 +11,14 @@ import (
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 )
 
-// ── Validation sentinels ──────────────────────────────────────────────────────
 
 var (
 	// ErrEmptyBashID: bash_id missing.
+	//
 	// ErrEmptyBashID：bash_id 缺失。
 	ErrEmptyBashID = errors.New("bash_id is required")
 )
 
-// ── Description & schema ──────────────────────────────────────────────────────
 
 const outputDescription = `Read new stdout/stderr from a background shell process started by Bash.
 
@@ -53,11 +44,10 @@ var outputSchema = json.RawMessage(`{
 	}
 }`)
 
-// ── Tool struct & 9 methods ───────────────────────────────────────────────────
 
 // BashOutput implements the BashOutput system tool.
 //
-// BashOutput struct 是 BashOutput 系统工具。
+// BashOutput 是 BashOutput 系统工具的实现。
 type BashOutput struct {
 	mgr *ProcessManager
 }
@@ -118,8 +108,6 @@ func (t *BashOutput) Execute(_ context.Context, argsJSON string) (string, error)
 	body := string(newBytes)
 
 	if args.Filter != "" {
-		// Validated in ValidateInput; safe to MustCompile here.
-		// 已在 ValidateInput 校验，此处 MustCompile 安全。
 		re := regexp.MustCompile(args.Filter)
 		body = filterLines(body, re)
 	}
@@ -127,9 +115,6 @@ func (t *BashOutput) Execute(_ context.Context, argsJSON string) (string, error)
 	return formatOutputResult(body, dropped, status, exitCode), nil
 }
 
-// filterLines keeps only lines that match re (anywhere on the line).
-//
-// filterLines 仅保留匹配 re 的行（行内任意位置）。
 func filterLines(s string, re *regexp.Regexp) string {
 	if s == "" {
 		return ""
@@ -144,9 +129,6 @@ func filterLines(s string, re *regexp.Regexp) string {
 	return strings.Join(out, "\n")
 }
 
-// formatOutputResult assembles the body + status footer.
-//
-// formatOutputResult 拼正文 + 状态尾注。
 func formatOutputResult(body string, dropped int64, status Status, exitCode int) string {
 	var sb strings.Builder
 	if body != "" {
@@ -176,6 +158,5 @@ func formatOutputResult(body string, dropped int64, status Status, exitCode int)
 	return sb.String()
 }
 
-// ── Compile-time checks ───────────────────────────────────────────────────────
 
 var _ toolapp.Tool = (*BashOutput)(nil)

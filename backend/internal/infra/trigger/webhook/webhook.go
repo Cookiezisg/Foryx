@@ -1,13 +1,6 @@
-// Package webhook is the HTTP-webhook trigger listener. Each registered
-// trigger gets its own sub-path under /api/v1/webhooks/{wfId}/{path} +
-// optional secret check (X-Webhook-Secret header or ?token=). Body
-// 10MB cap; payload becomes the trigger input.
+// Package webhook is the HTTP-webhook trigger listener (path + optional secret + 10MB body cap).
 //
-// Plan 05 §2.4 + §6.6.
-//
-// Package webhook 是 HTTP webhook trigger;每个 trigger 一个子路径
-// /api/v1/webhooks/{wfId}/{path} + 可选 secret 校验 (header 或 ?token=)。
-// body 10MB cap;payload 当 trigger input。
+// Package webhook 是 HTTP webhook 触发器（路径 + 可选 secret + 10MB body 上限）。
 package webhook
 
 import (
@@ -24,25 +17,21 @@ import (
 	triggerdomain "github.com/sunweilin/forgify/backend/internal/domain/trigger"
 )
 
-// MaxBodyBytes caps webhook POST body. 10MB default per Plan 05 §2.4.
-//
-// MaxBodyBytes webhook POST body 上限,默认 10MB(§2.4)。
 const MaxBodyBytes = 10 * 1024 * 1024
 
-// OnFireFunc is called on each accepted webhook request. Caller wires to
-// scheduler.StartRun.
+// OnFireFunc fires on each accepted webhook request; caller wires to scheduler.StartRun.
 //
-// OnFireFunc 每次 accept 的 webhook 请求调;接 scheduler.StartRun。
+// OnFireFunc 每次 accept 的 webhook 请求触发；调用方接 scheduler.StartRun。
 type OnFireFunc func(workflowID, nodeID string, input map[string]any)
 
-// Listener manages webhook registrations against a single http.ServeMux.
+// Listener manages webhook registrations against one shared http.ServeMux.
 //
-// Listener 管理 webhook 注册(共用一个 http.ServeMux)。
+// Listener 管理 webhook 注册，与外部共享一个 http.ServeMux。
 type Listener struct {
 	mu       sync.Mutex
 	mux      *http.ServeMux
-	registry map[string]registration // path → reg
-	keys     map[string]string       // (workflowID,nodeID) → path
+	registry map[string]registration
+	keys     map[string]string
 	lastFire map[string]time.Time
 	onFire   OnFireFunc
 	log      *zap.Logger
@@ -55,10 +44,9 @@ type registration struct {
 	Secret     string
 }
 
-// New constructs a Listener bound to mux. The mux is shared with the
-// main httpapi router (registers under /api/v1/webhooks/...).
+// New constructs a Listener bound to the given mux.
 //
-// New 构造 Listener,绑给定 mux(跟主 httpapi router 共享)。
+// New 构造 Listener 并绑定到给定 mux。
 func New(mux *http.ServeMux, log *zap.Logger, onFire OnFireFunc) *Listener {
 	return &Listener{
 		mux:      mux,
@@ -70,12 +58,9 @@ func New(mux *http.ServeMux, log *zap.Logger, onFire OnFireFunc) *Listener {
 	}
 }
 
-// Register adds a webhook at /api/v1/webhooks/{workflowID}/{path}.
-// spec.Config["path"] is required and must be unique across all
-// registered webhooks (ErrPathConflict). method defaults to POST.
+// Register mounts a webhook at /api/v1/webhooks/{workflowID}/{path}; conflicts → ErrPathConflict.
 //
-// Register 加 webhook 路径;path 必填且全局唯一,撞返 ErrPathConflict;
-// method 默认 POST。
+// Register 在 /api/v1/webhooks/{workflowID}/{path} 挂载 webhook；冲突返 ErrPathConflict。
 func (l *Listener) Register(spec triggerdomain.Spec) error {
 	subpath, _ := spec.Config["path"].(string)
 	method, _ := spec.Config["method"].(string)
@@ -101,12 +86,9 @@ func (l *Listener) Register(spec triggerdomain.Spec) error {
 	}
 
 	if oldPath, ok := l.keys[key]; ok && oldPath != full {
+		// stdlib mux can't unmount; leftover route 404s via registry miss.
+		// stdlib mux 不能 unmount，残留路由经 registry miss 自然 404。
 		delete(l.registry, oldPath)
-		// stdlib http.ServeMux can't unregister handlers — leftover route
-		// would 404 anyway since l.registry is the source-of-truth lookup
-		// table (see ServeHTTP wrapper below). Document the limitation.
-		// stdlib mux 不支持 unregister;留下的路由会落到 ServeHTTP 包装里
-		// 由 l.registry 查不到时回 404,等价 unregister 效果。
 	}
 
 	method = strings.ToUpper(method)
@@ -117,7 +99,6 @@ func (l *Listener) Register(spec triggerdomain.Spec) error {
 		Secret:     secret,
 	}
 	if _, alreadyMounted := l.registry[full]; !alreadyMounted {
-		// Register mux handler once per full path.
 		l.mux.HandleFunc(full, l.handleWebhook(full))
 	}
 	l.registry[full] = reg
@@ -125,10 +106,9 @@ func (l *Listener) Register(spec triggerdomain.Spec) error {
 	return nil
 }
 
-// Unregister removes a webhook (entry stays mounted on mux but starts
-// returning 404 since l.registry forgets it).
+// Unregister removes a webhook (mux entry stays but starts 404'ing).
 //
-// Unregister 删 webhook;mux 路由保留但 ServeHTTP 在 registry 查不到 → 404。
+// Unregister 删 webhook（mux 上仍在但开始返 404）。
 func (l *Listener) Unregister(workflowID, nodeID string) {
 	key := workflowID + "/" + nodeID
 	l.mu.Lock()
@@ -139,9 +119,9 @@ func (l *Listener) Unregister(workflowID, nodeID string) {
 	}
 }
 
-// State returns runtime state for one trigger.
+// State returns the runtime state for one trigger.
 //
-// State 返某 trigger 状态。
+// State 返某 trigger 的运行时状态。
 func (l *Listener) State(workflowID, nodeID string) triggerdomain.State {
 	key := workflowID + "/" + nodeID
 	l.mu.Lock()
@@ -186,7 +166,6 @@ func (l *Listener) handleWebhook(fullPath string) http.HandlerFunc {
 			}
 		}
 
-		// Body 10MB cap.
 		body, err := io.ReadAll(io.LimitReader(r.Body, MaxBodyBytes+1))
 		if err != nil {
 			http.Error(w, "read body", http.StatusBadRequest)
@@ -217,9 +196,8 @@ func (l *Listener) handleWebhook(fullPath string) http.HandlerFunc {
 		l.lastFire[key] = time.Now()
 		l.mu.Unlock()
 
-		// Fire async + recover to keep handler responsive even on slow
-		// scheduler / onFire panic (§6.13 parity with cron/fsnotify).
-		// 异步 fire + recover,保证 HTTP 响应不被 scheduler 慢或 panic 拖住。
+		// Fire async + recover so handler stays responsive on slow/panicking onFire.
+		// 异步 fire + recover，handler 不被慢/panic 拖累。
 		go func() {
 			defer func() {
 				if r := recover(); r != nil {
@@ -246,10 +224,9 @@ func flattenHeaders(h http.Header) map[string]string {
 	return out
 }
 
-// webhookFullPath builds the mux path for a workflow + subpath. Exported
-// so tests + Service can both use it.
+// webhookFullPath builds the mux path for a workflow + subpath.
 //
-// webhookFullPath 拼 webhook mux 路径。
+// webhookFullPath 拼 webhook 的 mux 路径。
 func webhookFullPath(workflowID, subpath string) string {
 	subpath = strings.TrimPrefix(subpath, "/")
 	return "/api/v1/webhooks/" + workflowID + "/" + subpath

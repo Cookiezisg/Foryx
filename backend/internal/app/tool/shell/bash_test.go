@@ -1,11 +1,3 @@
-// bash_test.go — unit tests for the Bash system tool. Covers schema /
-// metadata / ValidateInput, the cd-only state machine (parseCDOnly +
-// handleCD), foreground execution (echo, exit codes, timeout), and
-// background spawn returning a bash_id.
-//
-// bash_test.go — Bash 系统工具单测：schema / metadata / ValidateInput、
-// cd-only 状态机（parseCDOnly + handleCD）、前台执行（echo / exit / 超时）、
-// 后台 spawn 返 bash_id。
 package shell
 
 import (
@@ -34,7 +26,6 @@ func ctxWithAgentState(t *testing.T) (context.Context, *agentstatepkg.AgentState
 	return reqctxpkg.WithAgentState(context.Background(), state), state
 }
 
-// ── Identity / metadata / schema ──────────────────────────────────────────────
 
 func TestBash_IdentityMethods(t *testing.T) {
 	tool := newTestBash()
@@ -85,7 +76,6 @@ func TestBash_Schema_IsParsableObject(t *testing.T) {
 	}
 }
 
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestBash_ValidateInput_RequiresCommand(t *testing.T) {
 	tool := newTestBash()
@@ -115,7 +105,6 @@ func TestBash_ValidateInput_AcceptsValidArgs(t *testing.T) {
 	}
 }
 
-// ── parseCDOnly ───────────────────────────────────────────────────────────────
 
 func TestParseCDOnly_HandlesPlainCD(t *testing.T) {
 	cases := []struct {
@@ -151,7 +140,6 @@ func TestParseCDOnly_HandlesPlainCD(t *testing.T) {
 	}
 }
 
-// ── handleCD via Execute ──────────────────────────────────────────────────────
 
 func TestBash_Execute_CD_UpdatesAgentState(t *testing.T) {
 	tool := newTestBash()
@@ -220,7 +208,6 @@ func TestBash_Execute_CD_RelativeResolvesAgainstCwd(t *testing.T) {
 	}
 }
 
-// ── Foreground execution ──────────────────────────────────────────────────────
 
 func TestBash_Execute_Foreground_EchoCapturesStdout(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -340,7 +327,6 @@ func TestBash_Execute_Foreground_ParentCtxCancelled_ReportsCancelled(t *testing.
 	}
 }
 
-// ── Background spawn ──────────────────────────────────────────────────────────
 
 func TestBash_Execute_Background_ReturnsBashID(t *testing.T) {
 	if runtime.GOOS == "windows" {
@@ -406,7 +392,6 @@ func TestBash_Execute_Background_OutputCapturedForPolling(t *testing.T) {
 	t.Errorf("never saw bg-output-marker; got: %q", got)
 }
 
-// ── ResolveCwd helper ────────────────────────────────────────────────────────
 
 func TestResolveCwd_FallsBackToProcessCwd_WhenNoAgentState(t *testing.T) {
 	got := resolveCwd(context.Background())
@@ -424,7 +409,6 @@ func TestResolveCwd_PrefersAgentStateCwd(t *testing.T) {
 	}
 }
 
-// ── capOutput ────────────────────────────────────────────────────────────────
 
 func TestCapOutput_BelowLimit_Pass(t *testing.T) {
 	got := capOutput([]byte("short"))

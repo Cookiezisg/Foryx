@@ -1,8 +1,3 @@
-// service_test.go — unit tests for model.Service using a fake repository.
-// No real DB or logger needed for most tests.
-//
-// service_test.go — model.Service 的单元测试，使用 fake repository。
-// 大多数测试无需真实 DB 或 logger。
 package model
 
 import (
@@ -16,9 +11,6 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// fakeRepo is an in-memory modeldomain.Repository for testing.
-//
-// fakeRepo 是用于测试的内存版 modeldomain.Repository。
 type fakeRepo struct {
 	rows      map[string]*modeldomain.ModelConfig // keyed by ID
 	upsertErr error
@@ -60,8 +52,6 @@ func (r *fakeRepo) Upsert(_ context.Context, m *modeldomain.ModelConfig) error {
 	return nil
 }
 
-// helpers
-
 func newSvc(t *testing.T, repo modeldomain.Repository) *Service {
 	t.Helper()
 	return NewService(repo, zap.NewNop())
@@ -71,8 +61,6 @@ func ctxAlice() context.Context {
 	return reqctxpkg.SetUserID(context.Background(), "u-alice")
 }
 
-// --- NewService ---
-
 func TestNewService_NilLogger_Panics(t *testing.T) {
 	defer func() {
 		if r := recover(); r == nil {
@@ -81,8 +69,6 @@ func TestNewService_NilLogger_Panics(t *testing.T) {
 	}()
 	NewService(newFakeRepo(), nil)
 }
-
-// --- Upsert validation ---
 
 func TestUpsert_InvalidScenario(t *testing.T) {
 	svc := newSvc(t, newFakeRepo())
@@ -108,8 +94,6 @@ func TestUpsert_ModelIDRequired(t *testing.T) {
 	}
 }
 
-// --- Upsert happy paths ---
-
 func TestUpsert_NewScenario_CreatesRow(t *testing.T) {
 	svc := newSvc(t, newFakeRepo())
 	got, err := svc.Upsert(ctxAlice(), modeldomain.ScenarioChat, UpsertInput{Provider: "openai", ModelID: "gpt-4o"})
@@ -125,8 +109,6 @@ func TestUpsert_NewScenario_CreatesRow(t *testing.T) {
 }
 
 func TestUpsert_ExistingScenario_PreservesID(t *testing.T) {
-	// Second Upsert on the same scenario must reuse the existing row's ID.
-	// 同一 scenario 的第二次 Upsert 必须复用已有行的 ID。
 	svc := newSvc(t, newFakeRepo())
 
 	first, err := svc.Upsert(ctxAlice(), modeldomain.ScenarioChat, UpsertInput{Provider: "openai", ModelID: "gpt-4o"})
@@ -157,8 +139,6 @@ func TestUpsert_TrimsWhitespace(t *testing.T) {
 	}
 }
 
-// --- List ---
-
 func TestList_Empty(t *testing.T) {
 	svc := newSvc(t, newFakeRepo())
 	rows, err := svc.List(ctxAlice())
@@ -183,8 +163,6 @@ func TestList_AfterUpsert(t *testing.T) {
 		t.Errorf("got %d rows, want 1", len(rows))
 	}
 }
-
-// --- PickForChat ---
 
 func TestPickForChat_NotConfigured(t *testing.T) {
 	svc := newSvc(t, newFakeRepo())

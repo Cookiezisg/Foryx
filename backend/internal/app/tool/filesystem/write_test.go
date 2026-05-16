@@ -43,7 +43,6 @@ func callWrite(t *testing.T, w *Write, ctx context.Context, args map[string]any)
 	return w.Execute(ctx, string(raw))
 }
 
-// ── Identity / static metadata ────────────────────────────────────────────────
 
 func TestWrite_IdentityAndMetadata(t *testing.T) {
 	w := newWrite()
@@ -79,7 +78,6 @@ func TestWrite_CheckPermissionsAlwaysAllow(t *testing.T) {
 	}
 }
 
-// ── ValidateInput ─────────────────────────────────────────────────────────────
 
 func TestWriteValidateInput_EmptyFilePath(t *testing.T) {
 	err := newWrite().ValidateInput(json.RawMessage(`{"content":"x"}`))
@@ -114,7 +112,6 @@ func TestWriteValidateInput_EmptyContentOK(t *testing.T) {
 	}
 }
 
-// ── Execute: success paths ────────────────────────────────────────────────────
 
 func TestWriteExecute_NewFile(t *testing.T) {
 	dir := t.TempDir()
@@ -186,7 +183,6 @@ func TestWriteExecute_OverwriteAfterRead(t *testing.T) {
 	}
 }
 
-// ── Execute: must-Read-first guard ────────────────────────────────────────────
 
 func TestWriteExecute_OverwriteWithoutReadDenied(t *testing.T) {
 	// Existing file + no Read → should be denied with helpful message.
@@ -260,7 +256,6 @@ func TestWriteExecute_NoAgentStateAllowsNewFile(t *testing.T) {
 	}
 }
 
-// ── Execute: error paths ──────────────────────────────────────────────────────
 
 func TestWriteExecute_ParentDirMissing(t *testing.T) {
 	dir := t.TempDir()
@@ -313,7 +308,6 @@ func TestWriteExecute_PathGuardDenied(t *testing.T) {
 	}
 }
 
-// ── Atomic / mode preservation ────────────────────────────────────────────────
 
 func TestWriteExecute_PreservesExistingFileMode(t *testing.T) {
 	// Pre-existing file with 0o600 → after Read + overwrite, mode should

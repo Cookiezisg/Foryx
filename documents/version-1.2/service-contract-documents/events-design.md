@@ -43,7 +43,7 @@
 | `block_delta` | 给 block append 内容 | 每 token / chunk | ✅ → AppendBlockContent |
 | `block_stop` | 关 block | 每 block 1 次 | ✅ → FinalizeBlock |
 
-## 2. Block 类型枚举（6 种穷举）
+## 2. Block 类型枚举（7 种穷举）
 
 | Block Type | 含义 | content 形态 | attrs | 子 block 允许？ |
 |---|---|---|---|---|
@@ -53,8 +53,11 @@
 | `tool_result` | 工具最终返回 | result string | — | ❌ |
 | `progress` | 工具进度文字（sandbox 装包 / 网络拉块） | string，append | `{stage?: string}` 自由文本 | ❌ |
 | `message` | 嵌套消息占位（subagent 等） | — | `{messageId: string, ...}` | ✅（递归到下层） |
+| `compaction` | conversation-level 摘要（V1.2 §1 final-sweep） | markdown summary，append（一次性 delta）| `{coversFromSeq, coversToSeq, blocksArchived, generatedBy}` | ❌ |
 
 新增 block 类型必须先改 [`event-log-protocol.md`](../event-log-protocol.md) + DB CHECK + 前端 renderer，同 PR。
+
+`compaction` 块由 `app/contextmgr.Manager.fullCompact` 服务端 emit（不源于 LLM），挂在虚拟 system message 下（`{kind: "compaction"}`），承载 anchored-append summary 文本。DB block 行的 `context_role` 字段（V1.2 §1）按 `hot`/`warm`/`cold`/`archived` 控制投影到 LLM history 时的形态——见 [`../service-design-documents/compaction.md`](../service-design-documents/compaction.md) §6。
 
 ## 3. Status 枚举（4 种穷举）
 
@@ -249,8 +252,10 @@ type SlimPayload = {
 | `handler` | `app/handler/Service` 各 CRUD 端点 | 同 function 7 个 + `config_updated` / `config_cleared` | `{action, versionId?, versionNumber?}`(同 D-redo-7 删除 env action)|
 | `workflow` | `app/workflow/Service` 各 CRUD 端点 | created / updated / pending_created / version_accepted / pending_rejected / reverted / deleted | `{action, versionId?, versionNumber?}`(slim payload D-redo-6;无 env action,workflow 域无 sandbox)|
 | `flowrun` | `app/scheduler/Service` StartRun/finalize/pauseRun/ResumeApproval | started / paused / resumed / completed / failed / cancelled | `{action, workflowId, triggerKind?, nodeID?, decision?, elapsedMs?}`(slim;UI 经 `GET /flowruns/{id}` 拉详情 D-redo-6)|
+| `memory` | `app/memory/Service` 各 mutation 路径 | created / updated / pinned / unpinned / deleted | `{action, name, memType, source}` (slim; UI 经 `GET /api/v1/memories/{name}` 拉全文 — V1.2 §2 final-sweep)|
+| `compaction` | `app/contextmgr/Manager.fullCompact` | completed（暂仅一种 action — 失败仅 log，不推通知）| `{action: "completed", coversToSeq, blocksArchived, summaryBytes}` (slim; UI 经 `GET /api/v1/conversations/{id}` 拉 summary — V1.2 §1 final-sweep)|
 
-新增 type 字符串即可(**开放词表** — E2 演化规则)。前端不需协议升级。**已删除**:`handler_instance` / `trigger` 等 forge_redesign 早期表上拟加但未实施的 type。**Plan 05 (2026-05-13)**:加 `flowrun` entity type;scheduler.StartRun 推 `started`,driveLoop 终态推 `completed`/`failed`/`cancelled`,pauseRun 推 `paused`,ResumeApproval 推 `resumed`。
+新增 type 字符串即可(**开放词表** — E2 演化规则)。前端不需协议升级。**已删除**:`handler_instance` / `trigger` 等 forge_redesign 早期表上拟加但未实施的 type。**Plan 05 (2026-05-13)**:加 `flowrun` entity type;scheduler.StartRun 推 `started`,driveLoop 终态推 `completed`/`failed`/`cancelled`,pauseRun 推 `paused`,ResumeApproval 推 `resumed`。**V1.2 §1/§2 final-sweep (2026-05-16)**:加 `memory` + `compaction` entity types(slim payload + GET 拉详情)。
 
 ### 11.3 HTTP 端点
 

@@ -1,18 +1,5 @@
 //go:build pipeline
 
-// approval_e2e_test.go — Plan 06 F4 + Plan 05 §6.1/§3.5 end-to-end.
-// Exercises the full approval lifecycle:
-//
-//   build workflow w/ approval node → trigger → pause → POST /approvals
-//   → resume → complete
-//
-// RehydrateOnBoot is unit-tested in app/scheduler/pause_test.go; this
-// pipeline test focuses on the HTTP approve → resume → complete path
-// which is the user-facing UX gate.
-//
-// approval_e2e_test.go —— F4 + Plan 05 §6.1/§3.5 端到端。RehydrateOnBoot
-// 由单测覆盖,本测专注 HTTP approve → resume → complete 用户面 UX。
-
 package scheduler_test
 
 import (
@@ -25,19 +12,10 @@ import (
 	th "github.com/sunweilin/forgify/backend/test/harness"
 )
 
-// TestApproval_PauseResumeComplete_E2E — happy path approve.
-//
-//	trigger → approval pause → POST :approvals approve → completes
-//
-// TestApproval_PauseResumeComplete_E2E approve 路径完整跑通。
 func TestApproval_PauseResumeComplete_E2E(t *testing.T) {
 	h := th.New(t)
 	ctx := th.LocalCtxAs(reqctxpkg.DefaultLocalUserID)
 
-	// Build workflow: trigger → approval (will pause) → downstream
-	// (approval.approved → ack node).
-	// trigger → approval → ack(approval.approved port);approval pause 后
-	// resume approved 走 ack 节点 → complete。
 	wf, _, err := h.Workflow.Create(ctx, workflowapp.CreateInput{
 		Ops: []workflowapp.Op{
 			{Type: "set_meta", Raw: []byte(`{"op":"set_meta","name":"approval_happy","description":"e2e approve"}`)},
@@ -45,14 +23,13 @@ func TestApproval_PauseResumeComplete_E2E(t *testing.T) {
 			{Type: "add_node", Raw: []byte(`{"op":"add_node","node":{"id":"gate","type":"approval","config":{"prompt":"Proceed?"}}}`)},
 			{Type: "add_node", Raw: []byte(`{"op":"add_node","node":{"id":"ack","type":"variable","config":{"operation":"set","name":"acked","value":"yes"}}}`)},
 			{Type: "add_edge", Raw: []byte(`{"op":"add_edge","edge":{"id":"e1","from":"trig","to":"gate"}}`)},
-			{Type: "add_edge", Raw: []byte(`{"op":"add_edge","edge":{"id":"e2","from":"gate.approved","to":"ack"}}`)},
+			{Type: "add_edge", Raw: []byte(`{"op":"add_edge","edge":{"id":"e2","from":"gate","fromPort":"approved","to":"ack"}}`)},
 		},
 	})
 	if err != nil {
 		t.Fatalf("Create workflow: %v", err)
 	}
 
-	// Trigger.
 	var trigResp struct {
 		Data struct {
 			RunID string `json:"runId"`
@@ -64,7 +41,6 @@ func TestApproval_PauseResumeComplete_E2E(t *testing.T) {
 	}
 	runID := trigResp.Data.RunID
 
-	// Wait for paused state.
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		run, _ := h.FlowRunRepo.Get(ctx, runID)
@@ -77,7 +53,6 @@ func TestApproval_PauseResumeComplete_E2E(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	// POST approvals — approve.
 	var approveResp struct {
 		Data struct {
 			Resumed bool `json:"resumed"`
@@ -92,7 +67,6 @@ func TestApproval_PauseResumeComplete_E2E(t *testing.T) {
 		t.Errorf("resumed=false in response")
 	}
 
-	// Wait for completion.
 	deadline = time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		run, _ := h.FlowRunRepo.Get(ctx, runID)
@@ -104,9 +78,6 @@ func TestApproval_PauseResumeComplete_E2E(t *testing.T) {
 	t.Fatalf("run did not complete after approval within 2s")
 }
 
-// TestApproval_InvalidDecision_Returns400 — bad decision rejected.
-//
-// TestApproval_InvalidDecision_Returns400 — decision 不在白名单返 400。
 func TestApproval_InvalidDecision_Returns400(t *testing.T) {
 	h := th.New(t)
 	ctx := th.LocalCtxAs(reqctxpkg.DefaultLocalUserID)
@@ -131,7 +102,6 @@ func TestApproval_InvalidDecision_Returns400(t *testing.T) {
 	_ = th.DoRequest(t, h, "POST", "/api/v1/workflows/"+wf.ID+":trigger",
 		map[string]any{}, &trigResp)
 
-	// Wait for pause.
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		run, _ := h.FlowRunRepo.Get(ctx, trigResp.Data.RunID)
@@ -153,10 +123,6 @@ func TestApproval_InvalidDecision_Returns400(t *testing.T) {
 	}
 }
 
-// TestApproval_WrongNodeID_Returns404 — approve at a node that isn't
-// the paused gate returns FLOWRUN_APPROVAL_NODE_NOT_FOUND.
-//
-// TestApproval_WrongNodeID_Returns404 — approve 在非 paused 节点返 404。
 func TestApproval_WrongNodeID_Returns404(t *testing.T) {
 	h := th.New(t)
 	ctx := th.LocalCtxAs(reqctxpkg.DefaultLocalUserID)

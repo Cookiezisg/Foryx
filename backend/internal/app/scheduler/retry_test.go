@@ -1,5 +1,3 @@
-// retry_test.go — withRetry + per-node timeout + isFatalErr matrix.
-
 package scheduler
 
 import (
@@ -24,8 +22,6 @@ func newExecCtxForRetry() *ExecutionContext {
 		NextPort:  make(map[string]string),
 	}
 }
-
-// ── withRetry ────────────────────────────────────────────────────────────────
 
 func TestWithRetry_NoConfig_SingleAttempt(t *testing.T) {
 	var calls atomic.Int32
@@ -122,8 +118,6 @@ func TestWithRetry_CtxCancelShortCircuits(t *testing.T) {
 	}
 }
 
-// ── Backoff growth ──────────────────────────────────────────────────────────
-
 func TestNextDelay_Exponential(t *testing.T) {
 	got := nextDelay("exponential", 100*time.Millisecond,
 		&workflowdomain.RetryConfig{DelayMs: 100})
@@ -147,8 +141,6 @@ func TestNextDelay_Fixed(t *testing.T) {
 		t.Errorf("fixed: got %v, want 100ms", got)
 	}
 }
-
-// ── nodeTimeoutDuration ─────────────────────────────────────────────────────
 
 func TestNodeTimeoutDuration_OverrideWins(t *testing.T) {
 	d := nodeTimeoutDuration(workflowdomain.NodeSpec{
@@ -177,8 +169,6 @@ func TestNodeTimeoutDuration_DefaultByType(t *testing.T) {
 		}
 	}
 }
-
-// ── dispatchWithPolicies integration ────────────────────────────────────────
 
 func TestDispatchWithPolicies_TimeoutWraps(t *testing.T) {
 	repo := newFakeRepo()

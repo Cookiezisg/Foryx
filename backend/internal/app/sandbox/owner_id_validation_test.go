@@ -1,16 +1,3 @@
-// owner_id_validation_test.go — locks down the rule that EnsureEnv
-// rejects owner.IDs containing PATH-meta or whitespace characters.
-// This guard prevents regression of the bash auto-route bug where
-// `cv_xxx:python` (containing a literal ":") became a directory name
-// that, when prepended to PATH, was split by shell at the ":" and
-// silently fell through to /usr/bin (running system Python instead
-// of the conversation's mise-managed venv).
-//
-// owner_id_validation_test.go ——锁定 EnsureEnv 拒含 PATH-meta /
-// 空白字符的 owner.ID 规则。防 bash auto-route 那个 bug 回归：
-// `cv_xxx:python`（含字面 ":"）当目录名前置到 PATH 时被 shell 在
-// ":" 处切，悄悄落到 /usr/bin 用系统 Python 而非对话 mise venv。
-
 package sandbox
 
 import (
@@ -34,12 +21,12 @@ func TestEnsureEnv_RejectsPATHMetaCharsInOwnerID(t *testing.T) {
 	}
 	repo := sandboxstore.New(db)
 	svc := New(repo, t.TempDir(), nil, zap.NewNop())
-	svc.MarkReadyForTest("/fake/mise") // bypass real bootstrap
+	svc.MarkReadyForTest("/fake/mise")
 
 	cases := []struct {
 		name     string
 		ownerID  string
-		wantHint string // substring expected in the error
+		wantHint string
 	}{
 		{"colon", "cv_abc:python", "PATH-meta"},
 		{"semicolon", "cv_abc;python", "PATH-meta"},
@@ -47,7 +34,7 @@ func TestEnsureEnv_RejectsPATHMetaCharsInOwnerID(t *testing.T) {
 		{"space", "cv abc python", "whitespace"},
 		{"tab", "cv_abc\tpython", "whitespace"},
 		{"newline", "cv_abc\npython", "whitespace"},
-		{"null", "cv_abc\x00python", "whitespace"}, // \x00 falls into the "unsafe" set
+		{"null", "cv_abc\x00python", "whitespace"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -79,23 +66,11 @@ func TestEnsureEnv_AcceptsCleanOwnerID(t *testing.T) {
 	svc := New(repo, t.TempDir(), nil, zap.NewNop())
 	svc.MarkReadyForTest("/fake/mise")
 
-	// "cv_abc_python" is the post-fix form: convID + "_" + runtimeKind.
-	// EnsureEnv passes input validation; install will fail later because
-	// no installer / EnvManager is registered for "python" — but the
-	// error message must NOT mention "PATH-meta" or "whitespace".
-	//
-	// "cv_abc_python" 是修复后形态：convID + "_" + runtimeKind。
-	// EnsureEnv 过入口校验；后面装会失败（没注册 python installer /
-	// EnvManager），但错误信息不应含 "PATH-meta" / "whitespace"。
 	_, err = svc.EnsureEnv(context.Background(),
 		sandboxdomain.Owner{Kind: sandboxdomain.OwnerKindConversation, ID: "cv_abc_python"},
 		sandboxdomain.EnvSpec{Runtime: sandboxdomain.RuntimeSpec{Kind: "python"}},
 		nil)
 	if err == nil {
-		// Without a registered installer, install would normally fail.
-		// If it didn't error at all, that's surprising but not a
-		// validation regression — the validation case is what we care
-		// about here.
 		t.Skip("EnsureEnv unexpectedly succeeded; this test only checks input-validation path")
 	}
 	if strings.Contains(err.Error(), "PATH-meta") || strings.Contains(err.Error(), "whitespace") {

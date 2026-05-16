@@ -1,21 +1,3 @@
-// crud.go — Workflow CRUD + version/pending lifecycle. Mirrors function /
-// handler crud.go shapes so Service code feels uniform across trinity.
-//
-// Key model decisions (post-D-redo-11 trinity convention):
-//   - Create auto-accepts v1 when validation passes (TE-15 alignment)
-//   - Edit uses iterate-same-pending — second edit rewrites the row,
-//     never returns ErrPendingConflict
-//   - AcceptPending is a pure pointer flip (graph is already frozen on
-//     pending row)
-//   - RejectPending hard-deletes the pending Version row (D-redo-12)
-//   - Revert flips active_version_id to a numbered accepted version
-//   - All notifications carry slim payloads (D-redo-6): {action, versionId?,
-//     versionNumber?} — UI does GET for full entity
-//
-// crud.go —— Workflow CRUD + 版本生命周期;镜像 function/handler 模式。
-// Create 自动 accept v1;Edit iterate-same-pending(无 ErrPendingConflict);
-// AcceptPending 纯指针;RejectPending hard-delete;通知瘦身。
-
 package workflow
 
 import (
@@ -34,27 +16,20 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// validNameRe — workflow name char set (mirror function / handler).
-//
-// validNameRe — workflow name 字符集;跟 function/handler 同。
 var validNameRe = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_\-]{0,63}$`)
 
-// ── Inputs ───────────────────────────────────────────────────────────────────
-
-// CreateInput is the request shape for Service.Create. Ops carry the full
-// editable surface; the LLM tool layer constructs the ops slice from its
-// JSON-RPC args.
+// CreateInput is the request shape for Service.Create.
 //
-// CreateInput Service.Create 请求形状;LLM 工具层从 JSON-RPC args 构 ops。
+// CreateInput 是 Service.Create 的请求形状。
 type CreateInput struct {
 	Ops             []Op
 	ChangeReason    string
-	ProgressBlockID string // optional eventlog block for streaming UX
+	ProgressBlockID string
 }
 
-// EditInput is the request shape for Service.Edit (writes a pending).
+// EditInput is the request shape for Service.Edit.
 //
-// EditInput Service.Edit 请求形状(写 pending)。
+// EditInput 是 Service.Edit 的请求形状。
 type EditInput struct {
 	ID              string
 	Ops             []Op
@@ -62,9 +37,9 @@ type EditInput struct {
 	ProgressBlockID string
 }
 
-// UpdateMetaInput patches Workflow metadata (no version side effects).
+// UpdateMetaInput patches Workflow metadata without a version bump.
 //
-// UpdateMetaInput 改元数据(不动版本)。
+// UpdateMetaInput 改 Workflow 元数据，不动版本。
 type UpdateMetaInput struct {
 	ID             string
 	Name           *string
@@ -76,12 +51,9 @@ type UpdateMetaInput struct {
 	AttentionReason *string
 }
 
-// ── Reads ────────────────────────────────────────────────────────────────────
-
-// List returns a paginated page of live workflows. Computed Pending /
-// LiveRuns / LastFiredAt fields are NOT populated — Get fills them.
+// List returns a paginated page of live workflows; computed fields are not populated.
 //
-// List 返当前用户活跃 workflow 分页;计算字段不填,详情用 Get。
+// List 返当前用户活跃 workflow 分页，计算字段不填。
 func (s *Service) List(ctx context.Context, filter workflowdomain.ListFilter) ([]*workflowdomain.Workflow, string, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, "", fmt.Errorf("workflowapp.List: %w", err)
@@ -93,11 +65,9 @@ func (s *Service) List(ctx context.Context, filter workflowdomain.ListFilter) ([
 	return rows, next, nil
 }
 
-// ListAll returns every live workflow (no pagination) — used by
-// SearchWorkflow LLM ranking + Plan 05 scheduler bootstrap.
+// ListAll returns every live workflow for the current user (no pagination).
 //
-// ListAll 返当前用户全部活跃 workflow(无分页);SearchWorkflow + Plan 05
-// scheduler 用。
+// ListAll 返当前用户全部活跃 workflow（无分页）。
 func (s *Service) ListAll(ctx context.Context) ([]*workflowdomain.Workflow, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.ListAll: %w", err)
@@ -109,11 +79,9 @@ func (s *Service) ListAll(ctx context.Context) ([]*workflowdomain.Workflow, erro
 	return rows, nil
 }
 
-// Search returns workflows whose name / description / tags contain query
-// (case-insensitive substring). V1 implementation; LLM tool layer may
-// re-rank semantically.
+// Search returns workflows whose name / description / tags contain query (case-insensitive substring).
 //
-// Search 返 name/description/tags 含 query 子串的 workflow。
+// Search 返 name/description/tags 含 query 子串的 workflow（忽略大小写）。
 func (s *Service) Search(ctx context.Context, query string) ([]*workflowdomain.Workflow, error) {
 	all, err := s.ListAll(ctx)
 	if err != nil {
@@ -158,7 +126,7 @@ func (s *Service) Get(ctx context.Context, id string) (*workflowdomain.Workflow,
 
 // ListVersions paginates a workflow's versions.
 //
-// ListVersions 返某 workflow 版本分页。
+// ListVersions 返回某 workflow 的版本分页。
 func (s *Service) ListVersions(ctx context.Context, workflowID string, filter workflowdomain.VersionListFilter) ([]*workflowdomain.Version, string, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, "", fmt.Errorf("workflowapp.ListVersions: %w", err)
@@ -173,9 +141,9 @@ func (s *Service) ListVersions(ctx context.Context, workflowID string, filter wo
 	return rows, next, nil
 }
 
-// GetVersion fetches one version by id (GraphParsed populated).
+// GetVersion fetches one version by id with GraphParsed populated.
 //
-// GetVersion 按 id 取版本(填 GraphParsed)。
+// GetVersion 按 id 取版本并填 GraphParsed。
 func (s *Service) GetVersion(ctx context.Context, versionID string) (*workflowdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.GetVersion: %w", err)
@@ -188,9 +156,9 @@ func (s *Service) GetVersion(ctx context.Context, versionID string) (*workflowdo
 	return v, nil
 }
 
-// GetVersionByNumber fetches an accepted version by integer.
+// GetVersionByNumber fetches an accepted version by integer number.
 //
-// GetVersionByNumber 按整数版本号取 accepted。
+// GetVersionByNumber 按整数号取 accepted 版本。
 func (s *Service) GetVersionByNumber(ctx context.Context, workflowID string, versionN int) (*workflowdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.GetVersionByNumber: %w", err)
@@ -203,10 +171,9 @@ func (s *Service) GetVersionByNumber(ctx context.Context, workflowID string, ver
 	return v, nil
 }
 
-// GetPending returns the active pending (with GraphParsed); ErrPendingNotFound
-// if absent.
+// GetPending returns the active pending with GraphParsed populated; ErrPendingNotFound if absent.
 //
-// GetPending 返活动 pending(填 GraphParsed)。
+// GetPending 返活动 pending 并填 GraphParsed；无 pending 返 ErrPendingNotFound。
 func (s *Service) GetPending(ctx context.Context, workflowID string) (*workflowdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.GetPending: %w", err)
@@ -219,12 +186,9 @@ func (s *Service) GetPending(ctx context.Context, workflowID string) (*workflowd
 	return v, nil
 }
 
-// ── WorkflowReader satisfaction (Plan 05 consumers) ─────────────────────────
-
-// GetActiveVersion is the WorkflowReader entry the Plan 05 scheduler calls
-// to fetch the frozen graph it should execute.
+// GetActiveVersion returns the frozen active graph for the scheduler to execute.
 //
-// GetActiveVersion 给 Plan 05 scheduler 拿冻结图执行。
+// GetActiveVersion 返回给 scheduler 执行的冻结活动图。
 func (s *Service) GetActiveVersion(ctx context.Context, workflowID string) (*workflowdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.GetActiveVersion: %w", err)
@@ -244,10 +208,9 @@ func (s *Service) GetActiveVersion(ctx context.Context, workflowID string) (*wor
 	return v, nil
 }
 
-// GetWorkflow satisfies WorkflowReader. Same as Get but skips attachComputed
-// — schedulers don't need pending.
+// GetWorkflow returns a workflow without computed fields (for schedulers).
 //
-// GetWorkflow 同 Get;scheduler 不需要 pending,跳 attachComputed。
+// GetWorkflow 返 workflow 不填计算字段（scheduler 用）。
 func (s *Service) GetWorkflow(ctx context.Context, workflowID string) (*workflowdomain.Workflow, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.GetWorkflow: %w", err)
@@ -255,10 +218,9 @@ func (s *Service) GetWorkflow(ctx context.Context, workflowID string) (*workflow
 	return s.repo.GetWorkflow(ctx, workflowID)
 }
 
-// ListEnabled returns enabled live workflows. Plan 05 trigger domain calls
-// this at bootstrap to register listeners.
+// ListEnabled returns enabled live workflows for the trigger domain to register listeners.
 //
-// ListEnabled 返启用的 workflow;Plan 05 trigger 启动时调。
+// ListEnabled 返已启用的 workflow，供 trigger 域注册 listener。
 func (s *Service) ListEnabled(ctx context.Context) ([]*workflowdomain.Workflow, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.ListEnabled: %w", err)
@@ -270,13 +232,9 @@ func (s *Service) ListEnabled(ctx context.Context) ([]*workflowdomain.Workflow, 
 	return rows, nil
 }
 
-// ── Lifecycle ────────────────────────────────────────────────────────────────
-
-// Create applies ops + persists Workflow + v1 (auto-accepted on validation
-// success). Returns ErrDuplicateName / ErrNoTrigger / ErrDAGCycle / etc.
-// on validation failure.
+// Create applies ops and persists Workflow + auto-accepted v1.
 //
-// Create 应用 ops + 持久化 Workflow + v1(校验通过自动 accept)。
+// Create 应用 ops 并持久化 Workflow + 自动 accept 的 v1。
 func (s *Service) Create(ctx context.Context, in CreateInput) (*workflowdomain.Workflow, *workflowdomain.Version, error) {
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
@@ -347,16 +305,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*workflowdomain.W
 	return w, v, nil
 }
 
-// Edit produces a pending under iterate-same-pending semantics (mirror
-// function / handler Edit per D-redo-11):
-//   - no pending → apply ops on top of active → new pending row
-//   - pending exists → apply ops on top of pending → rewrite same row
-//   - ops=[] is forbidden here (workflow has no env to "force-rebuild"
-//     like function / handler;callers needing the same effect should
-//     instead call Edit with set_meta NOP)
+// Edit produces or iterates a pending; empty ops is rejected.
 //
-// Edit 按 iterate-same-pending(D-redo-11):无 pending 新建,有 pending 重写
-// 同行。ops=[] 在 workflow 域无意义(没 env 要重建),返 ErrOpInvalid。
+// Edit 产出或迭代 pending；ops 为空时返 ErrOpInvalid。
 func (s *Service) Edit(ctx context.Context, in EditInput) (*workflowdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.Edit: %w", err)
@@ -372,7 +323,6 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*workflowdomain.Versi
 	pending, perr := s.repo.GetPending(ctx, in.ID)
 	switch {
 	case perr == nil:
-		// pending exists → iterate same row
 	case errors.Is(perr, workflowdomain.ErrPendingNotFound):
 		pending = nil
 	default:
@@ -396,10 +346,6 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*workflowdomain.Versi
 	if err != nil {
 		return nil, fmt.Errorf("workflowapp.Edit: %w", err)
 	}
-	// Edit-time validation is full strict — we don't accept invalid
-	// pendings even though the user can Reject afterwards (catching
-	// errors earlier is better UX).
-	// Edit 期强校验;Reject 路径在,但提前抓错更好。
 	if err := ValidateGraph(ctx, draft, s.checker); err != nil {
 		return nil, fmt.Errorf("workflowapp.Edit: %w", err)
 	}
@@ -434,13 +380,9 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*workflowdomain.Versi
 	return v, nil
 }
 
-// AcceptPending flips pending → accepted (numbered) and points
-// active_version_id at it. Trims accepted versions to the cap. Also
-// clears NeedsAttention since the user has actively re-affirmed the
-// workflow shape.
+// AcceptPending promotes pending → numbered accepted, flips active_version_id, clears NeedsAttention.
 //
-// AcceptPending pending → 带号 accepted + 翻 active_version_id;裁剪至上限;
-// 同时清 NeedsAttention(用户已重 re-affirm)。
+// AcceptPending 把 pending 翻为带号 accepted，翻 active_version_id，清 NeedsAttention。
 func (s *Service) AcceptPending(ctx context.Context, id string) (*workflowdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.AcceptPending: %w", err)
@@ -471,10 +413,9 @@ func (s *Service) AcceptPending(ctx context.Context, id string) (*workflowdomain
 	return pending, nil
 }
 
-// RejectPending hard-deletes the pending Version row (D-redo-12 mirror).
-// ActiveVersion unchanged; UI/LLM can Edit again to create a fresh pending.
+// RejectPending hard-deletes the pending Version row.
 //
-// RejectPending 物理删 pending 行;不动 ActiveVersion。
+// RejectPending 物理删 pending 行。
 func (s *Service) RejectPending(ctx context.Context, id string) error {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return fmt.Errorf("workflowapp.RejectPending: %w", err)
@@ -490,9 +431,9 @@ func (s *Service) RejectPending(ctx context.Context, id string) error {
 	return nil
 }
 
-// Revert flips active_version_id to a target accepted version number.
+// Revert flips active_version_id to an accepted version identified by its integer number.
 //
-// Revert 把 ActiveVersionID 翻到指定 accepted 版本号。
+// Revert 把 active_version_id 翻到指定整数号的 accepted 版本。
 func (s *Service) Revert(ctx context.Context, id string, targetVersion int) (*workflowdomain.Version, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.Revert: %w", err)
@@ -509,11 +450,9 @@ func (s *Service) Revert(ctx context.Context, id string, targetVersion int) (*wo
 	return target, nil
 }
 
-// UpdateMeta patches Workflow metadata (name / description / tags / enabled /
-// concurrency / needs_attention) without creating a new version.
+// UpdateMeta patches Workflow metadata without creating a new version.
 //
-// UpdateMeta 改元数据(name/description/tags/enabled/concurrency/needs_attention)
-// 不创建新版本。
+// UpdateMeta 改 Workflow 元数据不创建新版本。
 func (s *Service) UpdateMeta(ctx context.Context, in UpdateMetaInput) (*workflowdomain.Workflow, error) {
 	if _, err := reqctxpkg.RequireUserID(ctx); err != nil {
 		return nil, fmt.Errorf("workflowapp.UpdateMeta: %w", err)
@@ -576,11 +515,6 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-// attachComputed populates Pending on w (best-effort; failure logged).
-//
-// attachComputed 给 w 填 Pending(尽力,失败 log 不抛)。
 func (s *Service) attachComputed(ctx context.Context, w *workflowdomain.Workflow) {
 	if w == nil {
 		return
@@ -594,10 +528,6 @@ func (s *Service) attachComputed(ctx context.Context, w *workflowdomain.Workflow
 	}
 }
 
-// attachGraph unmarshals v.Graph into v.GraphParsed (gorm:"-" computed
-// field). Failure is logged (caller already has the raw blob).
-//
-// attachGraph 解 v.Graph 到 v.GraphParsed。
 func (s *Service) attachGraph(v *workflowdomain.Version) {
 	if v == nil || v.Graph == "" {
 		return
@@ -611,9 +541,6 @@ func (s *Service) attachGraph(v *workflowdomain.Version) {
 	v.GraphParsed = &g
 }
 
-// nextVersionNumber returns max(accepted.version)+1.
-//
-// nextVersionNumber 返当前 workflow 下 max(accepted.version)+1。
 func (s *Service) nextVersionNumber(ctx context.Context, workflowID string) (int, error) {
 	rows, _, err := s.repo.ListVersions(ctx, workflowID, workflowdomain.VersionListFilter{
 		Status: workflowdomain.StatusAccepted,
@@ -628,10 +555,6 @@ func (s *Service) nextVersionNumber(ctx context.Context, workflowID string) (int
 	return *rows[0].Version + 1, nil
 }
 
-// publish emits a `workflow` entity notification with slim payload
-// (D-redo-6 — UI does GET for full entity).
-//
-// publish 推 `workflow` entity 通知;瘦身 payload(D-redo-6)。
 func (s *Service) publish(ctx context.Context, workflowID, action string, data map[string]any) {
 	envelope := map[string]any{"action": action}
 	for k, v := range data {

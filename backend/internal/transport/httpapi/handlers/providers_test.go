@@ -1,8 +1,3 @@
-// providers_test.go — verifies GET /api/v1/providers returns the full
-// provider registry + ?category= filter narrows correctly.
-//
-// providers_test.go ——验 GET /api/v1/providers 返完整 provider 注册表 + ?category=
-// 过滤工作。
 package handlers
 
 import (
@@ -31,8 +26,6 @@ func TestProvidersHandler_List_AllCategories(t *testing.T) {
 	if err := json.NewDecoder(rec.Body).Decode(&env); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	// 16 providers expected: 11 LLM + 1 mock dev + 4 search.
-	// 期望 16 个：11 LLM + 1 mock dev + 4 搜索。
 	if len(env.Data) != 16 {
 		t.Errorf("len = %d, want 16", len(env.Data))
 	}

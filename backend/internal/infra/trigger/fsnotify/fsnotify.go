@@ -1,12 +1,6 @@
-// Package fsnotify is the filesystem-watch trigger listener. Wraps the
-// fsnotify v1 library with per-(workflowID,nodeID) keyed watch paths +
-// pattern/event filtering. Path-not-exist is fail-soft per Plan 05
-// §6.11 — state flips to error and surfaces via Service.State + a
-// notification, but the workflow itself isn't blocked.
+// Package fsnotify is the filesystem-watch trigger listener (wraps fsnotify v1).
 //
-// Package fsnotify 是文件系统监听 trigger;包 fsnotify v1 + per-(workflowID,
-// nodeID) watch + 模式/事件过滤。路径不存在 fail-soft(§6.11):state 翻
-// error,但 workflow 本身不阻塞。
+// Package fsnotify 是文件系统监听 trigger（封装 fsnotify v1）。
 package fsnotify
 
 import (
@@ -23,15 +17,14 @@ import (
 	triggerdomain "github.com/sunweilin/forgify/backend/internal/domain/trigger"
 )
 
-// OnFireFunc is called on each filtered fsnotify event. Caller wires to
-// scheduler.StartRun.
+// OnFireFunc fires once per filtered fsnotify event; caller wires to scheduler.StartRun.
 //
-// OnFireFunc 每条过滤后 fsnotify 事件调;调用方接 scheduler.StartRun。
+// OnFireFunc 每条过滤后的 fsnotify 事件触发一次；调用方接 scheduler.StartRun。
 type OnFireFunc func(workflowID, nodeID string, input map[string]any)
 
-// Listener manages fsnotify watcher + per-key registration.
+// Listener manages the fsnotify watcher + per-key registrations.
 //
-// Listener 管理 fsnotify watcher + per-key 注册表。
+// Listener 管理 fsnotify watcher 与 per-key 注册表。
 type Listener struct {
 	mu       sync.Mutex
 	watcher  *notifyfsnotify.Watcher
@@ -44,10 +37,6 @@ type Listener struct {
 	wg       sync.WaitGroup
 }
 
-// watchSpec is the parsed runtime form of one registration; pattern is
-// pre-lowered for case-insensitive match.
-//
-// watchSpec 是一次 register 的解析形式;pattern 预 lower。
 type watchSpec struct {
 	WorkflowID string
 	NodeID     string
@@ -56,11 +45,9 @@ type watchSpec struct {
 	Events     []notifyfsnotify.Op
 }
 
-// New constructs a Listener. The fsnotify watcher is created lazily on
-// first Register so New itself is cheap and infallible (path errors
-// surface per-Register).
+// New constructs a Listener (watcher is built lazily at first Register).
 //
-// New 构造 Listener;watcher 延迟在首次 Register 时建,New 本身廉价。
+// New 构造 Listener（watcher 在首次 Register 时延迟建）。
 func New(log *zap.Logger, onFire OnFireFunc) *Listener {
 	return &Listener{
 		specs:    make(map[string]watchSpec),
@@ -72,9 +59,6 @@ func New(log *zap.Logger, onFire OnFireFunc) *Listener {
 	}
 }
 
-// ensureWatcher lazily builds the watcher + starts the event loop.
-//
-// ensureWatcher 延迟建 watcher + 启 event loop。
 func (l *Listener) ensureWatcher() error {
 	if l.watcher != nil {
 		return nil
@@ -89,13 +73,9 @@ func (l *Listener) ensureWatcher() error {
 	return nil
 }
 
-// Register adds a watch for spec.Config["path"]. Pattern (glob) and events
-// arrays are optional. Path-not-exist sets state=error + returns
-// ErrPathNotExist (per §6.11 fail-soft — caller logs + sets needs_attention,
-// doesn't fail the workflow registration overall).
+// Register adds a watch; path-not-exist flips state=error and returns ErrPathNotExist (fail-soft).
 //
-// Register 加 watch;path 不存在置 state=error 返 ErrPathNotExist(§6.11
-// fail-soft)。
+// Register 加 watch；path 不存在置 state=error 并返 ErrPathNotExist（fail-soft）。
 func (l *Listener) Register(spec triggerdomain.Spec) error {
 	path, _ := spec.Config["path"].(string)
 	pattern, _ := spec.Config["pattern"].(string)
@@ -134,7 +114,6 @@ func (l *Listener) Register(spec triggerdomain.Spec) error {
 		return fmt.Errorf("triggerfsnotifyinfra.Register: %w", err)
 	}
 
-	// Remove prior watch if re-registering.
 	if old, ok := l.specs[key]; ok {
 		_ = l.watcher.Remove(old.Path)
 		delete(l.specs, key)
@@ -163,9 +142,9 @@ func (l *Listener) Register(spec triggerdomain.Spec) error {
 	return nil
 }
 
-// Unregister removes a watch; safe on unknown key.
+// Unregister removes a watch; no-op on unknown key.
 //
-// Unregister 删 watch;key 未知 no-op。
+// Unregister 删 watch；未知 key 时 no-op。
 func (l *Listener) Unregister(workflowID, nodeID string) {
 	key := workflowID + "/" + nodeID
 	l.mu.Lock()
@@ -179,9 +158,9 @@ func (l *Listener) Unregister(workflowID, nodeID string) {
 	delete(l.states, key)
 }
 
-// State returns runtime status for one trigger.
+// State returns the runtime status for one trigger.
 //
-// State 返某 trigger 状态。
+// State 返某 trigger 的运行时状态。
 func (l *Listener) State(workflowID, nodeID string) triggerdomain.State {
 	key := workflowID + "/" + nodeID
 	l.mu.Lock()
@@ -200,9 +179,9 @@ func (l *Listener) State(workflowID, nodeID string) triggerdomain.State {
 	return st
 }
 
-// Stop closes the watcher + drains the event loop goroutine.
+// Stop closes the watcher and waits for the event loop to exit.
 //
-// Stop 关 watcher + 等 event loop goroutine 退出。
+// Stop 关 watcher 并等 event loop goroutine 退出。
 func (l *Listener) Stop() {
 	close(l.stopCh)
 	if l.watcher != nil {
@@ -211,11 +190,6 @@ func (l *Listener) Stop() {
 	l.wg.Wait()
 }
 
-// runEventLoop fans fsnotify events to matching specs, then calls onFire
-// with a defer-recover panic guard (§6.13).
-//
-// runEventLoop 把 fsnotify 事件分发给匹配 spec,调 onFire 带 panic 守卫
-// (§6.13)。
 func (l *Listener) runEventLoop() {
 	defer l.wg.Done()
 	for {
@@ -249,16 +223,12 @@ func (l *Listener) dispatch(ev notifyfsnotify.Event) {
 	evBaseLower := strings.ToLower(evBase)
 
 	for _, spec := range specs {
-		// Path match: watched path is dir → event must be under it; if watched
-		// path is the file itself, name match it.
-		// 路径匹配:watched 是 dir → 事件在它下;是 file → 名字匹配。
 		watchedAbs, _ := filepath.Abs(spec.Path)
 		eventAbs, _ := filepath.Abs(ev.Name)
 		if eventAbs != watchedAbs && evDir != watchedAbs && !strings.HasPrefix(eventAbs, watchedAbs+string(filepath.Separator)) {
 			continue
 		}
 
-		// Event-kind filter (empty Events = all).
 		if len(spec.Events) > 0 {
 			match := false
 			for _, op := range spec.Events {
@@ -272,7 +242,6 @@ func (l *Listener) dispatch(ev notifyfsnotify.Event) {
 			}
 		}
 
-		// Pattern (glob) filter against basename.
 		if spec.Pattern != "" {
 			matched, _ := filepath.Match(spec.Pattern, evBaseLower)
 			if !matched {
@@ -304,10 +273,9 @@ func (l *Listener) dispatch(ev notifyfsnotify.Event) {
 	}
 }
 
-// parseEvents normalizes config "events" array (["create","modify","delete"])
-// into fsnotify Op masks. Empty array = all events.
+// parseEvents normalizes a config "events" array into fsnotify Op masks; empty = all.
 //
-// parseEvents 把 config events 数组转 fsnotify Op masks;空数组 = 全要。
+// parseEvents 把 config events 数组转 fsnotify Op masks；空数组 = 全要。
 func parseEvents(arr []any) []notifyfsnotify.Op {
 	if len(arr) == 0 {
 		return nil

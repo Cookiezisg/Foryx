@@ -1,15 +1,3 @@
-// list_marketplace.go — list_mcp_marketplace system tool: returns the
-// full curated marketplace catalog (~21 entries) so the LLM can pick
-// what to install. V3 (2026-05-09) replaces the V2 search-based tool
-// — the curated catalog is small enough that full enumeration costs
-// less context than burning a round trip + LLM rerank on a keyword
-// AND-match that empirically missed obvious matches.
-//
-// list_marketplace.go ——list_mcp_marketplace 系统工具：返 curated
-// marketplace 全部 ~21 条让 LLM 自己挑装哪个。V3（2026-05-09）替代 V2
-// 基于搜索的工具——curated 太小，全列入 context 比 LLM rerank +
-// 关键词 AND-match（实测漏 playwright/browser/github/slack 等明显项）
-// 性价比更高。
 package mcp
 
 import (
@@ -24,7 +12,7 @@ import (
 
 // ListMCPMarketplace implements the list_mcp_marketplace system tool.
 //
-// ListMCPMarketplace 实现 list_mcp_marketplace 系统工具。
+// ListMCPMarketplace 是 list_mcp_marketplace 系统工具的实现。
 type ListMCPMarketplace struct {
 	svc *mcpapp.Service
 }
@@ -45,24 +33,20 @@ var listMarketplaceSchema = json.RawMessage(`{
 	"properties": {}
 }`)
 
-// Identity --------------------------------------------------------------------
 func (t *ListMCPMarketplace) Name() string                { return "list_mcp_marketplace" }
 func (t *ListMCPMarketplace) Description() string         { return listMarketplaceDescription }
 func (t *ListMCPMarketplace) Parameters() json.RawMessage { return listMarketplaceSchema }
 
-// Static metadata -------------------------------------------------------------
 func (t *ListMCPMarketplace) IsReadOnly() bool        { return true }
 func (t *ListMCPMarketplace) NeedsReadFirst() bool    { return false }
 func (t *ListMCPMarketplace) RequiresWorkspace() bool { return false }
 
-// Args-dependent hooks --------------------------------------------------------
 func (t *ListMCPMarketplace) ValidateInput(json.RawMessage) error { return nil }
 
 func (t *ListMCPMarketplace) CheckPermissions(json.RawMessage, toolapp.PermissionMode) toolapp.PermissionResult {
 	return toolapp.PermissionAllow
 }
 
-// ── Execute ───────────────────────────────────────────────────────────
 
 func (t *ListMCPMarketplace) Execute(ctx context.Context, _ string) (string, error) {
 	all, err := t.svc.ListRegistry(ctx)
@@ -72,14 +56,9 @@ func (t *ListMCPMarketplace) Execute(ctx context.Context, _ string) (string, err
 	return marshalMarketplaceResults(all), nil
 }
 
-// marshalMarketplaceResults renders RegistryEntry slice as the JSON
-// shape the LLM consumes — slimmer than the full RegistryEntry to
-// avoid burning tokens on InstallCmd internals. LLM only needs
-// name/description/category/tier/runtime/homepage + user-supplied
-// requirements + notes.
+// marshalMarketplaceResults renders RegistryEntry as a slim LLM-facing JSON shape (no InstallCmd internals).
 //
-// marshalMarketplaceResults 把 RegistryEntry 切片渲染成 LLM 消费的 JSON——
-// 比完整 RegistryEntry 瘦避免在 InstallCmd 内部细节烧 token。
+// marshalMarketplaceResults 把 RegistryEntry 渲染成瘦 LLM-facing JSON（不含 InstallCmd 内部）。
 func marshalMarketplaceResults(entries []mcpdomain.RegistryEntry) string {
 	type result struct {
 		Name         string                     `json:"name"`

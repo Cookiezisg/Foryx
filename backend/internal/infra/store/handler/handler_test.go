@@ -1,9 +1,3 @@
-// handler_test.go — integration tests for handlerstore.Store using in-memory
-// SQLite. Covers Handler CRUD + user scoping + partial UNIQUE + Version flow +
-// HardDeleteOldestAccepted (50 cap) + Config encrypted blob round-trip.
-//
-// handler_test.go — handlerstore.Store 集成测试(内存 SQLite)。
-
 package handler
 
 import (
@@ -68,8 +62,6 @@ func mkVersion(id, handlerID, status string) *handlerdomain.Version {
 	}
 }
 
-// ── Handler CRUD ─────────────────────────────────────────────────────────────
-
 func TestSaveHandler_HappyPath(t *testing.T) {
 	s := newStore(t)
 	ctx := ctxFor(userAlice)
@@ -116,11 +108,9 @@ func TestSaveHandler_CrossUserIsolation(t *testing.T) {
 	s := newStore(t)
 
 	_ = s.SaveHandler(ctxFor(userAlice), mkHandler("hd1", userAlice, "same"))
-	// Bob inserts same name — should NOT conflict (partial UNIQUE is per (user_id, name)).
 	if err := s.SaveHandler(ctxFor(userBob), mkHandler("hd2", userBob, "same")); err != nil {
 		t.Errorf("cross-user same name should be allowed: %v", err)
 	}
-	// Alice can't see Bob's row.
 	if _, err := s.GetHandler(ctxFor(userAlice), "hd2"); !errors.Is(err, handlerdomain.ErrNotFound) {
 		t.Errorf("Alice should NOT see Bob's row; got %v", err)
 	}
@@ -130,13 +120,11 @@ func TestListHandlers_Paginates(t *testing.T) {
 	s := newStore(t)
 	ctx := ctxFor(userAlice)
 
-	// Seed 5 handlers.
 	for i := 1; i <= 5; i++ {
 		_ = s.SaveHandler(ctx, mkHandler(fmt.Sprintf("hd%d", i), userAlice, fmt.Sprintf("h-%d", i)))
-		time.Sleep(2 * time.Millisecond) // ensure created_at ordering distinct
+		time.Sleep(2 * time.Millisecond)
 	}
 
-	// Page 1: limit 2.
 	rows, next, err := s.ListHandlers(ctx, handlerdomain.ListFilter{Limit: 2})
 	if err != nil {
 		t.Fatalf("Page 1: %v", err)
@@ -148,7 +136,6 @@ func TestListHandlers_Paginates(t *testing.T) {
 		t.Errorf("Page 1 next cursor empty; expected continuation")
 	}
 
-	// Page 2: from cursor.
 	rows2, _, err := s.ListHandlers(ctx, handlerdomain.ListFilter{Cursor: next, Limit: 10})
 	if err != nil {
 		t.Fatalf("Page 2: %v", err)
@@ -172,8 +159,6 @@ func TestSetActiveVersion(t *testing.T) {
 	}
 }
 
-// ── Version flow ─────────────────────────────────────────────────────────────
-
 func TestVersionFlow_PendingAcceptReject(t *testing.T) {
 	s := newStore(t)
 	ctx := ctxFor(userAlice)
@@ -193,7 +178,6 @@ func TestVersionFlow_PendingAcceptReject(t *testing.T) {
 		t.Errorf("GetPending.ID = %q, want hdv1", gotPending.ID)
 	}
 
-	// Accept → set version=1.
 	one := 1
 	if err := s.UpdateVersionStatus(ctx, "hdv1", handlerdomain.StatusAccepted, &one); err != nil {
 		t.Fatalf("UpdateVersionStatus accept: %v", err)
@@ -203,12 +187,10 @@ func TestVersionFlow_PendingAcceptReject(t *testing.T) {
 		t.Errorf("after accept: status=%q version=%v, want accepted/1", v.Status, v.Version)
 	}
 
-	// Now GetPending → ErrPendingNotFound.
 	if _, err := s.GetPending(ctx, "hd1"); !errors.Is(err, handlerdomain.ErrPendingNotFound) {
 		t.Errorf("expected ErrPendingNotFound, got %v", err)
 	}
 
-	// GetVersionByNumber.
 	v1, err := s.GetVersionByNumber(ctx, "hd1", 1)
 	if err != nil {
 		t.Fatalf("GetVersionByNumber: %v", err)
@@ -241,7 +223,6 @@ func TestHardDeleteOldestAccepted_TrimsBeyondCap(t *testing.T) {
 	ctx := ctxFor(userAlice)
 
 	_ = s.SaveHandler(ctx, mkHandler("hd1", userAlice, "trim"))
-	// Seed 7 accepted versions.
 	for i := 1; i <= 7; i++ {
 		v := mkVersion(fmt.Sprintf("hdv%d", i), "hd1", handlerdomain.StatusAccepted)
 		n := i
@@ -249,10 +230,9 @@ func TestHardDeleteOldestAccepted_TrimsBeyondCap(t *testing.T) {
 		if err := s.SaveVersion(ctx, v); err != nil {
 			t.Fatalf("seed %d: %v", i, err)
 		}
-		time.Sleep(time.Millisecond) // ordering
+		time.Sleep(time.Millisecond)
 	}
 
-	// Keep 3 newest → 4 should be hard-deleted.
 	if err := s.HardDeleteOldestAccepted(ctx, "hd1", 3); err != nil {
 		t.Fatalf("HardDeleteOldestAccepted: %v", err)
 	}
@@ -262,8 +242,6 @@ func TestHardDeleteOldestAccepted_TrimsBeyondCap(t *testing.T) {
 		t.Errorf("after trim len = %d, want 3", len(rows))
 	}
 }
-
-// ── Config (D-handler) ───────────────────────────────────────────────────────
 
 func TestUpdateConfigEncrypted_RoundTrip(t *testing.T) {
 	s := newStore(t)
@@ -283,7 +261,6 @@ func TestUpdateConfigEncrypted_RoundTrip(t *testing.T) {
 		t.Errorf("ciphertext mismatch: got %q want %q", got, ciphertext)
 	}
 
-	// Clear back to "".
 	if err := s.ClearConfig(ctx, "hd1"); err != nil {
 		t.Fatalf("ClearConfig: %v", err)
 	}
@@ -299,19 +276,16 @@ func TestUpdateConfigEncrypted_CrossUserIsolated(t *testing.T) {
 	_ = s.SaveHandler(ctxFor(userAlice), mkHandler("hd1", userAlice, "same"))
 	_ = s.UpdateConfigEncrypted(ctxFor(userAlice), "hd1", "alice-ciphertext")
 
-	// Bob tries to read alice's handler config — ErrNotFound.
 	_, err := s.GetConfigEncrypted(ctxFor(userBob), "hd1")
 	if !errors.Is(err, handlerdomain.ErrNotFound) {
 		t.Errorf("Bob reading Alice's config should fail; got %v", err)
 	}
 
-	// Bob tries to overwrite — ErrNotFound (no row matched for Bob).
 	err = s.UpdateConfigEncrypted(ctxFor(userBob), "hd1", "bob-ciphertext")
 	if !errors.Is(err, handlerdomain.ErrNotFound) {
 		t.Errorf("Bob updating Alice's config should fail; got %v", err)
 	}
 
-	// Alice's ciphertext untouched.
 	got, _ := s.GetConfigEncrypted(ctxFor(userAlice), "hd1")
 	if got != "alice-ciphertext" {
 		t.Errorf("Alice's ciphertext mutated by Bob: got %q", got)

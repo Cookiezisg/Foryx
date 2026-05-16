@@ -1,9 +1,3 @@
-// manager_test.go — unit tests for ProcessManager and BgProcess. Covers
-// registry CRUD, ring-buffer overflow, read-cursor semantics, and Stop()
-// cleanup.
-//
-// manager_test.go — ProcessManager 与 BgProcess 单测：注册表 CRUD、环形
-// 溢出、读游标语义、Stop() 清理。
 package shell
 
 import (

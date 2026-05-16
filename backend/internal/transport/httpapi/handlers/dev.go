@@ -1,11 +1,6 @@
-// dev.go — HTTP handlers for the /dev/* route group, registered only when
-// the server is started with --dev. Provides: static file serving for the
-// integration console, a log SSE stream, a read-only SQL endpoint, and a
-// YAML test-collection loader.
+// Package handlers — /dev/* route group, registered only under --dev.
 //
-// dev.go — /dev/* 路由组的 HTTP handler，仅在 --dev 启动时注册。
-// 提供：integration console 的静态文件服务、日志 SSE 流、只读 SQL 端点、
-// YAML 测试集合加载器。
+// Package handlers — /dev/* 路由组,仅 --dev 启动注册。
 package handlers
 
 import (
@@ -37,19 +32,16 @@ type DevHandler struct {
 	broadcaster    *loggerinfra.LogBroadcaster
 	collectionsDir string
 	integrationDir string
-	forgifyHome    string // resolved home root: dev → <data-dir>/.forgify, prod → ~/.forgify
+	forgifyHome    string
 	port           int
 	tools          []toolapp.Tool
 	llmFactory     *llminfra.Factory
 	shellManager   *shelltool.ProcessManager
 	log            *zap.Logger
-	buildID        string    // server-start unix timestamp; cache-busts /dev/static/* in HTML on every restart
-	startedAt      time.Time // for /dev/runtime uptime calculation (TE-21)
+	buildID        string
+	startedAt      time.Time
 }
 
-// NewDevHandler wires DevHandler dependencies.
-//
-// NewDevHandler 装配 DevHandler 依赖。
 func NewDevHandler(
 	db *gorm.DB,
 	broadcaster *loggerinfra.LogBroadcaster,
@@ -76,10 +68,6 @@ func NewDevHandler(
 	}
 }
 
-// Register attaches dev routes. Specific method+path patterns take priority
-// over the trailing-slash catch-all for static files.
-//
-// Register 挂载 dev 路由。带方法的精确路径模式优先于静态文件的通配路由。
 func (h *DevHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /dev/logs", h.StreamLogs)
 	mux.HandleFunc("POST /dev/sql", h.QuerySQL)
@@ -87,35 +75,20 @@ func (h *DevHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /dev/collections", h.ListCollections)
 	mux.HandleFunc("GET /dev/tools", h.ListTools)
 	mux.HandleFunc("POST /dev/invoke", h.InvokeTool)
-	// TE-9 Info tab data sources
 	mux.HandleFunc("GET /dev/info", h.Info)
 	mux.HandleFunc("GET /dev/forgify-home", h.ForgifyHome)
-	// TE-21 Metrics + Routes tabs
 	mux.HandleFunc("GET /dev/runtime", h.Runtime)
 	mux.HandleFunc("GET /dev/routes", h.Routes)
-	// TE-12 Bash background processes (nil-tolerant — only registered if
-	// shellManager wired; main.go always wires it).
 	if h.shellManager != nil {
 		mux.HandleFunc("GET /dev/bash-processes", h.BashProcesses)
 	}
-	// TE-4b mock LLM endpoints; nil-tolerant when --dev didn't wire
-	// the llmFactory (shouldn't happen in practice — dev mode always
-	// has it — but keeps the helper exit clean during refactor).
-	// TE-4b mock LLM 端点；llmFactory 没接时 nil-tolerant。
 	if h.llmFactory != nil {
 		mux.HandleFunc("POST /dev/mock-llm/scripts", h.MockLLMPushScripts)
 		mux.HandleFunc("GET /dev/mock-llm/queue", h.MockLLMQueue)
 		mux.HandleFunc("DELETE /dev/mock-llm/scripts", h.MockLLMClear)
 		mux.HandleFunc("GET /dev/mock-llm/last-prompt", h.MockLLMLastPrompt)
-		// TE-5a LLM trace endpoint — recorder is set during --dev boot
-		// (main.go calls llmFactory.SetTracer(...)). Nil-tolerant.
-		// TE-5a LLM trace 端点——recorder 在 --dev boot 时设
-		// （main.go 调 llmFactory.SetTracer）。容忍 nil。
 		mux.HandleFunc("GET /dev/llm-trace", h.LLMTrace)
 	}
-	// Static files: /dev/static/style.css, /dev/static/js/app.js, etc.
-	// no-cache so browser always fetches the latest version during dev.
-	// no-cache 避免浏览器缓存旧版本文件。
 	noCache := func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
@@ -123,19 +96,12 @@ func (h *DevHandler) Register(mux *http.ServeMux) {
 		})
 	}
 	mux.Handle("/dev/static/", noCache(http.StripPrefix("/dev/static/", http.FileServer(http.Dir(h.integrationDir)))))
-	// Catch-all: serve index.html for /dev/ and any unmatched sub-path.
 	mux.HandleFunc("/dev/", h.ServeIndex)
 }
 
-// ── GET /dev/ ─────────────────────────────────────────────────────────────────
-
-// ServeIndex serves the testend HTML entry for all /dev/* paths not matched
-// by a more specific route. Tries index.html (v2 Vite SPA) first, falls back
-// to tester.html (v1 Alpine.js) for backwards compat. We read manually
-// instead of http.ServeFile to avoid the trailing-slash redirect.
+// ServeIndex serves the testend HTML entry; tries index.html then tester.html.
 //
-// ServeIndex 为所有未匹配 /dev/* 路由提供 testend 入口 HTML。先试 index.html
-// (v2 Vite SPA),回退 tester.html(v1 Alpine.js)。手动读取避免 ServeFile 的尾斜杠重定向。
+// ServeIndex 提供 testend 入口 HTML;先 index.html 再 tester.html。
 func (h *DevHandler) ServeIndex(w http.ResponseWriter, r *http.Request) {
 	var data []byte
 	var err error
@@ -149,31 +115,15 @@ func (h *DevHandler) ServeIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "testend not built — run `make build-testend`", http.StatusNotFound)
 		return
 	}
-	// Cache-buster: substitute __BUILD__ in the HTML with this server's
-	// startup timestamp. Lets <link rel="stylesheet" href=".../style.css?v=__BUILD__">
-	// invalidate the browser memory cache on every backend restart, so the
-	// dev tester always picks up the latest CSS/JS without Cmd+Shift+R.
-	//
-	// __BUILD__ 占位符替换：让 link 标签的 ?v=__BUILD__ 在每次 backend 重启
-	// 时变化，浏览器内存缓存自然失效，dev 时不用每次硬刷。
 	body := strings.ReplaceAll(string(data), "__BUILD__", h.buildID)
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
-	// Late write error means client disconnected mid-response; nothing
-	// useful to do (status already sent). Intentionally ignored.
-	// 写出错通常是客户端中途断开，状态码已发出无可挽回，故意忽略。
 	_, _ = w.Write([]byte(body))
 }
 
-// ── GET /dev/logs ─────────────────────────────────────────────────────────────
-
-// StreamLogs streams backend log entries as SSE. On connection it replays
-// the ring buffer, then subscribes to new entries. SSE plumbing (headers,
-// keep-alive, ctx-driven shutdown) is delegated to responsehttpapi.StreamSSE.
+// StreamLogs replays the ring buffer then streams new log entries as SSE.
 //
-// StreamLogs 把后端日志条目以 SSE 形式推送。连接时先回放环形缓冲区，
-// 然后订阅新条目。SSE 管线（header、keep-alive、ctx 驱动退出）委托给
-// responsehttpapi.StreamSSE。
+// StreamLogs 先回放环形缓冲区,再以 SSE 推送新日志。
 func (h *DevHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 	ch, unsub := h.broadcaster.Subscribe()
 	defer unsub()
@@ -192,8 +142,6 @@ func (h *DevHandler) StreamLogs(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-// ── POST /dev/sql ─────────────────────────────────────────────────────────────
-
 type sqlRequest struct {
 	SQL string `json:"sql"`
 }
@@ -207,11 +155,9 @@ type sqlErrorResponse struct {
 	Error string `json:"error"`
 }
 
-// QuerySQL executes a read-only SQL SELECT and returns columns + rows.
-// Non-SELECT statements are rejected.
+// QuerySQL executes a read-only SELECT and returns columns + rows.
 //
-// QuerySQL 执行只读 SQL SELECT，返回列名和行数据。
-// 非 SELECT 语句直接拒绝。
+// QuerySQL 执行只读 SELECT,返回列名和行。
 func (h *DevHandler) QuerySQL(w http.ResponseWriter, r *http.Request) {
 	var req sqlRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -252,17 +198,9 @@ func (h *DevHandler) QuerySQL(w http.ResponseWriter, r *http.Request) {
 			ptrs[i] = &vals[i]
 		}
 		if err := rows.Scan(ptrs...); err != nil {
-			// Log + skip so dev console row count matches DB; silent
-			// continue would hide partial-result truths (operator sees
-			// "5 rows" when DB has 7, two failed Scan).
-			//
-			// Log + 跳让 dev console 行数与 DB 一致；silent continue
-			// 会藏部分结果（DB 7 行但 console 显示 5）。
 			h.log.Warn("dev: row scan failed", zap.Error(err))
 			continue
 		}
-		// Convert []byte values to string for JSON readability.
-		// 把 []byte 转成 string，JSON 展示更可读。
 		row := make([]any, len(vals))
 		for i, v := range vals {
 			if b, ok := v.([]byte); ok {
@@ -277,14 +215,12 @@ func (h *DevHandler) QuerySQL(w http.ResponseWriter, r *http.Request) {
 	writeDevJSON(w, http.StatusOK, sqlResponse{Columns: cols, Rows: result})
 }
 
-// ── GET /dev/schema ───────────────────────────────────────────────────────────
-
 type schemaColumn struct {
-	Name     string `json:"name"`
-	Type     string `json:"type"`
-	NotNull  bool   `json:"notNull"`
-	PK       bool   `json:"pk"`
-	Default  string `json:"default,omitempty"`
+	Name    string `json:"name"`
+	Type    string `json:"type"`
+	NotNull bool   `json:"notNull"`
+	PK      bool   `json:"pk"`
+	Default string `json:"default,omitempty"`
 }
 
 type schemaTable struct {
@@ -293,12 +229,9 @@ type schemaTable struct {
 	Columns  []schemaColumn `json:"columns"`
 }
 
-// Schema returns every user table with column definitions + a quick row count.
-// Lets the SQL tab render a "tables in this DB" sidebar so testers don't have to
-// remember table names. Pulls from sqlite_master + PRAGMA table_info.
+// Schema lists every user table with column definitions and row count.
 //
-// Schema 返每个用户表的列定义 + 行数。让 SQL tab 渲染"本 DB 表清单"侧栏，
-// 测试者不用背表名。从 sqlite_master + PRAGMA table_info 拿。
+// Schema 列出每个用户表的列定义和行数。
 func (h *DevHandler) Schema(w http.ResponseWriter, r *http.Request) {
 	sqlDB, err := h.db.DB()
 	if err != nil {
@@ -325,12 +258,7 @@ func (h *DevHandler) Schema(w http.ResponseWriter, r *http.Request) {
 	out := make([]schemaTable, 0, len(names))
 	for _, name := range names {
 		t := schemaTable{Name: name}
-		// Row count — best effort; ignore errors (e.g. virtual tables).
-		// 行数——尽力；忽略错误（如虚拟表）。
 		_ = sqlDB.QueryRowContext(r.Context(), fmt.Sprintf("SELECT COUNT(*) FROM %q", name)).Scan(&t.RowCount)
-		// PRAGMA table_info quoting: name interpolated, but it came from
-		// sqlite_master so it's a real table name, not user-controlled.
-		// PRAGMA table_info 名字插值；来自 sqlite_master 故非用户控制。
 		colRows, err := sqlDB.QueryContext(r.Context(), fmt.Sprintf("PRAGMA table_info(%q)", name))
 		if err != nil {
 			h.log.Warn("dev: PRAGMA table_info failed", zap.String("table", name), zap.Error(err))
@@ -358,8 +286,6 @@ func (h *DevHandler) Schema(w http.ResponseWriter, r *http.Request) {
 	}
 	writeDevJSON(w, http.StatusOK, out)
 }
-
-// ── GET /dev/collections ──────────────────────────────────────────────────────
 
 // Collection mirrors the YAML structure of integration/collections/*.yaml.
 //
@@ -389,21 +315,12 @@ type ExpectConfig struct {
 	Status int `yaml:"status" json:"status"`
 }
 
-// ListCollections reads all *.yaml files from testend/collections and returns
-// the parsed collection definitions as JSON. The frontend runner executes
-// the steps — the backend only loads and parses.
+// ListCollections returns parsed *.yaml collection definitions.
 //
-// ListCollections 从 testend/collections 读取所有 *.yaml 文件，把解析好的
-// 集合定义以 JSON 返回。步骤由前端执行，后端只负责加载和解析。
+// ListCollections 返回解析好的集合 YAML 定义。
 func (h *DevHandler) ListCollections(w http.ResponseWriter, r *http.Request) {
 	entries, err := os.ReadDir(h.collectionsDir)
 	if err != nil {
-		// Log + empty list. dev mode without collections dir is valid
-		// (--collections-dir not always set), but operator misconfig
-		// (wrong path / permission) should leave a breadcrumb in logs.
-		//
-		// Log + 空列表。dev 模式无 collections 目录合法（--collections-
-		// dir 未必设），但 operator 配错（路径/权限）应留 log 线索。
 		h.log.Warn("dev: read collections dir", zap.String("dir", h.collectionsDir), zap.Error(err))
 		writeDevJSON(w, http.StatusOK, []Collection{})
 		return
@@ -432,18 +349,14 @@ func (h *DevHandler) ListCollections(w http.ResponseWriter, r *http.Request) {
 	writeDevJSON(w, http.StatusOK, cols)
 }
 
-// ── GET /dev/tools ────────────────────────────────────────────────────────────
-
 type devToolSummary struct {
 	Name string `json:"name"`
 	Desc string `json:"desc"`
 }
 
-// ListTools returns the name and description of every system tool registered
-// with the agent, so the testend invoke panel can populate its dropdown.
+// ListTools returns name + description for every registered system tool.
 //
-// ListTools 返回注册到 agent 的每个 system tool 的名称和描述，
-// 供 testend invoke 面板填充下拉列表。
+// ListTools 返每个注册 system tool 的名称和描述。
 func (h *DevHandler) ListTools(w http.ResponseWriter, r *http.Request) {
 	out := make([]devToolSummary, 0, len(h.tools))
 	for _, t := range h.tools {
@@ -452,11 +365,9 @@ func (h *DevHandler) ListTools(w http.ResponseWriter, r *http.Request) {
 	writeDevJSON(w, http.StatusOK, out)
 }
 
-// ── POST /dev/invoke ──────────────────────────────────────────────────────────
-
 type invokeRequest struct {
 	Tool string `json:"tool"`
-	Args string `json:"args"` // JSON-encoded arguments for the tool
+	Args string `json:"args"`
 }
 
 type invokeResponse struct {
@@ -466,11 +377,9 @@ type invokeResponse struct {
 	Error     string `json:"error,omitempty"`
 }
 
-// InvokeTool directly runs a named system tool with caller-supplied JSON args.
-// Useful for smoke-testing tools without going through the LLM agent.
+// InvokeTool directly runs a named tool with caller-supplied JSON args.
 //
-// InvokeTool 用调用方提供的 JSON 参数直接运行指定 system tool，
-// 无需经过 LLM agent，方便冒烟测试。
+// InvokeTool 直接用调用方 JSON 参数运行指定 tool。
 func (h *DevHandler) InvokeTool(w http.ResponseWriter, r *http.Request) {
 	var req invokeRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -508,8 +417,6 @@ func (h *DevHandler) InvokeTool(w http.ResponseWriter, r *http.Request) {
 	}
 	writeDevJSON(w, http.StatusOK, invokeResponse{Output: output, OK: true, ElapsedMs: elapsed})
 }
-
-// ── helpers ───────────────────────────────────────────────────────────────────
 
 func writeDevJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

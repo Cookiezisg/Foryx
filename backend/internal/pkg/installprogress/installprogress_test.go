@@ -1,12 +1,3 @@
-// installprogress_test.go — exercises Run helper in both modes:
-// (1) ctx is in chat flow (conv + parent block) → progress block
-// emitted via injected Emitter; (2) ctx lacks chat context → no
-// emission, fn still runs.
-//
-// installprogress_test.go ——验 Run 两模式：(1) chat flow ctx（带 conv +
-// 父 block）→ 经注入 Emitter 推 progress block；(2) 无 chat ctx → 不发，
-// fn 照跑。
-
 package installprogress
 
 import (
@@ -22,10 +13,6 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// fakeEmitter records every interaction so tests can assert that
-// progress blocks fire (or don't) as expected.
-//
-// fakeEmitter 记录所有交互让测试断言 progress block 是否如期发。
 type fakeEmitter struct {
 	mu     sync.Mutex
 	starts []startCall
@@ -57,14 +44,13 @@ var _ eventlogpkg.Emitter = (*fakeEmitter)(nil)
 
 func TestRun_NoChatFlow_FnRunsButNoEmission(t *testing.T) {
 	em := &fakeEmitter{}
-	// ctx has emitter but NO conv / parent block — should be no-op channel
 	ctx := eventlogpkg.With(context.Background(), em)
 
 	called := false
 	out, err := Run(ctx, map[string]any{"runtime": "python"},
 		func(progress sandboxdomain.ProgressFunc) (string, error) {
 			called = true
-			progress("download", "fetching", 50) // should be silently dropped
+			progress("download", "fetching", 50)
 			return "ok", nil
 		})
 
@@ -105,8 +91,6 @@ func TestRun_ChatFlow_EmitsProgressBlock(t *testing.T) {
 	if em.starts[0].blockType != eventlogdomain.BlockTypeProgress {
 		t.Errorf("blockType = %q, want progress", em.starts[0].blockType)
 	}
-	// Expect 4 deltas: synthetic [starting] + fn's 2 progress() + synthetic [done].
-	// 4 条 delta：合成 [starting] + fn 内 2 次 progress() + 合成 [done]。
 	if len(em.deltas) != 4 {
 		t.Errorf("expected 4 DeltaBlock calls (start + 2 fn + done), got %d", len(em.deltas))
 	}

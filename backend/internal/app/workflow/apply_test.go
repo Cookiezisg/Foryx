@@ -1,8 +1,3 @@
-// apply_test.go — unit tests for the workflow ops engine. Each op family
-// gets a happy-path test + at least one failure mode.
-//
-// apply_test.go —— workflow ops 引擎单测;每个 op 家族 happy + 1 失败模式。
-
 package workflow
 
 import (

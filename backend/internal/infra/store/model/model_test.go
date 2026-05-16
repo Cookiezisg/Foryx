@@ -1,9 +1,3 @@
-// store_test.go — integration tests for Store using an in-memory SQLite.
-// Covers Upsert (insert + update), GetByScenario, List, cross-user isolation,
-// and the unique constraint guard.
-//
-// store_test.go — Store 的集成测试（内存 SQLite）。覆盖 Upsert（插入 + 更新）、
-// GetByScenario、List、跨用户隔离、唯一约束守卫。
 package model
 
 import (
@@ -50,8 +44,6 @@ func mkConfig(id, userID, scenario, provider, modelID string) *modeldomain.Model
 	}
 }
 
-// --- Upsert ---
-
 func TestUpsert_NewRowCreated(t *testing.T) {
 	s := newStore(t)
 	ctx := ctxFor(userAlice)
@@ -71,8 +63,6 @@ func TestUpsert_NewRowCreated(t *testing.T) {
 }
 
 func TestUpsert_UpdatePreservesID(t *testing.T) {
-	// Updating an existing row must keep the same ID.
-	// 更新已有行必须保持相同 ID。
 	s := newStore(t)
 	ctx := ctxFor(userAlice)
 
@@ -100,11 +90,6 @@ func TestUpsert_UpdatePreservesID(t *testing.T) {
 }
 
 func TestUpsert_UniqueConstraintBlocksDuplicate(t *testing.T) {
-	// Two different IDs for the same (user, scenario) must be rejected by DB.
-	// The service prevents this via GetByScenario+update; this test guards the DB contract.
-	//
-	// 同一 (user, scenario) 不同 ID 必须被 DB 拒绝。
-	// Service 已通过 GetByScenario + 更新避免这种情况；本测试守护 DB 层的约束。
 	s := newStore(t)
 	ctx := ctxFor(userAlice)
 
@@ -119,8 +104,6 @@ func TestUpsert_UniqueConstraintBlocksDuplicate(t *testing.T) {
 	}
 }
 
-// --- GetByScenario ---
-
 func TestGetByScenario_NotFound(t *testing.T) {
 	s := newStore(t)
 	_, err := s.GetByScenario(ctxFor(userAlice), modeldomain.ScenarioChat)
@@ -130,8 +113,6 @@ func TestGetByScenario_NotFound(t *testing.T) {
 }
 
 func TestGetByScenario_CrossUserIsolation(t *testing.T) {
-	// Alice's config must not be visible to Bob.
-	// Alice 的配置对 Bob 必须不可见。
 	s := newStore(t)
 
 	m := mkConfig("mc1", userAlice, modeldomain.ScenarioChat, "openai", "gpt-4o")
@@ -146,8 +127,6 @@ func TestGetByScenario_CrossUserIsolation(t *testing.T) {
 }
 
 func TestGetByScenario_MissingUserID(t *testing.T) {
-	// A ctx without InjectUserID must produce a wiring error, not ErrNotConfigured.
-	// 未经 InjectUserID 的 ctx 必须产生接线错误，而非 ErrNotConfigured。
 	s := newStore(t)
 	_, err := s.GetByScenario(context.Background(), modeldomain.ScenarioChat)
 	if err == nil {
@@ -157,8 +136,6 @@ func TestGetByScenario_MissingUserID(t *testing.T) {
 		t.Errorf("wiring bug leaked as ErrNotConfigured: %v", err)
 	}
 }
-
-// --- List ---
 
 func TestList_EmptyReturnsNonNilSlice(t *testing.T) {
 	s := newStore(t)

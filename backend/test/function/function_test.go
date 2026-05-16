@@ -1,23 +1,8 @@
 //go:build pipeline
 
-// function_test.go — end-to-end pipeline tests for the function domain
-// (forge_redesign Plan 01 Phase 8). Real in-process backend via harness:
-// real DB / SSE bridge / sandbox v2 (when mise embedded) / fake LLM.
+// Package function_test runs end-to-end pipeline tests for the function domain.
 //
-// Scenarios:
-//
-//  1. TestFunction_HTTP_CRUDLifecycle — POST → GET → PATCH → DELETE without
-//     sandbox; verifies serialization, error envelopes, name uniqueness.
-//  2. TestFunction_HTTP_PendingAcceptFlow — POST then PATCH-via-ops not
-//     possible from HTTP (HTTP only does direct create + meta update). Edit
-//     flow exercised via Service directly; HTTP pending:accept / :reject.
-//  3. TestFunction_LLM_SearchEmpty — chat-driven search_function on empty
-//     library returns []; no sandbox needed.
-//  4. TestFunction_HTTP_RunAndExecutionLog — requires sandbox; POST function,
-//     wait for env ready, POST :run, GET /executions, verify the log row.
-//
-// function_test.go —— function domain 端到端 pipeline 测试。
-
+// Package function_test 跑 function 域端到端 pipeline 测试。
 package function_test
 
 import (
@@ -29,13 +14,9 @@ import (
 	th "github.com/sunweilin/forgify/backend/test/harness"
 )
 
-// ── 1. HTTP CRUD lifecycle (no sandbox) ──────────────────────────────────────
-
 func TestFunction_HTTP_CRUDLifecycle(t *testing.T) {
 	h := th.New(t)
 
-	// Create via POST /functions
-	// POST 创建
 	var createResp struct {
 		Data struct {
 			Function struct {
@@ -56,8 +37,6 @@ func TestFunction_HTTP_CRUDLifecycle(t *testing.T) {
 		t.Errorf("function id %q missing fn_ prefix", fnID)
 	}
 
-	// GET /functions/{id}
-	// 单查
 	var getResp struct {
 		Data struct {
 			ID   string `json:"id"`
@@ -70,9 +49,6 @@ func TestFunction_HTTP_CRUDLifecycle(t *testing.T) {
 		t.Errorf("GET name=%q, want csv_clean", getResp.Data.Name)
 	}
 
-	// Duplicate name → 409 FUNCTION_NAME_DUPLICATE
-	// 重名 → 409. Same name AND matching def in body so AST scan + name char-set
-	// validation both pass before we hit the duplicate check.
 	var errResp th.ErrEnvelope
 	dupStatus := th.PostFunction(t, h, "csv_clean", "def csv_clean(args):\n    return args\n", &errResp)
 	if dupStatus != 409 {
@@ -82,8 +58,6 @@ func TestFunction_HTTP_CRUDLifecycle(t *testing.T) {
 		t.Errorf("duplicate error.code=%q, want FUNCTION_NAME_DUPLICATE", errResp.Error.Code)
 	}
 
-	// PATCH description
-	// PATCH 描述
 	newDesc := "Cleans CSV inputs"
 	patchResp := h.PatchJSON("/api/v1/functions/"+fnID,
 		map[string]any{"description": newDesc}, nil)
@@ -92,16 +66,12 @@ func TestFunction_HTTP_CRUDLifecycle(t *testing.T) {
 		t.Errorf("PATCH status=%d, want 200", patchResp.StatusCode)
 	}
 
-	// DELETE
-	// 软删
 	delResp := h.Delete("/api/v1/functions/" + fnID)
 	_ = delResp.Body.Close()
 	if delResp.StatusCode != 204 {
 		t.Errorf("DELETE status=%d, want 204", delResp.StatusCode)
 	}
 
-	// GET after DELETE → 404 (use DoRequest to capture error status without fatal).
-	// 删后 GET 404(用 DoRequest 非 fatal 抓状态码)。
 	var notFound th.ErrEnvelope
 	goneStatus := th.DoRequest(t, h, "GET", "/api/v1/functions/"+fnID, nil, &notFound)
 	if goneStatus != 404 {
@@ -112,12 +82,9 @@ func TestFunction_HTTP_CRUDLifecycle(t *testing.T) {
 	}
 }
 
-// ── 2. List + pagination smoke ───────────────────────────────────────────────
-
 func TestFunction_HTTP_ListPaginated(t *testing.T) {
 	h := th.New(t)
 
-	// Seed 3 functions.
 	for _, name := range []string{"alpha_fn", "beta_fn", "gamma_fn"} {
 		var resp struct{}
 		_ = th.PostFunction(t, h, name, "def "+name+"(x):\n    return x\n", &resp)
@@ -133,8 +100,6 @@ func TestFunction_HTTP_ListPaginated(t *testing.T) {
 		t.Errorf("List returned %d, want 3", len(listResp.Data))
 	}
 }
-
-// ── 3. LLM tool — search_function on empty library returns [] ────────────────
 
 func TestFunction_LLM_SearchEmpty(t *testing.T) {
 	fake := th.NewFakeLLMServer(t)
@@ -162,14 +127,10 @@ func TestFunction_LLM_SearchEmpty(t *testing.T) {
 	}
 }
 
-// ── 4. Run + execution log (sandbox-gated) ───────────────────────────────────
-
 func TestFunction_HTTP_RunAndExecutionLog(t *testing.T) {
 	h := th.New(t)
 	th.RequireFunctionResources(t, h)
 
-	// Create.
-	// 建。
 	var createResp struct {
 		Data struct {
 			Function struct{ ID string `json:"id"` } `json:"function"`
@@ -182,14 +143,7 @@ func TestFunction_HTTP_RunAndExecutionLog(t *testing.T) {
 	fnID := createResp.Data.Function.ID
 	versionID := createResp.Data.Version.ID
 
-	// Wait for env ready (background sync). Polls GET every 500ms up to 90s
-	// — first-time uv venv build downloads Python + creates a virtualenv;
-	// can take 20-60s on fresh CI. If python-build itself fails on this host
-	// (common cause: missing OS build deps for cpython), skip rather than
-	// fail — we're testing the function flow, not the mise install pipeline.
-	//
-	// 等 env ready(后台 sync)。每 500ms 轮询 GET,最长 90s。host 上 python-build
-	// 挂时(常见:缺 cpython 构建依赖)t.Skip(测的是 function 流程不是 mise)。
+	// Wait up to 90s for env_sync; t.Skip if mise/python-build fails on this host.
 	envReady := false
 	deadline := time.Now().Add(90 * time.Second)
 	for time.Now().Before(deadline) {
@@ -214,7 +168,6 @@ func TestFunction_HTTP_RunAndExecutionLog(t *testing.T) {
 		t.Skipf("env never reached ready within 90s for function %s/version %s (host runtime issue, not a code regression)", fnID, versionID)
 	}
 
-	// Run.
 	var runResp struct {
 		Data struct {
 			OK     bool   `json:"ok"`
@@ -234,8 +187,6 @@ func TestFunction_HTTP_RunAndExecutionLog(t *testing.T) {
 		t.Errorf("Run output=%v, want %q", runResp.Data.Output, "hi-world")
 	}
 
-	// Execution log list.
-	// 执行日志列表。
 	var execListResp struct {
 		Data struct {
 			Count      int              `json:"count"`

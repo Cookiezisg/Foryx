@@ -1,9 +1,3 @@
-// get.go — get_function system tool: returns full details of one function,
-// including active version code, parameters, dependencies, and pending if any.
-//
-// get.go —— get_function 系统工具:返单个 function 完整详情(活跃版本代码、
-// 参数、依赖、有 pending 时一并返)。
-
 package function
 
 import (

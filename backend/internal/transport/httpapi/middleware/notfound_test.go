@@ -1,6 +1,3 @@
-// notfound_test.go — unit tests for the NotFound fallback handler.
-//
-// notfound_test.go — NotFound fallback handler 的单元测试。
 package middleware
 
 import (
@@ -11,8 +8,6 @@ import (
 	"testing"
 )
 
-// envelopeShape is the JSON we expect NotFound to produce.
-// envelopeShape 是我们预期 NotFound 产生的 JSON 形状。
 type envelopeShape struct {
 	Error struct {
 		Code    string `json:"code"`
@@ -41,10 +36,6 @@ func TestNotFound_ReturnsEnvelope404(t *testing.T) {
 }
 
 func TestNotFound_IncludesPathInMessage(t *testing.T) {
-	// The message should tell the client which path failed to match —
-	// useful for debugging frontend typos in API paths.
-	//
-	// 消息应告诉客户端哪条路径没匹配——便于排查前端拼错 API 路径的 bug。
 	rec := httptest.NewRecorder()
 	NotFound(rec, httptest.NewRequest("GET", "/api/v1/totally-made-up", nil))
 
@@ -56,10 +47,6 @@ func TestNotFound_IncludesPathInMessage(t *testing.T) {
 }
 
 func TestNotFound_WorksForAnyMethod(t *testing.T) {
-	// 404 is path-based, not method-based; all methods on an unknown path
-	// should uniformly produce 404 NOT_FOUND.
-	//
-	// 404 基于路径而非方法；任何方法访问未知路径都应返回 404 NOT_FOUND。
 	methods := []string{"GET", "POST", "PATCH", "PUT", "DELETE"}
 	for _, m := range methods {
 		t.Run(m, func(t *testing.T) {
@@ -79,11 +66,6 @@ func TestNotFound_WorksForAnyMethod(t *testing.T) {
 }
 
 func TestNotFound_DoesNotLeakGoDefault(t *testing.T) {
-	// Regression guard: Go's default 404 body is literally "404 page not found\n".
-	// We must not accidentally fall back to that text.
-	//
-	// 回归守卫：Go 默认 404 响应体是纯文本 "404 page not found\n"。
-	// 我们的响应不应该包含这段。
 	rec := httptest.NewRecorder()
 	NotFound(rec, httptest.NewRequest("GET", "/x", nil))
 

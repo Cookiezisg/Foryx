@@ -1,8 +1,3 @@
-// openai_test.go — unit tests for the OpenAI-compatible SSE parser and
-// request builder. No network calls — all input is synthetic SSE text.
-//
-// openai_test.go — OpenAI 兼容 SSE 解析器和请求构建器的单元测试。
-// 不发网络请求——输入全部为合成 SSE 文本。
 package llm
 
 import (
@@ -14,8 +9,6 @@ import (
 	"strings"
 	"testing"
 )
-
-// ── SSE parser ────────────────────────────────────────────────────────────────
 
 func collectEvents(sseText string) []StreamEvent {
 	var events []StreamEvent
@@ -187,8 +180,6 @@ data: [DONE]
 	}
 }
 
-// ── Request builder ───────────────────────────────────────────────────────────
-
 func TestBuildOpenAIBody_SystemPrepended(t *testing.T) {
 	req := Request{
 		ModelID: "gpt-4o",
@@ -277,8 +268,6 @@ func TestBuildOpenAIBody_MultiModalUser(t *testing.T) {
 	var out oaiRequest
 	json.Unmarshal(body, &out)
 
-	// content should be a JSON array, not a string
-	// content 应为 JSON 数组而非字符串
 	var parts []oaiContentPart
 	if err := json.Unmarshal(out.Messages[0].Content, &parts); err != nil {
 		t.Fatalf("content is not a parts array: %v", err)
@@ -288,16 +277,6 @@ func TestBuildOpenAIBody_MultiModalUser(t *testing.T) {
 	}
 }
 
-// ── TE-23: assistant message protocol-baseline robustness ───────────────────
-
-// TestBuildOpenAIBody_ReasoningOnly_PromotedToContent verifies the TE-23
-// fallback (originally TE-22, moved here from app/loop/history.go): when an
-// assistant turn has only reasoning_content with no content + no tool_calls,
-// the OpenAI wire encoder copies reasoning_content into content. Without
-// this, the next turn's history triggers HTTP 400:
-//   "Invalid assistant message: content or tool_calls must be set"
-//
-// 仅有 reasoning_content 时把它拷给 content 兜底，避免下轮 history 400。
 func TestBuildOpenAIBody_ReasoningOnly_PromotedToContent(t *testing.T) {
 	req := Request{
 		ModelID: "deepseek-chat",
@@ -555,8 +534,6 @@ func TestParseOpenAINonStreaming_SynthesizesEvents(t *testing.T) {
 	}
 }
 
-// ── Error classification ──────────────────────────────────────────────────────
-
 func TestClassifyHTTPError(t *testing.T) {
 	cases := []struct {
 		status int
@@ -580,8 +557,6 @@ func TestClassifyHTTPError(t *testing.T) {
 	}
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
 func filterType(events []StreamEvent, t StreamEventType) []StreamEvent {
 	var out []StreamEvent
 	for _, e := range events {
@@ -592,6 +567,4 @@ func filterType(events []StreamEvent, t StreamEventType) []StreamEvent {
 	return out
 }
 
-// Ensure parseOpenAISSE accepts io.Reader (not just *strings.Reader).
-// 确保 parseOpenAISSE 接受 io.Reader（不仅仅是 *strings.Reader）。
 var _ io.Reader = (*strings.Reader)(nil)

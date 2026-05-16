@@ -1,10 +1,3 @@
-// exec_log.go — D22 skill_executions row writer. Called from Activate's
-// defer wrapper. Best-effort (failure logs but doesn't propagate);
-// detached ctx + user stamp so caller-cancel doesn't lose the row (§S9).
-//
-// exec_log.go —— D22 skill_executions 写入。Activate defer wrapper 调;
-// best-effort + detached ctx + user stamp(§S9)防 caller-cancel 丢日志。
-
 package skill
 
 import (
@@ -19,12 +12,9 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// recordExecution writes one terminal skill_executions row. Pulls
-// linkage IDs (conv/msg/toolCall) from ctx;classifies err type into
-// status (ok/cancelled/timeout/failed).
+// recordExecution writes one terminal skill_executions row via detached ctx.
 //
-// recordExecution 写一行 skill_executions 终态;按 ctx 抽 linkage ID +
-// 按 err 类型分 status。
+// recordExecution 用 detached ctx 写入 skill_executions 终态行。
 func (s *Service) recordExecution(ctx context.Context, name string, arguments []string, result string, callErr error, startedAt, endedAt time.Time) {
 	s.mu.RLock()
 	repo := s.execRepo
@@ -67,9 +57,6 @@ func (s *Service) recordExecution(ctx context.Context, name string, arguments []
 
 	skillVersion := ""
 	if skillRow != nil {
-		// V1: skilldomain.Skill exposes a content hash via the scanner;
-		// if SkillVersion field isn't surfaced we fall back to empty.
-		// V1:skilldomain.Skill 暂未暴露 content hash 字段,留空。
 		skillVersion = extractSkillVersion(skillRow)
 	}
 
@@ -106,18 +93,10 @@ func (s *Service) recordExecution(ctx context.Context, name string, arguments []
 	}
 }
 
-// extractSkillVersion best-effort reads a content hash from the Skill
-// struct. V1: returns empty until skilldomain.Skill exposes a Hash field.
-//
-// extractSkillVersion best-effort 读 content hash;V1 留空。
 func extractSkillVersion(*skilldomain.Skill) string {
 	return ""
 }
 
-// itoa is the tiny strconv.Itoa shim — kept local so we don't pull in
-// strconv just for this one call.
-//
-// itoa 是 strconv.Itoa 的局部 shim;省 import。
 func itoa(n int) string {
 	if n == 0 {
 		return "0"

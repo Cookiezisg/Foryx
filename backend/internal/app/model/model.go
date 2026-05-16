@@ -1,14 +1,6 @@
-// Package model (app layer) owns the Service: scenario validation, upsert
-// orchestration, and the ModelPicker implementation consumed by other domains.
+// Package model owns the Service for model-config CRUD and ModelPicker.
 //
-// All three model packages (domain / app / store) declare `package model`;
-// external callers alias at import (e.g. modelapp "…/internal/app/model").
-//
-// Package model（app 层）负责 Service：scenario 校验、upsert 编排，以及
-// 供其他 domain 消费的 ModelPicker 实现。
-//
-// 三个 model 包（domain / app / store）都声明 `package model`；
-// 外部调用方 import 时按角色起别名（如 modelapp "…/internal/app/model"）。
+// Package model 提供模型配置 CRUD 与 ModelPicker 实现。
 package model
 
 import (
@@ -24,7 +16,7 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// Service orchestrates model config CRUD and implements modeldomain.ModelPicker.
+// Service orchestrates model-config CRUD and implements modeldomain.ModelPicker.
 //
 // Service 编排模型配置 CRUD，并实现 modeldomain.ModelPicker。
 type Service struct {
@@ -32,9 +24,9 @@ type Service struct {
 	log  *zap.Logger
 }
 
-// NewService wires Service dependencies. Panics on nil logger.
+// NewService wires Service dependencies; panics on nil logger.
 //
-// NewService 装配依赖。nil logger 立刻 panic。
+// NewService 装配依赖；nil logger 直接 panic。
 func NewService(repo modeldomain.Repository, log *zap.Logger) *Service {
 	if log == nil {
 		panic("model.NewService: logger is nil")
@@ -50,21 +42,18 @@ type UpsertInput struct {
 	ModelID  string
 }
 
-// Compile-time guard: *Service satisfies modeldomain.ModelPicker.
-//
-// 编译期守护：*Service 满足 modeldomain.ModelPicker。
 var _ modeldomain.ModelPicker = (*Service)(nil)
 
 // List returns all active model configs for the current user.
 //
-// List 返回当前用户所有活跃模型配置。
+// List 返回当前用户的所有活跃模型配置。
 func (s *Service) List(ctx context.Context) ([]*modeldomain.ModelConfig, error) {
 	return s.repo.List(ctx)
 }
 
 // Upsert creates or updates the config for the given scenario.
 //
-// Upsert 为给定 scenario 创建或更新配置。
+// Upsert 为指定 scenario 创建或更新配置。
 func (s *Service) Upsert(ctx context.Context, scenario string, in UpsertInput) (*modeldomain.ModelConfig, error) {
 	if !modeldomain.IsValidScenario(scenario) {
 		return nil, modeldomain.ErrInvalidScenario
@@ -103,11 +92,9 @@ func (s *Service) Upsert(ctx context.Context, scenario string, in UpsertInput) (
 	return m, nil
 }
 
-// PickForChat returns the (provider, modelID) for the user's main chat
-// scenario. Returns ErrNotConfigured if the user has never set it.
+// PickForChat returns the (provider, modelID) for the chat scenario.
 //
-// PickForChat 返回当前用户主对话 scenario 的 (provider, modelID)。
-// 用户从未设置过则返回 ErrNotConfigured。
+// PickForChat 返回 chat scenario 的 (provider, modelID)，未配置返 ErrNotConfigured。
 func (s *Service) PickForChat(ctx context.Context) (provider, modelID string, err error) {
 	m, err := s.repo.GetByScenario(ctx, modeldomain.ScenarioChat)
 	if err != nil {
@@ -116,14 +103,9 @@ func (s *Service) PickForChat(ctx context.Context) (provider, modelID string, er
 	return m.Provider, m.ModelID, nil
 }
 
-// PickForWebSummary returns the (provider, modelID) the user picked for the
-// WebFetch summarisation scenario. Returns ErrNotConfigured if the user
-// never set it — the WebFetch tool is expected to fall back to
-// PickForChat so summarisation still works out of the box.
+// PickForWebSummary returns the (provider, modelID) for WebFetch summarisation.
 //
-// PickForWebSummary 返回用户为 WebFetch 摘要场景选定的 (provider, modelID)。
-// 未设置返 ErrNotConfigured——WebFetch tool 应 fallback 到 PickForChat，
-// 让开箱即用。
+// PickForWebSummary 返回 WebFetch 摘要的 (provider, modelID)，未配置时调用方应 fallback。
 func (s *Service) PickForWebSummary(ctx context.Context) (provider, modelID string, err error) {
 	m, err := s.repo.GetByScenario(ctx, modeldomain.ScenarioWebSummary)
 	if err != nil {

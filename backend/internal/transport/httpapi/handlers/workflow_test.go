@@ -1,6 +1,3 @@
-// workflow_test.go — E2E contract tests for /api/v1/workflows/*.
-//
-// workflow_test.go — /api/v1/workflows/* 端到端契约测试。
 package handlers
 
 import (
@@ -37,10 +34,6 @@ func newWorkflowTestServer(t *testing.T) *httptest.Server {
 	return httptest.NewServer(middlewarehttpapi.InjectUserID(mux))
 }
 
-// happyCreateOps returns a minimal valid ops payload: set_meta + one trigger
-// node. Validation passes (one trigger, no edges, no cycle).
-//
-// happyCreateOps 返最小可用 ops:set_meta + 一个 trigger 节点(无 edge,无 cycle)。
 func happyCreateOps(name string) []map[string]any {
 	return []map[string]any{
 		{"op": "set_meta", "name": name, "description": "test workflow"},
@@ -145,7 +138,6 @@ func TestWorkflowHandler_List_EnabledFilter(t *testing.T) {
 	for _, n := range []string{"on-1", "on-2"} {
 		do(t, srv, "POST", "/api/v1/workflows", map[string]any{"ops": happyCreateOps(n)})
 	}
-	// Disable on-2.
 	_, env := do(t, srv, "GET", "/api/v1/workflows", nil)
 	for _, raw := range dataSlice(t, env) {
 		wf := raw.(map[string]any)
@@ -206,7 +198,6 @@ func TestWorkflowHandler_Delete_Success(t *testing.T) {
 	if status != http.StatusNoContent {
 		t.Fatalf("DELETE status = %d, want 204", status)
 	}
-	// Confirm soft-delete via GET.
 	status, env = do(t, srv, "GET", "/api/v1/workflows/"+id, nil)
 	if status != http.StatusNotFound {
 		t.Fatalf("post-delete GET status = %d, want 404: %+v", status, env)
@@ -228,7 +219,6 @@ func TestWorkflowHandler_Versions_Listing(t *testing.T) {
 	if len(rows) != 1 {
 		t.Errorf("len(versions) = %d, want 1", len(rows))
 	}
-	// Fetch by numeric version.
 	status, env = do(t, srv, "GET", "/api/v1/workflows/"+id+"/versions/1", nil)
 	if status != http.StatusOK {
 		t.Fatalf("version detail status = %d", status)
@@ -259,11 +249,9 @@ func TestWorkflowHandler_Revert_Success(t *testing.T) {
 	srv := newWorkflowTestServer(t)
 	defer srv.Close()
 
-	// Create v1 (auto-accepted by Create).
 	_, env := do(t, srv, "POST", "/api/v1/workflows", map[string]any{"ops": happyCreateOps("reverting")})
 	id := dataMap(t, env)["workflow"].(map[string]any)["id"].(string)
 
-	// Revert to v1 — flips active to v1 again (no-op pointer flip, but exercises the path).
 	status, env := do(t, srv, "POST", "/api/v1/workflows/"+id+":revert", map[string]any{
 		"targetVersion": 1,
 	})
@@ -283,10 +271,6 @@ func TestWorkflowHandler_PostUnknownAction_NotFound(t *testing.T) {
 	_, env := do(t, srv, "POST", "/api/v1/workflows", map[string]any{"ops": happyCreateOps("unknown-action")})
 	id := dataMap(t, env)["workflow"].(map[string]any)["id"].(string)
 
-	// Unknown action (Plan 04 only recognized :revert; Plan 05 added :trigger;
-	// :bogus is genuinely unknown). http.NotFound writes plain text rather
-	// than the JSON envelope, so call directly + only check status.
-	// 未知 action — Plan 04 仅识 :revert,Plan 05 加 :trigger;:bogus 真未知。
 	resp, err := srv.Client().Post(srv.URL+"/api/v1/workflows/"+id+":bogus", "application/json", nil)
 	if err != nil {
 		t.Fatalf("POST: %v", err)
@@ -304,8 +288,6 @@ func TestWorkflowHandler_Trigger_NoFlowRunHandlerReturns503(t *testing.T) {
 	_, env := do(t, srv, "POST", "/api/v1/workflows", map[string]any{"ops": happyCreateOps("trigger-test")})
 	id := dataMap(t, env)["workflow"].(map[string]any)["id"].(string)
 
-	// AttachFlowRunHandler was not called → :trigger returns 503.
-	// AttachFlowRunHandler 未调 → :trigger 返 503。
 	status, env := do(t, srv, "POST", "/api/v1/workflows/"+id+":trigger",
 		map[string]any{"input": map[string]any{}})
 	if status != http.StatusServiceUnavailable {
@@ -320,7 +302,6 @@ func TestWorkflowHandler_Create_BadJSON(t *testing.T) {
 	srv := newWorkflowTestServer(t)
 	defer srv.Close()
 
-	// Unknown field triggers decodeJSON DisallowUnknownFields.
 	status, env := do(t, srv, "POST", "/api/v1/workflows", map[string]any{
 		"ops":           happyCreateOps("bad"),
 		"unknown_field": "x",

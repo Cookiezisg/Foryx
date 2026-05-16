@@ -1,10 +1,3 @@
-// delete.go — delete_function system tool: soft-deletes a function. Cascade
-// (mark referencing workflows as needs_attention per D20) is handled by the
-// workflow domain's notification subscriber.
-//
-// delete.go —— delete_function 系统工具:软删 function。引用其的 workflow
-// 标 needs_attention(D20)由 workflow 域订阅通知处理。
-
 package function
 
 import (

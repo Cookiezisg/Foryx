@@ -7,12 +7,9 @@ import (
 	"go.uber.org/zap"
 )
 
-// RequestLogger emits one structured log line per request with method,
-// path, status, response bytes, and elapsed time. Must be placed INSIDE
-// Recover so access logs reflect 500 responses written by Recover.
+// RequestLogger logs one line per request; must sit INSIDE Recover for 500 visibility.
 //
-// RequestLogger 每次请求打一行结构化日志：方法、路径、状态、响应字节数、
-// 耗时。必须放在 Recover **内层**，访问日志才能反映 Recover 写的 500。
+// RequestLogger 每请求一行日志;必须在 Recover 内层才能看到 500 状态。
 func RequestLogger(log *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -32,10 +29,9 @@ func RequestLogger(log *zap.Logger) func(http.Handler) http.Handler {
 	}
 }
 
-// statusRecorder wraps ResponseWriter to remember the final status code
-// and written byte count for logging.
+// statusRecorder wraps ResponseWriter to capture status + bytes for logging.
 //
-// statusRecorder 包装 ResponseWriter，记录最终状态码和写入字节数供日志读取。
+// statusRecorder 包装 ResponseWriter 记录状态码 + 字节数供日志读取。
 type statusRecorder struct {
 	http.ResponseWriter
 	status      int
@@ -44,15 +40,9 @@ type statusRecorder struct {
 }
 
 func newStatusRecorder(w http.ResponseWriter) *statusRecorder {
-	// Default 200: a handler that only Writes (no WriteHeader) implies 200 OK.
-	// 默认 200：只 Write 不 WriteHeader 的 handler 相当于隐式 200。
 	return &statusRecorder{ResponseWriter: w, status: http.StatusOK}
 }
 
-// WriteHeader records the first call's status; subsequent calls are ignored
-// (double WriteHeader is a handler bug).
-//
-// WriteHeader 只记首次调用的状态码；重复调用被忽略（重复 WriteHeader 是 handler bug）。
 func (r *statusRecorder) WriteHeader(code int) {
 	if r.wroteHeader {
 		return
@@ -71,11 +61,9 @@ func (r *statusRecorder) Write(b []byte) (int, error) {
 	return n, err
 }
 
-// Flush implements http.Flusher by delegating to the underlying
-// ResponseWriter, enabling SSE streaming through the logger middleware.
+// Flush delegates to the underlying ResponseWriter so SSE works through logger.
 //
-// Flush 通过委托底层 ResponseWriter 实现 http.Flusher，让 SSE 流式输出
-// 能穿透 logger 中间件。
+// Flush 委托底层 ResponseWriter,让 SSE 穿透 logger 中间件。
 func (r *statusRecorder) Flush() {
 	if f, ok := r.ResponseWriter.(http.Flusher); ok {
 		f.Flush()

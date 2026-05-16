@@ -1,6 +1,3 @@
-// model_test.go — unit tests for scenario validation helpers.
-//
-// model_test.go — scenario 校验工具函数的单元测试。
 package model
 
 import (

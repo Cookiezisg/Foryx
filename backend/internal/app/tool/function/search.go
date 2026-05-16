@@ -1,8 +1,3 @@
-// search.go — search_function system tool: LLM ranks the user's function
-// library by relevance to a natural-language query.
-//
-// search.go —— search_function 系统工具:LLM 按自然语言 query 排序用户 function。
-
 package function
 
 import (
@@ -118,10 +113,6 @@ func (t *SearchFunction) Execute(ctx context.Context, argsJSON string) (string, 
 		return "", fmt.Errorf("search_function: parse ranking: %w", err)
 	}
 
-	// Build id→Function map from existing ListAll result (avoids re-fetch),
-	// emit ranked output in LLM-ranked order.
-	//
-	// 用 ListAll 结果建 id→Function map(免重抓),按 LLM 排序产出。
 	byID := make(map[string]int, len(fns))
 	for i, f := range fns {
 		byID[f.ID] = i
