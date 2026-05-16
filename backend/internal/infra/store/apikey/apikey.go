@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -121,14 +122,35 @@ func (s *Store) GetByProvider(ctx context.Context, provider string) (*apikeydoma
 	return &k, nil
 }
 
-// Save upserts on primary key; caller must set k.UserID first.
+// Save upserts on primary key; caller must set k.UserID first. Translates
+// SQLite UNIQUE constraint violations on idx_api_keys_user_displayname_active
+// into ErrDisplayNameConflict so transport returns 409 instead of 500.
 //
-// Save 按主键 upsert；调用方需先设置 k.UserID。
+// Save 按主键 upsert；调用方需先设置 k.UserID。SQLite UNIQUE 冲突在
+// idx_api_keys_user_displayname_active 翻译为 ErrDisplayNameConflict（409）。
 func (s *Store) Save(ctx context.Context, k *apikeydomain.APIKey) error {
 	if err := s.db.WithContext(ctx).Save(k).Error; err != nil {
+		if isDisplayNameConflict(err) {
+			return apikeydomain.ErrDisplayNameConflict
+		}
 		return fmt.Errorf("apikeystore.Save: %w", err)
 	}
 	return nil
+}
+
+// isDisplayNameConflict matches modernc SQLite's UNIQUE-violation message
+// for the (user_id, display_name) partial index. SQLite reports the columns
+// involved, not the index name, so we match on "display_name".
+//
+// isDisplayNameConflict 匹配 SQLite 在 (user_id, display_name) 部分索引上的
+// UNIQUE 冲突消息——SQLite 报列名不报索引名,故匹配 "display_name"。
+func isDisplayNameConflict(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	return strings.Contains(msg, "UNIQUE constraint failed") &&
+		strings.Contains(msg, "api_keys.display_name")
 }
 
 // Delete soft-deletes by id; returns ErrNotFound on no-match (so retries don't silently succeed).

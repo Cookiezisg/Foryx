@@ -272,6 +272,28 @@ Function + Handler + Workflow System Tools 注入(9 function + 10 handler + 6 wo
 
 未来扩展：`POST /api/v1/conversations/{id}:compact` 手动强制（Manager.ForceCompact 已实现，端点未接）。
 
+#### usage（V1.2 §4 final-sweep）✅
+
+| Method | Path | 用途 |
+|---|---|---|
+| GET | `/api/v1/conversations/{id}` | 响应附 `tokensUsed: {input, output, total}` 聚合（§4.1）|
+| GET | `/api/v1/usage?conversationId={id}` | per-conv totals（无 cost）|
+| GET | `/api/v1/usage?period=day\|week\|month\|all` | per-period 聚合 + cost 估算按 (provider, modelId) 拆 |
+
+`/api/v1/usage` 响应 shape：`{scope, conversationId?, period?:{since,until}, inputTokens, outputTokens, totalTokens, costEstimateUsd, byModel: [{provider, modelId, inputTokens, outputTokens, totalTokens, costEstimateUsd, costKnown}], note}`。cost 基于 `pkg/llmcost` 静态 16-model registry（DeepSeek / Anthropic / OpenAI），未知模型 `costKnown=false`、cost=0；note 字段提示 "rough ballpark"。
+
+#### permissions + settings（V1.2 §3 final-sweep）✅
+
+| Method | Path | 用途 |
+|---|---|---|
+| GET | `/api/v1/settings` | 当前 `~/.forgify/settings.json` 解析后快照 |
+| PUT | `/api/v1/settings` | 替换整个 settings.json（atomic tmp+rename + reload）|
+| POST | `/api/v1/settings:reload` | 强制从磁盘重读（不依赖 fsnotify watcher）|
+| GET | `/api/v1/permissions/tools` | 列所有已注册 tool + dangerLevel(`read_only`/`workspace_write`/`danger_full_access`) |
+| POST | `/api/v1/permissions/test` | body `{toolName, args, destructive?}` → 返 `{action, reason}` 预测当前规则下结果，无副作用 |
+
+settings.json 顶层 schema：`{permissions:{defaultMode:ask\|allow\|deny\|bypass, deny:[], ask:[], allow:[]}, hooks:{PreToolUse:[], PostToolUse:[], Stop:[]}, protectedPaths:{denyWrite:[]}}`。规则形态 `"Verb(pattern)"`（如 `"Bash(rm -rf *)"`、`"Edit(./src/**)"`、`"WebFetch(domain:github.com)"`）；详 [`../service-design-documents/permissions.md`](../service-design-documents/permissions.md) §5.1。求值：deny→ask→allow→defaultMode 第一匹配赢；session ask-once 缓存让用户答过的同 (tool, args) 不再问。Hook 形态当前仅 shell exec（stdin/stdout JSON 协议），exit 0/2/其他 三态语义；详 §6。
+
 ---
 
 ### Phase 4 准备件（2026-05-05 提前交付）

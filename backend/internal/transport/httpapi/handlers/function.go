@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -128,9 +129,9 @@ func (h *FunctionHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.NoContent(w)
 }
 
-// postOnFunction dispatches POST /api/v1/functions/{id}:<action> (:run/:revert).
+// postOnFunction dispatches POST /api/v1/functions/{id}:<action> (:run / :revert / :edit).
 //
-// postOnFunction 派发 POST /api/v1/functions/{id}:<action>(:run/:revert)。
+// postOnFunction 派发 POST /api/v1/functions/{id}:<action>(:run / :revert / :edit)。
 func (h *FunctionHandler) postOnFunction(w http.ResponseWriter, r *http.Request) {
 	id, action, ok := idAndAction(r, "idAction")
 	if !ok {
@@ -142,9 +143,43 @@ func (h *FunctionHandler) postOnFunction(w http.ResponseWriter, r *http.Request)
 		h.Run(w, r, id)
 	case "revert":
 		h.Revert(w, r, id)
+	case "edit":
+		h.Edit(w, r, id)
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// Edit applies ops to a function, producing or iterating a pending version.
+// Mirrors edit_function LLM tool semantics; no forge SSE emit (HTTP path —
+// future testend editor UI is the consumer, not chat).
+//
+// Edit 给 function 应用 ops 产/迭代 pending 版本。镜像 edit_function 工具语义；
+// HTTP 路径不发 forge SSE（消费者是未来 testend 编辑器 UI,不是 chat 流）。
+func (h *FunctionHandler) Edit(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		Ops          json.RawMessage `json:"ops"`
+		ChangeReason string          `json:"changeReason"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	ops, err := functionapp.ParseOps(req.Ops)
+	if err != nil {
+		responsehttpapi.Error(w, http.StatusBadRequest, "FUNCTION_OP_INVALID", err.Error(), nil)
+		return
+	}
+	v, err := h.svc.Edit(r.Context(), functionapp.EditInput{
+		ID:           id,
+		Ops:          ops,
+		ChangeReason: req.ChangeReason,
+	})
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, v)
 }
 
 func (h *FunctionHandler) Run(w http.ResponseWriter, r *http.Request, id string) {

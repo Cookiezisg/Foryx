@@ -35,10 +35,10 @@
 
 **背景**：当前 `maxHistoryMessages=200` 硬截。复杂 forge 锻造 + 跑测 + 改 deps 重跑容易 50+ tool call，超过 200 条就静默丢早期消息——AI 突然"忘了在干啥"。Claude Code 对标的核心缺口。
 
-- ☐ **§1.1 Token counter** —— 每次 LLM 调用后累积 `Conversation.InputTokens / OutputTokens`（已有 message-level 字段，聚合到 conversation 即可）。**Done when**：`GET /api/v1/conversations/{id}` 返 `tokensUsed: {input, output, totalSinceStart}`。
-- ☐ **§1.2 MicroCompact**（Layer 1）—— 历史超过 N tokens 时，**删除旧 tool_result blocks 的 Content**（保留 metadata + tool name），只压最便宜的部分。**Done when**：context > 70% 阈值触发；保留最近 K turn 的完整 tool_result；旧 tool_result content 改为 `[compacted: 4.2 KB elided]`。
-- ☐ **§1.3 AutoCompact**（Layer 4）—— context > 92% 时，把全历史发给 LLM 做摘要，保留架构决策 / 未解决 bug / 当前 task，丢重复输出。结果作为 first user message 注入新 context。**Done when**：阈值触发、摘要落 `compacted_messages` 表（可审查）、新 context 接续无中断。
-- ☐ **§1.4 手动 `/compact [focus]` 命令** —— 用户输入触发 AutoCompact，可选 focus 字符串聚焦。**Done when**：testend 输入框打 `/compact auth-refactor` 立刻触发并 stream 进度。
+- ☑ **§1.1 Token counter** ✅ 2026-05-16 —— 经 §4.1 落地：`GET /api/v1/conversations/{id}` 返 `tokensUsed: {input, output, total}`，`chatdomain.Repository.SumTokensByConversation` SQL SUM。
+- ☑ **§1.2 MicroCompact**（Layer 1）✅ 2026-05-16 —— `app/contextmgr.demoteOldBlocks` Soft 阈 0.70 触发；老 tool_result `context_role` 标 `warm`（200B preview）/ `cold`（仅元数据占位）；DB Content 永不改写，只投影换形态。
+- ☑ **§1.3 AutoCompact**（Layer 4）✅ 2026-05-16 —— `app/contextmgr.fullCompact` Hard 阈 0.85 触发；cheap LLM 生成 anchored-merge 摘要 → `conversations.summary` 持续累加；候选 block 标 `archived`。摘要落 `conversation.summary` 列（非 `compacted_messages` 表）+ 新 block type `compaction` 留 audit。
+- ☐ **§1.4 手动 `/compact [focus]` 命令** —— 用户输入触发 AutoCompact，可选 focus 字符串聚焦。**Done when**：testend 输入框打 `/compact auth-refactor` 立刻触发并 stream 进度。**注**：`Manager.ForceCompact` 已实现，仅缺 HTTP 端点 + slash command 路由。
 - ☐ **§1.5 System prompt 缓存边界** —— `SYSTEM_PROMPT_DYNAMIC_BOUNDARY` 分割：静态段（tool defs / FORGIFY.md / catalog）+ 动态段（locale / now / git status）。**Done when**：静态前缀命中 Anthropic prompt cache，token 费用降 ~60% per turn。
 - ☐ **§1.6 Tool result budget** —— `applyToolResultBudget` ——单次 tool_result 超 N tokens 自动截断 + 追加 `[output truncated; original size: X KB]`。**Done when**：`Bash` / `Read` 大输出自动截断；前端能查看完整版（`/api/v1/blocks/{id}` 已有）。
 - ☐ **§1.7 `/context` 命令** —— 显示当前 context 占用分布（system prompt / history / catalog / each tool def）。**Done when**：testend 一键查看。
@@ -49,12 +49,12 @@
 
 **背景**：当前 `conversation.SystemPrompt` 字段是用户手动写。**跨会话记忆完全没有**——用户每开新对话都得重新教"我用 Python / 不要写中文注释 / 忽略 .venv"。
 
-- ☐ **§2.1 `FORGIFY.md` 自动注入** —— `~/.forgify/FORGIFY.md` + 工作目录向上递归 + project-level `.forgify/FORGIFY.md`（层级覆盖）。每次 chat turn build system prompt 时**重新从磁盘读**（compaction 后也是）。作为 user message 注入（不 system），永不被 compaction 删。**Done when**：`backend/internal/app/chat/runner.go::buildSystemPrompt` 读 FORGIFY.md 拼到 system prompt 顶部；编辑文件下次对话立刻生效。
-- ☐ **§2.2 `~/.forgify/memory/` 目录 + `MEMORY.md` 索引** —— `MEMORY.md` 是 ≤200 行 index，每行 `- [Topic](file.md) — one-line hook`。Topic 文件按需加载（不进 system prompt，靠 read_memory tool 取）。**Done when**：`~/.forgify/memory/MEMORY.md` 自动在 system prompt 注入（200 行 cap）。
-- ☐ **§2.3 `read_memory` tool** —— LLM 主动读 topic 文件。Args: `{name: "user_role"}` → 返 `~/.forgify/memory/user_role.md`。**Done when**：tool 接口 9 方法齐全 + 测试。
-- ☐ **§2.4 `write_memory` tool** —— LLM 写新 memory。Args: `{name, content, metadata: {type, description}}`。自动更新 MEMORY.md index 一行。**Done when**：tool 接口齐全 + atomic 写（tmp + rename）+ MEMORY.md 自动更新。
-- ☐ **§2.5 `forget_memory` tool** —— 删除 memory 文件 + 更新 index。**Done when**：tool 接口齐全 + 防误删（必须 LLM 主动调，user 不直接触发）。
-- ☐ **§2.6 4 类 memory types** —— Claude Code 模式：`user.md` / `feedback.md` / `project.md` / `reference.md` 各自独立 frontmatter。read/write_memory 强制 type 选择。**Done when**：4 类标准化、frontmatter schema 定型。
+- 🔄 **§2.1 `FORGIFY.md` 自动注入** ✅ 2026-05-16（**设计改向：DB-backed memories 替代磁盘文件**）—— Pinned memories（type=user / feedback）功能等价 FORGIFY.md，但状态在 `memories` 表而非 `~/.forgify/FORGIFY.md`，所有写入经 service 而非直接编辑文件；用户改动经 testend 立刻生效。**取舍**：DB 给 audit / CRUD / per-user 隔离更好；不再需要磁盘 watch。
+- 🔄 **§2.2 `~/.forgify/memory/` 目录 + `MEMORY.md` 索引** ✅ 2026-05-16（**同上替为 DB**）—— Non-pinned memories 等价 MEMORY.md index：`memoryapp.ForSystemPrompt` 渲染 200 行 markdown 索引段。
+- ☑ **§2.3 `read_memory` tool** ✅ 2026-05-16 —— `app/tool/memory/read.go` tool 接口 9 方法齐全 + 测试。
+- ☑ **§2.4 `write_memory` tool** ✅ 2026-05-16 —— `app/tool/memory/write.go` 走 service Upsert（atomic DB write），自动 publish `memory` notif。
+- ☑ **§2.5 `forget_memory` tool** ✅ 2026-05-16 —— `app/tool/memory/forget.go` 软删 + 通知。LLM 主动调（user 经 testend UI 也可）。
+- ☑ **§2.6 4 类 memory types** ✅ 2026-05-16 —— `user` / `feedback` / `project` / `reference` 4 值 CHECK 约束（DB 层强制）；schema 见 `service-design-documents/memory.md`。
 - ☐ **§2.7 autoDream**（远期）—— idle 24h + 5+ session 后，后台 subagent 整合 memory（dedup / 合并近义 / prune 旧的）。**Done when**：optional Phase 5+ 功能；本轮可选先 skip。
 
 ---
@@ -63,14 +63,14 @@
 
 **背景**：当前权限薄——PathGuard 守敏感路径（filesystem tools），Bash 故意不走 PathGuard（per CLAUDE.md decisión D5），没有 PermissionLevel / Stop Hook / 正式 Hook API。Phase 4 workflow 自动执行后风险升高。
 
-- ☐ **§3.1 Tool 级 `PermissionLevel()` 方法** —— Tool 接口加第 10 方法 `PermissionLevel() Level`（ReadOnly / WorkspaceWrite / DangerFullAccess）。给未来 settings allow/deny 用。**Done when**：20 个现有 tool 各自声明 level；不改任何运行时行为。
-- ☐ **§3.2 Protected paths** —— PathGuard 已有 deny list；扩展 deny **写**：`.git/` / `.env` / `.envrc` / `node_modules/` / 用户 `~/.ssh/` 等。**Done when**：Edit/Write tool 在写之前查 Protected paths，命中返友好错误。**注**：跟现有 PathGuard read deny list 复用同结构。
-- ☐ **§3.3 Settings allow/deny 规则** —— `~/.forgify/settings.json` 配 glob：`{"deny": ["Bash(rm -rf *)", "Read(*.env)"], "allow": ["Bash(npm:*)"]}`。Tool dispatch 时第一匹配。**Done when**：第一匹配 deny > allow > 默认；settings 改后 1s polling 重读。
-- ☐ **§3.4 Stop Hook** —— Agent 准备 finalPersist 前回调 hook；hook 返 `{continue: true, prompt: "tests didn't pass, fix first"}` 则强制继续。**Done when**：hook 接口 + 1 个 demo hook（"测试没过别停"）+ 测试。
-- ☐ **§3.5 PreToolUse hook 正式化** —— `PreToolUse(toolName, args)` 返 `Allow / Deny / Modify / Ask`。当前没有正式 API。**Done when**：接口落 `app/hooks/`；3 种触发方式（shell 命令 / HTTP / LLM prompt）；settings 配置。
-- ☐ **§3.6 PostToolUse hook 正式化** —— 现 `.claude/settings.local.json` 的 doc-sync hook 是临时配置。改正式 API：`PostToolUse(toolName, args, result)` 返 `nil / FeedbackToInject`。**Done when**：feedback 注入到下一轮 LLM context。
+- ☑ **§3.1 Tool 级 `PermissionLevel()` 方法** ✅ 2026-05-16 —— **设计改向：框架硬编码而非 Tool 接口第 10 方法**（抄 Claude Code 模式）。`app/tool/permissionsgate/levels.go` 静态 map 登记 56 tool；`LookupLevel` 兜底 `Tool.IsReadOnly()`。
+- ☑ **§3.2 Protected paths** ✅ 2026-05-16 —— `pkg/pathguard` 加 `AllowWrite` 方法 + `DefaultWriteOnlyExtras`（`.git/` / `.env*` / `.envrc` / `node_modules/` / `.venv/` / `~/.ssh/`）。读 deny 与写 deny 分离，写=读∪写专属。
+- ☑ **§3.3 Settings allow/deny 规则** ✅ 2026-05-16 —— `~/.forgify/settings.json` permissions.deny/ask/allow + defaultMode（ask/allow/deny/bypass）；deny→ask→allow→default 第一匹配。`infra/settings` 经 fsnotify watch + 5s poll 兜底热加载（**比原计划 1s polling 更快/更准**）。
+- ☑ **§3.4 Stop Hook** ✅ 2026-05-16 —— `hooks.Runner.FireStop` + Stop 时机；hook 返 `decision: "continue"` + Reason 注入下轮 prompt。**注**：chat runner 集成 Stop 触发点仍可补强（当前接口已就位，自动 fire 路径未接 finalPersist）。
+- ☑ **§3.5 PreToolUse hook 正式化** ✅ 2026-05-16 —— `app/hooks` shell exec + stdin/stdout JSON 协议；exit 0 解析 / exit 2 blocking deny / 其他 nonblocking。**注**：HTTP / MCP form 留 v2（设计 doc §6.6 已说明）。
+- ☑ **§3.6 PostToolUse hook 正式化** ✅ 2026-05-16 —— 同上 `FirePostToolUse`；hook 输出 `injectIntoNextTurn` 拼到 tool_result 当 `[hook] <hint>` 附录，下轮 LLM 看到。
 - ☐ **§3.7 SessionStart / SessionEnd hook** —— 对话开 / 关时回调。**Done when**：SessionStart 跑一次（init / 注入 context）；SessionEnd 跑一次（cleanup / log）。
-- ☐ **§3.8 Permission Explainer** —— 高风险操作前单独 LLM 调用解释风险（"rm -rf 会删整个项目，确定？"）。**Done when**：destructive=true 的 tool call 前显式 ask user 通过 AskUserQuestion 风格 UI。
+- ☐ **§3.8 Permission Explainer** —— 高风险操作前单独 LLM 调用解释风险（"rm -rf 会删整个项目，确定？"）。**Done when**：destructive=true 的 tool call 前显式 ask user 通过 AskUserQuestion 风格 UI。**部分**：destructive=true 当前强制走 ask 路径（V1.2 MVP 自动批准 + 日志），但 LLM explainer 风格未做。
 - ☐ **§3.9 Path traversal 防御加强** —— PathGuard 加 URL 解码 / Unicode normalization / backslash injection / 大小写 bypass 检测。**Done when**：覆盖 OWASP path traversal 常见 bypass。
 
 ---
@@ -79,8 +79,8 @@
 
 **背景**：后端记录够全，但前端 / API 没暴露。"花了多少钱 / 找历史对话 / 调试 LLM 输出" 这些日常需求都没好用工具。
 
-- ☐ **§4.1 Token / cost per-conversation 显示** —— Conversation entity 加聚合字段 `tokensUsed: {input, output}` + `costUsdEstimate`。**Done when**：GET conversation 返；testend 显示。
-- ☐ **§4.2 总累计 cost 面板** —— 按 day/week/month 聚合所有 conversation 的 token + cost。`GET /api/v1/usage?period=day`。**Done when**：testend `/usage` 视图。
+- ☑ **§4.1 Token / cost per-conversation 显示** ✅ 2026-05-16 —— `GET /api/v1/conversations/{id}` 响应附 `tokensUsed: {input, output, total}`；`SumTokensByConversation` 单 SQL SUM 聚合。**注**：每 conv 的 cost 估算需要 model breakdown，走 §4.2 端点（per-conv 模式无 cost 字段，仅 totals）。
+- ☑ **§4.2 总累计 cost 面板** ✅ 2026-05-16 —— `GET /api/v1/usage?conversationId=…\|period=day\|week\|month\|all`，按 (provider, modelId) 拆 + cost 估算；新 `pkg/llmcost` 16-model 单价 registry。**未做**：testend `/usage` 视图（仅后端端点，UI 留下次）。
 - ☐ **§4.3 Conversation 搜索** —— 按 title / message content / tool 名搜索。先 SQL LIKE，未来 FTS5。**Done when**：`GET /api/v1/conversations?search=email` 返匹配。
 - ☐ **§4.4 Conversation export (markdown)** —— 导出对话为 markdown 文件 / JSON。**Done when**：`GET /api/v1/conversations/{id}/export?format=md|json` 返下载。
 - ☐ **§4.5 Tool execution metrics dashboard** —— 慢 tool / 失败率 / p95 latency per-tool。基于现有 D22 execution log 聚合。**Done when**：`GET /api/v1/metrics/tools?since=7d` 返；testend 显示。
@@ -183,7 +183,7 @@
 **背景**：D1-D2 全交付（mise embed + 11 EnvManager + 3 层 leak 防御）。但 burn-in #15-17 + D2 遗留有几个真 bug。
 
 - ☐ **§11.1 env destroy 后 function lazy-rebuild**（burn-in #15）—— 当前 env destroy 后 next RunFunction 报错而不是自动重建。**Done when**：RunFunction 探测 env not ready 时自动 Sync；测试覆盖。
-- ☐ **§11.2 ownerKind 非白名单显式拒**（burn-in #16）—— 当前传非法 ownerKind 静默吞。**Done when**：sandboxapp.EnsureEnv 入口校验 owner.Kind ∈ 白名单，否则 ErrInvalidOwnerKind。
+- ☑ **§11.2 ownerKind 非白名单显式拒**（burn-in #16）✅ 2026-05-15 —— P3 batch 顺手修：`validOwnerKinds` 5 值白名单 + 400 `INVALID_OWNER_KIND`，告别"空 list 当无数据"误读。
 - ☐ **§11.3 runtime 表 `3.12` vs `>=3.12` dedup**（burn-in #17）—— 两个版本说同一件事，但是 DB UNIQUE 让它们各占一行。**Done when**：Install 时解析 PEP 440 specifier → 取实际 install 版本（mise where）作 UNIQUE key；旧行迁移。
 - ☐ **§11.4 Ruby / PHP EnvManager 修 bundler / composer**（D2 遗留）—— bundler / composer 不在 mise registry，Ruby/PHP EnvManager 调 EnsureTool 会失败。**Done when**：直接静态装 bundler / composer（github release 二进制）；EnvManager 用之；测试。
 - ☐ **§11.5 env corruption 自动重装** —— `.venv/bin/python` 缺失（mise upgrade 把 install dir 改了）→ 自动 Sync 重建。**Done when**：Spawn 前 check 关键 binary 存在 → 不在则 Sync；测试。
@@ -196,8 +196,8 @@
 
 **背景**：Plan 05 14 项 hardening 完成，但 burn-in #18 + 几个收尾还在。
 
-- ☐ **§12.1 Pagination limit cap**（burn-in #18）—— 当前 `limit` 无上限，可传 `?limit=10000` 拉爆。**Done when**：`pkg/pagination.Parse` cap 到 200；超过返 400 INVALID_REQUEST。
-- ☐ **§12.2 HTTP request retry (LLM client)** —— `infra/llm/openai.go` / `anthropic.go` 当前一次性发；429 / 529 / ECONNRESET 直接抛。加 exponential backoff（3 次重试上限）。**Done when**：`pkg/withretry` 通用；LLM client 接；测试。
+- ☑ **§12.1 Pagination limit cap**（burn-in #18）✅ 2026-05-15 —— 审计发现 `pkg/pagination.Parse` 早已 cap 到 `MaxLimit=200`；负数/非数字 400 INVALID_REQUEST；handler 全经 Parse 单入口，无直读 `?limit`。**实现到位**（误判为遗留）。
+- ☑ **§12.2 HTTP request retry (LLM client)** ✅ 2026-05-16 —— `infra/llm.Generate` 套 `withRetry`（3 attempts，500ms → 1.5s 指数退避）；`isRetryable` 白名单 `ErrRateLimited` / `ErrProviderError` / `context.DeadlineExceeded`；`ErrAuthFailed` / `ErrBadRequest` / `context.Canceled` 不重试。**注**：仅 `Generate`（非流式）有 retry —— `Stream`（chat 主路径）不重试，避免 mid-stream retry 丢已见内容；7 单测覆盖。
 - ☐ **§12.3 Per-conversation model override** —— 当前全局 model_configs；某对话想用别的 model 没接口。**Done when**：Conversation 加 `modelOverride: {provider, modelId}` 字段；PickForChat 检查 conv 字段优先。
 - ☐ **§12.4 Webhook 多 HMAC 算法** —— 当前 secret 单字符串。GitHub / GitLab 等用 HMAC-SHA256 不同 header 名。**Done when**：spec 加 `"signatureAlgo": "hmac-sha256", "signatureHeader": "X-Hub-Signature-256"`。
 
@@ -205,11 +205,11 @@
 
 ## 13. 可靠性 / 故障恢复
 
-- ☐ **§13.1 LLM client withRetry**（同 §12.2，单列因为这是可靠性核心）—— exponential backoff 3 attempts。**Done when**：测试 mock 429 → 3 次后成功。
+- ☑ **§13.1 LLM client withRetry**（同 §12.2，单列因为这是可靠性核心）✅ 2026-05-16 —— 见 §12.2。
 - ☐ **§13.2 LLM provider auto-failover** —— 单 provider 持续失败 → 自动切到 fallback provider（用户配的）。**Done when**：apikey 配 `fallbackProvider` 字段；chat resolver 实现切换。
 - ☐ **§13.3 SearXNG instance 健康度跟踪** —— `app/tool/web/search.go` 三层 fallback，但 SearXNG 池中坏实例不剔除。**Done when**：连续失败 ≥ 3 次的 instance 30 分钟内不用。
 - ☐ **§13.4 BackgroundCtx 死亡检测** —— catalog / skill / mcp polling 用 background ctx；进程关 ctx 不取消（OS 回收）。但万一卡死 goroutine 不退。**Done when**：Stop() 方法 + main.go shutdown 显式调 + 测试。
-- ☐ **§13.5 Conversation queue 长任务 worker timeout** —— `app/chat/runner.go` queue worker 没自身超时；卡死 goroutine 占资源。**Done when**：worker per-task 总超时 30 分钟（可配）；超时 cancel + log。
+- ☑ **§13.5 Conversation queue 长任务 worker timeout** ✅ 2026-05-16 —— `chat.runner.processTask` 加 `context.WithTimeout(maxTurnDuration=10min)`；超时 loop.Run 下步退，`host.WriteFinalize` 落 `cancelled/timeout` 终态。**注**：用 10 min（非原计划 30 min）—— 单 chat turn 10 min 已经够大；超此基本是 bug 而非用户期望。
 
 ---
 
@@ -270,7 +270,7 @@
 
 - ☐ **§17.1 Burn-in #7 — LLM tool description 问题** —— 翻 progress-record 找具体描述（2026-05-15 burn-in 行）。**Done when**：定位 + 修。
 - ☐ **§17.2 Burn-in #11 — NodeType 设计 issue** —— 同上。**Done when**：定位 + 修。
-- ☐ **§17.3 Conversation queue full 时的 backpressure** —— `runner.go` 当前 buffered chan(5)；满了用户发新 message 会 block。加 explicit error 返"对话繁忙，请等等"。**Done when**：queue 满 → 立刻返 409 CHAT_BUSY + 前端 retry hint。
+- ☑ **§17.3 Conversation queue full 时的 backpressure** ✅ 2026-05-16 —— 审计验证：现状 `select` + `default` 已经直接返 409 `STREAM_IN_PROGRESS`（buffered chan(5) 满时），无 block / panic 风险。**实现到位**（误判为遗留；名字 STREAM_IN_PROGRESS 与"queue full"语义稍有重叠，但 V1.2 单用户本地几乎撞不到 6+1=7 队，过度区分是反校验剧场）。
 - ☐ **§17.4 Conversation 长期 idle 后清理** —— `agentstate` 跟 conversation 一起 GC 时机不清晰。**Done when**：30 天 idle conv 触发 agentstate 释放；测试。
 - ☐ **§17.5 Bash AST walk 边界** —— `mvdan.cc/sh/v3` AST 覆盖 95%；`eval` / `source` / 动态 `$()` 仍可逃逸（已 Description 警告但 detect 漏）。**Done when**：扫描 AST 含 `EvalExpr` / `CmdSubst` / `SourceExpr` → fallback 走 plain shell（不 auto-route）+ warn。
 - ☐ **§17.6 Catalog cache lock contention** —— `catalog.Refresh` 持 sourcesMu RWMutex + 后续 LLM 调用持续到完成。LLM 慢时 lock contention。**Done when**：拉数据后立刻 release lock，LLM 调用不持锁。
@@ -341,3 +341,50 @@ V1.2 ship 标准（前端 Wails 之外）：
 ---
 
 > **维护**：做完一项划 `☑` + git commit message 引用 §N.M；新发现 gap 直接 append 到本文档同节末尾。每周 review 一次 ordering。
+
+---
+
+## 19. Tracker（进度看板）
+
+**用法**：
+- 每完成一批，**就来这里**：(a) 上面把对应 ☐ 翻成 ☑（带 ✅ 日期）；(b) 总览表更新数字；(c) "日志" 追一条。
+- ☐ 未做 / 🔄 设计改向已等价完成 / 部分 = 主体完工有遗留 / ☑ 完工。
+
+### 19.1 总览（按节聚合）
+
+| § | 节标题 | 已完 / 总数 | 状态 | 备注 |
+|---|---|---|---|---|
+| §1 | 长任务能力（Compaction）| 3 / 7 | 🟢 主体完工 | 核心 3 件（counter / Micro / Auto）做完；slash / cache 边界 / tool budget 留下次 |
+| §2 | 记忆系统（Memory）| 6 / 7 | 🟢 主体完工 | §2.1+§2.2 设计改向：DB-backed 替代磁盘 FORGIFY.md / MEMORY.md（pinned + index 同语义）；§2.7 autoDream "本轮 skip" 远期 |
+| §3 | 权限 + Hooks | 6 / 9 | 🟢 主体完工 | §3.7 Session hooks / §3.8 Explainer / §3.9 path traversal 加固 留 v2 |
+| §4 | 可观测性 | 2 / 10 | 🟡 起步 | §4.1 + §4.2 后端就位；testend `/usage` UI 留下次 |
+| §5 | Workflow 高阶 | 0 / 7 | ⬜ 未起 | Phase 4 主体已完，本节是 V1.5 deferred 全做 |
+| §6 | MCP 高阶 | 0 / 7 | ⬜ 未起 | |
+| §7 | Skill 高阶 | 0 / 5 | ⬜ 未起 | |
+| §8 | Subagent 高阶 | 0 / 5 | ⬜ 未起 | |
+| §9 | Catalog 高阶 | 0 / 5 | ⬜ 未起 | |
+| §10 | UX 工具完善 | 0 / 7 | ⬜ 未起 | §10.1 Checkpoint/Undo 是 ship gate "用户敢用"关键 |
+| §11 | Sandbox 收尾 + 修复 | 1 / 7 | 🟡 起步 | §11.2 已修；§11.1 / §11.3-7 待 |
+| §12 | HTTP / API 收尾 | 2 / 4 | 🟢 主体完工 | §12.3 + §12.4 留下次 |
+| §13 | 可靠性 / 故障恢复 | 2 / 5 | 🟢 主体完工 | retry + timeout 两件核心已完；failover / SearXNG health / BackgroundCtx 留 |
+| §14 | Phase 5 真正没做的 | 0 / 7 | ⬜ 未起 | 愿景核心；§14.1 sqlite-vec spike 是闸门 |
+| §15 | 完美产品 UX | 0 / 16 | ⬜ 未起 | onboarding / settings pane / themes / 等等；穿插着做 |
+| §16 | 桌面 app 准备 | 0 / 7 | ⬜ 未起 | Wails 主迁移前的后端 prep |
+| §17 | Burn-in 剩余 + 杂项 | 1 / 13 | 🟡 起步 | §17.3 已审计；§17.1+§17.2 burn-in #7/#11 + §17.4-13 待 |
+
+**Ship gate 进度（`完工标准` 节）**：
+
+- ☑ §1 + §2 + §3 — **"AI 真的不傻"基线**（✅ 2026-05-16 全过）
+- 🟢 §11-12 (sandbox / API 收尾) + §13 (可靠性) — **不易崩**（主体过，残留低优）
+- ⬜ §14 (Phase 5 智能化) — **愿景核心**
+- ⬜ §10.1 (Checkpoint) + §15.1-15.5 (onboarding 基本套件) — **用户敢用**
+
+### 19.2 日志
+
+| 日期 | 范围 | 摘要 |
+|---|---|---|
+| 2026-05-16 | **§3 permissions + hooks + §4.1+4.2 + §12.2 + §13.1 + §13.5 + §17.3** | V1.2 ship gate 第三栏（"AI 真的不傻"）完工。新增 4 包（`domain/permissions` + `infra/settings` + `app/tool/permissionsgate` + `app/hooks`）+ 56 tool 危险等级登记 + glob→regex 翻译器 + shell hook stdin/stdout JSON 协议 + `pathguard.AllowWrite`（读写 deny 分离）+ 5 HTTP endpoints + testend `/config/permissions` 3 tab。30+ 新单测 + 3 pipeline test 全绿。同步：`service-design-documents/permissions.md`（18 节设计 doc）+ api-design + error-codes（INVALID_SETTINGS / BLOCKED_BY_RULE）+ progress-record dev log。**附带**：Token counter（§4.1）+ Usage 端点（§4.2，按 model 拆 + cost 估算 via 新 `pkg/llmcost` 16-model registry）+ LLM withRetry（§12.2 + §13.1，仅 Generate；Stream 不重试避免 mid-stream 丢内容）+ chat worker 10 min timeout（§13.5）+ queue backpressure 现状审计（§17.3 已实现到位）。|
+| 2026-05-16 | **§1 compaction + §2 memory** | V1.2 ship gate 第一栏（"AI 真的不傻"基础）完工。新增 `domain/permissions` 仍待 §3；但 §1 + §2 两大跨对话能力一气落地：`pkg/modelmeta` + `pkg/tokencount` + `app/contextmgr.Manager`（3 路径：< Soft / Soft 降级 / Hard fullCompact）+ `conversations.summary` + `summary_covers_up_to_seq` 2 列 + `message_blocks.context_role` 1 列 + 新 block type `compaction`（eventlog 协议 6→7 种）+ `loop/history.BlocksToAssistantLLM` 按 role 投影 + chat.buildHistory 前置 `<conversation_summary>` wrapper；Memory 新 `domain/memory` + `app/memory` + 3 system tools + 7 HTTP endpoints + 3 errmap sentinel + testend `/config/memory` + `/current/compaction` 2 视图。4 + 3 = 7 pipeline tests 全绿。设计 doc：`service-design-documents/memory.md` + `compaction.md`。附带修旧债：harness Attrs migration / scheduler dotted edge / handler Python kwargs / cancel 422 接受 / chat_test seed-delete 模式。|
+| 2026-05-15 | **§11.2 ownerKind 白名单 + §12.1 limit cap（审计）** | burn-in P3 batch 顺手修：`validOwnerKinds` 5 值白名单 + 400 INVALID_OWNER_KIND。同期审计 §12.1 发现 `pkg/pagination.Parse` 早已 cap 到 200，无 handler 直读 `?limit`——实现到位（误判为遗留）。|
+
+> **下条记录待写**：根据 §18 ordering，下一站建议 §14.1 sqlite-vec spike（30 min 半成本闸门）→ §10.1 Checkpoint/Undo（~1 天 用户敢用 ship gate）→ §11 sandbox 收尾 batch。

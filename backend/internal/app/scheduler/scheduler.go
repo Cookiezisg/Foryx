@@ -169,17 +169,44 @@ func (s *Service) StartRun(ctx context.Context, workflowID, triggerKind string, 
 	return run.ID, nil
 }
 
-// Cancel cancels a running or paused FlowRun; cleanup runs in executeRun's deferred path.
+// Cancel cancels a running or paused FlowRun. Running: signal the goroutine
+// via cancel(); cleanup writes terminal state in executeRun's deferred path.
+// Paused: no goroutine exists, so write status=cancelled directly to DB and
+// publish a notification ourselves.
 //
-// Cancel 取消运行中或 paused FlowRun；清理在 executeRun defer 路径。
-func (s *Service) Cancel(_ context.Context, runID string) error {
+// Cancel 取消运行中或 paused FlowRun。运行中：发 cancel() 信号，终态写在
+// executeRun defer 路径。Paused：没有 goroutine,直接 DB 转 cancelled +
+// 自己发通知（v2 burn-in fix #27）。
+func (s *Service) Cancel(ctx context.Context, runID string) error {
 	s.cancelsMu.RLock()
 	cancel, ok := s.cancels[runID]
 	s.cancelsMu.RUnlock()
-	if !ok {
+	if ok {
+		cancel()
+		return nil
+	}
+	run, err := s.repo.Get(ctx, runID)
+	if err != nil {
+		// Unknown run / soft-deleted → not cancellable (preserves the
+		// pre-#27 contract; ErrNotFound was previously hidden inside the
+		// cancels-map miss path).
+		//
+		// 未知 run / 软删 → not cancellable（保 #27 之前契约：先前 ErrNotFound
+		// 被 cancels map miss 路径掩盖）。
 		return fmt.Errorf("schedulerapp.Cancel: %w", flowrundomain.ErrNotCancellable)
 	}
-	cancel()
+	if run.Status != flowrundomain.StatusPaused {
+		return fmt.Errorf("schedulerapp.Cancel: %w", flowrundomain.ErrNotCancellable)
+	}
+	now := time.Now().UTC()
+	elapsed := now.Sub(run.StartedAt).Milliseconds()
+	if err := s.repo.UpdateStatus(ctx, runID, flowrundomain.StatusCancelled, nil, "CANCELLED", "cancelled while paused", &now, elapsed); err != nil {
+		return fmt.Errorf("schedulerapp.Cancel: paused→cancelled: %w", err)
+	}
+	if err := s.repo.ClearPausedState(ctx, runID); err != nil {
+		s.log.Warn("clear pausedState after cancel failed", zap.String("runId", runID), zap.Error(err))
+	}
+	s.publish(ctx, runID, run.WorkflowID, "cancelled", map[string]any{"fromPaused": true})
 	return nil
 }
 

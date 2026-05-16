@@ -153,7 +153,7 @@ func (h *FlowRunHandler) Approve(w http.ResponseWriter, r *http.Request) {
 			"scheduler not wired", nil)
 		return
 	}
-	if err := h.scheduler.ResumeApproval(r.Context(), r.PathValue("id"), r.PathValue("nodeId"), req.Decision); err != nil {
+	if err := h.scheduler.ResumeApproval(r.Context(), r.PathValue("id"), r.PathValue("nodeId"), req.Decision, req.Reason); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}

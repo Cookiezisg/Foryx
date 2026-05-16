@@ -25,7 +25,13 @@ func New(deps Deps) http.Handler {
 		handlershttpapi.NewModelConfigHandler(deps.ModelService, deps.Log).Register(mux)
 	}
 	if deps.ConversationService != nil {
-		handlershttpapi.NewConversationHandler(deps.ConversationService, deps.Log).Register(mux)
+		// ChatService is the TokenSummer (V1.2 §4.1); nil-tolerant.
+		// ChatService 即 TokenSummer（§4.1）；nil 安全。
+		var tokens handlershttpapi.TokenSummer
+		if deps.ChatService != nil {
+			tokens = deps.ChatService
+		}
+		handlershttpapi.NewConversationHandler(deps.ConversationService, tokens, deps.Log).Register(mux)
 	}
 	if deps.FunctionService != nil {
 		handlershttpapi.NewFunctionHandler(deps.FunctionService, deps.Log).Register(mux)
@@ -47,6 +53,16 @@ func New(deps Deps) http.Handler {
 	}
 	if deps.ChatService != nil {
 		handlershttpapi.NewChatHandler(deps.ChatService, deps.Log).Register(mux)
+		// /api/v1/usage piggy-backs on chat's SumTokens methods (V1.2 §4.2).
+		// /api/v1/usage 复用 chat 的 SumTokens 方法（§4.2）。
+		handlershttpapi.NewUsageHandler(deps.ChatService, deps.Log).Register(mux)
+	}
+	// V1.2 §3 final-sweep — permissions + settings 5 endpoints.
+	// 全 nil 时 group 整组跳。
+	if deps.SettingsService != nil && deps.PermGate != nil {
+		handlershttpapi.NewPermissionsHandler(
+			deps.SettingsService, deps.PermGate, deps.SettingsPath, deps.Tools, deps.Log,
+		).Register(mux)
 	}
 	if deps.EventLogBridge != nil {
 		handlershttpapi.NewEventLogHandler(deps.EventLogBridge, deps.BlockV2Repo, deps.Log).Register(mux)

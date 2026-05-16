@@ -21,6 +21,14 @@ type chatHost struct {
 	uid       string
 	msgID     string
 	userMsgID string
+	// provider / modelID identify the LLM serving this turn; recorded
+	// on the assistant Message row for /api/v1/usage cost estimation
+	// (V1.2 §4.2). Empty in unit tests that bypass picker.
+	//
+	// provider / modelID 标识本回合 LLM；落库到 assistant Message 行供
+	// /api/v1/usage cost 估算（§4.2）。绕过 picker 的单测为空。
+	provider string
+	modelID  string
 }
 
 func (h *chatHost) LoadHistory(ctx context.Context) ([]llminfra.LLMMessage, error) {
@@ -36,7 +44,7 @@ func (h *chatHost) WriteFinalize(ctx context.Context, blocks []chatdomain.Block,
 	saveCtx := reqctxpkg.SetUserID(context.Background(), h.uid)
 	saveCtx = reqctxpkg.WithConversationID(saveCtx, h.convID)
 
-	msg := buildMessage(h.msgID, h.convID, h.uid, status, stopReason, errCode, errMsg, in, out)
+	msg := buildMessage(h.msgID, h.convID, h.uid, status, stopReason, errCode, errMsg, in, out, h.provider, h.modelID)
 	if err := h.svc.repo.SaveMessage(saveCtx, msg); err != nil {
 		h.svc.log.Error("CRITICAL: final assistant message persist failed — message lost",
 			zap.String("msg_id", h.msgID), zap.String("conversation_id", h.convID), zap.Error(err))
@@ -82,6 +90,7 @@ func buildMessage(
 	msgID, convID, uid string,
 	status, stopReason, errorCode, errorMessage string,
 	inputTokens, outputTokens int,
+	provider, modelID string,
 ) *chatdomain.Message {
 	return &chatdomain.Message{
 		ID:             msgID,
@@ -94,5 +103,7 @@ func buildMessage(
 		ErrorMessage:   errorMessage,
 		InputTokens:    inputTokens,
 		OutputTokens:   outputTokens,
+		Provider:       provider,
+		ModelID:        modelID,
 	}
 }

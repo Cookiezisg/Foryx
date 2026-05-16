@@ -23,6 +23,7 @@ func NewModelConfigHandler(svc *modelapp.Service, log *zap.Logger) *ModelConfigH
 
 func (h *ModelConfigHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/model-configs", h.List)
+	mux.HandleFunc("GET /api/v1/model-configs/{scenario}", h.Get)
 	mux.HandleFunc("PUT /api/v1/model-configs/{scenario}", h.Upsert)
 }
 
@@ -38,6 +39,16 @@ func (h *ModelConfigHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	responsehttpapi.Success(w, http.StatusOK, items)
+}
+
+func (h *ModelConfigHandler) Get(w http.ResponseWriter, r *http.Request) {
+	scenario := r.PathValue("scenario")
+	m, err := h.svc.GetByScenario(r.Context(), scenario)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, m)
 }
 
 func (h *ModelConfigHandler) Upsert(w http.ResponseWriter, r *http.Request) {

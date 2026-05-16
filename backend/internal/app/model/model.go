@@ -11,6 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
+	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
@@ -21,17 +22,21 @@ import (
 // Service 编排模型配置 CRUD，并实现 modeldomain.ModelPicker。
 type Service struct {
 	repo modeldomain.Repository
+	keys apikeydomain.KeyProvider
 	log  *zap.Logger
 }
 
 // NewService wires Service dependencies; panics on nil logger.
+// keys is the cross-domain port used to verify a provider has at least one
+// api-key before Upsert accepts the config (avoids green-save / red-runtime UX).
 //
-// NewService 装配依赖；nil logger 直接 panic。
-func NewService(repo modeldomain.Repository, log *zap.Logger) *Service {
+// NewService 装配依赖；nil logger 直接 panic。keys 是跨 domain 端口，
+// Upsert 时校验 provider 已有 api-key（防止"绿保存红运行时"反模式）。
+func NewService(repo modeldomain.Repository, keys apikeydomain.KeyProvider, log *zap.Logger) *Service {
 	if log == nil {
 		panic("model.NewService: logger is nil")
 	}
-	return &Service{repo: repo, log: log}
+	return &Service{repo: repo, keys: keys, log: log}
 }
 
 // UpsertInput is the validated payload for Service.Upsert.
@@ -51,6 +56,18 @@ func (s *Service) List(ctx context.Context) ([]*modeldomain.ModelConfig, error) 
 	return s.repo.List(ctx)
 }
 
+// GetByScenario returns the config for one scenario; ErrInvalidScenario for
+// bad name, ErrNotConfigured for unconfigured.
+//
+// GetByScenario 返指定 scenario 的配置；非法 scenario 返 ErrInvalidScenario,
+// 未配置返 ErrNotConfigured。
+func (s *Service) GetByScenario(ctx context.Context, scenario string) (*modeldomain.ModelConfig, error) {
+	if !modeldomain.IsValidScenario(scenario) {
+		return nil, modeldomain.ErrInvalidScenario
+	}
+	return s.repo.GetByScenario(ctx, scenario)
+}
+
 // Upsert creates or updates the config for the given scenario.
 //
 // Upsert 为指定 scenario 创建或更新配置。
@@ -67,6 +84,15 @@ func (s *Service) Upsert(ctx context.Context, scenario string, in UpsertInput) (
 	uid, err := reqctxpkg.RequireUserID(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("model.Service.Upsert: %w", err)
+	}
+	if s.keys != nil {
+		has, hkErr := s.keys.HasKeyForProvider(ctx, strings.TrimSpace(in.Provider))
+		if hkErr != nil {
+			return nil, fmt.Errorf("model.Service.Upsert: %w", hkErr)
+		}
+		if !has {
+			return nil, modeldomain.ErrProviderHasNoKey
+		}
 	}
 	m, err := s.repo.GetByScenario(ctx, scenario)
 	if err != nil && !errors.Is(err, modeldomain.ErrNotConfigured) {

@@ -179,6 +179,49 @@ export const memoryAPI = {
     postJSON<Memory>(`/api/v1/memories/${encodeURIComponent(name)}:unpin`, {}),
 };
 
+/* ───────── permissions + settings (V1.2 §3 final-sweep) ───────── */
+export type DangerLevel = 'read_only' | 'workspace_write' | 'danger_full_access';
+export type DefaultMode = 'ask' | 'allow' | 'deny' | 'bypass';
+export type Action = 'allow' | 'ask' | 'deny';
+
+export interface HookSpec {
+  matcher?: string;
+  command: string;
+  args?: string[];
+  timeout?: number;
+  if?: string;
+}
+
+export interface Settings {
+  permissions: {
+    defaultMode?: DefaultMode;
+    deny?: string[];
+    ask?: string[];
+    allow?: string[];
+  };
+  hooks?: {
+    PreToolUse?: HookSpec[];
+    PostToolUse?: HookSpec[];
+    Stop?: HookSpec[];
+  };
+  protectedPaths?: { denyWrite?: string[] };
+}
+
+export interface ToolRow {
+  name: string;
+  description: string;
+  dangerLevel: DangerLevel;
+}
+
+export const permissionsAPI = {
+  getSettings: () => getJSON<Settings>('/api/v1/settings'),
+  putSettings: (s: Settings) => putJSON<Settings>('/api/v1/settings', s),
+  reload: () => postJSON<Settings>('/api/v1/settings:reload', {}),
+  listTools: () => getJSON<ToolRow[]>('/api/v1/permissions/tools'),
+  test: (in_: { toolName: string; args: unknown; destructive?: boolean }) =>
+    postJSON<{ action: Action; reason: string }>('/api/v1/permissions/test', in_),
+};
+
 /* ───────── tool registry (dev) ───────── */
 export const toolsAPI = {
   list: () => getJSON<ToolMeta[]>('/dev/tools'),

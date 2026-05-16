@@ -27,7 +27,7 @@ func newConvTestServer(t *testing.T) *httptest.Server {
 	}
 	log := zaptest.NewLogger(t)
 	svc := convapp.NewService(convstore.New(gdb), nil, log)
-	h := NewConversationHandler(svc, log)
+	h := NewConversationHandler(svc, nil, log)
 	mux := http.NewServeMux()
 	h.Register(mux)
 	return httptest.NewServer(middlewarehttpapi.InjectUserID(mux))

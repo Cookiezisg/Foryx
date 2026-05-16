@@ -251,10 +251,94 @@ func TestNew_EmptyDenyListAllowsEverything(t *testing.T) {
 	}
 }
 
-func TestNew_NonAbsoluteRuleSilentlyDropped(t *testing.T) {
+func TestNew_NonAbsoluteRuleAppliedBySegmentMatch(t *testing.T) {
+	// V1.2 §3 final-sweep: relative rules now apply via segment / basename
+	// matching (used by DefaultWriteOnlyExtras for .git/, .env, etc).
+	// "relative/path/" treated as a path segment to detect anywhere in
+	// the cleaned path; falls through to allow on uncorrelated paths.
+	//
+	// V1.2 §3：相对规则现在按段 / basename 匹配（DefaultWriteOnlyExtras 用
+	// .git/、.env 等）。"relative/path/" 当路径段在 cleaned 路径中任意检测；
+	// 不相关路径放行。
 	g := New([]string{"relative/path/"})
-
 	if ok, _ := g.Allow("/etc/hosts"); !ok {
-		t.Errorf("relative rule should be dropped; /etc/hosts should still be allowed")
+		t.Errorf("uncorrelated /etc/hosts should pass relative rule")
+	}
+	if ok, _ := g.Allow("/work/relative/path/file"); ok {
+		t.Errorf("expected /work/relative/path/file to be denied by segment rule")
+	}
+}
+
+// ── V1.2 §3 final-sweep — AllowWrite tests ─────────────────────────────
+
+func TestAllowWrite_DefaultExtras_DenyGit(t *testing.T) {
+	g := NewDefault()
+	cases := []string{
+		"/work/proj/.git",
+		"/work/proj/.git/HEAD",
+		"/work/proj/.git/refs/heads/main",
+		"/home/user/code/.git/hooks/pre-commit",
+	}
+	for _, p := range cases {
+		if ok, reason := g.AllowWrite(p); ok {
+			t.Errorf("write to %q should be denied (.git/); got allowed: %q", p, reason)
+		}
+		// Reads still pass (.git/ is in WriteOnlyExtras, not main deny).
+		// 读仍通过（.git/ 在 WriteOnlyExtras，不在主 deny）。
+		if ok, _ := g.Allow(p); !ok {
+			t.Errorf("read of %q should pass (write-only deny only)", p)
+		}
+	}
+}
+
+func TestAllowWrite_DefaultExtras_DenyEnv(t *testing.T) {
+	g := NewDefault()
+	cases := []string{
+		"/work/proj/.env",
+		"/work/proj/.env.local",
+		"/home/user/.envrc",
+	}
+	for _, p := range cases {
+		if ok, reason := g.AllowWrite(p); ok {
+			t.Errorf("write to %q should be denied; got allowed: %q", p, reason)
+		}
+		if ok, _ := g.Allow(p); !ok {
+			t.Errorf("read of %q should pass", p)
+		}
+	}
+}
+
+func TestAllowWrite_DefaultExtras_DenyNodeModules(t *testing.T) {
+	g := NewDefault()
+	if ok, _ := g.AllowWrite("/work/proj/node_modules/lodash/index.js"); ok {
+		t.Errorf("write into node_modules should be denied")
+	}
+	if ok, _ := g.AllowWrite("/work/proj/.venv/lib/python3.12/x.py"); ok {
+		t.Errorf("write into .venv should be denied")
+	}
+}
+
+func TestAllowWrite_NormalPathAllowed(t *testing.T) {
+	g := NewDefault()
+	if ok, _ := g.AllowWrite("/work/proj/src/main.go"); !ok {
+		t.Errorf("write to src/main.go should be allowed")
+	}
+}
+
+func TestAllowWrite_InheritsReadDenyList(t *testing.T) {
+	// Anything Allow denies, AllowWrite must also deny.
+	// Allow 拒的，AllowWrite 也必拒。
+	g := NewDefault()
+	if ok, _ := g.AllowWrite("/etc/hosts"); ok {
+		t.Errorf("write to /etc/hosts should be denied (inherits read deny)")
+	}
+}
+
+func TestAllowWrite_EnvLocal_DotEnvExactBaseMatch(t *testing.T) {
+	// .env.example must NOT be blocked (file-name match is exact basename).
+	// .env.example 不该被拦（按 basename 精确匹配）。
+	g := NewDefault()
+	if ok, _ := g.AllowWrite("/work/proj/.env.example"); !ok {
+		t.Errorf(".env.example should be allowed (not exact .env)")
 	}
 }

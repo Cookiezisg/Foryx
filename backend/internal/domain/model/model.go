@@ -53,6 +53,7 @@ var (
 	ErrInvalidScenario  = errors.New("model: invalid scenario")
 	ErrProviderRequired = errors.New("model: provider is required")
 	ErrModelIDRequired  = errors.New("model: model id is required")
+	ErrProviderHasNoKey = errors.New("model: provider has no api-key configured")
 )
 
 // Repository is the storage contract for ModelConfig, scoped by ctx userID.

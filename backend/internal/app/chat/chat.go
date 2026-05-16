@@ -10,10 +10,13 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 
+	hooksapp "github.com/sunweilin/forgify/backend/internal/app/hooks"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	permgate "github.com/sunweilin/forgify/backend/internal/app/tool/permissionsgate"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	catalogdomain "github.com/sunweilin/forgify/backend/internal/domain/catalog"
 	memorydomain "github.com/sunweilin/forgify/backend/internal/domain/memory"
@@ -63,9 +66,10 @@ type Service struct {
 	log           *zap.Logger
 	queues        sync.Map
 
-	catalog   catalogdomain.SystemPromptProvider
-	memory    memorydomain.SystemPromptProvider
-	compactor ContextCompactor
+	catalog     catalogdomain.SystemPromptProvider
+	memory      memorydomain.SystemPromptProvider
+	compactor   ContextCompactor
+	interceptor *toolInterceptor
 }
 
 // ContextCompactor is the chat-side port for app/contextmgr.Manager.
@@ -157,6 +161,18 @@ func (s *Service) SetMemoryProvider(p memorydomain.SystemPromptProvider) {
 // SetContextCompactor 接对话级 token 压缩器；留 nil 安全。
 func (s *Service) SetContextCompactor(c ContextCompactor) {
 	s.compactor = c
+}
+
+// SetPermissionsAndHooks plugs the V1.2 §3 permissions gate + hook runner.
+// Either arg may be nil → that stage skipped. Call after main constructs
+// the gate / runner; chat.runAgent installs the resulting interceptor
+// on agentCtx so loop.runOneTool consumes it.
+//
+// SetPermissionsAndHooks 接 V1.2 §3 permissions gate + hook runner。
+// 任一为 nil → 对应阶段跳。main 构造完调；chat.runAgent 把生成的
+// interceptor 装到 agentCtx 让 loop.runOneTool 消费。
+func (s *Service) SetPermissionsAndHooks(gate *permgate.Gate, hooks *hooksapp.Runner) {
+	s.interceptor = newToolInterceptor(gate, hooks, s.log)
 }
 
 type SendInput struct {
@@ -317,4 +333,23 @@ func (s *Service) Cancel(_ context.Context, conversationID string) error {
 // ListMessages 返回对话的分页消息列表（含 Blocks）。
 func (s *Service) ListMessages(ctx context.Context, conversationID string, filter chatdomain.ListFilter) ([]*chatdomain.Message, string, error) {
 	return s.repo.ListMessagesByConversation(ctx, conversationID, filter)
+}
+
+// SumTokensForConversation returns aggregate {input, output, total}
+// for convID under the ctx user. Used by GET /conversations/{id} +
+// /api/v1/usage (V1.2 §4.1/§4.2).
+//
+// SumTokensForConversation 返 ctx 用户在 convID 下的 {input, output, total}
+// 聚合。GET /conversations/{id} + /api/v1/usage 用（§4.1/§4.2）。
+func (s *Service) SumTokensForConversation(ctx context.Context, convID string) (chatdomain.TokensUsed, error) {
+	return s.repo.SumTokensByConversation(ctx, convID)
+}
+
+// SumTokensByPeriod groups SUM(input/output) by (provider, modelId) in
+// [since, until) for the ctx user. Zero-value bounds skip.
+//
+// SumTokensByPeriod 按 (provider, modelId) 分组聚合 ctx 用户 [since, until)
+// 区间。零值端跳过。
+func (s *Service) SumTokensByPeriod(ctx context.Context, since, until time.Time) ([]chatdomain.TokensByModel, error) {
+	return s.repo.SumTokensByPeriod(ctx, since, until)
 }

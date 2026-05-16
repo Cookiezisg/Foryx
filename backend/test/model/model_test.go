@@ -25,6 +25,10 @@ func putModelConfig(t *testing.T, h *th.Harness, scenario, provider, modelID str
 
 func TestModel_UpsertAndList_Roundtrip(t *testing.T) {
 	h := th.New(t)
+	// model.Upsert now requires a matching api-key (green-save / red-runtime
+	// guard); seed one before the PUT.
+	// model.Upsert 现在要求有匹配 api-key；PUT 前种一个。
+	h.SeedDeepSeek(t, "test-key")
 
 	var resp struct {
 		Data struct {
@@ -68,6 +72,7 @@ func TestModel_UpsertAndList_Roundtrip(t *testing.T) {
 
 func TestModel_Upsert_Idempotent_IDUnchanged(t *testing.T) {
 	h := th.New(t)
+	h.SeedDeepSeek(t, "test-key")
 
 	first := struct {
 		Data struct{ ID string `json:"id"` } `json:"data"`

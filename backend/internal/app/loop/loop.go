@@ -5,13 +5,26 @@ package loop
 
 import (
 	"context"
+	"fmt"
 
 	"go.uber.org/zap"
 
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
+	eventlogdomain "github.com/sunweilin/forgify/backend/internal/domain/eventlog"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 )
+
+// maxConsecutiveAllFailTurns caps how many turns in a row may end with every
+// tool call returning an error before the loop aborts (TOOL_ERROR_STORM).
+// Three is the lowest value that still gives the LLM room to self-correct from
+// a single mistake — burn-in v2 saw the LLM build 4 orphan handlers before
+// giving up; this cap stops similar drift early.
+//
+// maxConsecutiveAllFailTurns 限定连续多少轮全员失败后熔断（TOOL_ERROR_STORM）。
+// 3 是给 LLM 自纠机会的最小值；burn-in v2 撞过 LLM 连建 4 个废 handler 才放弃,
+// 此熔断早停类似漂移。
+const maxConsecutiveAllFailTurns = 3
 
 // Host is the per-run hook surface; block persistence happens via the eventlog Emitter, not Host.
 //
@@ -60,15 +73,16 @@ func Run(
 	byName := toolsByName(tools)
 
 	var (
-		allBlocks    []chatdomain.Block
-		totalIn      int
-		totalOut     int
-		stopReason   = chatdomain.StopReasonEndTurn
-		finalStatus  = chatdomain.StatusCompleted
-		errCode      string
-		errMsg       string
-		finalWritten bool
-		stepsRun     int
+		allBlocks      []chatdomain.Block
+		totalIn        int
+		totalOut       int
+		stopReason     = chatdomain.StopReasonEndTurn
+		finalStatus    = chatdomain.StatusCompleted
+		errCode        string
+		errMsg         string
+		finalWritten   bool
+		stepsRun       int
+		consecAllFail  int
 	)
 
 	for step := range maxSteps {
@@ -106,6 +120,37 @@ func Run(
 
 		rBlocks := runTools(ctx, toolCalls, byName, log)
 		allBlocks = append(allBlocks, rBlocks...)
+
+		// Consecutive-all-fail circuit breaker: count turns where every
+		// tool_result has a non-empty Error. Three in a row breaks the loop
+		// to prevent the LLM from drilling deeper into a stuck state (e.g.
+		// repeatedly creating broken handlers).
+		//
+		// 连续全失败熔断:统计每轮 tool_result 全部带 Error 的次数,3 次连续即
+		// 熔断,防 LLM 在卡壳状态下越钻越深(如反复造废 handler)。
+		if len(rBlocks) > 0 {
+			allFailed := true
+			for _, b := range rBlocks {
+				if b.Type == eventlogdomain.BlockTypeToolResult && b.Error == "" {
+					allFailed = false
+					break
+				}
+			}
+			if allFailed {
+				consecAllFail++
+				if consecAllFail >= maxConsecutiveAllFailTurns {
+					stopReason = chatdomain.StopReasonError
+					errCode = "TOOL_ERROR_STORM"
+					errMsg = fmt.Sprintf("%d consecutive turns where every tool call failed; aborting to prevent runaway", consecAllFail)
+					finalStatus = chatdomain.StatusError
+					host.WriteFinalize(ctx, allBlocks, chatdomain.StatusError, stopReason, errCode, errMsg, totalIn, totalOut)
+					finalWritten = true
+					break
+				}
+			} else {
+				consecAllFail = 0
+			}
+		}
 
 		history, err = extendHistory(log, history, aBlocks, rBlocks)
 		if err != nil {

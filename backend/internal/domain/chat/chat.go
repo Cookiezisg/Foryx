@@ -26,6 +26,14 @@ type Message struct {
 	ErrorMessage   string         `gorm:"type:text;default:''" json:"errorMessage,omitempty"`
 	InputTokens    int            `gorm:"default:0" json:"inputTokens,omitempty"`
 	OutputTokens   int            `gorm:"default:0" json:"outputTokens,omitempty"`
+	// Provider / ModelID record which LLM produced this turn. Populated
+	// on assistant terminal write by chat runner; empty for user / system
+	// messages. Used by /api/v1/usage for cost estimation (V1.2 §4.2).
+	//
+	// Provider / ModelID 记录此回合用的 LLM。chat runner 在 assistant 终态
+	// 写时填；user / system 消息为空。/api/v1/usage cost 估算用（§4.2）。
+	Provider       string         `gorm:"type:text;default:'';index:idx_msg_provider_model,priority:1" json:"provider,omitempty"`
+	ModelID        string         `gorm:"type:text;default:'';index:idx_msg_provider_model,priority:2" json:"modelId,omitempty"`
 	Attrs          map[string]any `gorm:"type:text;serializer:json" json:"attrs,omitempty"`
 	CreatedAt      time.Time      `json:"createdAt"`
 	UpdatedAt      time.Time      `json:"updatedAt"`
@@ -187,4 +195,45 @@ type Repository interface {
 
 	SaveAttachment(ctx context.Context, a *Attachment) error
 	GetAttachment(ctx context.Context, id string) (*Attachment, error)
+
+	// SumTokensByConversation aggregates input/output across all messages
+	// of convID, scoped to ctx user. Used by GET /conversations/{id} +
+	// /api/v1/usage (V1.2 §4.1/§4.2).
+	//
+	// SumTokensByConversation 按 ctx 用户聚合 convID 全部 message 的
+	// input/output token。GET /conversations/{id} + /api/v1/usage 用。
+	SumTokensByConversation(ctx context.Context, convID string) (TokensUsed, error)
+
+	// SumTokensByPeriod aggregates across all conversations of the ctx
+	// user between since (inclusive) and until (exclusive), broken down
+	// by (provider, modelId). Pass zero time on either side to skip that
+	// bound. Used by /api/v1/usage (V1.2 §4.2).
+	//
+	// SumTokensByPeriod 按 ctx 用户在 [since, until) 区间聚合所有对话，
+	// 按 (provider, modelId) 拆。两端任一传零值跳过该约束。
+	SumTokensByPeriod(ctx context.Context, since, until time.Time) ([]TokensByModel, error)
+}
+
+// TokensUsed is an aggregate token-count snapshot for one conversation
+// or one period (V1.2 §4.1).
+//
+// TokensUsed 是单对话或单期间的 token 计数聚合（V1.2 §4.1）。
+type TokensUsed struct {
+	Input  int `json:"input"`
+	Output int `json:"output"`
+	Total  int `json:"total"`
+}
+
+// TokensByModel is one row of period aggregation, broken down by which
+// LLM produced the tokens. Provider / ModelID may be empty for legacy
+// messages written before V1.2 §4.2 added the columns (counted under
+// the "(unknown)" bucket by /api/v1/usage).
+//
+// TokensByModel 是按期间聚合的一行，按产出 LLM 拆。空 Provider/ModelID
+// 是 §4.2 加列之前的历史消息（/api/v1/usage 归到 "(unknown)" 桶）。
+type TokensByModel struct {
+	Provider string `json:"provider"`
+	ModelID  string `json:"modelId"`
+	Input    int    `json:"input"`
+	Output   int    `json:"output"`
 }

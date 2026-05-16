@@ -58,10 +58,24 @@ func (s *Service) runQueue(conversationID string, q *convQueue) {
 	}
 }
 
+// maxTurnDuration is the hard wall-clock cap on one chat agent turn.
+// Beyond this, agentCtx is cancelled; loop.Run observes cancellation
+// and exits at the next iteration boundary, host.WriteFinalize lands
+// status="cancelled" stop_reason="timeout". Protects against (a) a
+// runaway tool that never returns, (b) an LLM stream that hangs on a
+// dead socket past the HTTP timeout, (c) infinite tool-call loops.
+//
+// maxTurnDuration 是单 chat agent turn 的硬墙钟上限。超时 agentCtx 取消，
+// loop.Run 下一步退出，host.WriteFinalize 落 status=cancelled
+// stop_reason=timeout。防 (a) 永不返回的 tool，(b) socket 死后挂死的
+// LLM stream，(c) 无限 tool-call 循环。10min 取自"单轮工作流复杂任务
+// 合理上限"经验值；超过基本是 bug 而非用户期望。
+const maxTurnDuration = 10 * time.Minute
+
 func (s *Service) processTask(conversationID string, q *convQueue, task queuedTask) {
 	ctx := task.ctx
 
-	agentCtx, cancel := context.WithCancel(ctx)
+	agentCtx, cancel := context.WithTimeout(ctx, maxTurnDuration)
 	q.mu.Lock()
 	q.cancel = cancel
 	q.mu.Unlock()
@@ -109,6 +123,14 @@ func (s *Service) processTask(conversationID string, q *convQueue, task queuedTa
 		uid:       task.uid,
 		msgID:     msgID,
 		userMsgID: task.userMsgID,
+		provider:  bc.Provider,
+		modelID:   bc.ModelID,
+	}
+	// Install V1.2 §3 interceptor (permissions gate + Pre/PostToolUse).
+	// Nil when SetPermissionsAndHooks wasn't called → loop sees noop.
+	// 装 V1.2 §3 interceptor。未 SetPermissionsAndHooks 时为 nil，loop 走 noop。
+	if s.interceptor != nil {
+		agentCtx = loopapp.WithInterceptor(agentCtx, s.interceptor)
 	}
 	result := loopapp.Run(agentCtx, host, bc.Client, baseReq, maxSteps, s.log)
 
@@ -148,9 +170,14 @@ func (s *Service) emitFatalError(
 	// Detached saveCtx mirrors host.WriteFinalize: upstream cancel must not block terminal write.
 	saveCtx := reqctxpkg.SetUserID(context.Background(), uid)
 	saveCtx = reqctxpkg.WithConversationID(saveCtx, conv.ID)
+	// emitFatalError fires before bundle.Provider/ModelID are known
+	// (resolve failed), so leave them empty — usage aggregation drops
+	// zero-token rows anyway.
+	// emitFatalError 在 bundle.Provider/ModelID 已知前触发（resolve 已
+	// 失败），留空——usage 聚合本就丢 0 token 行。
 	msg := buildMessage(msgID, conv.ID, uid,
 		chatdomain.StatusError, chatdomain.StopReasonError,
-		code, message, 0, 0)
+		code, message, 0, 0, "", "")
 	if err := s.repo.SaveMessage(saveCtx, msg); err != nil {
 		s.log.Error("CRITICAL: fatal-error stub message persist failed — message lost",
 			zap.String("msg_id", msgID), zap.Error(err))

@@ -28,6 +28,7 @@ import (
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	handlerinfra "github.com/sunweilin/forgify/backend/internal/infra/handler"
 	memorydomain "github.com/sunweilin/forgify/backend/internal/domain/memory"
+	permdomain "github.com/sunweilin/forgify/backend/internal/domain/permissions"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -53,6 +54,7 @@ var errTable = map[error]errMapping{
 	apikeydomain.ErrBaseURLRequired:     {http.StatusBadRequest, "BASE_URL_REQUIRED"},
 	apikeydomain.ErrAPIFormatRequired:   {http.StatusBadRequest, "API_FORMAT_REQUIRED"},
 	apikeydomain.ErrKeyRequired:         {http.StatusBadRequest, "KEY_REQUIRED"},
+	apikeydomain.ErrDisplayNameConflict: {http.StatusConflict, "API_KEY_NAME_CONFLICT"},
 
 	// conversation
 	convdomain.ErrNotFound: {http.StatusNotFound, "CONVERSATION_NOT_FOUND"},
@@ -72,6 +74,7 @@ var errTable = map[error]errMapping{
 	modeldomain.ErrInvalidScenario:  {http.StatusBadRequest, "INVALID_SCENARIO"},
 	modeldomain.ErrProviderRequired: {http.StatusBadRequest, "PROVIDER_REQUIRED"},
 	modeldomain.ErrModelIDRequired:  {http.StatusBadRequest, "MODEL_ID_REQUIRED"},
+	modeldomain.ErrProviderHasNoKey: {http.StatusUnprocessableEntity, "PROVIDER_HAS_NO_KEY"},
 
 	// function
 	functiondomain.ErrNotFound:             {http.StatusNotFound, "FUNCTION_NOT_FOUND"},
@@ -196,6 +199,10 @@ var errTable = map[error]errMapping{
 	memorydomain.ErrNotFound:     {http.StatusNotFound, "MEMORY_NOT_FOUND"},
 	memorydomain.ErrNameConflict: {http.StatusConflict, "MEMORY_NAME_CONFLICT"},
 	memorydomain.ErrInvalidName:  {http.StatusBadRequest, "MEMORY_INVALID_NAME"},
+
+	// permissions (V1.2 §3 final-sweep)
+	permdomain.ErrInvalidSettings: {http.StatusBadRequest, "INVALID_SETTINGS"},
+	permdomain.ErrBlockedByRule:   {http.StatusUnprocessableEntity, "BLOCKED_BY_RULE"},
 
 	// ask
 	askapp.ErrNoPendingQuestion: {http.StatusNotFound, "ASK_NO_PENDING_QUESTION"},

@@ -37,6 +37,8 @@ import (
 	triggerapp "github.com/sunweilin/forgify/backend/internal/app/trigger"
 	catalogapp "github.com/sunweilin/forgify/backend/internal/app/catalog"
 	contextmgrapp "github.com/sunweilin/forgify/backend/internal/app/contextmgr"
+	hooksapp "github.com/sunweilin/forgify/backend/internal/app/hooks"
+	permgateapp "github.com/sunweilin/forgify/backend/internal/app/tool/permissionsgate"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
 	functiontool "github.com/sunweilin/forgify/backend/internal/app/tool/function"
@@ -90,6 +92,7 @@ import (
 	mcpcallstore "github.com/sunweilin/forgify/backend/internal/infra/store/mcpcalls"
 	skillexecstore "github.com/sunweilin/forgify/backend/internal/infra/store/skillexec"
 	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
+	settingsinfra "github.com/sunweilin/forgify/backend/internal/infra/settings"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	routerhttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/router"
 )
@@ -187,7 +190,7 @@ func main() {
 		log,
 	)
 
-	modelService := modelapp.NewService(modelstore.New(gdb), log)
+	modelService := modelapp.NewService(modelstore.New(gdb), apikeyService, log)
 
 	llmFactory := llminfra.NewFactory()
 
@@ -343,6 +346,16 @@ func main() {
 
 	catalogService := catalogapp.New(filepath.Join(homeRoot, ".catalog.json"), notificationsPub, log)
 	catalogService.SetGenerator(catalogapp.NewLLMGenerator(modelService, apikeyService, llmFactory, log))
+	// Sources here = "things the LLM can call from chat as capabilities":
+	// function (run_function), handler (call_handler), skill (invoke), mcp
+	// (server tools). Workflows are intentionally NOT in coverage — they
+	// are user-triggered (trigger_workflow fires a job; not a capability
+	// the LLM picks based on intent matching).
+	//
+	// 此处 sources = LLM 从 chat 可调用的能力:function (run_function) /
+	// handler (call_handler) / skill (invoke) / mcp (server tools)。
+	// workflow 故意不在 coverage——它是用户触发(trigger_workflow 启动 job,
+	// 不是 LLM 按意图匹配挑用的能力)。
 	catalogService.RegisterSource(functionService.AsCatalogSource())
 	catalogService.RegisterSource(handlerService.AsCatalogSource())
 	catalogService.RegisterSource(skillService.AsCatalogSource())
@@ -352,6 +365,21 @@ func main() {
 	}
 	chatService.SetSystemPromptProvider(catalogService)
 	chatService.SetMemoryProvider(memoryService)
+
+	// V1.2 §3 final-sweep — permissions + hooks.
+	// settings.json lives at <homeRoot>/settings.json; gate reads via
+	// SettingsService snapshot; HookRunner consumes the same snapshot.
+	// V1.2 §3 final-sweep —— permissions + hooks。settings.json 在
+	// <homeRoot>/settings.json；gate 经 SettingsService 快照读；
+	// HookRunner 共用此快照。
+	settingsService := settingsinfra.New(filepath.Join(homeRoot, "settings.json"), log)
+	if err := settingsService.Start(context.Background()); err != nil {
+		log.Warn("settings start failed (continuing with last good snapshot)", zap.Error(err))
+	}
+	permGate := permgateapp.New(settingsService)
+	hookRunner := hooksapp.New(settingsService, log)
+	chatService.SetPermissionsAndHooks(permGate, hookRunner)
+	settingsPath := filepath.Join(homeRoot, "settings.json")
 
 	cheapLLMResolver := func(ctx context.Context) (llminfra.Client, string, string, string, error) {
 		bundle, err := llmclientpkg.ResolveForWebSummary(ctx, modelService, apikeyService, llmFactory)
@@ -444,6 +472,9 @@ func main() {
 		SkillService:        skillService,
 		CatalogService:      catalogService,
 		MemoryService:       memoryService,
+		SettingsService:     settingsService,
+		SettingsPath:        settingsPath,
+		PermGate:            permGate,
 		Dev:                 *dev,
 		Tools:               tools,
 		LLMFactory:          llmFactory,

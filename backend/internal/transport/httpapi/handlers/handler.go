@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -144,9 +145,42 @@ func (h *HandlerHandler) postOnHandler(w http.ResponseWriter, r *http.Request) {
 		h.Call(w, r, id)
 	case "revert":
 		h.Revert(w, r, id)
+	case "edit":
+		h.Edit(w, r, id)
 	default:
 		http.NotFound(w, r)
 	}
+}
+
+// Edit applies ops to a handler, producing or iterating a pending version.
+// Mirrors edit_handler LLM tool semantics; HTTP path consumer = future testend editor.
+//
+// Edit 给 handler 应用 ops 产/迭代 pending 版本。镜像 edit_handler 工具语义；
+// HTTP 消费者是未来 testend 编辑器。
+func (h *HandlerHandler) Edit(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		Ops          json.RawMessage `json:"ops"`
+		ChangeReason string          `json:"changeReason"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	ops, err := handlerapp.ParseOps(req.Ops)
+	if err != nil {
+		responsehttpapi.Error(w, http.StatusBadRequest, "HANDLER_OP_INVALID", err.Error(), nil)
+		return
+	}
+	v, err := h.svc.Edit(r.Context(), handlerapp.EditInput{
+		ID:           id,
+		Ops:          ops,
+		ChangeReason: req.ChangeReason,
+	})
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, v)
 }
 
 func (h *HandlerHandler) Call(w http.ResponseWriter, r *http.Request, id string) {

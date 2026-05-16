@@ -11,6 +11,7 @@ import (
 	"time"
 
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
+	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	eventlogdomain "github.com/sunweilin/forgify/backend/internal/domain/eventlog"
@@ -233,11 +234,21 @@ func TestChat_Live_ReasoningModel_BlocksSeparate(t *testing.T) {
 func TestChat_MissingAPIKey_ErrorCodePersisted(t *testing.T) {
 	h := th.New(t)
 
-	if _, err := h.Model.Upsert(h.LocalCtx(), modeldomain.ScenarioChat, modelapp.UpsertInput{
-		Provider: th.ProviderDeepSeek,
-		ModelID:  "deepseek-chat",
-	}); err != nil {
-		t.Fatalf("seed model config: %v", err)
+	// Model.Upsert now requires a matching api-key to exist (green-save /
+	// red-runtime guard), so we seed then delete to simulate the
+	// "config drifted out from under the chat flow" path that
+	// API_KEY_PROVIDER_NOT_FOUND is meant to catch.
+	// Model.Upsert 现在要求有匹配 api-key（防绿保存红运行时），所以先
+	// 种再删，模拟 API_KEY_PROVIDER_NOT_FOUND 想抓的"config 已飘走"路径。
+	h.SeedDeepSeek(t, "test-key-soon-to-be-deleted")
+	keys, _, err := h.APIKey.List(h.LocalCtx(), apikeydomain.ListFilter{Limit: 10})
+	if err != nil {
+		t.Fatalf("list apikeys: %v", err)
+	}
+	for _, k := range keys {
+		if err := h.APIKey.Delete(h.LocalCtx(), k.ID); err != nil {
+			t.Fatalf("delete apikey: %v", err)
+		}
 	}
 
 	conv := h.NewConversation(t, "no-key")

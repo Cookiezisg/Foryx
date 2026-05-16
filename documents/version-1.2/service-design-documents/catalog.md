@@ -151,7 +151,7 @@ type Item struct {
 ```go
 type Catalog struct {
     Summary       string               `json:"summary"`        // 进 system prompt 的人类可读文本（含 LLM 自动生成的路由观察）
-    Coverage      map[string][]string  `json:"coverage"`       // source → [item ID]，校验完整性用
+    Coverage      map[string][]string  `json:"coverage"`       // source → [item ID]（function/handler/skill/mcp；workflow 不入,因 workflow 是用户触发不是 LLM 意图匹配的能力）
     Fingerprint   string               `json:"fingerprint"`    // sha256 of sorted (source+name+description)；用于跳过无效 regen
     GeneratedAt   time.Time            `json:"generatedAt"`
     Version       int                  `json:"version"`        // 自增

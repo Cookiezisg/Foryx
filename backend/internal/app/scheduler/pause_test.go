@@ -102,7 +102,7 @@ func TestResumeApproval_InvalidDecision(t *testing.T) {
 	repo := newPauseFakeRepo()
 	s := newSvcWithPauseRepo(t, repo, &fakeWorkflowReader{})
 
-	err := s.ResumeApproval(context.Background(), "fr1", "approval", "maybe")
+	err := s.ResumeApproval(context.Background(), "fr1", "approval", "maybe", "")
 	if !errors.Is(err, flowrundomain.ErrApprovalDecisionInvalid) {
 		t.Errorf("expected ErrApprovalDecisionInvalid, got %v", err)
 	}
@@ -113,7 +113,7 @@ func TestResumeApproval_NotPaused(t *testing.T) {
 	_ = repo.Create(context.Background(), mkRun("fr1", "u1", "wf1", flowrundomain.StatusRunning))
 	s := newSvcWithPauseRepo(t, repo, &fakeWorkflowReader{})
 
-	err := s.ResumeApproval(context.Background(), "fr1", "approval", "approved")
+	err := s.ResumeApproval(context.Background(), "fr1", "approval", "approved", "")
 	if !errors.Is(err, flowrundomain.ErrNotPaused) {
 		t.Errorf("expected ErrNotPaused, got %v", err)
 	}
@@ -126,7 +126,7 @@ func TestResumeApproval_WrongNodeID(t *testing.T) {
 	_ = repo.Create(context.Background(), run)
 
 	s := newSvcWithPauseRepo(t, repo, &fakeWorkflowReader{})
-	err := s.ResumeApproval(context.Background(), "fr1", "wrong_node", "approved")
+	err := s.ResumeApproval(context.Background(), "fr1", "wrong_node", "approved", "")
 	if !errors.Is(err, flowrundomain.ErrApprovalNodeNotFound) {
 		t.Errorf("expected ErrApprovalNodeNotFound, got %v", err)
 	}
@@ -182,7 +182,7 @@ func TestResumeApproval_EndToEnd_FinishesRun(t *testing.T) {
 	}
 
 	// Resume with approved decision.
-	if err := s.ResumeApproval(ctxWith("u1"), runID, "approval", "approved"); err != nil {
+	if err := s.ResumeApproval(ctxWith("u1"), runID, "approval", "approved", "OK"); err != nil {
 		t.Fatalf("ResumeApproval: %v", err)
 	}
 

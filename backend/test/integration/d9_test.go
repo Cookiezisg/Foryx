@@ -174,9 +174,16 @@ func TestD9_BootSmoke(t *testing.T) {
 		t.Fatalf("Catalog.Refresh: %v", err)
 	}
 	cat := h.Catalog.Get()
-	if cat == nil || cat.Summary == "" {
-		t.Errorf("Catalog Summary empty after Refresh; got %+v", cat)
+	if cat == nil {
+		t.Errorf("Catalog.Get returned nil after Refresh")
 	}
+	// Empty Summary is fine when no functions/handlers/skills/mcps are
+	// registered — mechanical fallback intentionally outputs "" for an
+	// empty library (catalog/mechanical.go: avoids "## Available
+	// capabilities" header followed by nothing).
+	// 空 Summary 在无功能 / 无 handler / 无 skill / 无 mcp 时是合理的——
+	// mechanical fallback 故意为空库返 ""（避免 "## Available capabilities"
+	// 头后空白怪态）。
 
 	if servers := h.MCP.ListServers(context.Background()); servers == nil {
 		t.Errorf("MCP.ListServers returned nil; want empty slice")

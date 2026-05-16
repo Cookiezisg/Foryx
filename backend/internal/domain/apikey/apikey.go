@@ -65,6 +65,7 @@ var (
 	ErrBaseURLRequired     = errors.New("apikey: base_url required for this provider")
 	ErrAPIFormatRequired   = errors.New("apikey: api_format required for custom provider")
 	ErrKeyRequired         = errors.New("apikey: key value is required")
+	ErrDisplayNameConflict = errors.New("apikey: display name already in use")
 )
 
 // Repository is the storage contract for APIKey, scoped by ctx userID.
@@ -90,6 +91,7 @@ type Repository interface {
 type KeyProvider interface {
 	ResolveCredentials(ctx context.Context, provider string) (Credentials, error)
 	MarkInvalid(ctx context.Context, provider string, reason string) error
+	HasKeyForProvider(ctx context.Context, provider string) (bool, error)
 }
 
 // SearchProviderPriority is the order WebSearch tries BYOK keys; must match app/apikey/providers.go.

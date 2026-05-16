@@ -89,6 +89,7 @@ const sections: NavSection[] = [
       { label: 'MCP servers', path: '/config/mcp' },
       { label: 'Sandbox', path: '/config/sandbox' },
       { label: 'Memory', path: '/config/memory', hint: 'cross-conv long-term facts (V1.2 §2)' },
+      { label: 'Permissions', path: '/config/permissions', hint: 'settings.json rules + hooks (V1.2 §3)' },
     ],
   },
   {

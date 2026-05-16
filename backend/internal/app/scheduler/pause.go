@@ -10,6 +10,7 @@ import (
 
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
+	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
@@ -40,9 +41,13 @@ func (s *Service) pauseRun(ctx context.Context, run *flowrundomain.FlowRun, exec
 }
 
 // ResumeApproval rehydrates a paused FlowRun and continues execution with the user's decision.
+// reason is an optional free-form note — preserved in the flowrun_nodes row's
+// output for audit. Empty reason is allowed (user can skip).
 //
 // ResumeApproval 重建 paused FlowRun 并按用户决策继续执行。
-func (s *Service) ResumeApproval(ctx context.Context, runID, nodeID, decision string) error {
+// reason 是可选自由文本备注——写到 flowrun_nodes 行 output 留痕。
+// 用户可不填（空字符串允许）。
+func (s *Service) ResumeApproval(ctx context.Context, runID, nodeID, decision, reason string) error {
 	if decision != "approved" && decision != "rejected" {
 		return fmt.Errorf("schedulerapp.ResumeApproval: %w", flowrundomain.ErrApprovalDecisionInvalid)
 	}
@@ -101,8 +106,37 @@ func (s *Service) ResumeApproval(ctx context.Context, runID, nodeID, decision st
 	if err := s.repo.UpdateStatus(runCtx, runID, flowrundomain.StatusRunning, nil, "", "", nil, 0); err != nil {
 		return fmt.Errorf("schedulerapp.ResumeApproval: flip running: %w", err)
 	}
+
+	// Write a flowrun_nodes row for the approval decision so audit trail of
+	// "who decided what + reason" survives PausedState clearing. reason may
+	// be empty — user chose to skip it.
+	//
+	// 写一行 flowrun_nodes 留 approval 审计——decision+reason 在 PausedState
+	// 清空后仍能查到。reason 可空（用户选择不填）。
+	approvalEnded := time.Now().UTC()
+	approvalRow := &flowrundomain.Node{
+		ID:          idgenpkg.New("frn"),
+		UserID:      run.UserID,
+		Status:      flowrundomain.NodeStatusOK,
+		TriggeredBy: "workflow",
+		Input:       map[string]any{},
+		Output:      map[string]any{"decision": decision, "reason": reason},
+		StartedAt:   savedPaused.PausedAt,
+		EndedAt:     approvalEnded,
+		ElapsedMs:   approvalEnded.Sub(savedPaused.PausedAt).Milliseconds(),
+		FlowrunID:   runID,
+		NodeID:      nodeID,
+		NodeType:    workflowdomain.NodeTypeApproval,
+		Attempts:    1,
+	}
+	if err := s.repo.CreateNode(runCtx, approvalRow); err != nil {
+		s.log.Warn("ResumeApproval: write approval audit node failed",
+			zap.String("runID", runID), zap.Error(err))
+	}
+
 	s.publish(runCtx, runID, run.WorkflowID, "resumed", map[string]any{
 		"decision": decision,
+		"reason":   reason,
 		"nodeID":   nodeID,
 	})
 

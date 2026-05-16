@@ -367,4 +367,77 @@ func (s *Store) GetAttachment(ctx context.Context, id string) (*chatdomain.Attac
 	return &a, nil
 }
 
+// SumTokensByConversation runs SUM(input_tokens), SUM(output_tokens) over
+// all live messages of convID scoped to ctx user. One SQL hit.
+//
+// SumTokensByConversation 经一次 SQL 对 convID 全部活跃 message 求和。
+func (s *Store) SumTokensByConversation(ctx context.Context, convID string) (chatdomain.TokensUsed, error) {
+	uid, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return chatdomain.TokensUsed{}, err
+	}
+	var row struct {
+		Input  int64
+		Output int64
+	}
+	if err := s.db.WithContext(ctx).
+		Model(&chatdomain.Message{}).
+		Select("COALESCE(SUM(input_tokens), 0) AS input, COALESCE(SUM(output_tokens), 0) AS output").
+		Where("conversation_id = ? AND user_id = ?", convID, uid).
+		Scan(&row).Error; err != nil {
+		return chatdomain.TokensUsed{}, fmt.Errorf("chatstore.SumTokensByConversation: %w", err)
+	}
+	return chatdomain.TokensUsed{
+		Input:  int(row.Input),
+		Output: int(row.Output),
+		Total:  int(row.Input + row.Output),
+	}, nil
+}
+
+// SumTokensByPeriod groups SUM(input/output) by (provider, model_id) for
+// the ctx user's messages in [since, until). Zero-value bounds skip that
+// half. One SQL hit.
+//
+// SumTokensByPeriod 按 (provider, model_id) 分组求和 ctx 用户在 [since, until)
+// 区间的 message。零值端跳过该约束。
+func (s *Store) SumTokensByPeriod(ctx context.Context, since, until time.Time) ([]chatdomain.TokensByModel, error) {
+	uid, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	q := s.db.WithContext(ctx).
+		Model(&chatdomain.Message{}).
+		Select("provider, model_id, COALESCE(SUM(input_tokens), 0) AS input, COALESCE(SUM(output_tokens), 0) AS output").
+		Where("user_id = ?", uid).
+		Group("provider, model_id")
+	if !since.IsZero() {
+		q = q.Where("created_at >= ?", since.UTC())
+	}
+	if !until.IsZero() {
+		q = q.Where("created_at < ?", until.UTC())
+	}
+	var rows []struct {
+		Provider string
+		ModelID  string `gorm:"column:model_id"`
+		Input    int64
+		Output   int64
+	}
+	if err := q.Scan(&rows).Error; err != nil {
+		return nil, fmt.Errorf("chatstore.SumTokensByPeriod: %w", err)
+	}
+	out := make([]chatdomain.TokensByModel, 0, len(rows))
+	for _, r := range rows {
+		if r.Input == 0 && r.Output == 0 {
+			continue
+		}
+		out = append(out, chatdomain.TokensByModel{
+			Provider: r.Provider,
+			ModelID:  r.ModelID,
+			Input:    int(r.Input),
+			Output:   int(r.Output),
+		})
+	}
+	return out, nil
+}
+
 var _ chatdomain.Repository = (*Store)(nil)

@@ -49,6 +49,7 @@ type createRequest struct {
 type updateRequest struct {
 	DisplayName *string `json:"displayName"`
 	BaseURL     *string `json:"baseUrl"`
+	Key         *string `json:"key"`
 }
 
 func (h *APIKeyHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -99,6 +100,7 @@ func (h *APIKeyHandler) Update(w http.ResponseWriter, r *http.Request) {
 	k, err := h.svc.Update(r.Context(), id, apikeyapp.UpdateInput{
 		DisplayName: req.DisplayName,
 		BaseURL:     req.BaseURL,
+		Key:         req.Key,
 	})
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)

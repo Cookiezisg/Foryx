@@ -23,14 +23,16 @@ import (
 // allowAll 是放行任何路径的 PathGuard，用于关注 Read 行为本身的测试。
 type allowAll struct{}
 
-func (allowAll) Allow(string) (bool, string) { return true, "" }
+func (allowAll) Allow(string) (bool, string)      { return true, "" }
+func (allowAll) AllowWrite(string) (bool, string) { return true, "" }
 
 // denyAll is a PathGuard that rejects every path with a fixed reason.
 //
 // denyAll 是拒绝任何路径的 PathGuard，固定 reason。
 type denyAll struct{}
 
-func (denyAll) Allow(string) (bool, string) { return false, "denied for test" }
+func (denyAll) Allow(string) (bool, string)      { return false, "denied for test" }
+func (denyAll) AllowWrite(string) (bool, string) { return false, "denied for test" }
 
 // newRead builds a Read tool with the provided guard. Most tests use allowAll;
 // PathGuard interaction has its own dedicated test.

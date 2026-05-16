@@ -26,6 +26,8 @@ import (
 	catalogapp "github.com/sunweilin/forgify/backend/internal/app/catalog"
 	chatapp "github.com/sunweilin/forgify/backend/internal/app/chat"
 	contextmgrapp "github.com/sunweilin/forgify/backend/internal/app/contextmgr"
+	hooksapp "github.com/sunweilin/forgify/backend/internal/app/hooks"
+	permgateapp "github.com/sunweilin/forgify/backend/internal/app/tool/permissionsgate"
 	convapp "github.com/sunweilin/forgify/backend/internal/app/conversation"
 	functionapp "github.com/sunweilin/forgify/backend/internal/app/function"
 	handlerapp "github.com/sunweilin/forgify/backend/internal/app/handler"
@@ -72,6 +74,7 @@ import (
 	forgeinfra "github.com/sunweilin/forgify/backend/internal/infra/forge"
 	mcpinfra "github.com/sunweilin/forgify/backend/internal/infra/mcp"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
+	settingsinfra "github.com/sunweilin/forgify/backend/internal/infra/settings"
 	notificationsinfra "github.com/sunweilin/forgify/backend/internal/infra/notifications"
 	sandboxinfra "github.com/sunweilin/forgify/backend/internal/infra/sandbox"
 	apikeystore "github.com/sunweilin/forgify/backend/internal/infra/store/apikey"
@@ -150,6 +153,10 @@ type Harness struct {
 	Catalog             *catalogapp.Service
 	Memory              *memoryapp.Service
 	ContextManager      *contextmgrapp.Manager
+	Settings            *settingsinfra.Service
+	SettingsPath        string // path to settings.json for tests to write rules
+	PermGate            *permgateapp.Gate
+	HookRunner          *hooksapp.Runner
 
 	APIKey       *apikeyapp.Service
 	Model        *modelapp.Service
@@ -233,7 +240,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		apikeyapp.NewHTTPTester(nil),
 		log,
 	)
-	modelService := modelapp.NewService(modelstore.New(gdb), log)
+	modelService := modelapp.NewService(modelstore.New(gdb), apikeyService, log)
 
 	llmFactory := llminfra.NewFactory()
 
@@ -443,6 +450,21 @@ func New(t *testing.T, opts ...Option) *Harness {
 		chatRepo, convstore.New(gdb), chatEmitter, notificationsPub, cheapLLMResolver, log)
 	chatService.SetContextCompactor(contextManager)
 
+	// V1.2 §3 final-sweep — permissions + hooks. Test harness points at
+	// a per-test settings.json under t.TempDir() (created lazily); tests
+	// write a custom file when they need rules.
+	// V1.2 §3 ——permissions + hooks。test harness 指向 t.TempDir()/
+	// settings.json（懒建）；测试需规则时自写文件。
+	settingsPath := filepath.Join(t.TempDir(), "settings.json")
+	settingsService := settingsinfra.New(settingsPath, log)
+	if err := settingsService.Start(context.Background()); err != nil {
+		t.Logf("settings start failed (continuing with empty defaults): %v", err)
+	}
+	t.Cleanup(settingsService.Close)
+	permGate := permgateapp.New(settingsService)
+	hookRunner := hooksapp.New(settingsService, log)
+	chatService.SetPermissionsAndHooks(permGate, hookRunner)
+
 	workflowChecker.Skill = skillService
 	workflowChecker.MCP = mcpService
 
@@ -504,6 +526,9 @@ func New(t *testing.T, opts ...Option) *Harness {
 		SkillService:        skillService,
 		CatalogService:      catalogService,
 		MemoryService:       memoryService,
+		SettingsService:     settingsService,
+		SettingsPath:        settingsPath,
+		PermGate:            permGate,
 		Dev:                 false,
 		Tools:               tools,
 		LLMFactory:          llmFactory,
@@ -543,6 +568,10 @@ func New(t *testing.T, opts ...Option) *Harness {
 		Chat:                chatService,
 		Memory:              memoryService,
 		ContextManager:      contextManager,
+		Settings:            settingsService,
+		SettingsPath:        settingsPath,
+		PermGate:            permGate,
+		HookRunner:          hookRunner,
 		Tools:               tools,
 	}
 }

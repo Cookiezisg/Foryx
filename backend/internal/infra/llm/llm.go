@@ -9,6 +9,7 @@ import (
 	"errors"
 	"iter"
 	"strings"
+	"time"
 )
 
 var (
@@ -126,18 +127,97 @@ type Client interface {
 	Stream(ctx context.Context, req Request) iter.Seq[StreamEvent]
 }
 
-// Generate consumes Stream, concatenates text deltas, returns the assembled string.
+// Generate consumes Stream, concatenates text deltas, returns the assembled
+// string. Auto-retries transient upstream failures (429 / 5xx / connection
+// errors) up to retryMaxAttempts with exponential backoff — see withRetry
+// for the policy. Retries are only safe here because Generate has no
+// observable side effects until it returns (no partial UI emission), so
+// "retry from scratch" never loses user-visible content. Stream() callers
+// that yield events as they arrive (chat agent loop) must NOT use this
+// retry policy — they get raw Client.Stream() instead.
 //
-// Generate 消费 Stream 并拼接文字 delta，返回完整字符串。
+// Generate 消费 Stream 拼接文字 delta 返完整串。upstream 短期失败
+// （429 / 5xx / 连接错）自动重试至 retryMaxAttempts，指数退避（见
+// withRetry）。Generate 在返回前无可观察副作用（不向 UI emit），所以
+// "从头重试"不丢用户已见内容；这是 Stream() 直调（chat agent loop）
+// 不能套同样 retry 的关键区别。
 func Generate(ctx context.Context, c Client, req Request) (string, error) {
-	var sb strings.Builder
-	for event := range c.Stream(ctx, req) {
-		switch event.Type {
-		case EventText:
-			sb.WriteString(event.Delta)
-		case EventError:
-			return "", event.Err
+	return withRetry(ctx, func() (string, error) {
+		var sb strings.Builder
+		for event := range c.Stream(ctx, req) {
+			switch event.Type {
+			case EventText:
+				sb.WriteString(event.Delta)
+			case EventError:
+				return "", event.Err
+			}
 		}
+		return sb.String(), nil
+	})
+}
+
+const (
+	retryMaxAttempts  = 3                      // initial + 2 retries
+	retryInitialDelay = 500 * time.Millisecond // first backoff
+	retryDelayFactor  = 3                      // each retry waits factor× the previous
+)
+
+// withRetry runs fn up to retryMaxAttempts times, sleeping between
+// attempts when fn returned a retryable error. Returns the last error
+// when retries exhaust, or ctx.Err() if cancellation interrupts the
+// backoff sleep.
+//
+// withRetry 把 fn 跑至多 retryMaxAttempts 次；fn 返可重试错时退避 sleep。
+// 用完 attempts 返最后一次的错；backoff sleep 期间 ctx 取消返 ctx.Err。
+func withRetry(ctx context.Context, fn func() (string, error)) (string, error) {
+	delay := retryInitialDelay
+	var lastErr error
+	for attempt := 0; attempt < retryMaxAttempts; attempt++ {
+		if attempt > 0 {
+			select {
+			case <-ctx.Done():
+				return "", ctx.Err()
+			case <-time.After(delay):
+			}
+			delay *= retryDelayFactor
+		}
+		out, err := fn()
+		if err == nil {
+			return out, nil
+		}
+		if !isRetryable(err) {
+			return "", err
+		}
+		lastErr = err
 	}
-	return sb.String(), nil
+	return "", lastErr
+}
+
+// isRetryable identifies upstream errors worth a second try: rate limit,
+// generic provider errors (often 5xx / network blips), and ctx-derived
+// errors EXCEPT explicit cancellation (which is caller intent). Auth /
+// bad-request / model-not-found are not retryable — same input would
+// fail the same way.
+//
+// isRetryable 识别值得重试的 upstream 错：限流、通用 provider 错（多
+// 半是 5xx / 网络抖动）、ctx 派生错（但显式 cancel 排除——那是 caller
+// 意图）。Auth / 参数错 / model-不存在 不重试——同样输入只会再挂。
+func isRetryable(err error) bool {
+	if err == nil {
+		return false
+	}
+	switch {
+	case errors.Is(err, ErrRateLimited):
+		return true
+	case errors.Is(err, ErrProviderError):
+		return true
+	case errors.Is(err, context.DeadlineExceeded):
+		return true
+	case errors.Is(err, ErrAuthFailed),
+		errors.Is(err, ErrBadRequest),
+		errors.Is(err, ErrModelNotFound),
+		errors.Is(err, context.Canceled):
+		return false
+	}
+	return false
 }

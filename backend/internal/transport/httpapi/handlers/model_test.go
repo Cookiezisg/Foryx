@@ -26,7 +26,12 @@ func newModelTestServer(t *testing.T) *httptest.Server {
 		t.Fatalf("dbinfra.Migrate: %v", err)
 	}
 	log := zaptest.NewLogger(t)
-	svc := modelapp.NewService(modelstore.New(gdb), log)
+	// Pass nil KeyProvider — handler tests don't exercise the cross-domain
+	// "provider must have api-key" check; that's covered in app/model unit tests.
+	//
+	// 传 nil KeyProvider — handler 测试不验跨 domain provider-has-key 检查,
+	// 该路径由 app/model 单测覆盖。
+	svc := modelapp.NewService(modelstore.New(gdb), nil, log)
 	h := NewModelConfigHandler(svc, log)
 
 	mux := http.NewServeMux()

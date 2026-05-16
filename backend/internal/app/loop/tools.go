@@ -76,9 +76,16 @@ func runTools(
 	return blocks
 }
 
-// runOneTool runs ValidateInput → CheckPermissions → Execute and returns a tool_result block.
+// runOneTool runs interceptor.BeforeCall → ValidateInput →
+// CheckPermissions → Execute → interceptor.AfterCall and returns a
+// tool_result block. BeforeCall denial short-circuits with a denial
+// tool_result; AfterCall's injected feedback is appended to the
+// tool_result content for the LLM to see on the next turn.
 //
-// runOneTool 跑 ValidateInput → CheckPermissions → Execute，返 tool_result block；失败 ok=false。
+// runOneTool 跑 interceptor.BeforeCall → ValidateInput → CheckPermissions
+// → Execute → interceptor.AfterCall，返 tool_result block。BeforeCall
+// 拒绝短路返拒绝 tool_result；AfterCall 注入文本拼到 tool_result content
+// 让 LLM 下轮看到。
 func runOneTool(
 	ctx context.Context,
 	t toolapp.Tool,
@@ -91,7 +98,29 @@ func runOneTool(
 	toolCtx := reqctxpkg.WithToolCallID(ctx, tc.ID)
 	toolCtx = reqctxpkg.WithParentBlockID(toolCtx, tc.ID)
 
-	output, errMsg, ok := executeTool(toolCtx, t, tc.Name, argsJSON, log)
+	intr := interceptorFrom(ctx)
+	var (
+		output string
+		errMsg string
+		ok     bool
+	)
+	if denied, reason := intr.BeforeCall(toolCtx, tc); denied {
+		log.Info("tool blocked by interceptor",
+			zap.String("tool", tc.Name), zap.String("call_id", tc.ID), zap.String("reason", reason))
+		output = "permission denied: " + reason
+		errMsg = "BLOCKED_BY_RULE: " + reason
+		ok = false
+	} else {
+		output, errMsg, ok = executeTool(toolCtx, t, tc.Name, argsJSON, log)
+	}
+
+	if inject := intr.AfterCall(toolCtx, tc, output, errMsg, ok); inject != "" {
+		if output != "" {
+			output += "\n\n[hook] " + inject
+		} else {
+			output = "[hook] " + inject
+		}
+	}
 
 	em := eventlogpkg.From(ctx)
 	msgID, _ := reqctxpkg.GetMessageID(ctx)

@@ -5,6 +5,7 @@ package apikey
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -49,11 +50,14 @@ type CreateInput struct {
 }
 
 // UpdateInput is the partial-update payload; nil fields unchanged, "" clears.
+// Key rotation: non-nil non-empty Key re-encrypts + masks + resets test_status to pending.
 //
-// UpdateInput 部分更新载荷；nil 不动、空串清空，不允许改 Key/Provider/APIFormat。
+// UpdateInput 部分更新载荷；nil 不动、空串清空。Key 非空时旋转密钥（重新加密 +
+// 重新 mask + 重置 test_status=pending），不允许改 Provider/APIFormat（删了重建）。
 type UpdateInput struct {
 	DisplayName *string
 	BaseURL     *string
+	Key         *string
 }
 
 var _ apikeydomain.KeyProvider = (*Service)(nil)
@@ -116,17 +120,52 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*apike
 	if err != nil {
 		return nil, err
 	}
+	// No-op: empty PATCH `{}` returns the row unchanged (skip updated_at bump).
+	// No-op:空 PATCH `{}` 不 bump updated_at,直接返当前行。
+	if in.DisplayName == nil && in.BaseURL == nil && in.Key == nil {
+		return k, nil
+	}
 	if in.DisplayName != nil {
 		k.DisplayName = strings.TrimSpace(*in.DisplayName)
 	}
 	if in.BaseURL != nil {
 		k.BaseURL = strings.TrimSpace(*in.BaseURL)
 	}
+	if in.Key != nil {
+		newKey := strings.TrimSpace(*in.Key)
+		if newKey == "" {
+			return nil, apikeydomain.ErrKeyRequired
+		}
+		ciphertext, encErr := s.encryptor.Encrypt(ctx, []byte(newKey))
+		if encErr != nil {
+			return nil, fmt.Errorf("apikey.Service.Update: encrypt: %w", encErr)
+		}
+		k.KeyEncrypted = string(ciphertext)
+		k.KeyMasked = maskKey(newKey)
+		k.TestStatus = apikeydomain.TestStatusPending
+		k.TestError = ""
+		k.LastTestedAt = nil
+		k.ModelsFound = nil
+	}
 	k.UpdatedAt = time.Now().UTC()
 	if err := s.repo.Save(ctx, k); err != nil {
 		return nil, err
 	}
 	return k, nil
+}
+
+// HasKeyForProvider reports whether any active key exists for provider under the ctx user.
+//
+// HasKeyForProvider 报告当前用户在 provider 下是否有活跃 key（用于 model upsert 早校验）。
+func (s *Service) HasKeyForProvider(ctx context.Context, provider string) (bool, error) {
+	_, err := s.repo.GetByProvider(ctx, provider)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, apikeydomain.ErrNotFoundForProvider) {
+		return false, nil
+	}
+	return false, fmt.Errorf("apikey.Service.HasKeyForProvider: %w", err)
 }
 
 func (s *Service) Delete(ctx context.Context, id string) error {

@@ -109,6 +109,9 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 | `ATTACHMENT_PARSE_FAILED` | 422 | `chatdomain.ErrAttachmentParseFailed` | 文件损坏或解析失败 | ✅ |
 | `ATTACHMENT_NOT_FOUND` | 404 | `chatdomain.ErrAttachmentNotFound` | 附件 ID 不存在或不属于当前 user | ✅ |
 | `EMPTY_CONTENT` | 400 | `chatdomain.ErrEmptyContent` | 消息 content 为空/空白且无附件——拒绝以避免触发无意义的 ~25k token LLM 调用 | ✅ |
+| `API_KEY_NAME_CONFLICT` | 409 | `apikeydomain.ErrDisplayNameConflict` | 同用户下 displayName 重复（partial UNIQUE 只对非空 name 生效）| ✅ |
+| `PROVIDER_HAS_NO_KEY` | 422 | `modeldomain.ErrProviderHasNoKey` | PUT model-config 时 provider 没有 api-key — 防绿保存红运行时 | ✅ |
+| `TOOL_ERROR_STORM` | — | (status code stored on Message.errorCode) | chat runner 连 3 轮 tool 调用全员失败熔断；避免 LLM 越钻越深 | ✅ |
 | `LLM_AUTH_FAILED` | 401 | `llminfra.ErrAuthFailed` | LLM provider 返 401（API key 失效）；errors.Is 触发 apikey.MarkInvalid | ✅ |
 | `LLM_RATE_LIMITED` | 429 | `llminfra.ErrRateLimited` | LLM provider 返 429（速率限制）| ✅ |
 | `LLM_BAD_REQUEST` | 400 | `llminfra.ErrBadRequest` | LLM provider 返 400（请求体非法）| ✅ |
@@ -282,6 +285,13 @@ AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 
 | Code | HTTP | Sentinel | 场景 | 状态 |
 |---|---|---|---|---|
 | `COMPACTION_FAILED` | 503 | `contextmgrapp.ErrCompactFailed` | 仅 `Manager.ForceCompact` 路径（手动 :compact 端点未接）；自动后台 MaybeCompact 失败仅 log + 下轮 retry，不上抛 | ⏳ |
+
+#### permissions + hooks（V1.2 §3 final-sweep）✅
+
+| Code | HTTP | Sentinel | 场景 | 状态 |
+|---|---|---|---|---|
+| `INVALID_SETTINGS` | 400 | `permdomain.ErrInvalidSettings` | PUT /api/v1/settings body 违反 schema（defaultMode 非 4 值 / 空规则 / hook command 空 / timeout 负）| ✅ |
+| `BLOCKED_BY_RULE` | 422 | `permdomain.ErrBlockedByRule` | 内部 sentinel——chat 派发 tool 时被 settings.deny 或 PreToolUse hook deny 拒绝；返给 LLM 的 tool_result.error 含 `"BLOCKED_BY_RULE: <reason>"` 前缀 | ✅ |
 
 ---
 

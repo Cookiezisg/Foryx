@@ -33,6 +33,7 @@ func (h *SandboxHandler) Register(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/sandbox/bootstrap-status", h.BootstrapStatus)
 	mux.HandleFunc("GET /api/v1/conversations/{id}/sandbox-envs", h.ListConvEnvs)
 	mux.HandleFunc("POST /api/v1/sandbox/envs/{idAction}", h.envAction)
+	mux.HandleFunc("DELETE /api/v1/sandbox/envs/{id}", h.DestroyEnv)
 	mux.HandleFunc("POST /api/v1/sandbox/runtimes/{idAction}", h.runtimeAction)
 	mux.HandleFunc("POST /api/v1/sandbox/{action}", h.sandboxAction)
 	mux.HandleFunc("POST /api/v1/conversations/{id}/sandbox-envs/{kindAction}", h.convEnvKindAction)
@@ -139,6 +140,19 @@ func (h *SandboxHandler) envAction(w http.ResponseWriter, r *http.Request) {
 			"unknown env action: "+action, nil)
 		return
 	}
+	h.destroyEnv(w, r, id)
+}
+
+// DestroyEnv handles `DELETE /api/v1/sandbox/envs/{id}` — RESTful alias for
+// the `POST /envs/{id}:destroy` action. Same body, same response.
+//
+// DestroyEnv 是 `DELETE /api/v1/sandbox/envs/{id}` 的 RESTful 别名,
+// 走与 `:destroy` action 完全一样的逻辑。
+func (h *SandboxHandler) DestroyEnv(w http.ResponseWriter, r *http.Request) {
+	h.destroyEnv(w, r, r.PathValue("id"))
+}
+
+func (h *SandboxHandler) destroyEnv(w http.ResponseWriter, r *http.Request, id string) {
 	env, err := h.svc.GetEnv(r.Context(), id)
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)

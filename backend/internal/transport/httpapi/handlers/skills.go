@@ -79,6 +79,29 @@ type skillCreateRequest struct {
 	Name        string                  `json:"name"`
 	Frontmatter skilldomain.Frontmatter `json:"frontmatter"`
 	Body        string                  `json:"body"`
+
+	// FlatDescription is the convenience field for clients that send a flat
+	// `{name, description, body}` shape (mirroring testend's UI fields). When
+	// present and Frontmatter.Description is empty, it auto-populates the
+	// frontmatter's description + name.
+	//
+	// FlatDescription 是兼容扁平 `{name, description, body}` 请求形的便利字段
+	// （对应 testend UI 的三字段）；当它非空且 Frontmatter.Description 空时,
+	// 自动补 frontmatter 的 description + name。
+	FlatDescription string `json:"description,omitempty"`
+}
+
+// normalizeFrontmatter back-fills Frontmatter.Name + Description from top-level
+// fields when the caller used the flat `{name, description, body}` shape.
+//
+// normalizeFrontmatter 调用方用扁平形时把顶层字段回填到 Frontmatter。
+func (req *skillCreateRequest) normalizeFrontmatter() {
+	if strings.TrimSpace(req.Frontmatter.Name) == "" {
+		req.Frontmatter.Name = req.Name
+	}
+	if strings.TrimSpace(req.Frontmatter.Description) == "" {
+		req.Frontmatter.Description = req.FlatDescription
+	}
 }
 
 func (h *SkillsHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -87,6 +110,7 @@ func (h *SkillsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
+	req.normalizeFrontmatter()
 	sk, err := h.svc.Create(r.Context(), req.Name, req.Frontmatter, req.Body)
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
@@ -102,6 +126,7 @@ func (h *SkillsHandler) Replace(w http.ResponseWriter, r *http.Request) {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
+	req.normalizeFrontmatter()
 	sk, err := h.svc.Replace(r.Context(), name, req.Frontmatter, req.Body)
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)

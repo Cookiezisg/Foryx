@@ -16,6 +16,18 @@ type extraGroup struct {
 
 var schemaExtraGroups = []extraGroup{
 	{
+		table: "api_keys",
+		stmts: []string{
+			// Empty displayName allowed to duplicate (server-defaulted); non-empty
+			// must be unique per user. Soft-deleted rows ignored.
+			//
+			// 空 displayName 允许重复(服务端默认值);非空必 per-user 唯一。软删除行不参与。
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_user_displayname_active
+				ON api_keys(user_id, display_name)
+				WHERE deleted_at IS NULL AND display_name != ''`,
+		},
+	},
+	{
 		table: "functions",
 		stmts: []string{
 			`CREATE UNIQUE INDEX IF NOT EXISTS idx_functions_user_name_active

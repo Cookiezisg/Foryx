@@ -155,6 +155,8 @@ func (h *WorkflowHandler) postOnWorkflow(w http.ResponseWriter, r *http.Request)
 	switch action {
 	case "revert":
 		h.Revert(w, r, id)
+	case "edit":
+		h.Edit(w, r, id)
 	case "trigger":
 		if h.flowrun == nil {
 			responsehttpapi.Error(w, http.StatusServiceUnavailable, "SCHEDULER_NOT_AVAILABLE",
@@ -187,6 +189,37 @@ func (h *WorkflowHandler) Revert(w http.ResponseWriter, r *http.Request, id stri
 		return
 	}
 	v, err := h.svc.Revert(r.Context(), id, req.TargetVersion)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, v)
+}
+
+// Edit applies ops to a workflow, producing or iterating a pending version.
+// Mirrors edit_workflow LLM tool semantics; consumer = future testend editor.
+//
+// Edit 给 workflow 应用 ops 产/迭代 pending 版本。镜像 edit_workflow 工具语义；
+// HTTP 消费者是未来 testend 编辑器。
+func (h *WorkflowHandler) Edit(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		Ops          json.RawMessage `json:"ops"`
+		ChangeReason string          `json:"changeReason"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	ops, err := workflowapp.ParseOps(req.Ops)
+	if err != nil {
+		responsehttpapi.Error(w, http.StatusBadRequest, "WORKFLOW_OP_INVALID", err.Error(), nil)
+		return
+	}
+	v, err := h.svc.Edit(r.Context(), workflowapp.EditInput{
+		ID:           id,
+		Ops:          ops,
+		ChangeReason: req.ChangeReason,
+	})
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

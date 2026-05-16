@@ -7,9 +7,30 @@ import (
 
 	"go.uber.org/zap"
 
+	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
+
+// fakeKeys is a minimal KeyProvider for model unit tests; reports true for
+// any provider in `available`, false otherwise.
+//
+// fakeKeys 是 model 单测用的最小 KeyProvider 桩；available 中的 provider
+// 报有 key,其他报没 key。
+type fakeKeys struct {
+	available map[string]bool
+}
+
+func (f *fakeKeys) ResolveCredentials(context.Context, string) (apikeydomain.Credentials, error) {
+	return apikeydomain.Credentials{}, nil
+}
+func (f *fakeKeys) MarkInvalid(context.Context, string, string) error { return nil }
+func (f *fakeKeys) HasKeyForProvider(_ context.Context, provider string) (bool, error) {
+	if f.available == nil {
+		return true, nil
+	}
+	return f.available[provider], nil
+}
 
 type fakeRepo struct {
 	rows      map[string]*modeldomain.ModelConfig // keyed by ID
@@ -54,7 +75,7 @@ func (r *fakeRepo) Upsert(_ context.Context, m *modeldomain.ModelConfig) error {
 
 func newSvc(t *testing.T, repo modeldomain.Repository) *Service {
 	t.Helper()
-	return NewService(repo, zap.NewNop())
+	return NewService(repo, &fakeKeys{}, zap.NewNop())
 }
 
 func ctxAlice() context.Context {
@@ -67,7 +88,7 @@ func TestNewService_NilLogger_Panics(t *testing.T) {
 			t.Error("expected panic on nil logger, got none")
 		}
 	}()
-	NewService(newFakeRepo(), nil)
+	NewService(newFakeRepo(), &fakeKeys{}, nil)
 }
 
 func TestUpsert_InvalidScenario(t *testing.T) {

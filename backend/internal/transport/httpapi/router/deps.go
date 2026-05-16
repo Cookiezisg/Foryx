@@ -21,6 +21,7 @@ import (
 	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
 	catalogapp "github.com/sunweilin/forgify/backend/internal/app/catalog"
 	memoryapp "github.com/sunweilin/forgify/backend/internal/app/memory"
+	permgateapp "github.com/sunweilin/forgify/backend/internal/app/tool/permissionsgate"
 	mcpapp "github.com/sunweilin/forgify/backend/internal/app/mcp"
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
 	skillapp "github.com/sunweilin/forgify/backend/internal/app/skill"
@@ -34,7 +35,16 @@ import (
 	eventlogdomain "github.com/sunweilin/forgify/backend/internal/domain/eventlog"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	loggerinfra "github.com/sunweilin/forgify/backend/internal/infra/logger"
+	handlershttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/handlers"
 )
+
+// SettingsServicePort is the contract the permissions HTTP handler
+// needs from infra/settings.Service. Defined here as type alias-shape
+// to avoid pulling infra into transport.
+//
+// SettingsServicePort 是 permissions HTTP handler 从 infra/settings.Service
+// 要的契约。本地定义形状避免 transport 引 infra。
+type SettingsServicePort = handlershttpapi.SettingsService
 
 // Deps bundles HTTP-transport dependencies; per-domain fields are nil-tolerant.
 //
@@ -67,6 +77,13 @@ type Deps struct {
 	SkillService        *skillapp.Service
 	CatalogService      *catalogapp.Service
 	MemoryService       *memoryapp.Service
+
+	// V1.2 §3 final-sweep — permissions + hooks.
+	// SettingsService 持 settings.json snapshot；SettingsPath 给 PUT 写；
+	// PermGate 给 /permissions/test 用。三者捆绑出现，nil 时本组 5 端点跳。
+	SettingsService SettingsServicePort
+	SettingsPath    string
+	PermGate        *permgateapp.Gate
 
 	// Dev enables the /dev/* route group; below fields populate only when Dev=true.
 	//
