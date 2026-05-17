@@ -2,460 +2,94 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Forgify — Icon Mark · 方向 A</title>
+  <title>Forgify — Icon · 双色 · spark 再放大</title>
   <style>
     @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap");
-
     :root {
-      --orange: #D97757;
-      --orange-deep: #B85A3E;
-      --paper: #FAFAF7;
-      --ink: #37352F;
-      --ink-soft: rgba(55,53,47,.55);
-      --ink-faint: rgba(55,53,47,.4);
-      --border: rgba(55,53,47,.10);
-      --dark-bg: #191919;
+      --paper:#FAFAF7; --ink:#37352F;
+      --ink-soft:rgba(55,53,47,.55); --ink-faint:rgba(55,53,47,.4);
+      --border:rgba(55,53,47,.10);
     }
-
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: "Inter", "Noto Sans SC", -apple-system, sans-serif;
-      background: var(--paper);
-      color: var(--ink);
-      padding: 48px 56px 80px 56px;
-      max-width: 1280px;
-      margin: 0 auto;
-      -webkit-font-smoothing: antialiased;
-      letter-spacing: -0.005em;
-    }
-
-    h1 {
-      font-size: 32px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      margin: 0 0 8px 0;
-    }
-    .lead {
-      color: var(--ink-soft);
-      font-size: 15px;
-      line-height: 1.55;
-      margin: 0 0 48px 0;
-      max-width: 640px;
-    }
-
-    section { margin-bottom: 56px; }
-    .section-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--ink-faint);
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      margin-bottom: 14px;
-      display: flex; align-items: center; gap: 8px;
-    }
-    .section-label::after {
-      content: "";
-      flex: 1; height: 1px;
-      background: var(--border);
-    }
-
-    /* ───────── Hero: big squircle ───────── */
-    .hero {
-      display: grid;
-      grid-template-columns: 320px 1fr;
-      gap: 48px;
-      align-items: center;
-    }
-    .hero-icon {
-      width: 256px; height: 256px;
-      border-radius: 56px;
-      box-shadow:
-        0 1px 2px rgba(0,0,0,.10),
-        0 30px 60px -20px rgba(217,119,87,.45),
-        0 10px 24px -12px rgba(0,0,0,.18);
-    }
-    .hero-desc {
-      display: flex; flex-direction: column; gap: 12px;
-      color: var(--ink-soft);
-      font-size: 14px;
-      line-height: 1.6;
-    }
-    .hero-desc h2 {
-      margin: 0;
-      font-size: 22px;
-      color: var(--ink);
-      font-weight: 600;
-      letter-spacing: -0.015em;
-    }
-    .hero-desc strong { color: var(--ink); font-weight: 600; }
-    .hero-desc ul { padding-left: 18px; margin: 6px 0 0 0; }
-    .hero-desc li { margin: 4px 0; }
-
-    /* ───────── Variant strip (sizes) ───────── */
-    .sizes {
-      display: flex;
-      align-items: center;
-      gap: 32px;
-      flex-wrap: wrap;
-    }
-    .size-card {
-      display: flex; flex-direction: column; align-items: center; gap: 10px;
-    }
-    .size-cap {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 10px;
-      color: var(--ink-faint);
-      letter-spacing: 0.04em;
-    }
-
-    .squircle-128 { width: 128px; height: 128px; border-radius: 28px; box-shadow: 0 1px 2px rgba(0,0,0,.08), 0 10px 24px -8px rgba(0,0,0,.18); }
-    .squircle-64  { width: 64px;  height: 64px;  border-radius: 14px; box-shadow: 0 1px 2px rgba(0,0,0,.06), 0 6px 14px -4px rgba(0,0,0,.16); }
-    .squircle-32  { width: 32px;  height: 32px;  border-radius: 8px;  box-shadow: 0 1px 2px rgba(0,0,0,.10); }
-    .squircle-22  { width: 22px;  height: 22px;  border-radius: 5px;  box-shadow: 0 1px 1px rgba(0,0,0,.10); }
-    .squircle-16  { width: 16px;  height: 16px;  border-radius: 3px; }
-
-    /* ───────── Backgrounds row ───────── */
-    .bg-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
-    .bg-card {
-      padding: 32px;
-      border-radius: 14px;
-      border: 1px solid var(--border);
-      display: flex; flex-direction: column; align-items: center; gap: 16px;
-    }
-    .bg-card.on-orange { background: var(--orange); color: white; border-color: transparent; }
-    .bg-card.on-white  { background: white; }
-    .bg-card.on-paper  { background: var(--paper); }
-    .bg-card.on-dark   { background: var(--dark-bg); color: rgba(255,255,255,.75); border-color: rgba(255,255,255,.12); }
-    .bg-card-label {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 10px;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-      opacity: 0.7;
-    }
-    .bg-card .squircle-128 { box-shadow: 0 1px 2px rgba(0,0,0,.10), 0 8px 20px -6px rgba(0,0,0,.20); }
-    .bg-card.on-orange .squircle-128 { box-shadow: 0 2px 4px rgba(0,0,0,.20), 0 14px 28px -8px rgba(0,0,0,.30); }
-
-    /* ───────── Wordmark ───────── */
-    .wordmark {
-      display: flex; align-items: center; gap: 14px;
-      padding: 32px;
-      background: white;
-      border: 1px solid var(--border);
-      border-radius: 14px;
-    }
-    .wordmark-text {
-      font-family: "Inter", sans-serif;
-      font-size: 36px;
-      font-weight: 700;
-      letter-spacing: -0.02em;
-      color: var(--ink);
-    }
-    .wordmark .squircle-64 { box-shadow: 0 1px 2px rgba(0,0,0,.10), 0 8px 18px -6px rgba(217,119,87,.30); }
-
-    .wordmark.is-mini {
-      padding: 18px 22px;
-      gap: 10px;
-    }
-    .wordmark.is-mini .wordmark-text { font-size: 22px; font-weight: 600; }
-
-    /* ───────── Anatomy ───────── */
-    .anatomy {
-      display: grid;
-      grid-template-columns: 320px 1fr;
-      gap: 48px;
-      align-items: center;
-    }
-    .anatomy svg {
-      width: 320px; height: 320px;
-      background: white;
-      border: 1px dashed var(--border);
-      border-radius: 14px;
-      padding: 0;
-    }
-    .anatomy-notes {
-      display: flex; flex-direction: column; gap: 10px;
-      font-size: 13px;
-      color: var(--ink-soft);
-      line-height: 1.6;
-    }
-    .anatomy-notes b { color: var(--ink); font-weight: 600; }
-    .anatomy-notes code { font-family: "JetBrains Mono", monospace; font-size: 12px; background: rgba(217,119,87,.1); color: var(--orange-deep); padding: 1px 5px; border-radius: 3px; }
-
-    /* ───────── Realistic context: sidebar replacement ───────── */
-    .realistic {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 16px;
-    }
-    .real-card {
-      padding: 22px;
-      background: white;
-      border: 1px solid var(--border);
-      border-radius: 12px;
-    }
-    .real-card-label {
-      font-size: 11px;
-      font-weight: 600;
-      color: var(--ink-faint);
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      margin-bottom: 12px;
-    }
-    .fake-sidebar-header {
-      display: flex; align-items: center; gap: 9px;
-      padding: 6px 8px;
-      border-radius: 7px;
-      background: #f7f7f5;
-    }
-    .fake-sidebar-header-text {
-      flex: 1;
-      display: flex; flex-direction: column; gap: 1px;
-    }
-    .fake-sidebar-header-text > div:first-child { font-size: 13px; font-weight: 600; color: var(--ink); }
-    .fake-sidebar-header-text > div:last-child  { font-size: 10px; color: rgba(55,53,47,.45); }
-
-    .fake-favicon-bar {
-      display: flex; align-items: center; gap: 10px;
-      padding: 6px 12px;
-      background: #ECECEA;
-      border-radius: 6px;
-      font-size: 13px;
-      color: var(--ink);
-      max-width: 320px;
-    }
-    .fake-favicon-bar .url {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 12px;
-      color: rgba(55,53,47,.55);
-      flex: 1;
-    }
+    *{box-sizing:border-box}
+    body{margin:0;font-family:"Inter","Noto Sans SC",sans-serif;background:var(--paper);color:var(--ink);padding:48px 56px 80px 56px;max-width:1100px;margin:0 auto;-webkit-font-smoothing:antialiased;letter-spacing:-.005em}
+    h1{font-size:28px;font-weight:700;letter-spacing:-.02em;margin:0 0 8px 0}
+    .lead{color:var(--ink-soft);font-size:14px;line-height:1.55;margin:0 0 40px 0;max-width:720px}
+    .section-label{font-size:11px;font-weight:600;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.08em;margin:32px 0 14px 0;display:flex;align-items:center;gap:8px}
+    .section-label::after{content:"";flex:1;height:1px;background:var(--border)}
+    .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:16px}
+    .card{background:white;border:1px solid var(--border);border-radius:12px;padding:32px 28px 22px 28px;display:flex;flex-direction:column;align-items:center;gap:18px}
+    .big{width:220px;height:220px;border-radius:48px;box-shadow:0 1px 2px rgba(0,0,0,.10),0 22px 40px -14px rgba(0,0,0,.30)}
+    .mini-row{display:flex;align-items:center;gap:14px}
+    .mini-row svg{box-shadow:0 1px 2px rgba(0,0,0,.10)}
+    .m64{width:64px;height:64px;border-radius:14px}
+    .m32{width:32px;height:32px;border-radius:7px}
+    .m22{width:22px;height:22px;border-radius:5px}
+    .m16{width:16px;height:16px;border-radius:3.5px}
+    .name{font-size:14px;font-weight:600;color:var(--ink);text-align:center}
+    .hex{font-family:"JetBrains Mono",monospace;font-size:10px;color:var(--ink-faint);letter-spacing:.04em;margin-top:4px;text-align:center}
   </style>
 </head>
 <body>
-  <!-- ═════════════ Define the mark once, use everywhere ═════════════ -->
+
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <defs>
-      <!-- The pure mark (white, anvil + spark). Use with <use href="#mark"/> -->
-      <!-- viewBox is 1024×1024. Spark above, anvil below. -->
-      <symbol id="mark" viewBox="0 0 1024 1024">
-        <!-- 4-point spark (sparkle) — slightly above center -->
-        <path d="
-          M 512 312
-          L 552 432
-          L 672 472
-          L 552 512
-          L 512 632
-          L 472 512
-          L 352 472
-          L 472 432
-          Z
-        " fill="currentColor"/>
-        <!-- anvil slab — wider, rounded, sits below the spark -->
-        <rect x="232" y="668" width="560" height="80" rx="16" fill="currentColor"/>
+      <!-- spark r=224, inner offset 56. Center (512, 472). -->
+      <symbol id="spark" viewBox="0 0 1024 1024">
+        <path d="M 512 248 L 568 416 L 736 472 L 568 528 L 512 696 L 456 528 L 288 472 L 456 416 Z" fill="#E08862"/>
       </symbol>
-
-      <!-- Squircle clip path for app icon -->
-      <clipPath id="squircle-clip">
-        <rect x="0" y="0" width="1024" height="1024" rx="224"/>
-      </clipPath>
+      <!-- anvil pushed to y=736 to keep ~40px gap below the bigger spark -->
+      <symbol id="anvil" viewBox="0 0 1024 1024">
+        <rect x="232" y="736" width="560" height="76" rx="14" fill="currentColor"/>
+      </symbol>
     </defs>
   </svg>
 
-  <h1>Forgify · Icon Mark</h1>
+  <h1>Dark / Light · spark r=224</h1>
   <p class="lead">
-    方向 A：<strong style="color:var(--ink)">火星 + 砧面</strong>。
-    四角光晕（spark）落在矩形砧面上方——"正在被锻造的瞬间"。
-    没有锤子，没有火焰，只留下动作发生的两个证据：来源（spark）与承接（anvil）。
+    spark 半径从 200 → <b>224</b>（再 +12%），内凹点 56。砧面下移到 y=736，h=76，保留 ~40px 净空。spark 始终是 <code style="font-family:monospace;background:rgba(0,0,0,.06);padding:1px 5px;border-radius:3px">#E08862</code>。
   </p>
 
-  <!-- ─────────────── HERO ─────────────── -->
-  <section>
-    <div class="section-label"><span>主图标 · macOS Dock @ 1024</span></div>
-    <div class="hero">
-      <svg class="hero-icon" viewBox="0 0 1024 1024">
-        <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-        <use href="#mark" color="#FFFFFF"/>
+  <div class="section-label"><span>双色 · 跟随系统</span></div>
+
+  <div class="grid">
+
+    <div class="card">
+      <svg class="big" viewBox="0 0 1024 1024">
+        <rect width="1024" height="1024" rx="224" fill="#2C2C2C"/>
+        <use href="#spark"/>
+        <g color="white"><use href="#anvil"/></g>
       </svg>
-      <div class="hero-desc">
-        <h2>主版本</h2>
-        <p>Claude 橙的方圆角矩形底，纯白 mark。整体留白充足，符合 macOS Big Sur+ 的应用图标语法（中央元素、不顶满、有呼吸）。</p>
-        <ul>
-          <li><strong>视觉重量</strong>：砧面占 55% 宽度，spark 占 31%，对比强烈但不失稳</li>
-          <li><strong>对称轴</strong>：完全水平对称，纵向略偏上一点点（光学居中而非几何居中）</li>
-          <li><strong>不画工具</strong>：没有锤子、火焰、齿轮——避开"造工具 App"的所有视觉陷阱</li>
-          <li><strong>叙事性</strong>：spark 在 anvil 上方有 80px 空隙——是"刚被打出的火星正在落"的瞬间</li>
-        </ul>
+      <div class="mini-row">
+        <svg class="m64" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="#2C2C2C"/><use href="#spark"/><g color="white"><use href="#anvil"/></g></svg>
+        <svg class="m32" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="#2C2C2C"/><use href="#spark"/><g color="white"><use href="#anvil"/></g></svg>
+        <svg class="m22" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="#2C2C2C"/><use href="#spark"/><g color="white"><use href="#anvil"/></g></svg>
+        <svg class="m16" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="#2C2C2C"/><use href="#spark"/><g color="white"><use href="#anvil"/></g></svg>
+      </div>
+      <div>
+        <div class="name">Dark</div>
+        <div class="hex">#2C2C2C · #FFFFFF · #E08862</div>
       </div>
     </div>
-  </section>
 
-  <!-- ─────────────── BACKGROUNDS ─────────────── -->
-  <section>
-    <div class="section-label"><span>四种底色 · 全部 @ 128×128</span></div>
-    <div class="bg-row">
-      <div class="bg-card on-orange">
-        <svg class="squircle-128" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-          <use href="#mark" color="#FFFFFF"/>
-        </svg>
-        <span class="bg-card-label">主版本 · 橙底白 mark</span>
-      </div>
-      <div class="bg-card on-white">
-        <svg class="squircle-128" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" fill="#37352F"/>
-          <use href="#mark" color="#FFFFFF"/>
-        </svg>
-        <span class="bg-card-label">墨黑底 · 沉稳</span>
-      </div>
-      <div class="bg-card on-paper">
-        <svg class="squircle-128" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" fill="#FFFFFF" stroke="#37352F" stroke-width="8"/>
-          <use href="#mark" color="#37352F"/>
-        </svg>
-        <span class="bg-card-label">轮廓白 · 极简</span>
-      </div>
-      <div class="bg-card on-dark">
-        <svg class="squircle-128" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-          <use href="#mark" color="#FFFFFF"/>
-        </svg>
-        <span class="bg-card-label">同主版本 · dark 模式下不变</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- ─────────────── SIZE LADDER ─────────────── -->
-  <section>
-    <div class="section-label"><span>尺度阶梯 · 测可读性</span></div>
-    <div class="sizes">
-      <div class="size-card">
-        <svg class="squircle-128" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-          <use href="#mark" color="#FFFFFF"/>
-        </svg>
-        <span class="size-cap">128 · dock @ 2×</span>
-      </div>
-      <div class="size-card">
-        <svg class="squircle-64" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-          <use href="#mark" color="#FFFFFF"/>
-        </svg>
-        <span class="size-cap">64 · finder list</span>
-      </div>
-      <div class="size-card">
-        <svg class="squircle-32" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-          <use href="#mark" color="#FFFFFF"/>
-        </svg>
-        <span class="size-cap">32 · menubar</span>
-      </div>
-      <div class="size-card">
-        <svg class="squircle-22" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-          <use href="#mark" color="#FFFFFF"/>
-        </svg>
-        <span class="size-cap">22 · sidebar pill</span>
-      </div>
-      <div class="size-card">
-        <svg class="squircle-16" viewBox="0 0 1024 1024">
-          <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-          <use href="#mark" color="#FFFFFF"/>
-        </svg>
-        <span class="size-cap">16 · favicon</span>
-      </div>
-    </div>
-    <p style="margin-top: 16px; font-size: 12px; color: var(--ink-faint); max-width: 720px;">
-      关键测试：22×22 (sidebar pill) 和 16×16 (favicon) 仍然认得出"光点 + 砧面"两个层次。
-      如果再小，砧面会糊成一条线，spark 会糊成一个点，仍然是 Forgify。
-    </p>
-  </section>
-
-  <!-- ─────────────── ANATOMY ─────────────── -->
-  <section>
-    <div class="section-label"><span>构造网格 · 几何骨架</span></div>
-    <div class="anatomy">
-      <svg viewBox="0 0 1024 1024">
-        <!-- soft grid -->
-        <g stroke="#D97757" stroke-opacity="0.15" stroke-width="2" fill="none">
-          <line x1="0" y1="512" x2="1024" y2="512" />
-          <line x1="512" y1="0" x2="512" y2="1024" />
-          <line x1="232" y1="0" x2="232" y2="1024" />
-          <line x1="792" y1="0" x2="792" y2="1024" />
-          <line x1="0" y1="312" x2="1024" y2="312" />
-          <line x1="0" y1="632" x2="1024" y2="632" />
-          <line x1="0" y1="668" x2="1024" y2="668" />
-          <line x1="0" y1="748" x2="1024" y2="748" />
-        </g>
-        <use href="#mark" color="#37352F"/>
+    <div class="card">
+      <svg class="big" viewBox="0 0 1024 1024">
+        <rect width="1024" height="1024" rx="224" fill="#F5F5F2"/>
+        <use href="#spark"/>
+        <g color="#1F1F1F"><use href="#anvil"/></g>
       </svg>
-      <div class="anatomy-notes">
-        <p><b>砧面（anvil）</b>：宽 <code>560</code> · 高 <code>80</code> · 圆角 <code>16</code>。
-          占图标 55% 宽度——足够"稳"，不会发飘。</p>
-        <p><b>光点（spark）</b>：四角星 · 外接圆半径 <code>160</code> · 中心位于 <code>(512, 472)</code>。
-          四条凸边的内凹点离中心 <code>40</code>——决定光点"刺"出来的锐度。</p>
-        <p><b>间距</b>：光点底部到砧面顶部 <code>36</code>。再小一点会粘上，再大一点关系会断。</p>
-        <p><b>对称</b>：纯水平镜像，所以 mark 在 RTL 上下文里也成立。</p>
-        <p><b>视觉重心</b>：mark 整体中心 <code>(512, 530)</code>，稍低于几何中心——光点视觉上要重于砧面（亮色 + 锐角），下移 18 像素补偿。</p>
+      <div class="mini-row">
+        <svg class="m64" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="#F5F5F2"/><use href="#spark"/><g color="#1F1F1F"><use href="#anvil"/></g></svg>
+        <svg class="m32" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="#F5F5F2"/><use href="#spark"/><g color="#1F1F1F"><use href="#anvil"/></g></svg>
+        <svg class="m22" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="#F5F5F2"/><use href="#spark"/><g color="#1F1F1F"><use href="#anvil"/></g></svg>
+        <svg class="m16" viewBox="0 0 1024 1024"><rect width="1024" height="1024" rx="224" fill="#F5F5F2"/><use href="#spark"/><g color="#1F1F1F"><use href="#anvil"/></g></svg>
+      </div>
+      <div>
+        <div class="name">Light</div>
+        <div class="hex">#F5F5F2 · #1F1F1F · #E08862</div>
       </div>
     </div>
-  </section>
 
-  <!-- ─────────────── WORDMARK ─────────────── -->
-  <section>
-    <div class="section-label"><span>组合：mark + 字 · 用作 logo 横排</span></div>
-    <div class="wordmark">
-      <svg class="squircle-64" viewBox="0 0 1024 1024">
-        <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-        <use href="#mark" color="#FFFFFF"/>
-      </svg>
-      <div class="wordmark-text">Forgify</div>
-    </div>
-    <div style="height: 14px"></div>
-    <div class="wordmark is-mini">
-      <svg class="squircle-32" viewBox="0 0 1024 1024">
-        <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-        <use href="#mark" color="#FFFFFF"/>
-      </svg>
-      <div class="wordmark-text">Forgify</div>
-    </div>
-  </section>
-
-  <!-- ─────────────── IN CONTEXT ─────────────── -->
-  <section>
-    <div class="section-label"><span>真实情境</span></div>
-    <div class="realistic">
-      <div class="real-card">
-        <div class="real-card-label">侧栏 workspace pill (22×22) — 替换现在那个 FG 方块</div>
-        <div class="fake-sidebar-header">
-          <svg class="squircle-22" viewBox="0 0 1024 1024">
-            <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-            <use href="#mark" color="#FFFFFF"/>
-          </svg>
-          <div class="fake-sidebar-header-text">
-            <div>Forgify</div>
-            <div>local · sun@laptop</div>
-          </div>
-        </div>
-      </div>
-      <div class="real-card">
-        <div class="real-card-label">浏览器 favicon (16×16) — 调试控制台 / Wails 包窗口</div>
-        <div class="fake-favicon-bar">
-          <svg class="squircle-16" viewBox="0 0 1024 1024">
-            <rect width="1024" height="1024" rx="224" fill="#D97757"/>
-            <use href="#mark" color="#FFFFFF"/>
-          </svg>
-          <span class="url">localhost:8742 · CSV → Notion 同步脚本</span>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <p style="margin-top: 32px; font-size: 12px; color: var(--ink-faint); border-top: 1px solid var(--border); padding-top: 16px;">
-    全部画法源自一个 <code style="font-family:monospace">&lt;symbol id="mark"&gt;</code>——上线后 mark 改一处其他全部跟着变。所有底色 / 尺寸都是同一张图。
-  </p>
+  </div>
 
 </body>
 </html>

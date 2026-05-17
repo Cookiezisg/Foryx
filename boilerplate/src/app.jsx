@@ -19,6 +19,14 @@ const PANE_META = {
 function Pane({ kind, onClose, crumbs, children }) {
   const meta = PANE_META[kind];
   const I = Icon[meta.icon];
+  if (kind === "chat") {
+    // chat has its own header — skip the pane-bar to save vertical space
+    return (
+      <div className="pane" data-kind={kind}>
+        <div className="pane-body">{children}</div>
+      </div>
+    );
+  }
   return (
     <div className="pane" data-kind={kind}>
       <div className="pane-bar">
@@ -89,9 +97,53 @@ function PaneResize({ onDrag }) {
 }
 
 // ── Settings popover (retired Tweaks) ────────────────────────────────────
-function SettingsPopover({ tweaks, setTweak, onClose }) {
+function SettingsPopover({ tweaks, setTweak, onClose, openConfigPane }) {
+  const [accountUiMode, setAccountUiMode] = useAppState("view");
+  const [newName, setNewName] = useAppState("");
+  const active = (tweaks.accounts || []).find(a => a.id === tweaks.activeAccount) || (tweaks.accounts || [])[0];
+  const addAccount = () => {
+    if (!newName.trim()) return;
+    const id = newName.toLowerCase().replace(/\s+/g, "_").slice(0, 16) + "_" + Math.random().toString(36).slice(2, 5);
+    const palette = ["#d97757", "#2383e2", "#0f7b6c", "#6940a5", "#37352f"];
+    const color = palette[(tweaks.accounts?.length || 0) % palette.length];
+    setTweak("accounts", [...(tweaks.accounts || []), { id, name: newName.trim(), color }]);
+    setTweak("activeAccount", id);
+    setNewName("");
+    setAccountUiMode("view");
+  };
   return (
     <div className="settings-pop" onClick={e => e.stopPropagation()}>
+      <div className="settings-pop-account">
+        <div className="settings-pop-account-head">
+          <div className="settings-pop-account-avatar" style={{ background: active?.color }}>
+            {active?.name?.slice(0, 1).toUpperCase() || "?"}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--fg-strong)" }}>{active?.name || "无账号"}</div>
+            <div style={{ fontSize: 10, color: "var(--fg-faint)" }}>本地账号 · {(tweaks.accounts || []).length} 个</div>
+          </div>
+          <button className="btn btn-xs btn-ghost" onClick={() => setAccountUiMode(m => m === "switch" ? "view" : "switch")}>切换</button>
+        </div>
+        {accountUiMode === "switch" && (
+          <div className="settings-pop-account-list">
+            {(tweaks.accounts || []).map(a => (
+              <button key={a.id} className={"settings-pop-account-row" + (a.id === tweaks.activeAccount ? " is-active" : "")}
+                      onClick={() => { setTweak("activeAccount", a.id); setAccountUiMode("view"); }}>
+                <span className="settings-pop-account-avatar small" style={{ background: a.color }}>{a.name.slice(0, 1).toUpperCase()}</span>
+                <span style={{ flex: 1 }}>{a.name}</span>
+                {a.id === tweaks.activeAccount && <Icon.Check />}
+              </button>
+            ))}
+            <div className="settings-pop-account-add">
+              <input className="cfg-input" placeholder="新账号名…" value={newName}
+                     onChange={e => setNewName(e.target.value)}
+                     onKeyDown={e => { if (e.key === "Enter") addAccount(); }} />
+              <button className="btn btn-xs btn-accent" onClick={addAccount}><Icon.Plus /> 添加</button>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="settings-pop-row">
         <span>主题</span>
         <div style={{ display: "flex", gap: 4 }}>
@@ -117,9 +169,18 @@ function SettingsPopover({ tweaks, setTweak, onClose }) {
           ))}
         </div>
       </div>
-      <div className="settings-pop-row" style={{ borderTop: "1px solid var(--border-soft)", paddingTop: 8 }}>
-        <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>更多在 设置 pane</span>
-        <button className="btn btn-xs btn-ghost" onClick={onClose}><Icon.X /> 关闭</button>
+      <div className="settings-pop-row">
+        <span>语言</span>
+        <div style={{ display: "flex", gap: 4 }}>
+          {[["zh", "中文"], ["en", "English"]].map(([v, l]) => (
+            <button key={v} className={"btn btn-xs" + (tweaks.lang === v ? " btn-primary" : " btn-ghost")} onClick={() => setTweak("lang", v)}>{l}</button>
+          ))}
+        </div>
+      </div>
+      <div style={{ borderTop: "1px solid var(--border-soft)", paddingTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+        <button className="settings-pop-link" onClick={() => { onClose(); openConfigPane?.(); }}>
+          <Icon.KeyRound /> API Keys / Model / Sandbox…
+        </button>
       </div>
     </div>
   );
@@ -133,7 +194,13 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "reasoningDefault": "collapsed",
   "showApprovalBanner": true,
   "showOnboarding": false,
-  "hasApiKey": true
+  "hasApiKey": true,
+  "lang": "zh",
+  "activeAccount": "sun",
+  "accounts": [
+    { "id": "sun",   "name": "Sun",   "color": "#d97757" },
+    { "id": "alice", "name": "Alice", "color": "#2383e2" }
+  ]
 }/*EDITMODE-END*/;
 
 const HEX_TO_ACCENT = {
@@ -184,6 +251,7 @@ function App() {
 
 
   // Shell API
+  const [focusEntity, setFocusEntity] = useAppState({}); // { pane: entityId } map
   const togglePane = (k) => {
     setOpenPanes(curr => {
       if (curr.includes(k)) return curr.filter(x => x !== k);
@@ -193,6 +261,10 @@ function App() {
   };
   const closePane = (k) => setOpenPanes(curr => curr.filter(x => x !== k));
   const openPaneIfClosed = (k) => setOpenPanes(curr => curr.includes(k) ? curr : (curr.length >= 2 ? [curr[1], k] : [...curr, k]));
+  const openEntity = (pane, id) => {
+    openPaneIfClosed(pane);
+    setFocusEntity(fe => ({ ...fe, [pane]: id }));
+  };
 
   const pushToast = (t) => {
     const id = Math.random().toString(36).slice(2, 8);
@@ -207,6 +279,8 @@ function App() {
       togglePane,
       setActiveConv,
       openConv: (id) => { if (id) setActiveConv(id); openPaneIfClosed("chat"); },
+      openEntity,
+      focusEntity,
       toast: pushToast,
     };
   });
@@ -277,6 +351,7 @@ function App() {
           isStreaming={streaming}
           onSend={() => setStreaming(true)}
           onCancel={() => setStreaming(false)}
+          onClose={() => closePane("chat")}
         />
       );
     }
@@ -377,7 +452,7 @@ function App() {
       <ToastTray toasts={toasts} dismiss={(id) => setToasts(ts => ts.filter(t => t.id !== id))} />
       {showOnb && <Onboarding onDismiss={() => { setShowOnb(false); setTweak("showOnboarding", false); }} />}
       {settings && <div className="overlay" style={{ background: "transparent" }} onClick={() => setSettings(false)}>
-        <SettingsPopover tweaks={tweaks} setTweak={setTweak} onClose={() => setSettings(false)} />
+        <SettingsPopover tweaks={tweaks} setTweak={setTweak} onClose={() => setSettings(false)} openConfigPane={() => openPaneIfClosed("config")} />
       </div>}
     </div>
   );
@@ -392,8 +467,7 @@ function NoApiKeyGate({ openConfig }) {
         <div>
           <div className="empty-shell-title">先来配一个 API Key</div>
           <div className="empty-shell-sub">
-            Forgify 完全本地运行——你的 key 加密存在 <code style={{ fontFamily: "var(--font-mono)" }}>~/.forgify/</code>，<br />
-            不上传任何地方。
+            key 加密存在 <code style={{ fontFamily: "var(--font-mono)" }}>~/.forgify/</code>，不上传。
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>

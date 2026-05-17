@@ -16,24 +16,60 @@ function SideNavItem({ icon: I, label, active, badge, onClick, indent }) {
   );
 }
 
+function ConvMore({ conv }) {
+  const [open, setOpen] = useSideState(false);
+  const [pos, setPos] = useSideState(null);
+  const btnRef = React.useRef(null);
+  const onClick = (e) => {
+    e.stopPropagation();
+    if (open) { setOpen(false); return; }
+    const r = btnRef.current.getBoundingClientRect();
+    setPos({ top: r.bottom + 4, left: Math.min(r.left, window.innerWidth - 200) });
+    setOpen(true);
+  };
+  React.useEffect(() => {
+    if (!open) return;
+    const close = (e) => { if (e.target.closest(".conv-more-menu")) return; setOpen(false); };
+    setTimeout(() => window.addEventListener("click", close), 0);
+    return () => window.removeEventListener("click", close);
+  }, [open]);
+  return (
+    <div className="conv-more" onClick={(e) => e.stopPropagation()}>
+      <button ref={btnRef} className="rel-more-btn" onClick={onClick} title="对话操作"><Icon.MoreHorizontal /></button>
+      {open && pos && ReactDOM.createPortal(
+        <div className="conv-more-menu" style={{ position: "fixed", top: pos.top, left: pos.left }}>
+          <button><Icon.Pin /> {conv.pinned ? "取消置顶" : "置顶"}</button>
+          <button><Icon.Edit /> 重命名</button>
+          <button><Icon.Folder /> {conv.archived ? "取消归档" : "归档"}</button>
+          <button className="is-danger"><Icon.Trash /> 删除</button>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+
 function ChatListItem({ conv, active, onClick }) {
   const isStreaming = conv.status === "streaming";
   const isApproval = conv.status === "approval";
   return (
-    <button
-      className={"nav-item nav-sub-item" + (active ? " is-active" : "") + (isStreaming ? " is-streaming" : "")}
-      onClick={onClick}
-      title={conv.title}
-    >
-      <span
-        className={"dot" + (isStreaming ? " is-streaming" : "")}
-        style={isApproval ? { background: "var(--status-warn)" } : null}
-      />
-      <span className="label">{conv.title}</span>
-      {isApproval && (
-        <span className="badge" style={{ background: "color-mix(in srgb, var(--status-warn) 16%, transparent)", color: "var(--status-warn)" }}>!</span>
-      )}
-    </button>
+    <div className={"nav-item-wrap" + (active ? " is-active" : "")}>
+      <button
+        className={"nav-item" + (active ? " is-active" : "") + (isStreaming ? " is-streaming" : "")}
+        onClick={onClick}
+        title={conv.title}
+      >
+        <span
+          className={"dot" + (isStreaming ? " is-streaming" : "")}
+          style={isApproval ? { background: "var(--status-warn)" } : null}
+        />
+        <span className="label">{conv.title}</span>
+        {isApproval && (
+          <span className="badge" style={{ background: "color-mix(in srgb, var(--status-warn) 16%, transparent)", color: "var(--status-warn)" }}>!</span>
+        )}
+      </button>
+      <ConvMore conv={conv} />
+    </div>
   );
 }
 
@@ -79,6 +115,7 @@ function Sidebar({ openPanes, togglePane, activeConv, onPickConv, onOpenCmdk, on
         <SideNavItem icon={Icon.Hammer}        label="锻造"   active={isOpen("forge")}    onClick={() => togglePane("forge")} />
         <SideNavItem icon={Icon.Play}          label="执行"   active={isOpen("execute")}  onClick={() => togglePane("execute")} />
         <SideNavItem icon={Icon.FileText}      label="文档"   active={isOpen("documents")} onClick={() => togglePane("documents")} />
+        <SideNavItem icon={Icon.Activity}      label="洞察"   active={isOpen("observe")}  onClick={() => togglePane("observe")} />
       </div>
 
       <div className="nav-section">
@@ -86,12 +123,6 @@ function Sidebar({ openPanes, togglePane, activeConv, onPickConv, onOpenCmdk, on
         <SideNavItem icon={Icon.Sparkles}      label="Skills" active={isOpen("skills")} onClick={() => togglePane("skills")} />
         <SideNavItem icon={Icon.Server}        label="MCP"    active={isOpen("mcp")}    onClick={() => togglePane("mcp")} />
         <SideNavItem icon={Icon.Brain}         label="Memory" active={isOpen("memory")} onClick={() => togglePane("memory")} />
-      </div>
-
-      <div className="nav-section">
-        <div className="nav-section-title"><span>其他</span></div>
-        <SideNavItem icon={Icon.Activity} label="洞察" active={isOpen("observe")} onClick={() => togglePane("observe")} />
-        <SideNavItem icon={Icon.Settings} label="设置" active={isOpen("config")}  onClick={() => togglePane("config")} />
       </div>
 
       <div className="nav-section nav-conv-section" style={{ overflowY: "auto", flex: 1, paddingBottom: 12 }}>
@@ -129,8 +160,8 @@ function Sidebar({ openPanes, togglePane, activeConv, onPickConv, onOpenCmdk, on
               onClick={() => setShowArchived(s => !s)}
               style={{ marginTop: 10 }}
             >
-              <Icon.ChevronRight className="chev" style={{ width: 11, height: 11, transform: showArchived ? "rotate(90deg)" : "none", transition: "transform 120ms" }} />
               <span>归档 · {archivedF.length}</span>
+              <Icon.ChevronRight className="chev" style={{ width: 11, height: 11, transform: showArchived ? "rotate(90deg)" : "none", transition: "transform 120ms" }} />
             </button>
             {showArchived && archivedF.map(c => (
               <ChatListItem

@@ -169,58 +169,151 @@ function ConfigView() {
   );
 }
 
-// ── Observe view (very light, charts/metrics shell) ──────────────────────
+// ── Observe view (relations graph + usage) ──────────────────────────────
 function ObserveView() {
-  const metric = (label, value, sub, trend) => (
+  const [tab, setTab] = useCfgState("relations");
+  const metric = (label, value, sub) => (
     <div className="card" style={{ cursor: "default" }}>
       <div style={{ fontSize: 11, color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>{label}</div>
       <div style={{ fontSize: 26, fontWeight: 600, color: "var(--fg-strong)", letterSpacing: "-0.02em", fontFamily: "var(--font-mono)" }}>{value}</div>
       <div className="card-desc">{sub}</div>
-      {trend && (
-        <svg viewBox="0 0 200 40" width="100%" height="32" style={{ marginTop: 4 }}>
-          <polyline points={trend} fill="none" stroke="var(--accent)" strokeWidth="1.5" strokeLinejoin="round" />
-        </svg>
-      )}
     </div>
   );
-
   return (
-    <div className="page">
+    <div className="page" style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
       <div className="page-header">
         <div className="page-header-text">
           <div className="page-title"><Icon.Activity /> 洞察</div>
-          <div className="page-subtitle">用量、成本、健康度 · 仅你自己看得到</div>
-        </div>
-        <div className="page-actions">
-          <button className="btn btn-sm">今天</button>
-          <button className="btn btn-sm">本周</button>
-          <button className="btn btn-sm btn-ghost">本月</button>
+          <div className="page-subtitle">实体关系 · 用量</div>
         </div>
       </div>
-
-      <div className="page-body">
-        <div className="card-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
-          {metric("消息", "342", "本周 +12% vs 上周", "0,28 14,24 28,30 42,18 56,22 70,12 84,15 98,8 112,12 126,6 140,9 154,5 168,8 182,4 196,6")}
-          {metric("Tool calls", "1,284", "并行率 38%", "0,36 14,32 28,20 42,28 56,18 70,22 84,12 98,16 112,8 126,12 140,6 154,10 168,4 182,6 196,3")}
-          {metric("Token 用量", "1.2M", "≈ ¥ 4.18 / 周", "0,30 14,26 28,18 42,22 56,14 70,18 84,8 98,12 112,6 126,10 140,4 154,8 168,2 182,5 196,2")}
-          {metric("FlowRun 成功率", "94%", "6 个 workflow 活跃", "0,18 14,16 28,12 42,14 56,10 70,12 84,8 98,10 112,6 126,8 140,4 154,6 168,2 182,4 196,2")}
+      <div className="page-tabs">
+        {[["relations", "关系图"], ["usage", "用量"]].map(([k, l]) => (
+          <button key={k} className={"page-tab" + (tab === k ? " is-active" : "")} onClick={() => setTab(k)}>{l}</button>
+        ))}
+      </div>
+      {tab === "relations" && (
+        <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }}>
+          <RelGraph />
         </div>
+      )}
+      {tab === "usage" && (
+        <div className="page-body">
+          <div className="card-grid" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
+            {metric("消息", "342", "本周 +12% vs 上周")}
+            {metric("Tool calls", "1,284", "并行率 38%")}
+            {metric("Token 用量", "1.2M", "≈ ¥ 4.18 / 周")}
+            {metric("FlowRun 成功率", "94%", "6 个 workflow 活跃")}
+          </div>
 
-        <h3 style={{ marginTop: 24, fontSize: 13, color: "var(--fg-faint)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>
-          活动热点 · 过去 7 天
-        </h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(24, 1fr)", gap: 2, marginTop: 10, height: 88 }}>
-          {Array.from({ length: 24 * 7 }).map((_, i) => {
-            const intensity = (Math.sin(i * 0.7) + Math.cos(i * 0.3) + 2) / 4;
-            const alpha = (0.08 + intensity * 0.55).toFixed(2);
-            return (
-              <div key={i} title={`${Math.floor(i / 24)}d ${i % 24}:00`} style={{
-                background: `oklch(from var(--accent) l c h / ${alpha})`,
-                borderRadius: 2,
-              }} />
-            );
-          })}
+          <h3 className="section-label" style={{ marginTop: 24 }}>
+            活动热力图 · 过去一年
+          </h3>
+          <ContribHeatmap />
         </div>
+      )}
+    </div>
+  );
+}
+
+function ContribHeatmap() {
+  const weeks = 53;
+  const today = new Date();
+  // Anchor: oldest cell is (weeks-1) weeks + 6 days ago, then we walk forward day by day.
+  // Determine the Sunday of (today's week - (weeks-1) weeks).
+  const dayOfWeek = today.getDay(); // 0 = Sun
+  const start = new Date(today);
+  start.setDate(today.getDate() - dayOfWeek - (weeks - 1) * 7);
+  start.setHours(0, 0, 0, 0);
+
+  const cells = [];
+  for (let w = 0; w < weeks; w++) {
+    const col = [];
+    for (let d = 0; d < 7; d++) {
+      const idx = w * 7 + d;
+      const date = new Date(start);
+      date.setDate(start.getDate() + idx);
+      if (date > today) { col.push(null); continue; }
+      const recency = w / weeks;
+      const weekday = d > 0 && d < 6 ? 1 : 0.4;
+      const noise = ((Math.sin(idx * 1.7) + Math.cos(idx * 0.7) + 2) / 4);
+      const v = noise * weekday * (0.3 + recency * 0.7);
+      let level = 0;
+      if (v > 0.20) level = 1;
+      if (v > 0.40) level = 2;
+      if (v > 0.60) level = 3;
+      if (v > 0.78) level = 4;
+      col.push({ level, date });
+    }
+    cells.push(col);
+  }
+
+  // Month labels: place label at the column where a new month starts (only if it has >= 2 weeks visible)
+  const monthLabels = [];
+  let lastMonth = -1;
+  for (let w = 0; w < weeks; w++) {
+    const firstReal = cells[w].find(c => c);
+    if (!firstReal) continue;
+    const m = firstReal.date.getMonth();
+    if (m !== lastMonth) {
+      monthLabels.push({ w, label: (m + 1) + "月" });
+      lastMonth = m;
+    }
+  }
+
+  const totalActive = cells.flat().filter(c => c && c.level > 0).length;
+
+  // GitHub-style: 10px square, 3px gap → column width 13
+  const CELL = 10, GAP = 3, STEP = CELL + GAP;
+
+  return (
+    <div className="ct-heatmap">
+      <div className="ct-summary">
+        <span>过去一年 <b>{totalActive}</b> 天有活动</span>
+      </div>
+      <div className="ct-grid" style={{ "--ct-cell": CELL + "px", "--ct-gap": GAP + "px", "--ct-step": STEP + "px" }}>
+        <div className="ct-day-col">
+          <span style={{ visibility: "hidden" }}>Mon</span>
+          <span>周一</span>
+          <span style={{ visibility: "hidden" }}>Tue</span>
+          <span>周三</span>
+          <span style={{ visibility: "hidden" }}>Thu</span>
+          <span>周五</span>
+          <span style={{ visibility: "hidden" }}>Sat</span>
+        </div>
+        <div className="ct-right">
+          <div className="ct-month-row" style={{ width: weeks * STEP }}>
+            {monthLabels.map((m, i) => (
+              <span key={i} className="ct-month" style={{ left: m.w * STEP }}>{m.label}</span>
+            ))}
+          </div>
+          <div className="ct-cells">
+            {cells.map((col, w) => (
+              <div key={w} className="ct-col">
+                {col.map((c, d) => (
+                  c ? (
+                    <div
+                      key={d}
+                      className={"ct-cell ct-l" + c.level}
+                      title={c.date.toLocaleDateString("zh-CN", { year: "numeric", month: "short", day: "numeric" }) + " · " + (c.level === 0 ? "无活动" : c.level + " 级活动")}
+                    />
+                  ) : (
+                    <div key={d} className="ct-cell ct-empty" />
+                  )
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div className="ct-legend">
+        <span>少</span>
+        <div className="ct-cell ct-l0" />
+        <div className="ct-cell ct-l1" />
+        <div className="ct-cell ct-l2" />
+        <div className="ct-cell ct-l3" />
+        <div className="ct-cell ct-l4" />
+        <span>多</span>
       </div>
     </div>
   );
@@ -242,8 +335,8 @@ function Onboarding({ onDismiss }) {
         <div>
           <div className="onboarding-title">欢迎使用 Forgify</div>
           <div className="onboarding-sub">
-            本地优先的 Agentic Workflow Platform。你的每个工具、每段对话、每次运行<br />
-            都只存在这台电脑上。先让我把环境准备好。
+            你的工具、对话、运行历史只存在这台电脑上。<br />
+            先把环境准备好。
           </div>
         </div>
 

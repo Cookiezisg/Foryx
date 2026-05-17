@@ -127,10 +127,9 @@ function EntityLink({ id }) {
       title={meta.label + " · 点击在右侧打开"}
       onClick={(e) => {
         e.stopPropagation();
-        if (window.Shell) {
-          if (prefix === "cv") { window.Shell.openConv(id); }
-          else { window.Shell.openPane(meta.pane); }
-        }
+        if (!window.Shell) return;
+        if (prefix === "cv") window.Shell.openConv(id);
+        else window.Shell.openEntity?.(meta.pane, id);
       }}
     >
       <Ic className="icon" />{id}
@@ -280,7 +279,7 @@ function BlockList({ blocks, depth = 0, defaultOpenTools = false }) {
         if (g.eg && g.items.length > 1) {
           return (
             <div className="tool-batch" key={gi} style={{ marginLeft: 22 }}>
-              <div className="tool-batch-tag">{"PARALLEL · group " + g.eg}</div>
+              <div className="tool-batch-tag" />
               {g.items.map(b => (
                 <ToolCallBlock key={b.id} block={b} defaultOpen={defaultOpenTools} />
               ))}

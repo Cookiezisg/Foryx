@@ -15,7 +15,7 @@ function DocTreeItem({ node, openSet, toggleOpen, selectedId, onSelect }) {
   const isFolder = node.kind === "folder";
   const isOpen = openSet.has(node.id);
   return (
-    <>
+    <div className={"doc-tree-row" + (selectedId === node.id ? " is-selected" : "")}>
       <button
         className={"doc-tree-item" + (selectedId === node.id ? " is-selected" : "")}
         style={{ paddingLeft: 8 + node.depth * 14 }}
@@ -28,12 +28,23 @@ function DocTreeItem({ node, openSet, toggleOpen, selectedId, onSelect }) {
           <Icon.ChevronRight className="chev" style={{ transform: isOpen ? "rotate(90deg)" : "none" }} />
         ) : <span className="chev-placeholder" />}
         <span className="doc-icon">
-          {node.icon || (isFolder ? "📁" : "📄")}
+          {isFolder ? <Icon.Folder /> : <Icon.FileText />}
         </span>
         <span className="doc-label">{node.title}</span>
-        <button className="row-add" title="新建子页">+</button>
       </button>
-    </>
+      {!isFolder && (
+        <ActionMenu items={[
+          { label: "在新 pane 打开", icon: Icon.ArrowRight },
+          { label: "重命名", icon: Icon.Edit, shortcut: "F2" },
+          { label: "移动到…", icon: Icon.Folder },
+          { label: "复制", icon: Icon.Copy, shortcut: "⌘D" },
+          "divider",
+          { label: "导出 Markdown", icon: Icon.Inbox },
+          { label: "归档", icon: Icon.Folder },
+          { label: "删除", icon: Icon.Trash, danger: true, shortcut: "⌫" },
+        ]} />
+      )}
+    </div>
   );
 }
 
@@ -168,14 +179,14 @@ function DocPage({ doc, onShowBacklinks }) {
       <div className="empty" style={{ flex: 1 }}>
         <Icon.FileText className="icon" />
         <div className="title">选择一个文档，或新建</div>
-        <div className="sub">左侧侧栏拖拽可重新整理树形结构</div>
+        <div className="sub">左侧选一篇</div>
       </div>
     );
   }
   return (
     <div className="doc-page">
       <div className="doc-page-head">
-        <div className="doc-page-icon">{doc.icon || "📄"}</div>
+        <div className="doc-page-icon"><Icon.FileText /></div>
         <div className="doc-page-title" contentEditable suppressContentEditableWarning>
           {doc.title}
         </div>
@@ -184,8 +195,7 @@ function DocPage({ doc, onShowBacklinks }) {
         <span><Icon.Clock /> 编辑 <RelTime ts={new Date(Date.now() - 12 * 60 * 1000)} /></span>
         <span>·</span>
         <span><Icon.User /> Sun</span>
-        <span>·</span>
-        <span>挂在 <a onClick={() => window.Shell?.openPane("forge")} style={{ cursor: "pointer" }}>weekly-training-summary</a> 工作流</span>
+        <EntityRelMeta entityId={doc.id} />
         <div style={{ flex: 1 }} />
         <div className="page-actions" style={{ display: "flex", gap: 6 }}>
           <button className="btn btn-xs btn-ghost" onClick={onShowBacklinks}><Icon.Layers /> 引用 (3)</button>
@@ -210,11 +220,13 @@ function DocPage({ doc, onShowBacklinks }) {
   );
 }
 
+
 function DocumentsView() {
-  const [selectedId, setSelectedId] = useDocState("d_strava");
+  const [selectedId, setSelectedId] = useDocState(window.Shell?.focusEntity?.documents || "d_strava");
   const [showBacklinks, setShowBacklinks] = useDocState(false);
   const [treeOpen, setTreeOpen] = useDocState(false);
   const doc = findDoc(selectedId);
+
   return (
     <div className={"doc-shell" + (treeOpen ? " is-tree-open" : "")}>
       <DocSidebar selectedId={selectedId} onSelect={(id) => { setSelectedId(id); setTreeOpen(false); }} />

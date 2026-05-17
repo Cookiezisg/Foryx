@@ -5,16 +5,26 @@ const { useState: useSkState } = React;
 
 function SkillRow({ skill, active, onClick }) {
   return (
-    <button className={"sk-row" + (active ? " is-active" : "")} onClick={onClick}>
-      <div className="sk-row-icon">
-        <Icon.Sparkles />
-      </div>
-      <div className="sk-row-meta">
-        <div className="sk-row-name">{skill.name}</div>
-        <div className="sk-row-desc">{skill.description}</div>
-      </div>
-      <span className="badge muted">{skill.source}</span>
-    </button>
+    <div className="sk-row-wrap">
+      <button className={"sk-row" + (active ? " is-active" : "")} onClick={onClick}>
+        <div className="sk-row-icon">
+          <Icon.Sparkles />
+        </div>
+        <div className="sk-row-meta">
+          <div className="sk-row-name">{skill.name}</div>
+          <div className="sk-row-desc">{skill.description}</div>
+        </div>
+        <span className="badge muted">{skill.source}</span>
+      </button>
+      <ActionMenu items={[
+        { label: "打开 SKILL.md 文件夹", icon: Icon.Folder },
+        { label: "复制路径", icon: Icon.Copy },
+        { label: "重新扫描", icon: Icon.Refresh },
+        "divider",
+        { label: "禁用", icon: Icon.EyeOff },
+        { label: "删除", icon: Icon.Trash, danger: true },
+      ]} />
+    </div>
   );
 }
 
@@ -67,7 +77,11 @@ function SkillDetail({ skill, onBack }) {
             <KindChip kind="skill" />
             <span className="cell-mono" style={{ color: "var(--fg-faint)" }}>{skill.id}</span>
           </div>
-          <div className="page-title" style={{ fontFamily: "var(--font-mono)" }}>{fm.name}</div>
+
+          <div className="page-subtitle" style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
+            <span>{fm.description || skill.description}</span>
+            <EntityRelMeta entityId={skill.id} />
+          </div>
         </div>
         <div className="page-actions">
           <span className="badge success"><span className="dot" />active</span>
@@ -129,6 +143,13 @@ function SkillDetail({ skill, onBack }) {
 
 function SkillsView() {
   const [open, setOpen] = useSkState(null);
+  React.useEffect(() => {
+    const id = window.Shell?.focusEntity?.skills;
+    if (id) {
+      const s = Forgify.skills.find(x => x.id === id);
+      if (s) setOpen(s);
+    }
+  }, []);
   if (open) return <SkillDetail skill={open} onBack={() => setOpen(null)} />;
 
   return (
@@ -136,7 +157,7 @@ function SkillsView() {
       <div className="page-header">
         <div className="page-header-text">
           <div className="page-title"><Icon.Sparkles /> Skills</div>
-          <div className="page-subtitle">SKILL.md 风格的可复用能力模板 · 用 $1 / $ARGUMENTS 接收参数</div>
+          <div className="page-subtitle">SKILL.md 模板</div>
         </div>
         <div className="page-actions">
           <button className="btn btn-sm"><Icon.Folder /> 打开 skills 目录</button>

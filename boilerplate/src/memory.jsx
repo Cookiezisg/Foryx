@@ -20,7 +20,12 @@ function MemoryRow({ m }) {
       <span className="mem-kind" style={{ "--c": meta.color }}>{meta.label}</span>
       <div className="mem-text">{m.text}</div>
       <span className="mem-source cell-mono">ai</span>
-      <button className="icon-btn mem-action"><Icon.MoreHorizontal /></button>
+      <ActionMenu items={[
+        { label: m.pinned ? "取消置顶" : "Pin 到 system prompt", icon: Icon.Pin },
+        { label: "编辑", icon: Icon.Edit },
+        "divider",
+        { label: "删除", icon: Icon.Trash, danger: true },
+      ]} />
     </div>
   );
 }
@@ -35,7 +40,7 @@ function MemoryView() {
       <div className="page-header">
         <div className="page-header-text">
           <div className="page-title"><Icon.Brain /> Memory</div>
-          <div className="page-subtitle">跨对话长期事实库 · pinned 全文进入每个 system prompt</div>
+          <div className="page-subtitle">跨对话事实 · pinned 进 system prompt</div>
         </div>
         <div className="page-actions">
           <span className="badge muted"><Icon.Pin style={{ width: 11, height: 11 }} /> {pinnedCount} pinned</span>

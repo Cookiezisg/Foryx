@@ -75,10 +75,18 @@ function MessageView({ msg, tweaks, isLast }) {
   );
 }
 
-function ChatHeader({ title, model }) {
+function ChatHeader({ title, model, convId, onClose }) {
   return (
     <div className="chat-header">
-      <div className="chat-header-actions" style={{ marginLeft: "auto" }}>
+      <div className="chat-title-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 2 }}>
+        <div className="chat-title-text">{title}</div>
+        {convId && (
+          <div style={{ fontSize: 11, color: "var(--fg-muted)", display: "flex", alignItems: "center", gap: 4 }}>
+            <EntityRelMeta entityId={convId} />
+          </div>
+        )}
+      </div>
+      <div className="chat-header-actions">
         <div className="model-tag" title="切换模型">
           <span className="provider">{(model || "AI").slice(0, 2).toUpperCase()}</span>
           <span>{model || "deepseek-chat"}</span>
@@ -87,6 +95,7 @@ function ChatHeader({ title, model }) {
         <button className="icon-btn" title="附加 Skill / Memory"><Icon.Layers /></button>
         <button className="icon-btn" title="对话历史搜索"><Icon.Search /></button>
         <button className="icon-btn" title="对话设置"><Icon.Settings /></button>
+        {onClose && <button className="icon-btn" title="关闭" onClick={onClose}><Icon.X /></button>}
       </div>
     </div>
   );
@@ -240,15 +249,10 @@ function Composer({ disabled, isStreaming, onSend, onCancel }) {
                     onClick={() => setAttached(a => [...a, { name: `file-${a.length + 1}.csv`, size: 4096 }])}>
               <Icon.Paperclip />
             </button>
-            <button className="composer-tool" title="使用 Skill (/skill)"
-                    onClick={() => { setText("/skill "); ta.current?.focus(); }}>
-              <Icon.Sparkles />
-            </button>
             <button className="composer-tool" title="@ 引用实体"
                     onClick={() => { setText(t => (t.endsWith(" ") || !t ? t : t + " ") + "@"); ta.current?.focus(); }}>
               <Icon.At />
             </button>
-            <button className="composer-tool" title="语音"><Icon.Mic /></button>
             <div className="composer-spacer" />
             <div className="composer-mode" title="切换 agent 模式">
               <Icon.Cpu style={{ width: 12, height: 12 }} />
@@ -311,7 +315,7 @@ function mentionPool() {
   ];
 }
 
-function ChatView({ conv, tweaks, isStreaming, onSend, onCancel }) {
+function ChatView({ conv, tweaks, isStreaming, onSend, onCancel, onClose }) {
   const streamRef = useRef(null);
   useEffect(() => {
     let raf2 = null;
@@ -325,7 +329,7 @@ function ChatView({ conv, tweaks, isStreaming, onSend, onCancel }) {
 
   return (
     <div className="chat">
-      <ChatHeader title={conv.title} model={conv.model} />
+      <ChatHeader title={conv.title} model={conv.model} convId={conv.id} onClose={onClose} />
       <div className="chat-stream" ref={streamRef}>
         <div className="chat-stream-inner">
           <div className="day-divider">今天 · {new Date().toLocaleDateString("zh-CN")}</div>

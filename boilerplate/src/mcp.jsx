@@ -40,13 +40,14 @@ function McpDetail({ server, onBack }) {
             <span className="cell-mono" style={{ color: "var(--fg-faint)" }}>{server.id}</span>
           </div>
           <div className="page-title" style={{ fontFamily: "var(--font-mono)" }}>{server.name}</div>
-          <div className="page-subtitle">
+          <div className="page-subtitle" style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
             {server.status === "healthy" ? (
               <span className="badge success"><span className="dot" />healthy</span>
             ) : (
               <span className="badge warn"><span className="dot" />degraded</span>
             )}
-            <span style={{ marginLeft: 8 }}>{detail.tools?.length || 0} tools 已注册 · 最近心跳 {relTime(server.lastSeen)}</span>
+            <span style={{ marginLeft: 4 }}>{detail.tools?.length || 0} tools 已注册 · 最近心跳 {relTime(server.lastSeen)}</span>
+            <EntityRelMeta entityId={server.id} />
           </div>
         </div>
         <div className="page-actions">
@@ -143,8 +144,17 @@ function McpDetail({ server, onBack }) {
   );
 }
 
+// Mcp view — list + open by focusEntity
 function McpView() {
   const [open, setOpen] = useMcpState(null);
+  useMcpState; // hook order
+  React.useEffect(() => {
+    const id = window.Shell?.focusEntity?.mcp;
+    if (id) {
+      const m = Forgify.mcpServers.find(x => x.id === id);
+      if (m) setOpen(m);
+    }
+  }, []);
   if (open) return <McpDetail server={open} onBack={() => setOpen(null)} />;
 
   return (
@@ -152,7 +162,7 @@ function McpView() {
       <div className="page-header">
         <div className="page-header-text">
           <div className="page-title"><Icon.Server /> MCP Servers</div>
-          <div className="page-subtitle">Model Context Protocol — 第三方能力即插即用</div>
+          <div className="page-subtitle">MCP server</div>
         </div>
         <div className="page-actions">
           <button className="btn btn-sm"><Icon.Inbox /> 从市场添加</button>
@@ -187,7 +197,14 @@ function McpView() {
                 </div>
                 <div className="card-foot">
                   <span>{detail.tools?.length || m.tools} tools · 最近 {relTime(m.lastSeen)}</span>
-                  <span style={{ color: "var(--fg-faint)" }}>{detail.command || ""}</span>
+                  <ActionMenu items={[
+                    { label: "重连", icon: Icon.Refresh },
+                    { label: "编辑配置", icon: Icon.Settings },
+                    { label: "查看日志", icon: Icon.Terminal },
+                    "divider",
+                    { label: "停用", icon: Icon.StopCircle },
+                    { label: "删除", icon: Icon.Trash, danger: true },
+                  ]} />
                 </div>
               </div>
             );

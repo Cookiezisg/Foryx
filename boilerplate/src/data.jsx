@@ -417,6 +417,76 @@ const dagEdges = [
   { from: "n_wr",    to: "n_done" },
 ];
 
+// ── Workflow versions for wf_weekly_training (3 versions, has pending + deployed != current) ──
+const workflowDetails = {
+  wf_weekly_training: {
+    versions: [
+      {
+        id: "v3", label: "v3", state: "pending",
+        at: "8 分钟前", author: "ai · CSV → Notion 对话",
+        summary: "在 Notion 写入前加 approval 节点 + Slack 失败通知",
+        description: "每周一早 7:30 把训练数据写到 Notion（带审批 + Slack 通知）。",
+        nodes: [
+          { id: "n_trig",  kind: "trigger",  label: "Cron 触发",      sub: "30 7 * * 1",        x: 40,  y: 60, retry: 0, timeout: 5,  onError: "fail" },
+          { id: "n_fetch", kind: "function", label: "Fetch Strava",   sub: "fn_strava_002",     x: 260, y: 60, retry: 3, timeout: 30, onError: "retry" },
+          { id: "n_agg",   kind: "function", label: "Aggregate Week", sub: "fn_aggregate_week", x: 480, y: 60, retry: 1, timeout: 10, onError: "fail" },
+          { id: "n_apr",   kind: "approval", label: "等待确认",        sub: "Notion 草稿区",      x: 480, y: 200, retry: 0, timeout: 86400, onError: "fail" },
+          { id: "n_wr",    kind: "handler",  label: "Notion 写入",     sub: "hd_notion_001",     x: 260, y: 320, retry: 3, timeout: 30, onError: "fail" },
+          { id: "n_done",  kind: "variable", label: "记录 last_run",   sub: "Memory write",      x: 40,  y: 320, retry: 0, timeout: 5,  onError: "skip" },
+          { id: "n_slack", kind: "http",     label: "Slack 失败通知",  sub: "POST hooks.slack.com", x: 700, y: 320, retry: 0, timeout: 10, onError: "skip" },
+        ],
+        edges: [
+          { from: "n_trig",  to: "n_fetch" },
+          { from: "n_fetch", to: "n_agg" },
+          { from: "n_agg",   to: "n_apr" },
+          { from: "n_apr",   to: "n_wr" },
+          { from: "n_wr",    to: "n_done" },
+          { from: "n_wr",    to: "n_slack" },
+        ],
+      },
+      {
+        id: "v2", label: "v2", state: "current",
+        at: "2 天前", author: "user · 手动",
+        summary: "Notion 写入加 approval 节点",
+        description: "每周一早 7:30 把训练数据写到 Notion，写之前需人工审批。",
+        nodes: [
+          { id: "n_trig",  kind: "trigger",  label: "Cron 触发",      sub: "30 7 * * 1",        x: 40,  y: 60, retry: 0, timeout: 5,  onError: "fail" },
+          { id: "n_fetch", kind: "function", label: "Fetch Strava",   sub: "fn_strava_002",     x: 260, y: 60, retry: 3, timeout: 30, onError: "retry" },
+          { id: "n_agg",   kind: "function", label: "Aggregate Week", sub: "fn_aggregate_week", x: 480, y: 60, retry: 1, timeout: 10, onError: "fail" },
+          { id: "n_apr",   kind: "approval", label: "等待确认",        sub: "Notion 草稿区",      x: 480, y: 200, retry: 0, timeout: 86400, onError: "fail" },
+          { id: "n_wr",    kind: "handler",  label: "Notion 写入",     sub: "hd_notion_001",     x: 260, y: 320, retry: 1, timeout: 30, onError: "fail" },
+          { id: "n_done",  kind: "variable", label: "记录 last_run",   sub: "Memory write",      x: 40,  y: 320, retry: 0, timeout: 5,  onError: "skip" },
+        ],
+        edges: [
+          { from: "n_trig",  to: "n_fetch" },
+          { from: "n_fetch", to: "n_agg" },
+          { from: "n_agg",   to: "n_apr" },
+          { from: "n_apr",   to: "n_wr" },
+          { from: "n_wr",    to: "n_done" },
+        ],
+      },
+      {
+        id: "v1", label: "v1", state: "deployed", // archived AND deployed in production
+        at: "9 天前", author: "ai · 初版",
+        summary: "初版 · 直接写 Notion，不经审批",
+        description: "每周一早 7:30 把训练数据写到 Notion。",
+        nodes: [
+          { id: "n_trig",  kind: "trigger",  label: "Cron 触发",      sub: "30 7 * * 1",        x: 40,  y: 60, retry: 0, timeout: 5,  onError: "fail" },
+          { id: "n_fetch", kind: "function", label: "Fetch Strava",   sub: "fn_strava_002",     x: 260, y: 60, retry: 3, timeout: 30, onError: "retry" },
+          { id: "n_agg",   kind: "function", label: "Aggregate Week", sub: "fn_aggregate_week", x: 480, y: 60, retry: 1, timeout: 10, onError: "fail" },
+          { id: "n_wr",    kind: "handler",  label: "Notion 写入",     sub: "hd_notion_001",     x: 260, y: 200, retry: 1, timeout: 30, onError: "fail" },
+        ],
+        edges: [
+          { from: "n_trig",  to: "n_fetch" },
+          { from: "n_fetch", to: "n_agg" },
+          { from: "n_agg",   to: "n_wr" },
+        ],
+      },
+    ],
+  },
+};
+
+
 // ────────────────────────────────────────────────────────────────────────────
 // Pending diff for forge detail demo
 // ────────────────────────────────────────────────────────────────────────────
@@ -439,6 +509,7 @@ const pendingDiff = [
 window.Forgify = {
   conversations, activeMessages, forges, flowruns, skills, mcpServers,
   memories, apiKeys, modelConfigs, notifications, dagNodes, dagEdges, pendingDiff,
+  workflowDetails,
   workflowHistory, flowrunDetails,
 };
 
@@ -447,7 +518,7 @@ window.Forgify = {
 // ────────────────────────────────────────────────────────────────────────────
 const documents = [
   { id: "d_root", title: "我的文档", kind: "folder", children: [
-    { id: "d_strava", title: "Strava 训练数据 schema", icon: "📊", kind: "page", body:
+    { id: "d_strava", title: "Strava 训练数据 schema", kind: "page", body:
 `# Strava 训练数据 schema
 
 > 用作 weekly-training-summary workflow 的输入契约。
@@ -467,7 +538,7 @@ const documents = [
 - moving_time 不等于 elapsed_time（停表）
 - 私密活动需要 OAuth scope \`activity:read_all\`
 ` },
-    { id: "d_notion", title: "Notion database 设计", icon: "📓", kind: "page", body:
+    { id: "d_notion", title: "Notion database 设计", kind: "page", body:
 `# 训练日志 database · Notion
 
 数据库 id: \`7c2a...\`（写在 memory.project 里）
@@ -488,8 +559,8 @@ const documents = [
 - 同周已存在则 update，不是新增
 - 草稿区先写 status="draft"，approval 后改 "published"
 ` },
-    { id: "d_arch", title: "Forgify 自己的架构笔记", icon: "🏗️", kind: "folder", children: [
-      { id: "d_arch_sse", title: "三流 SSE 设计", icon: "📡", kind: "page", body:
+    { id: "d_arch", title: "Forgify 自己的架构笔记", kind: "folder", children: [
+      { id: "d_arch_sse", title: "三流 SSE 设计", kind: "page", body:
 `# 三流 SSE 设计
 
 后端只有三条 SSE 流：
@@ -502,10 +573,10 @@ const documents = [
 
 > 永远不再加第四条流。所有未来需求走 forge 流 + filter，或 Wails native event。
 ` },
-      { id: "d_arch_loop", title: "ReAct loop", icon: "🔁", kind: "page", body: "" },
-      { id: "d_arch_sandbox", title: "Sandbox v2 (mise embed)", icon: "📦", kind: "page", body: "" },
+      { id: "d_arch_loop", title: "ReAct loop", kind: "page", body: "" },
+      { id: "d_arch_sandbox", title: "Sandbox v2 (mise embed)", kind: "page", body: "" },
     ]},
-    { id: "d_idea", title: "想法本", icon: "💡", kind: "page", body:
+    { id: "d_idea", title: "想法本", kind: "page", body:
 `# 想法本
 
 - 把 Inbox 邮件按主题打标，每周一汇总到 Notion
@@ -616,11 +687,16 @@ const mcpDetails = {
 const functionDetails = {
   fn_aggregate_week: {
     versions: [
-      { v: "v0 (pending)", state: "pending", at: "3 分钟前", author: "ai · CSV → Notion 对话" },
-      { v: "v1", state: "current",   at: "1 小时前",  author: "ai · 周报对话" },
-      { v: "v0 (initial)", state: "archived", at: "1 天前", author: "ai · 周报对话" },
-    ],
-    code:
+      {
+        id: "v2",
+        label: "v2",
+        state: "pending",
+        at: "3 分钟前",
+        author: "ai · CSV → Notion 对话",
+        summary: "把按周聚合的返回值从单个 avg_pace 扩展为完整 5 字段（含 climb / hr / count）",
+        description: "按周聚合训练数据。返回每周的平均配速、总爬升、平均心率、训练次数等 5 个聚合字段。",
+        schema: { inputs: "activities: Activity[]", outputs: "by_week: dict[isoweek, AggregateRow]" },
+        code:
 `from collections import defaultdict
 from isoweek import Week
 
@@ -646,15 +722,117 @@ def avg(xs):
     xs = [x for x in xs if x is not None]
     return sum(xs) / len(xs) if xs else None
 `,
-    schema: {
-      inputs:  "activities: Activity[]",
-      outputs: "by_week: dict[isoweek, AggregateRow]",
-      sandbox: "python 3.12.13 · fnenv_a1b2c3",
-    },
+      },
+      {
+        id: "v1",
+        label: "v1",
+        state: "current",
+        at: "1 小时前",
+        author: "ai · 周报对话",
+        summary: "初版：按周聚合 + 单字段平均配速",
+        description: "按周聚合训练数据，返回 isoweek → 平均配速 的字典。",
+        schema: { inputs: "activities: Activity[]", outputs: "by_week: dict[isoweek, float]" },
+        code:
+`from collections import defaultdict
+from isoweek import Week
+
+def aggregate_week(activities):
+    """按周聚合训练数据。"""
+    by_week = defaultdict(list)
+    for a in activities:
+        wk = Week.withdate(a.start_date.date())
+        by_week[str(wk)].append(a)
+    return {w: avg([a.pace for a in xs]) for w, xs in by_week.items()}
+
+
+def avg(xs):
+    return sum(xs) / len(xs) if xs else None
+`,
+      },
+      {
+        id: "v0",
+        label: "v0",
+        state: "archived",
+        at: "1 天前",
+        author: "ai · 周报对话",
+        summary: "首次实现 · 仅算配速",
+        description: "返回 week → pace 的简单字典。",
+        schema: { inputs: "activities: Activity[]", outputs: "dict[str, float]" },
+        code:
+`def aggregate_week(activities):
+    return {a.week: a.pace for a in activities}
+`,
+      },
+    ],
+    sandbox: "python 3.12.13 · fnenv_a1b2c3",
     runs: [
       { at: "3 min ago", status: "ok",    duration: "230ms", input: "4 activities" },
       { at: "12 min ago", status: "ok",   duration: "218ms", input: "4 activities" },
       { at: "1 hour ago", status: "fail", duration: "12ms",  input: "0 activities — NameError on avg" },
+    ],
+  },
+
+  // No pending — for previewing the "prod" view
+  fn_strava_002: {
+    versions: [
+      {
+        id: "v3", label: "v3", state: "current",
+        at: "14 天前",
+        author: "user · 手动",
+        summary: "支持 since 参数 + 按距离/时间筛选",
+        description: "拉取 Strava 最近 N 天的活动数据。支持 since (iso8601) 与 type 筛选。",
+        schema: { inputs: "since: str, type?: str", outputs: "activities: Activity[]" },
+        code:
+`import requests
+from datetime import datetime
+
+def strava_recent_activities(since: str, type: str = None):
+    """拉取 Strava 最近的活动数据。"""
+    params = {"after": int(datetime.fromisoformat(since).timestamp())}
+    r = requests.get("https://www.strava.com/api/v3/athlete/activities",
+                     params=params,
+                     headers={"Authorization": f"Bearer {TOKEN}"})
+    items = r.json()
+    if type:
+        items = [a for a in items if a["type"] == type]
+    return [Activity.from_api(a) for a in items]
+`,
+      },
+      {
+        id: "v2", label: "v2", state: "archived",
+        at: "30 天前", author: "ai · API 调研对话",
+        summary: "改用官方 API 替代第三方爬虫",
+        description: "拉取 Strava 最近的活动数据。",
+        schema: { inputs: "since: str", outputs: "activities: Activity[]" },
+        code:
+`import requests
+from datetime import datetime
+
+def strava_recent_activities(since):
+    params = {"after": int(datetime.fromisoformat(since).timestamp())}
+    r = requests.get("https://www.strava.com/api/v3/athlete/activities",
+                     params=params,
+                     headers={"Authorization": f"Bearer {TOKEN}"})
+    return [Activity.from_api(a) for a in r.json()]
+`,
+      },
+      {
+        id: "v1", label: "v1", state: "archived",
+        at: "45 天前", author: "ai · 初版",
+        summary: "通过第三方爬虫拉数据（不稳定）",
+        description: "scrape Strava activities.",
+        schema: { inputs: "user_id: int", outputs: "activities: list" },
+        code:
+`def strava_recent_activities(user_id):
+    # TODO: replace with official API
+    return scrape_strava(user_id)
+`,
+      },
+    ],
+    sandbox: "python 3.12.13 · fnenv_d2e3f4",
+    runs: [
+      { at: "12 min ago", status: "ok", duration: "1.8s", input: "since=2026-05-13" },
+      { at: "1 day ago",  status: "ok", duration: "1.6s", input: "since=2026-05-12" },
     ],
   },
 };
@@ -664,18 +842,126 @@ def avg(xs):
 // ────────────────────────────────────────────────────────────────────────────
 const handlerDetails = {
   hd_notion_001: {
-    methods: [
-      { name: "__init__",      sig: "(database_id: str, draft_mode: bool = True)", desc: "握住 Notion client 与目标 db" },
-      { name: "upsert_row",    sig: "(key: str, fields: dict) -> str", desc: "插入或更新；返回 page id" },
-      { name: "publish",       sig: "(page_id: str) -> None", desc: "把 draft 改成 published" },
-      { name: "search",        sig: "(query: str, limit: int = 10) -> list[Page]", desc: "全文搜" },
-      { name: "delete",        sig: "(page_id: str) -> None", desc: "归档（不真删）" },
+    versions: [
+      {
+        id: "v8", label: "v8", state: "pending",
+        at: "5 分钟前", author: "ai · API 重构对话",
+        summary: "加 batch_upsert 批量写 + 修复 rate-limit 在大批量时的死锁",
+        description: "Notion database writer 含 rate-limit + 批量写 + 自动重试。",
+        methods: [
+          { name: "__init__",   sig: "(database_id: str, draft_mode: bool = True)",  desc: "握住 Notion client 与目标 db",
+            body: `def __init__(self, database_id: str, draft_mode: bool = True):
+    self.db = database_id
+    self.draft = draft_mode
+    self.client = NotionClient(token=self.cfg.notion_token)
+    self.limiter = RateLimiter(rps=3)
+    self.batch_size = self.cfg.get('batch_size', 50)` },
+          { name: "upsert_row", sig: "(key: str, fields: dict) -> str",               desc: "插入或更新；返回 page id",
+            body: `def upsert_row(self, key: str, fields: dict) -> str:
+    self.limiter.acquire()
+    existing = self._find_by_key(key)
+    if existing:
+        return self.client.pages.update(existing.id, properties=fields).id
+    return self.client.pages.create(database_id=self.db, properties=fields).id` },
+          { name: "batch_upsert", sig: "(rows: list[dict]) -> list[str]",             desc: "批量 upsert，自动分批 + 限流",
+            body: `def batch_upsert(self, rows: list[dict]) -> list[str]:
+    ids = []
+    for chunk in self._chunked(rows, self.batch_size):
+        with self.limiter.batch():
+            ids.extend(self._concurrent_upsert(chunk, max_workers=4))
+    return ids` },
+          { name: "publish",    sig: "(page_id: str) -> None",                        desc: "把 draft 改成 published（幂等）",
+            body: `def publish(self, page_id: str) -> None:
+    page = self.client.pages.retrieve(page_id)
+    if page.properties.get('status') == 'published':
+        return  # idempotent
+    self.client.pages.update(page_id, properties={'status': 'published'})` },
+          { name: "search",     sig: "(query: str, limit: int = 10, cursor: str = None) -> SearchPage", desc: "全文搜 + 分页",
+            body: `def search(self, query: str, limit: int = 10, cursor: str = None) -> SearchPage:
+    resp = self.client.search(query=query, page_size=limit, start_cursor=cursor)
+    return SearchPage(items=resp.results, next_cursor=resp.next_cursor)` },
+          { name: "delete",     sig: "(page_id: str) -> None",                        desc: "归档（不真删）",
+            body: `def delete(self, page_id: str) -> None:
+    self.client.pages.update(page_id, archived=True)` },
+        ],
+        config: {
+          database_id:   { value: "7c2a***...***", masked: true,  secret: false },
+          draft_mode:    { value: "true",          masked: false, secret: false },
+          notion_token:  { value: "secret_***...d8a", masked: true, secret: true },
+          batch_size:    { value: "50",            masked: false, secret: false },
+        },
+      },
+      {
+        id: "v7", label: "v7", state: "current",
+        at: "2 天前", author: "ai · API 重构对话",
+        summary: "把 publish 改成幂等 + 加 search 分页",
+        description: "Notion database writer，含 rate-limit 重试。",
+        methods: [
+          { name: "__init__",   sig: "(database_id: str, draft_mode: bool = True)",  desc: "握住 Notion client 与目标 db",
+            body: `def __init__(self, database_id: str, draft_mode: bool = True):
+    self.db = database_id
+    self.draft = draft_mode
+    self.client = NotionClient(token=self.cfg.notion_token)
+    self.limiter = RateLimiter(rps=3)` },
+          { name: "upsert_row", sig: "(key: str, fields: dict) -> str",               desc: "插入或更新；返回 page id",
+            body: `def upsert_row(self, key: str, fields: dict) -> str:
+    self.limiter.acquire()
+    existing = self._find_by_key(key)
+    if existing:
+        return self.client.pages.update(existing.id, properties=fields).id
+    return self.client.pages.create(database_id=self.db, properties=fields).id` },
+          { name: "publish",    sig: "(page_id: str) -> None",                        desc: "把 draft 改成 published（幂等）",
+            body: `def publish(self, page_id: str) -> None:
+    page = self.client.pages.retrieve(page_id)
+    if page.properties.get('status') == 'published':
+        return  # idempotent
+    self.client.pages.update(page_id, properties={'status': 'published'})` },
+          { name: "search",     sig: "(query: str, limit: int = 10, cursor: str = None) -> SearchPage", desc: "全文搜 + 分页",
+            body: `def search(self, query: str, limit: int = 10, cursor: str = None) -> SearchPage:
+    resp = self.client.search(query=query, page_size=limit, start_cursor=cursor)
+    return SearchPage(items=resp.results, next_cursor=resp.next_cursor)` },
+          { name: "delete",     sig: "(page_id: str) -> None",                        desc: "归档（不真删）",
+            body: `def delete(self, page_id: str) -> None:
+    self.client.pages.update(page_id, archived=True)` },
+        ],
+        config: {
+          database_id:   { value: "7c2a***...***", masked: true,  secret: false },
+          draft_mode:    { value: "true",          masked: false, secret: false },
+          notion_token:  { value: "secret_***...d8a", masked: true, secret: true },
+        },
+      },
+      {
+        id: "v6", label: "v6", state: "archived",
+        at: "8 天前", author: "ai · 用户反馈对话",
+        summary: "支持 rich_text 字段类型",
+        description: "Notion database writer.",
+        methods: [
+          { name: "__init__",   sig: "(database_id: str)",                            desc: "握住 Notion client",
+            body: `def __init__(self, database_id: str):
+    self.db = database_id
+    self.client = NotionClient(token=self.cfg.notion_token)` },
+          { name: "upsert_row", sig: "(key: str, fields: dict) -> str",               desc: "插入或更新",
+            body: `def upsert_row(self, key: str, fields: dict) -> str:
+    existing = self._find_by_key(key)
+    if existing:
+        return self.client.pages.update(existing.id, properties=fields).id
+    return self.client.pages.create(database_id=self.db, properties=fields).id` },
+          { name: "publish",    sig: "(page_id: str) -> None",                        desc: "发布草稿",
+            body: `def publish(self, page_id: str) -> None:
+    self.client.pages.update(page_id, properties={'status': 'published'})` },
+          { name: "search",     sig: "(query: str, limit: int = 10) -> list[Page]",   desc: "全文搜（无分页）",
+            body: `def search(self, query: str, limit: int = 10) -> list[Page]:
+    return self.client.search(query=query, page_size=limit).results` },
+          { name: "delete",     sig: "(page_id: str) -> None",                        desc: "归档",
+            body: `def delete(self, page_id: str) -> None:
+    self.client.pages.update(page_id, archived=True)` },
+        ],
+        config: {
+          database_id:   { value: "7c2a***...***", masked: true,  secret: false },
+          notion_token:  { value: "secret_***...d8a", masked: true, secret: true },
+        },
+      },
     ],
-    config: {
-      database_id: { value: "7c2a***...***", masked: true, secret: false },
-      draft_mode:  { value: "true",          masked: false, secret: false },
-      notion_token:{ value: "secret_***...d8a", masked: true, secret: true },
-    },
     callStats: { ok: 887, fail: 4, p50: 184, p95: 612, p99: 1840 },
     recentCalls: [
       { at: "1 分钟前", method: "upsert_row", status: "ok", ms: 184 },
@@ -689,3 +975,103 @@ const handlerDetails = {
 window.Forgify = Object.assign(window.Forgify, {
   documents, skillBodies, mcpDetails, functionDetails, handlerDetails,
 });
+
+// ────────────────────────────────────────────────────────────────────────────
+// Entity relationships — the graph of which things reference which.
+// ────────────────────────────────────────────────────────────────────────────
+// Each edge: { from, to, kind }
+//   uses          — workflow uses function/handler/mcp/skill
+//   forged_from   — forge produced by conversation (AI 锻造)
+//   instance_of   — flowrun belongs to workflow
+//   attached_to   — document attached to conversation
+//   referenced_in — entity mentioned in document body
+//   about         — memory about workflow/function
+//   uses_doc      — workflow/function uses document as input/schema
+const relations = [
+  // Workflow weekly-training-summary uses these
+  { from: "wf_weekly_training", to: "fn_strava_002",   kind: "uses" },
+  { from: "wf_weekly_training", to: "fn_aggregate_week", kind: "uses" },
+  { from: "wf_weekly_training", to: "hd_notion_001",  kind: "uses" },
+  { from: "wf_weekly_training", to: "d_strava",       kind: "uses_doc" },
+  { from: "wf_weekly_training", to: "d_notion",       kind: "uses_doc" },
+
+  // invoice-intake workflow
+  { from: "wf_invoice_intake",  to: "fn_pdf_extract",  kind: "uses" },
+  { from: "wf_invoice_intake",  to: "fn_csv_parse",    kind: "uses" },
+  { from: "wf_invoice_intake",  to: "hd_airtable_002", kind: "uses" },
+
+  // Forging conversations
+  { from: "cv_a1", to: "wf_weekly_training",  kind: "forged_from" },
+  { from: "cv_a1", to: "fn_aggregate_week",   kind: "forged_from" },
+  { from: "cv_b2", to: "wf_weekly_training",  kind: "discussed_in" },
+  { from: "cv_d4", to: "wf_invoice_intake",   kind: "forged_from" },
+  { from: "cv_d4", to: "fn_pdf_extract",      kind: "forged_from" },
+
+  // Documents attached to conversations
+  { from: "cv_a1", to: "d_strava",            kind: "attached_to" },
+  { from: "cv_a1", to: "d_notion",            kind: "attached_to" },
+
+  // Doc references inside doc bodies
+  { from: "d_strava", to: "fn_strava_002",    kind: "referenced_in" },
+  { from: "d_notion", to: "hd_notion_001",    kind: "referenced_in" },
+  { from: "d_arch_sse", to: "wf_weekly_training", kind: "referenced_in" },
+
+  // FlowRuns
+  { from: "fr_8d2a", to: "wf_invoice_intake", kind: "instance_of" },
+  { from: "fr_8d29", to: "wf_weekly_training", kind: "instance_of" },
+  { from: "fr_8d28", to: "wf_weekly_training", kind: "instance_of" }, // changed for graph density
+  { from: "fr_8d27", to: "wf_invoice_intake", kind: "instance_of" },
+  { from: "fr_8d26", to: "wf_invoice_intake", kind: "instance_of" },
+  { from: "fr_8d25", to: "wf_invoice_intake", kind: "instance_of" },
+
+  // Memories about
+  { from: "mem_1", to: "wf_weekly_training",  kind: "about" },
+  { from: "mem_2", to: "wf_weekly_training",  kind: "about" },
+  { from: "mem_4", to: "fn_strava_002",       kind: "about" },
+
+  // Skills used
+  { from: "wf_invoice_intake",  to: "sk_pdf",     kind: "uses" },
+  { from: "fn_pdf_extract",     to: "sk_pdf",     kind: "uses" },
+
+  // MCP usage
+  { from: "wf_invoice_intake",  to: "mcp_fs",     kind: "uses" },
+];
+
+Forgify.relations = relations;
+
+// ── Append more relations to make every entity kind interconnected ─────
+const moreRelations = [
+  // Conversation → Memory (which conv produced which memory)
+  { from: "cv_a1", to: "mem_2",  kind: "produced" },
+  { from: "cv_b2", to: "mem_3",  kind: "produced" },
+  { from: "cv_c3", to: "mem_4",  kind: "produced" },
+
+  // Conversations forging more entities
+  { from: "cv_c3", to: "fn_strava_002", kind: "forged_from" },
+  { from: "cv_e5", to: "hd_notion_001", kind: "discussed_in" },
+  { from: "cv_h8", to: "fn_csv_parse",  kind: "discussed_in" },
+
+  // Memory references between
+  { from: "mem_1", to: "cv_a1",        kind: "referenced_in" },
+
+  // Skill referenced in docs
+  { from: "d_arch_loop", to: "sk_csv",    kind: "referenced_in" },
+  { from: "d_arch_sandbox", to: "mcp_fs", kind: "referenced_in" },
+
+  // MCP <-> conversation
+  { from: "cv_e5", to: "mcp_gh",  kind: "uses" },
+  { from: "cv_f6", to: "mcp_lin", kind: "uses" },
+
+  // Workflow references doc for output schema
+  { from: "wf_invoice_intake", to: "d_strava",   kind: "uses_doc" },
+  { from: "wf_invoice_intake", to: "d_arch_sse", kind: "uses_doc" },
+
+  // Cross handler/skill
+  { from: "hd_notion_001",  to: "sk_notion", kind: "uses" },
+  { from: "hd_airtable_002", to: "mcp_pg",   kind: "uses" },
+
+  // Function → MCP
+  { from: "fn_pdf_extract", to: "mcp_fs", kind: "uses" },
+];
+
+Forgify.relations = Forgify.relations.concat(moreRelations);
