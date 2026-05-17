@@ -8,12 +8,14 @@
  *   - rail mode (40px icons-only) for expanded layout
  */
 import { computed, onMounted, ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { useConvStore } from '@/stores/conv';
 import { useUIStore } from '@/stores/ui';
 import { timeAgo } from '@/utils/format';
 
 defineProps<{ rail?: boolean }>();
 
+const { t } = useI18n();
 const conv = useConvStore();
 const ui = useUIStore();
 
@@ -56,14 +58,14 @@ function closeCtx() {
 async function doRename(id: string) {
   closeCtx();
   const cur = conv.list.find((c) => c.id === id);
-  const next = window.prompt('新标题', cur?.title || '');
+  const next = window.prompt(t('convs.renamePrompt'), cur?.title || '');
   if (next !== null && next !== cur?.title) await conv.rename(id, next);
 }
 
 async function doSysPrompt(id: string) {
   closeCtx();
   const cur = conv.list.find((c) => c.id === id);
-  const next = window.prompt('system prompt (留空清除)', cur?.systemPrompt || '');
+  const next = window.prompt(t('convs.systemPromptDialog'), cur?.systemPrompt || '');
   if (next !== null) await conv.setSystemPrompt(id, next);
 }
 
@@ -88,7 +90,7 @@ async function doTogglePin(id: string) {
 
 async function doDelete(id: string) {
   closeCtx();
-  if (!window.confirm('确认删除该对话?')) return;
+  if (!window.confirm(t('convs.deleteConfirm'))) return;
   await conv.remove(id);
 }
 </script>
@@ -97,15 +99,15 @@ async function doDelete(id: string) {
   <aside class="convs" :class="{ rail }">
     <header class="convs-header">
       <template v-if="!rail">
-        <strong class="convs-title">{{ conv.showArchived ? 'Archived' : 'Conversations' }}</strong>
+        <strong class="convs-title">{{ conv.showArchived ? t('convs.archived') : t('convs.title') }}</strong>
         <button
           class="btn ghost icon"
           :class="{ 'archived-on': conv.showArchived }"
           @click="conv.toggleShowArchived()"
-          :title="conv.showArchived ? 'show active' : 'show archived'"
+          :title="conv.showArchived ? t('convs.showActive') : t('convs.showArchived')"
         >📁</button>
-        <button class="btn ghost icon" @click="showFilter = !showFilter" title="filter">⌕</button>
-        <button class="btn ghost icon primary-look" @click="createNew" title="new conversation (⌘N)">＋</button>
+        <button class="btn ghost icon" @click="showFilter = !showFilter" :title="t('convs.showFilter')">⌕</button>
+        <button class="btn ghost icon primary-look" @click="createNew" :title="t('convs.newButton')">＋</button>
       </template>
       <template v-else>
         <button class="btn ghost icon" @click="ui.toggleExpanded()" title="restore 4-column">⤡</button>
@@ -116,18 +118,18 @@ async function doDelete(id: string) {
     <input
       v-if="!rail && showFilter"
       class="convs-filter"
-      placeholder="filter title / id…"
+      :placeholder="t('convs.filterPlaceholder')"
       v-model="conv.filter"
       autofocus
     />
 
     <div class="convs-list scroll" v-if="!rail">
       <div v-if="conv.loading" class="empty">
-        <span class="dim">加载中…</span>
+        <span class="dim">{{ t('convs.loadingHint') }}</span>
       </div>
       <div v-else-if="filtered.length === 0" class="empty">
-        <span class="empty-title">{{ conv.list.length === 0 ? '还没有对话' : '没匹配项' }}</span>
-        <button class="btn primary" @click="createNew">＋ 开始第一个对话</button>
+        <span class="empty-title">{{ conv.list.length === 0 ? t('convs.emptyTitle') : t('convs.noMatch') }}</span>
+        <button class="btn primary" @click="createNew">{{ t('convs.startFirst') }}</button>
       </div>
       <div
         v-for="c in filtered"
@@ -136,11 +138,11 @@ async function doDelete(id: string) {
         :class="{ selected: c.id === conv.selectedId, pinned: c.pinned }"
         @click="conv.select(c.id)"
         @contextmenu="openCtx($event, c.id)"
-        :title="`${c.title || '(untitled)'} · ${c.id}`"
+        :title="`${c.title || t('common.untitled')} · ${c.id}`"
       >
         <div class="conv-line">
           <span v-if="c.pinned" class="pin-mark" title="pinned">📌</span>
-          <span class="conv-title ellipsis">{{ c.title || '(untitled)' }}</span>
+          <span class="conv-title ellipsis">{{ c.title || t('common.untitled') }}</span>
           <span class="conv-time">{{ timeAgo(c.updatedAt) }}</span>
         </div>
         <div class="conv-id mono dim">{{ c.id.slice(0, 18) }}</div>
@@ -168,16 +170,16 @@ async function doDelete(id: string) {
       @click.stop
     >
       <button class="ctx-item" @click="doTogglePin(ctxMenu.id)">
-        {{ conv.list.find((c) => c.id === ctxMenu.id)?.pinned ? '取消置顶' : '置顶' }}
+        {{ conv.list.find((c) => c.id === ctxMenu.id)?.pinned ? t('convs.ctxUnpin') : t('convs.ctxPin') }}
       </button>
-      <button class="ctx-item" @click="doRename(ctxMenu.id)">重命名</button>
-      <button class="ctx-item" @click="doSysPrompt(ctxMenu.id)">system prompt…</button>
-      <button class="ctx-item" @click="doDuplicate(ctxMenu.id)">复制</button>
+      <button class="ctx-item" @click="doRename(ctxMenu.id)">{{ t('convs.ctxRename') }}</button>
+      <button class="ctx-item" @click="doSysPrompt(ctxMenu.id)">{{ t('convs.ctxSysPrompt') }}</button>
+      <button class="ctx-item" @click="doDuplicate(ctxMenu.id)">{{ t('convs.ctxDuplicate') }}</button>
       <button class="ctx-item" @click="doToggleArchive(ctxMenu.id)">
-        {{ conv.list.find((c) => c.id === ctxMenu.id)?.archived ? '取消归档' : '归档' }}
+        {{ conv.list.find((c) => c.id === ctxMenu.id)?.archived ? t('convs.ctxUnarchive') : t('convs.ctxArchive') }}
       </button>
       <div class="ctx-sep" />
-      <button class="ctx-item danger" @click="doDelete(ctxMenu.id)">删除</button>
+      <button class="ctx-item danger" @click="doDelete(ctxMenu.id)">{{ t('convs.ctxDelete') }}</button>
     </div>
   </aside>
 </template>

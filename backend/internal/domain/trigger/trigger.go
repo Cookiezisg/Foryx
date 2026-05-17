@@ -26,6 +26,7 @@ const (
 // Spec 是从 workflow trigger 节点解出的规范化触发器配置。
 type Spec struct {
 	WorkflowID string         `json:"workflowId"`
+	UserID     string         `json:"userId"` // owner of the workflow; populated at registration so onFire fires with correct ctx
 	NodeID     string         `json:"nodeId"`
 	Kind       string         `json:"kind"`
 	Config     map[string]any `json:"config"`

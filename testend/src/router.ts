@@ -64,6 +64,7 @@ const routes: RouteRecordRaw[] = [
   { path: '/config/documents', component: () => import('@/views/config/Documents.vue') },
   { path: '/config/permissions', component: () => import('@/views/config/Permissions.vue') },
   { path: '/config/llm-health', component: () => import('@/views/config/LLMHealth.vue') },
+  { path: '/config/profile', component: () => import('@/views/config/Profile.vue') },
 
   /* dev */
   { path: '/dev/sql', component: () => import('@/views/dev/SQL.vue') },

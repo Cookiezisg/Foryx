@@ -150,10 +150,54 @@ continueRun 重建 ExecutionContext:
 
 ### 6.3 RehydrateOnBoot (§6.1)
 
-桌面 app 用户合盖 / 进程重启时,approval-paused run 不能丢。`Service.RehydrateOnBoot` 在启动后调:
-- 扫 `repo.ListPaused`
+桌面 app 用户合盖 / 进程重启时,approval-paused run 不能丢。`Service.RehydrateOnBoot(ctx, userID)` 在启动后调:
+- ctx 经 `reqctxpkg.SetUserID` scope 到指定 user → 扫 `repo.ListPaused`
 - 每行预注 no-op cancel func (让 `Service.Cancel` 不返 `ErrNotCancellable`)
 - Run 保持 paused — 真 ctx 在 ResumeApproval 时新建
+
+**§20 multi-user**：main.go 启动期遍历所有 user 调 `RehydrateOnBoot(ctx, u.ID)`，让任意 user 的 paused flowrun 都能正确恢复 cancel 句柄。
+
+---
+
+## 6.4 Sub-DAG 执行（§5.1 Loop body 子图）
+
+`runReadyLoop` 是从 `driveLoop` 抽出的 ready-set 主循环，**不调 finalizeRun**，让子图复用：
+
+```go
+status, errCode, errMsg, paused := s.runReadyLoop(ctx, run, execCtx, topo, ready)
+```
+
+`Service.ExecuteSubDAG(req SubDAGRequest)` 给 LoopDispatcher 每迭代调一次：
+- 构造 sub-ExecutionContext（继承 Variables / parent Outputs；隔离 Done / Failed / NextPort；绑 `Loop *workflowapp.LoopContext{Item, Index}`）
+- `SubDAGFromBody(map)` 把 `loop.config.body` JSON map decode 为 `*workflowdomain.Graph`
+- 调 `runReadyLoop` 跑完
+- 收集每节点 outputs 给 LoopDispatcher 聚合
+
+**Approval 节点在 body 中被拒**（V1 不支持迭代中途暂停）— `ExecuteSubDAG` 入口检测 + 返 `ErrSubDAGContainsApproval`。
+
+**记录到 flowrun_nodes**：每迭代的 body 节点 record 时自动带 `parent_loop_node` + `iteration_index` 列（execCtx 携带）。
+
+---
+
+## 6.5 Run-level timeout（§5.7）
+
+`Workflow.TimeoutSec int` >0 时，`StartRun` 改用 `context.WithTimeout(timeoutSec)` 替原 `WithCancel`。`runReadyLoop` 每轮 ready-set 前 `select { case <-ctx.Done(): }`：
+- `errors.Is(ctx.Err(), context.DeadlineExceeded)` → status=failed + errorCode=`RUN_TIMEOUT`
+- 否则（显式 Cancel）→ status=cancelled
+
+---
+
+## 6.6 Dry-run 模式
+
+`FlowRun.DryRun bool` + `StartRunWithOptions(opts StartRunOptions{DryRun: true})`。`ExecutionContext.DryRun` propagate（含 sub-DAG）。`dispatchWithPolicies` 拦截 9 个 side-effect NodeType（function / handler / mcp / skill / llm / agent / http / approval / wait），返 mock：
+
+```go
+{Outputs: {"out": "[DRY RUN: <type>]", "_dryRun": true}}
+```
+
+`approval` 自动 `NextPort=approved` 让 DAG 越过审批关。纯逻辑节点（trigger / condition / variable / loop / parallel）正常跑——用户能看见 DAG 实际路径。
+
+HTTP 入口：`POST /api/v1/workflows/{id}:trigger?dryRun=true` 走 `scheduler.StartRunWithOptions` bypass trigger.FireManual。
 
 ---
 

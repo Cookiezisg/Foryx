@@ -305,6 +305,29 @@ AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 
 | `INVALID_SETTINGS` | 400 | `permdomain.ErrInvalidSettings` | PUT /api/v1/settings body 违反 schema（defaultMode 非 4 值 / 空规则 / hook command 空 / timeout 负）| ✅ |
 | `BLOCKED_BY_RULE` | 422 | `permdomain.ErrBlockedByRule` | 内部 sentinel——chat 派发 tool 时被 settings.deny 或 PreToolUse hook deny 拒绝；返给 LLM 的 tool_result.error 含 `"BLOCKED_BY_RULE: <reason>"` 前缀 | ✅ |
 
+#### user（V1.2 §20 multi-user）✅
+
+| Code | HTTP | Sentinel | 场景 | 状态 |
+|---|---|---|---|---|
+| `USER_NOT_FOUND` | 404 | `userdomain.ErrNotFound` | GET / DELETE / Update / Activate 时 ID 不存在 | ✅ |
+| `USERNAME_REQUIRED` | 400 | `userdomain.ErrUsernameRequired` | POST body username 空或仅空白 | ✅ |
+| `USERNAME_CONFLICT` | 409 | `userdomain.ErrUsernameConflict` | UNIQUE 约束违反（username 已存在）| ✅ |
+| `USERNAME_INVALID` | 400 | `userdomain.ErrUsernameInvalid` | 格式违反 `^[a-z0-9_-]{1,32}$` | ✅ |
+| `CANNOT_DELETE_LAST_USER` | 422 | `userdomain.ErrCannotDeleteLast` | 全表只剩 1 个 user 时 DELETE | ✅ |
+| `LANGUAGE_INVALID` | 400 | `userdomain.ErrLanguageInvalid` | language 非 `zh-CN` / `en`（§21 i18n）| ✅ |
+
+#### flowrun run-level timeout（V1.2 §5.7）✅
+
+| Code | HTTP | Sentinel | 场景 | 状态 |
+|---|---|---|---|---|
+| `RUN_TIMEOUT` | 内部 | `context.DeadlineExceeded` | scheduler 用 `context.WithTimeout(workflow.TimeoutSec)`；`runReadyLoop` 检测 `ctx.Err == DeadlineExceeded` → flowrun.status=failed + errorCode=RUN_TIMEOUT | ✅ |
+
+#### trigger（V1.2 §12.4 + §20 multi-user）✅
+
+| Code | HTTP | Sentinel | 场景 | 状态 |
+|---|---|---|---|---|
+| `INVALID_CONFIG` | 400 | `triggerdomain.ErrInvalidConfig` | webhook spec `signatureAlgo` 未识别 / algo 缺 secret 等（§12.4 HMAC）| ✅ |
+
 ---
 
 ### Phase 4：工作流能力

@@ -100,6 +100,9 @@ func New(deps Deps) http.Handler {
 	if deps.DocumentService != nil {
 		handlershttpapi.NewDocumentHandler(deps.DocumentService, deps.Log).Register(mux)
 	}
+	if deps.UserService != nil {
+		handlershttpapi.NewUsersHandler(deps.UserService, deps.Log).Register(mux)
+	}
 	// §4.8 context-stats — needs conv + tokensummer; nil-safe degradation.
 	if deps.ConversationService != nil {
 		handlershttpapi.NewContextStatsHandler(
@@ -130,7 +133,13 @@ func New(deps Deps) http.Handler {
 }
 
 func applyChain(h http.Handler, deps Deps) http.Handler {
-	h = middlewarehttpapi.InjectUserID(h)
+	// Multi-user middleware reads X-Forgify-User-ID; if UserService nil (early boot / tests), falls back to legacy default.
+	// 多用户中间件读 X-Forgify-User-ID;UserService nil（早期 boot / 测试）走 legacy 默认。
+	if deps.UserService != nil {
+		h = middlewarehttpapi.InjectUserIDWith(deps.UserService)(h)
+	} else {
+		h = middlewarehttpapi.InjectUserID(h)
+	}
 	h = middlewarehttpapi.InjectLocale(h)
 	h = middlewarehttpapi.CORS(middlewarehttpapi.DefaultCORSConfig())(h)
 	h = middlewarehttpapi.RequestLogger(deps.Log)(h)

@@ -57,6 +57,7 @@ func New(mux *http.ServeMux, log *zap.Logger) *Service {
 	onFire := func(workflowID, nodeID string, input map[string]any) {
 		s.mu.RLock()
 		sched := s.scheduler
+		spec, ok := s.specs[workflowID][nodeID]
 		s.mu.RUnlock()
 		if sched == nil {
 			s.log.Warn("trigger fired before scheduler attached — drop",
@@ -64,7 +65,16 @@ func New(mux *http.ServeMux, log *zap.Logger) *Service {
 				zap.String("nodeID", nodeID))
 			return
 		}
-		ctx := reqctxpkg.SetUserID(context.Background(), reqctxpkg.DefaultLocalUserID)
+		// §multi-user: resolve workflow owner from the registered Spec so the run
+		// executes under the right user ctx. Pre-multi-user code path used
+		// DefaultLocalUserID; that's now a defensive fallback only.
+		// §multi-user: 从注册时的 Spec 拿 workflow owner，确保 run 在正确 user ctx 跑。
+		// 老的单用户路径用 DefaultLocalUserID，现在仅作兜底。
+		uid := reqctxpkg.DefaultLocalUserID
+		if ok && spec.UserID != "" {
+			uid = spec.UserID
+		}
+		ctx := reqctxpkg.SetUserID(context.Background(), uid)
 		kind := kindForNode(s, workflowID, nodeID)
 		runID, err := sched.StartRun(ctx, workflowID, kind, input)
 		if err != nil {

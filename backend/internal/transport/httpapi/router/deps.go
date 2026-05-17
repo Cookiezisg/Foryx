@@ -27,6 +27,7 @@ import (
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
 	skillapp "github.com/sunweilin/forgify/backend/internal/app/skill"
 	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
+	userapp "github.com/sunweilin/forgify/backend/internal/app/user"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	shelltool "github.com/sunweilin/forgify/backend/internal/app/tool/shell"
 	workflowapp "github.com/sunweilin/forgify/backend/internal/app/workflow"
@@ -83,6 +84,7 @@ type Deps struct {
 	CatalogService      *catalogapp.Service
 	MemoryService       *memoryapp.Service
 	DocumentService     *documentapp.Service
+	UserService         *userapp.Service
 
 	// §4.5 metrics dashboard — aggregated views over the 4 D22 execution-log tables.
 	FunctionExecRepo functiondomain.ExecutionRepository

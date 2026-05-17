@@ -294,6 +294,25 @@
 
 ---
 
+## 20. 多用户 / Profile 切换（V1.2 minimal）
+
+**背景**：单机本地 + 一个用户多账号场景（个人 vs 工作 vs 副业），需要类 Slack workspace 切换。无 auth、无密码——单机谁拿 laptop 谁控制。
+
+- ☑ **§20.1 User domain + service + HTTP** ✅ 2026-05-17 —— `domain/user` + `app/user` + `infra/store/user` + `handlers/users.go`（GET list / POST / GET id / DELETE / POST :activate）+ 5 sentinel + errmap。`EnsureDefault` 启动时给空表创默认 `ID="local-user"` user 让现有数据自然 surface（数据库已经按 user_id scope）。8 单测。
+- ☑ **§20.2 Middleware + session 机制** ✅ 2026-05-17 —— `InjectUserIDWith(resolver)` 读 `X-Forgify-User-ID` header（SSE EventSource 浏览器 API 限制 → query `?userID=` 兜底），验证 user 存在 → ctx。回退链：unknown header / 缺 → 首个 user → DefaultLocalUserID（DB 空兜底）。3 新单测。
+- ☑ **§20.3 Per-user filesystem roots** ✅ 2026-05-17 —— 新 `pkg/userpath`：`UserHome(homeRoot, uid)` → `homeRoot/users/<uid>/`；`MigrateLegacy` 把老 `homeRoot/{mcp.json,skills,.catalog.json,settings.json}` 平迁到 `homeRoot/users/local-user/`（target 存在 → skip）。main.go 4 处装配切到 `defaultUserHome`。4 单测。
+- ☑ **§20.4 Frontend 切换 UI** ✅ 2026-05-17 —— `api/users.ts` + `stores/users.ts`（active 持久化 localStorage / 切换 reload 清内存 state）+ `UserPicker.vue` startup 选择屏（≥2 profile 且无 active 时显示）+ `UserSwitcher.vue` header 右上 avatar dropdown + `/config/profile` 管理页 + `api/client.ts` 注入 `X-Forgify-User-ID` header + `api/sse.ts` 给 EventSource URL append `?userID=`。
+
+**V1.2 限制**（用户已确认接受）：
+- 后台任务（catalog / skill / mcp polling、scheduler、trigger）仍跑在默认 user 上下文；非 active user 的 cron workflow **会** fire 但用 owner user_id 入 flowrun。
+- 无密码 / 锁。
+- 不区分 user 的 mcp.json / skills 目录——切 user 时仍读默认桶。运行时按 user 重建 service 留 V1.5。
+- 真"per-user 后台 poller + 隔离 service tree" → V1.5。
+
+**§20 完工 4/4 ✅**——单机多 profile 体验跟 Slack workspace 切换齐平，5 天工程量浓缩在 1 天交付。
+
+---
+
 ## 17. Burn-in 剩余 + 杂项
 
 **背景**：burn-in 还有 #7 / #11 / #15-18 这几个；#15-18 已经在 §11-12 中拆出来；剩 #7 / #11。
@@ -390,6 +409,8 @@ V1.2 ship 标准（前端 Wails 之外）：
 | §4 | 可观测性 | 10 / 10 | ✅ 完工 | 2026-05-17 全清——`/conversations?search=` + export md/json + metrics dashboard + llm-trace + catalog history/diff + context-stats + testend `/observe/usage` + `/config/llm-health` 全到位 |
 | §5 | Workflow 高阶 | 2 / 10 | 🟢 主体推进 | §5.1 Loop body ✅ + §5.7 Run-level timeout ✅ 2026-05-17；§5.2 defer；§5.3-§5.6/§5.8-§5.10 V1.5 territory |
 | §19 | 工作流可用性 | 2 / 2 | ✅ 完工 2026-05-17 | Dry-run 模式 + Live progress UI（轮询 + 通知响应 + 状态徽章）|
+| §20 | 多用户 / Profile 切换 | 4 / 4 | ✅ 完工 2026-05-17 | User domain + middleware header + per-user fs roots + frontend picker/switcher；后台 polling 仍走默认 user，per-user poller 留 V1.5 |
+| §21 | 多语言 i18n (中/英) | 4 / 4 | ✅ 完工 2026-05-17 | User.Language + vue-i18n + locale 切换 UI；门面层翻译完，深层 panel V1.5 |
 | §6 | MCP 高阶 | 0 / 7 | ⬜ 未起 | |
 | §7 | Skill 高阶 | 0 / 5 | ⬜ 未起 | |
 | §8 | Subagent 高阶 | 0 / 5 | ⬜ 未起 | |
@@ -415,6 +436,9 @@ V1.2 ship 标准（前端 Wails 之外）：
 
 | 日期 | 范围 | 摘要 |
 |---|---|---|
+| 2026-05-17 | **[doc-fix] §S14 同步补课** | 多个 feat batch 只更新 sweep + progress-record，漏了 design / contract 文档同步。一次性补：(1) 新 `service-design-documents/user.md` 13 节完整设计 doc；(2) `api-design.md` 加 users 5 endpoints + `/dev/prompts` + `/system-prompt-preview` + workflows `?dryRun=true` query + 多用户 session 段 + 多语言段；(3) `error-codes.md` 加 user 6 sentinel + RUN_TIMEOUT + trigger INVALID_CONFIG；(4) `database-design.md` 加 `users` 表 + `workflows.timeout_sec` + `flowruns.dry_run` + `flowrun_nodes.parent_loop_node` + `iteration_index`；(5) `workflow.md` 14 节点 + loop body config 详；(6) `scheduler.md` 新增 §6.4 Sub-DAG / §6.5 run-level timeout / §6.6 dry-run + §6.3 RehydrateOnBoot 多 user 注释；(7) `trigger.md` Spec.UserID 段。**反思**：feat 期间应与代码一同步契约文档，事后补效率低且易漏。下次纪律 = contract docs 与 commit 一起更新。 |
+| 2026-05-17 | **§21 多语言 i18n（中/英）** | 后端 `User.Language string`（zh-CN / en；DB CHECK 约束）+ `Update / Create input` 字段 + PATCH endpoint + `ErrLanguageInvalid` errmap。前端 `vue-i18n@10` + `src/i18n.ts`（zh-CN 默认，localStorage `forgify:locale` + 浏览器嗅探）+ `locales/{zh-CN,en}.json` 骨架（common / topbar / nav / convs / chat / users 6 节）+ `client.ts` Accept-Language header 注入 + `usersAPI.update` + `users.setLanguage` 双写 vue-i18n。**门面层翻译**：TopBar / TabNav / ConvSidebar / UserPicker / UserSwitcher / Profile.vue 全切 `t()`。Profile 页加语言切换 select。**深层 panel（FlowRunDetail / WorkflowDetail / 等 60 个）保留原文**，dogfood 撞到再补。test-unit + vet + vue-tsc 全绿。 |
+| 2026-05-17 | **§20 多用户 / Profile 切换 V1.2 minimal** | **§20.1** `domain/user` + `app/user`（Create/Get/List/Delete/EnsureDefault/TouchLastUsed）+ `infra/store/user` + `handlers/users.go`（GET list / POST / GET id / DELETE / POST :activate）+ 5 sentinel + errmap 5 行（USER_NOT_FOUND / USERNAME_REQUIRED / USERNAME_CONFLICT / USERNAME_INVALID / CANNOT_DELETE_LAST_USER）+ 8 单测。**§20.2** `InjectUserIDWith(resolver)` 读 `X-Forgify-User-ID` header；fallback 链 unknown → 首个 user → DefaultLocalUserID（SSE 用 `?userID=` query 兜底，因 EventSource 不能自定义 header）+ 3 单测。**§20.3** 新 `pkg/userpath`：`UserHome` + `MigrateLegacy`（target 存在 skip）；main.go 4 装配位置切到 `defaultUserHome`（mcp.json / skills / .catalog.json / settings.json）+ 4 单测。**§20.4** `api/users.ts` + `stores/users.ts`（localStorage 持久化 active；switchTo reload 整页清 state）+ `UserPicker.vue` 启动选择屏（≥2 profile + 无 active 显示）+ `UserSwitcher.vue` header avatar dropdown + `/config/profile` 管理页 + `client.ts` X-Forgify-User-ID header 注入 + `sse.ts` URL `?userID=` append。**EnsureDefault** 启动期把空表迁出 `ID="local-user"` 默认 user 让现有 row（已是该 user_id）自然 surface；`MigrateLegacy` 同步把单用户期文件路径平迁到 `users/local-user/`。**V1.2 限制接受**：后台 polling 走默认 user / 无密码 / 不区分 user 的 service tree（运行时重建留 V1.5）。**§20 4/4 ✅**。test-unit + vet + vue-tsc 全绿。 |
 | 2026-05-17 | **§5.7 Run-level timeout + Dry-run + Live UI 三连发** | **§5.7** `Workflow.TimeoutSec int`（0 = unlimited）→ `StartRun` 用 `context.WithTimeout`；`runReadyLoop` 检测 `ctx.Err == DeadlineExceeded` 区分 → status=failed + RUN_TIMEOUT。**Dry-run** `FlowRun.DryRun bool` + `StartRunWithOptions(opts StartRunOptions{DryRun})` + `ExecutionContext.DryRun` propagate（含子图）+ `dispatchWithPolicies` 拦截 8 个 side-effect NodeType（function/handler/mcp/skill/llm/agent/http/approval/wait）返合成 `{out: "[DRY RUN]", _dryRun: true}`；approval 自动 NextPort=approved；HTTP `POST /workflows/{id}:trigger?dryRun=true` 接入（bypasses trigger.FireManual）。**Live progress UI** `FlowRunDetail.vue` 加 2s polling（running/paused 启动；终态停）+ notifications store watch（type=flowrun match id 即时 refresh）+ 头部 `👁 DRY RUN` / `⏱ RUN_TIMEOUT` 徽章 + 🟢 live-pulse 闪烁。workflow trigger UI 加 👁 Dry-run 按钮。**4 新单测**（DeadlineExceeded→RUN_TIMEOUT / 显式 cancel→cancelled / 函数 dry-run mock / pure logic 透传 / approval 自动 approved）。test-unit + vet + vue-tsc 全绿。 |
 | 2026-05-17 | **§5.1 Workflow Loop body subgraph 完整版** | scheduler 真正 for-each：(1) `pause.go::driveLoop` 抽 `runReadyLoop` 与 finalizeRun 解耦——让子图复用 ready-set 主循环不写终态。(2) 新 `subdag.go`：`ExecuteSubDAG(req)` per-iteration 入口 + `SubDAGFromBody(map)→Graph` decoder + `SubstituteLoopTemplates` 深度模板替换（`{{ .loop.item }}` / `{{ .loop.index }}` 在 string / nested map / list 叶节点全生效）+ `concurrentRun` 并发 helper（默认 cap 5）。(3) `LoopDispatcher` 重写：sequential 默认 / `parallel: true` + `concurrency: N` 并行 / `onError: stop` 默认 vs `continue` opt-in（返 `{successes, failures: [{index, error}]}`）。(4) `flowrun_nodes` 加 `parent_loop_node TEXT` + `iteration_index INT` 列；`recordNode` 自动 propagate。(5) `ExecutionContext` 加 `Loop / ParentLoopNodeID / IterationIndex`；`dispatch_condition.go` EvalContext 转发 Loop。(6) body 含 approval 节点拒（V1 不支持中途暂停）。3 层嵌套上限沿用 validate.go 早有 container-body 递归校验。**5 单测**：simple foreach sequential / fail-fast / continue / approval rejected / SubstituteLoopTemplates 嵌套。**create_workflow tool description 加 loop body 完整例**（含 parallel / onError 字段说明）。**§5 状态 0/7 → 1/10**（§5.2 标 defer V1.5）。test-unit + vet + Windows cross 全绿。 |
 | 2026-05-17 | **§18 Prompt Governance 全批 — 吸收 §14.6 / §14.7 / §17.1** | **§18.1** `GET /api/v1/dev/prompts` (dev-only) 罗列 41 条 prompt（33 tool desc + 2 chat-system 静态段 + 3 internal-llm + 3 subagent）每条返 {name, category, content, length, tokensEst, source}。testend `/dev/prompts` 搜索/过滤/折叠/length 颜色告警 + category 统计板。**§18.2** `chat.Service.SystemPromptSections` 返按 cache-friendly 顺序的命名段；`AssemblePromptSections` 加 `<section name="...">` XML markers；`GET /api/v1/conversations/{id}/system-prompt-preview` 端点 + testend chat header 📋 prompt 按钮全屏 modal（每段折叠 + raw 切换）。`buildSystemPrompt` 重构为单一事实源（sections → assemble）。**§18.3** `cmd/lintprompts` 扫 5 个 prompt-bearing dir × 34 个 prompt 常量 × 4 规则（length 50-800 / 第一人称 / weasel / emoji）；当前基线 1 violation（compactSystemPrompt 890 char）。`make lint-prompts` Makefile target。**§18.4** `prompt-principles.md` 6 条原则（examples-beat-rules / what-NOT / static-first / no-first-person / no-weasel / 50-800 sweet spot）+ anti-pattern 表 + section markers 设计 + "新写 prompt 流程"5 步。**Collapse**：§14.6 + §14.7 + §17.1 全部归 §18 ✅（本质 prompt 工程不是 feature）。**§18 完工 4/4；§14 状态 5/7→5/5 完工**。test-unit + vue-tsc + Windows cross 全绿。 |

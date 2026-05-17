@@ -7,7 +7,7 @@
  * Col4 "expand" mode collapses col1+col2 into 40px icon rails so
  * content-heavy views (graph editor, SQL, wide tables) get the floor.
  */
-import { onMounted, onUnmounted, computed } from 'vue';
+import { onMounted, onUnmounted, computed, ref } from 'vue';
 import TopBar from '@/components/layout/TopBar.vue';
 import ConvSidebar from '@/components/layout/ConvSidebar.vue';
 import ChatPanel from '@/components/layout/ChatPanel.vue';
@@ -16,19 +16,33 @@ import ResizableSplit from '@/components/layout/ResizableSplit.vue';
 import ToastTray from '@/components/common/ToastTray.vue';
 import RawJsonModal from '@/components/common/RawJsonModal.vue';
 import CommandPalette from '@/components/common/CommandPalette.vue';
+import UserPicker from '@/components/users/UserPicker.vue';
 import { useUIStore } from '@/stores/ui';
 import { useChatStore } from '@/stores/chat';
 import { useNotificationsStore } from '@/stores/notifications';
 import { useForgeStore } from '@/stores/forge';
 import { useCatalogStore } from '@/stores/catalog';
+import { useUsersStore } from '@/stores/users';
 
 const ui = useUIStore();
 const chat = useChatStore();
 const notifs = useNotificationsStore();
 const forge = useForgeStore();
 const catalog = useCatalogStore();
+const users = useUsersStore();
 
 const expanded = computed(() => ui.expanded);
+const bootstrapped = ref(false);
+
+// Show UserPicker when 2+ profiles exist and no active selected;
+// auto-pick single profile / auto-load active from localStorage otherwise.
+// 2+ profile 且无 active → 显示 UserPicker；单 profile / localStorage 已有 active → 自动进。
+const showPicker = computed(
+  () =>
+    bootstrapped.value &&
+    users.list.length >= 2 &&
+    !users.list.find((u) => u.id === users.activeId),
+);
 
 function onKeydown(e: KeyboardEvent) {
   if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -41,8 +55,12 @@ function onKeydown(e: KeyboardEvent) {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   document.addEventListener('keydown', onKeydown);
+  // §multi-user: load users first; SSE / catalog need an active user to scope properly.
+  // §multi-user: 先加载 users；SSE / catalog 需要 active user 才能正确 scope。
+  await users.refresh();
+  bootstrapped.value = true;
   // Start global subscriptions: chat eventlog, notifications, forge.
   chat.startSSE();
   notifs.start();
@@ -120,6 +138,7 @@ onUnmounted(() => {
 
     <CommandPalette v-if="ui.palette" />
     <RawJsonModal v-if="ui.rawJson.open" />
+    <UserPicker v-if="showPicker" />
     <ToastTray />
   </div>
 </template>

@@ -11,6 +11,8 @@
  * connection budget).
  */
 
+import { getActiveUserID } from './client';
+
 export type StreamID = 'eventlog' | 'notifications' | 'forge';
 
 export interface StreamEvent<T = unknown> {
@@ -68,7 +70,11 @@ function connect(stream: StreamID) {
   // automatically on auto-reconnect after network error. On manual reconnect
   // we close + reopen with no header, accepting that gap (frontend can
   // re-fetch state via REST if needed).
-  const es = new EventSource(ch.url, { withCredentials: false });
+  // §multi-user: append ?userID=<active> since EventSource can't set custom headers in browser API.
+  // §multi-user: 加 ?userID=<active>；EventSource 浏览器 API 不能自定义 header。
+  const uid = getActiveUserID();
+  const url = uid ? `${ch.url}?userID=${encodeURIComponent(uid)}` : ch.url;
+  const es = new EventSource(url, { withCredentials: false });
   ch.es = es;
   ch.connected = false;
 

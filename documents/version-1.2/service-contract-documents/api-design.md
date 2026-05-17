@@ -67,6 +67,14 @@ type Error = {
 - 状态变更：用 `PATCH` + 状态字段（不用 `/archive`、`/restore` 子路径）
 - 不能用 RESTful 表达的动作：`:action` 后缀（如 `POST /api-keys/{id}:test`）
 
+### 多用户 session（§20）
+
+每个请求需 `X-Forgify-User-ID: <userID>` header 标识当前 profile；缺省回退至 DB 首个 user，再回退 `local-user`。SSE EventSource API 不能自定义 header → 端点 URL append `?userID=<uid>` 兜底。详 [`../service-design-documents/user.md`](../service-design-documents/user.md) §9。
+
+### 多语言（§21）
+
+每个请求附 `Accept-Language: zh-CN | en` header（按 active user.language 自动设）；后端 ctx 经 `InjectLocale` middleware 注入，LLM system prompt 自动按 locale 拼 hint 段。
+
 ---
 
 ## API 清单
@@ -206,7 +214,7 @@ type Error = {
 
 | Method | Path | 用途 |
 |---|---|---|
-| POST   | `/api/v1/workflows/{id}:trigger`                       | 手动触发 (转 scheduler.StartRun;disabled → 422)|
+| POST   | `/api/v1/workflows/{id}:trigger`                       | 手动触发 (转 scheduler.StartRun;disabled → 422);query `?dryRun=true` 走 preview 模式,side-effect 节点(function/handler/mcp/skill/llm/agent/http/approval/wait)返 mock outputs(§19 dry-run)|
 | GET    | `/api/v1/workflows/{id}/triggers`                      | trigger 状态 §6.12 (含 cron `nextFireAt`)|
 | GET    | `/api/v1/flowruns`                                     | 列表 (?workflowId / ?status / ?triggerKind)|
 | GET    | `/api/v1/flowruns/{id}`                                | 单 FlowRun |
@@ -309,6 +317,26 @@ Notion-style 树状文档库 CRUD + move。详见 [`../service-design-documents/
 | POST | `/api/v1/permissions/test` | body `{toolName, args, destructive?}` → 返 `{action, reason}` 预测当前规则下结果，无副作用 |
 
 settings.json 顶层 schema：`{permissions:{defaultMode:ask\|allow\|deny\|bypass, deny:[], ask:[], allow:[]}, hooks:{PreToolUse:[], PostToolUse:[], Stop:[]}, protectedPaths:{denyWrite:[]}}`。规则形态 `"Verb(pattern)"`（如 `"Bash(rm -rf *)"`、`"Edit(./src/**)"`、`"WebFetch(domain:github.com)"`）；详 [`../service-design-documents/permissions.md`](../service-design-documents/permissions.md) §5.1。求值：deny→ask→allow→defaultMode 第一匹配赢；session ask-once 缓存让用户答过的同 (tool, args) 不再问。Hook 形态当前仅 shell exec（stdin/stdout JSON 协议），exit 0/2/其他 三态语义；详 §6。
+
+#### user（V1.2 §20 multi-user）✅
+详见 [`../service-design-documents/user.md`](../service-design-documents/user.md)。本地多 profile（无 auth、无密码）；DB 自动 user_id scope；前端 X-Forgify-User-ID header 注入。
+
+| Method | Path | 用途 |
+|---|---|---|
+| GET | `/api/v1/users` | 列表（无分页，量小）|
+| POST | `/api/v1/users` | 创建（body `{username, displayName?, avatarColor?, language?}`；username 1-32 [a-z0-9_-] 自动 lowercase）→ 201 |
+| GET | `/api/v1/users/{id}` | 单查 → 200 / 404 |
+| PATCH | `/api/v1/users/{id}` | partial update（`displayName?` / `avatarColor?` / `language?`）→ 200 |
+| DELETE | `/api/v1/users/{id}` | 软删（拒最后一个 → 422 CANNOT_DELETE_LAST_USER）→ 204 |
+| POST | `/api/v1/users/{id}:activate` | touch last_used_at + 返 User → 200 |
+
+#### dev prompts inventory（V1.2 §18 prompt governance）✅
+详见 [`../service-design-documents/../prompt-principles.md`](../prompt-principles.md)。dev-only。
+
+| Method | Path | 用途 |
+|---|---|---|
+| GET | `/api/v1/dev/prompts` | 41 条 prompt 总览：33 tool descriptions + 2 chat-system 静态段 + 3 internal-llm + 3 subagent；每条 `{name, category, content, length, tokensEst, source}` → 200 |
+| GET | `/api/v1/conversations/{id}/system-prompt-preview` | 当前 conv 实际拼装的 system prompt + section 拆解 → 200 |
 
 ---
 

@@ -26,6 +26,7 @@ import (
 	skilldomain "github.com/sunweilin/forgify/backend/internal/domain/skill"
 	subagentdomain "github.com/sunweilin/forgify/backend/internal/domain/subagent"
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
+	userdomain "github.com/sunweilin/forgify/backend/internal/domain/user"
 	cryptoinfra "github.com/sunweilin/forgify/backend/internal/infra/crypto"
 	handlerinfra "github.com/sunweilin/forgify/backend/internal/infra/handler"
 	memorydomain "github.com/sunweilin/forgify/backend/internal/domain/memory"
@@ -155,6 +156,13 @@ var errTable = map[error]errMapping{
 	tododomain.ErrNotFound:        {http.StatusNotFound, "TODO_NOT_FOUND"},
 	tododomain.ErrSubjectRequired: {http.StatusBadRequest, "TODO_SUBJECT_REQUIRED"},
 	tododomain.ErrInvalidStatus:   {http.StatusBadRequest, "TODO_INVALID_STATUS"},
+
+	userdomain.ErrNotFound:          {http.StatusNotFound, "USER_NOT_FOUND"},
+	userdomain.ErrUsernameRequired:  {http.StatusBadRequest, "USERNAME_REQUIRED"},
+	userdomain.ErrUsernameConflict:  {http.StatusConflict, "USERNAME_CONFLICT"},
+	userdomain.ErrUsernameInvalid:   {http.StatusBadRequest, "USERNAME_INVALID"},
+	userdomain.ErrCannotDeleteLast:  {http.StatusUnprocessableEntity, "CANNOT_DELETE_LAST_USER"},
+	userdomain.ErrLanguageInvalid:   {http.StatusBadRequest, "LANGUAGE_INVALID"},
 
 	// sandbox
 	sandboxdomain.ErrRuntimeNotSupported:  {http.StatusUnprocessableEntity, "SANDBOX_RUNTIME_NOT_SUPPORTED"},

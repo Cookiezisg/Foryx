@@ -11,105 +11,108 @@
  */
 import { computed, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { useI18n } from 'vue-i18n';
 import { useConvStore } from '@/stores/conv';
 
 defineProps<{ rail?: boolean }>();
 
+const { t } = useI18n();
 const conv = useConvStore();
 const route = useRoute();
 const router = useRouter();
 
 interface NavItem {
-  label: string;
+  labelKey: string;
   path: string;
   hint?: string;
 }
 interface NavSection {
   id: string;
-  label: string;
+  labelKey: string;
   items: NavItem[];
   requiresConv?: boolean;
 }
 
-const sections: NavSection[] = [
+const sections = computed<NavSection[]>(() => [
   {
     id: 'current',
-    label: 'Current conv',
+    labelKey: 'nav.sectionCurrent',
     requiresConv: true,
     items: [
-      { label: 'Wire trace', path: '/current/wire', hint: 'LLM call request/events/elapsed' },
-      { label: 'Eventlog raw', path: '/current/eventlog', hint: 'this conv\'s SSE events' },
-      { label: 'Notifications', path: '/current/notifications', hint: 'notif history for this conv' },
-      { label: 'Sub-agents', path: '/current/subagents', hint: 'sub-runs spawned in this conv' },
-      { label: 'Tool calls', path: '/current/tools', hint: 'all tool_call blocks' },
-      { label: 'Todos', path: '/current/todos', hint: 'conv-scoped todos' },
-      { label: 'Asks pending', path: '/current/asks', hint: 'waiting AskUserQuestions' },
-      { label: 'Attachments', path: '/current/attachments', hint: 'uploaded files' },
-      { label: 'Compaction', path: '/current/compaction', hint: 'summary + block roles (V1.2 §1)' },
+      { labelKey: 'nav.currentWire', path: '/current/wire' },
+      { labelKey: 'nav.currentEventlog', path: '/current/eventlog' },
+      { labelKey: 'nav.currentNotifications', path: '/current/notifications' },
+      { labelKey: 'nav.currentSubagents', path: '/current/subagents' },
+      { labelKey: 'nav.currentTools', path: '/current/tools' },
+      { labelKey: 'nav.currentTodos', path: '/current/todos' },
+      { labelKey: 'nav.currentAsks', path: '/current/asks' },
+      { labelKey: 'nav.currentAttachments', path: '/current/attachments' },
+      { labelKey: 'nav.currentCompaction', path: '/current/compaction' },
     ],
   },
   {
     id: 'forge',
-    label: 'Forge',
+    labelKey: 'nav.sectionForge',
     items: [
-      { label: 'Functions', path: '/forge/functions' },
-      { label: 'Handlers', path: '/forge/handlers' },
-      { label: 'Workflows', path: '/forge/workflows' },
-      { label: 'Tools registry', path: '/forge/tools', hint: 'LLM system tools' },
-      { label: 'Collections', path: '/forge/collections', hint: 'YAML test scenarios' },
+      { labelKey: 'nav.forgeFunctions', path: '/forge/functions' },
+      { labelKey: 'nav.forgeHandlers', path: '/forge/handlers' },
+      { labelKey: 'nav.forgeWorkflows', path: '/forge/workflows' },
+      { labelKey: 'nav.forgeTools', path: '/forge/tools' },
+      { labelKey: 'nav.forgeCollections', path: '/forge/collections' },
     ],
   },
   {
     id: 'execute',
-    label: 'Execute',
+    labelKey: 'nav.sectionExecute',
     items: [
-      { label: 'Triggers', path: '/execute/triggers' },
-      { label: 'FlowRuns', path: '/execute/flowruns' },
-      { label: 'Approvals', path: '/execute/approvals' },
-      { label: 'Executions', path: '/execute/executions', hint: 'D22 5 表' },
+      { labelKey: 'nav.executeTriggers', path: '/execute/triggers' },
+      { labelKey: 'nav.executeFlowruns', path: '/execute/flowruns' },
+      { labelKey: 'nav.executeApprovals', path: '/execute/approvals' },
+      { labelKey: 'nav.executeExecutions', path: '/execute/executions' },
     ],
   },
   {
     id: 'observe',
-    label: 'Observe',
+    labelKey: 'nav.sectionObserve',
     items: [
-      { label: 'Live SSE', path: '/observe/live', hint: '3 streams' },
-      { label: 'Notif history', path: '/observe/notifications' },
-      { label: 'Catalog', path: '/observe/catalog' },
-      { label: 'Usage', path: '/observe/usage', hint: 'token / cost spend per period (§4.9)' },
-      { label: 'Mock LLM', path: '/observe/mock-llm' },
+      { labelKey: 'nav.observeLive', path: '/observe/live' },
+      { labelKey: 'nav.observeNotifications', path: '/observe/notifications' },
+      { labelKey: 'nav.observeCatalog', path: '/observe/catalog' },
+      { labelKey: 'nav.observeUsage', path: '/observe/usage' },
+      { labelKey: 'nav.observeMockLLM', path: '/observe/mock-llm' },
     ],
   },
   {
     id: 'config',
-    label: 'Config',
+    labelKey: 'nav.sectionConfig',
     items: [
-      { label: 'API Keys', path: '/config/apikeys' },
-      { label: 'Models', path: '/config/models' },
-      { label: 'Skills', path: '/config/skills' },
-      { label: 'MCP servers', path: '/config/mcp' },
-      { label: 'Sandbox', path: '/config/sandbox' },
-      { label: 'Memory', path: '/config/memory', hint: 'cross-conv long-term facts (V1.2 §2)' },
-      { label: 'Documents', path: '/config/documents', hint: 'Notion-style markdown tree (Phase 5 §14)' },
-      { label: 'Permissions', path: '/config/permissions', hint: 'settings.json rules + hooks (V1.2 §3)' },
-      { label: 'LLM Health', path: '/config/llm-health', hint: 'per-provider connectivity (§4.10)' },
+      { labelKey: 'nav.configApiKeys', path: '/config/apikeys' },
+      { labelKey: 'nav.configModels', path: '/config/models' },
+      { labelKey: 'nav.configSkills', path: '/config/skills' },
+      { labelKey: 'nav.configMCP', path: '/config/mcp' },
+      { labelKey: 'nav.configSandbox', path: '/config/sandbox' },
+      { labelKey: 'nav.configMemory', path: '/config/memory' },
+      { labelKey: 'nav.configDocuments', path: '/config/documents' },
+      { labelKey: 'nav.configPermissions', path: '/config/permissions' },
+      { labelKey: 'nav.configLLMHealth', path: '/config/llm-health' },
+      { labelKey: 'nav.configProfile', path: '/config/profile' },
     ],
   },
   {
     id: 'dev',
-    label: 'Dev',
+    labelKey: 'nav.sectionDev',
     items: [
-      { label: 'SQL', path: '/dev/sql' },
-      { label: 'Info', path: '/dev/info' },
-      { label: 'Routes', path: '/dev/routes' },
-      { label: 'Backend logs', path: '/dev/logs' },
-      { label: 'Processes', path: '/dev/processes', hint: 'Bash bg' },
-      { label: 'Metrics', path: '/dev/metrics' },
-      { label: 'Errors', path: '/dev/errors' },
-      { label: 'Prompts', path: '/dev/prompts', hint: 'all LLM-facing prompts (§18.1)' },
+      { labelKey: 'nav.devSQL', path: '/dev/sql' },
+      { labelKey: 'nav.devInfo', path: '/dev/info' },
+      { labelKey: 'nav.devRoutes', path: '/dev/routes' },
+      { labelKey: 'nav.devLogs', path: '/dev/logs' },
+      { labelKey: 'nav.devProcesses', path: '/dev/processes' },
+      { labelKey: 'nav.devMetrics', path: '/dev/metrics' },
+      { labelKey: 'nav.devErrors', path: '/dev/errors' },
+      { labelKey: 'nav.devPrompts', path: '/dev/prompts' },
     ],
   },
-];
+]);
 
 /* Persist collapsed sections in localStorage. */
 const LS_KEY = 'forgify-testend:nav-collapsed';
@@ -158,9 +161,9 @@ function isActive(p: string) {
       >
         <button class="section-header" @click="toggle(s.id)">
           <span class="caret">{{ collapsed.has(s.id) ? '▸' : '▾' }}</span>
-          <span class="section-label">{{ s.label }}</span>
-          <span v-if="s.requiresConv && !conv.selectedId" class="section-note" title="select a conversation">
-            no conv
+          <span class="section-label">{{ t(s.labelKey) }}</span>
+          <span v-if="s.requiresConv && !conv.selectedId" class="section-note" :title="t('nav.noConv')">
+            {{ t('nav.noConv') }}
           </span>
         </button>
         <ul v-show="!collapsed.has(s.id)" class="section-items">
@@ -170,10 +173,8 @@ function isActive(p: string) {
             class="item"
             :class="{ active: isActive(it.path), gated: s.requiresConv && !conv.selectedId }"
             @click="(s.requiresConv && !conv.selectedId) ? null : nav(it.path)"
-            :title="it.hint || ''"
           >
-            <span>{{ it.label }}</span>
-            <span v-if="it.hint" class="item-hint">{{ it.hint }}</span>
+            <span>{{ t(it.labelKey) }}</span>
           </li>
         </ul>
       </section>
@@ -184,10 +185,10 @@ function isActive(p: string) {
         v-for="s in sections"
         :key="s.id"
         class="rail-section"
-        :title="s.label"
+        :title="t(s.labelKey)"
         @click="nav(s.items[0].path)"
       >
-        {{ s.label[0] }}
+        {{ t(s.labelKey)[0] }}
       </button>
     </div>
   </nav>

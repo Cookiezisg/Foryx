@@ -33,6 +33,7 @@ import (
 	skillapp "github.com/sunweilin/forgify/backend/internal/app/skill"
 	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	todoapp "github.com/sunweilin/forgify/backend/internal/app/todo"
+	userapp "github.com/sunweilin/forgify/backend/internal/app/user"
 	workflowapp "github.com/sunweilin/forgify/backend/internal/app/workflow"
 	schedulerapp "github.com/sunweilin/forgify/backend/internal/app/scheduler"
 	triggerapp "github.com/sunweilin/forgify/backend/internal/app/trigger"
@@ -65,6 +66,7 @@ import (
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
+	userdomain "github.com/sunweilin/forgify/backend/internal/domain/user"
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
@@ -79,6 +81,7 @@ import (
 	forgepkg "github.com/sunweilin/forgify/backend/internal/pkg/forge"
 	notificationspkg "github.com/sunweilin/forgify/backend/internal/pkg/notifications"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
+	userpathpkg "github.com/sunweilin/forgify/backend/internal/pkg/userpath"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	loggerinfra "github.com/sunweilin/forgify/backend/internal/infra/logger"
 	mcpinfra     "github.com/sunweilin/forgify/backend/internal/infra/mcp"
@@ -94,6 +97,7 @@ import (
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
+	userstore "github.com/sunweilin/forgify/backend/internal/infra/store/user"
 	workflowstore "github.com/sunweilin/forgify/backend/internal/infra/store/workflow"
 	flowrunstore "github.com/sunweilin/forgify/backend/internal/infra/store/flowrun"
 	mcpcallstore "github.com/sunweilin/forgify/backend/internal/infra/store/mcpcalls"
@@ -177,6 +181,7 @@ func main() {
 		&memorydomain.Memory{},
 		&documentdomain.Document{},
 		&catalogdomain.HistoryEntry{},
+		&userdomain.User{},
 	); err != nil {
 		log.Error("migrate db", zap.Error(err))
 		os.Exit(1)
@@ -192,6 +197,25 @@ func main() {
 		log.Error("build encryptor", zap.Error(err))
 		os.Exit(1)
 	}
+	// §multi-user: user service first; EnsureDefault migrates pre-existing "local-user" data into a Profile entity.
+	// §multi-user: user service 优先；EnsureDefault 把老 "local-user" 数据迁成一个 Profile entity。
+	userService := userapp.NewService(userstore.New(gdb), log)
+	if _, err := userService.EnsureDefault(context.Background()); err != nil {
+		log.Error("user EnsureDefault failed", zap.Error(err))
+		os.Exit(1)
+	}
+	// Migrate legacy single-user paths into users/local-user/ subdir.
+	// 迁老的单用户路径到 users/local-user/ 子目录。
+	if err := userpathpkg.MigrateLegacy(homeRoot, reqctxpkg.DefaultLocalUserID,
+		"mcp.json", "skills", ".catalog.json", "settings.json"); err != nil {
+		log.Warn("legacy path migration", zap.Error(err))
+	}
+	defaultUserHome, err := userpathpkg.UserHome(homeRoot, reqctxpkg.DefaultLocalUserID)
+	if err != nil {
+		log.Error("user home init", zap.Error(err))
+		os.Exit(1)
+	}
+
 	apikeyService := apikeyapp.NewService(
 		apikeystore.New(gdb),
 		encryptor,
@@ -271,7 +295,11 @@ func main() {
 	pathGuard := pathguardpkg.NewDefault()
 
 	// MCP Service constructed before WebTools so WebSearch can route through duckduckgo-search MCP.
-	mcpConfigPath := filepath.Join(homeRoot, "mcp.json")
+	// V1.2 multi-user: paths scoped to default user's home (~/.forgify/users/local-user/). Per-user
+	// switching today reads from default user's bucket; rebuilding services per-user is V1.5.
+	// V1.2 多用户：路径 scope 到默认用户主目录 (~/.forgify/users/local-user/)。
+	// 切换 user 时今天仍读默认 user 桶；运行时按 user 重建 service 留 V1.5。
+	mcpConfigPath := filepath.Join(defaultUserHome, "mcp.json")
 	mcpRegistrySource := mcpinfra.NewCuratedRegistrySource()
 	mcpService := mcpapp.New(
 		mcpConfigPath,
@@ -344,7 +372,7 @@ func main() {
 	tools = append(tools, mcptool.MCPTools(mcpService)...)
 
 	skillService := skillapp.New(
-		filepath.Join(homeRoot, "skills"),
+		filepath.Join(defaultUserHome, "skills"),
 		subagentService,
 		modelService,
 		apikeyService,
@@ -358,7 +386,7 @@ func main() {
 	}
 	tools = append(tools, skilltool.SkillTools(skillService)...)
 
-	catalogService := catalogapp.New(filepath.Join(homeRoot, ".catalog.json"), notificationsPub, log)
+	catalogService := catalogapp.New(filepath.Join(defaultUserHome, ".catalog.json"), notificationsPub, log)
 	catalogService.SetGenerator(catalogapp.NewLLMGenerator(modelService, apikeyService, llmFactory, log))
 	catalogService.SetHistoryRepo(cataloghistorystore.New(gdb))
 	// Sources here = "things the LLM can call from chat as capabilities":
@@ -389,7 +417,7 @@ func main() {
 	// V1.2 §3 final-sweep —— permissions + hooks。settings.json 在
 	// <homeRoot>/settings.json；gate 经 SettingsService 快照读；
 	// HookRunner 共用此快照。
-	settingsService := settingsinfra.New(filepath.Join(homeRoot, "settings.json"), log)
+	settingsService := settingsinfra.New(filepath.Join(defaultUserHome, "settings.json"), log)
 	if err := settingsService.Start(context.Background()); err != nil {
 		log.Warn("settings start failed (continuing with last good snapshot)", zap.Error(err))
 	}
@@ -456,8 +484,17 @@ func main() {
 	router.Set(workflowdomain.NodeTypeVariable, schedulerapp.NewVariableDispatcher())
 	schedulerService.SetRouter(router)
 
-	if err := schedulerService.RehydrateOnBoot(context.Background(), ""); err != nil {
-		log.Warn("scheduler rehydrate failed (paused runs may need manual resume)", zap.Error(err))
+	// §multi-user: rehydrate paused FlowRuns for every user, not just default.
+	// §multi-user: 给每个 user 都 rehydrate paused FlowRun，不止默认 user。
+	if users, err := userService.List(context.Background()); err == nil {
+		for _, u := range users {
+			if err := schedulerService.RehydrateOnBoot(context.Background(), u.ID); err != nil {
+				log.Warn("scheduler rehydrate failed (paused runs may need manual resume)",
+					zap.String("user_id", u.ID), zap.Error(err))
+			}
+		}
+	} else {
+		log.Warn("rehydrate: skipped (user list failed)", zap.Error(err))
 	}
 
 	tools = append(tools, workflowtool.WorkflowExecutionTools(flowrunRepo)...)
@@ -501,6 +538,7 @@ func main() {
 		CatalogService:      catalogService,
 		MemoryService:       memoryService,
 		DocumentService:     documentService,
+		UserService:         userService,
 		FunctionExecRepo:    functionExecRepo,
 		HandlerCallRepo:     handlerCallRepo,
 		MCPCallRepo:         mcpCallRepo,

@@ -22,6 +22,36 @@ export class HttpError extends Error {
   }
 }
 
+/** §multi-user: client stamps the active user's ID into X-Forgify-User-ID on every request. */
+const ACTIVE_USER_STORAGE_KEY = 'forgify:active-user';
+const LOCALE_STORAGE_KEY = 'forgify:locale';
+
+export function getActiveUserID(): string | null {
+  try {
+    return localStorage.getItem(ACTIVE_USER_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
+export function setActiveUserID(uid: string | null) {
+  try {
+    if (uid) localStorage.setItem(ACTIVE_USER_STORAGE_KEY, uid);
+    else localStorage.removeItem(ACTIVE_USER_STORAGE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** §i18n: client sends Accept-Language based on persisted locale (synced with vue-i18n). */
+function getActiveLocale(): string | null {
+  try {
+    return localStorage.getItem(LOCALE_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 async function request<T>(
   method: string,
   path: string,
@@ -32,6 +62,14 @@ async function request<T>(
     Accept: 'application/json',
     ...options.headers,
   };
+  const uid = getActiveUserID();
+  if (uid && !headers['X-Forgify-User-ID']) {
+    headers['X-Forgify-User-ID'] = uid;
+  }
+  const locale = getActiveLocale();
+  if (locale && !headers['Accept-Language']) {
+    headers['Accept-Language'] = locale;
+  }
   let payload: BodyInit | undefined;
   if (body !== undefined && body !== null) {
     if (body instanceof FormData) {

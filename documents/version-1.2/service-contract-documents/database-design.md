@@ -49,6 +49,10 @@ GORM tag 表达不了的 SQL 都在这里：
 
 ### Phase 2
 
+#### `users` ✅（V1.2 §20 multi-user）
+详见 [`../service-design-documents/user.md`](../service-design-documents/user.md) §8。
+主键文本（默认 user 固定 `"local-user"` 匹配 `reqctxpkg.DefaultLocalUserID`；新建用户 `u_<16hex>`）；UNIQUE `username`；软删。字段：`username`（1-32 [a-z0-9_-]，强制 lowercase）/ `display_name` / `avatar_color`（hex #4f46e5）/ **`language TEXT default 'zh-CN' CHECK(language IN ('zh-CN','en'))`**（§21 i18n）/ `last_used_at`（activate 时刷新；UserPicker 高亮"最近用"）/ 时间戳。**唯一不按 user_id scope 的表**——它自己就是身份。`EnsureDefault` 启动时空表创默认 user 让现有数据自然 surface（DB 已 user_id-scoped）。
+
 #### `api_keys` ✅
 详见 [`../service-design-documents/apikey.md`](../service-design-documents/apikey.md) §11。
 主键 `aki_<16hex>`；软删（`DeletedAt`）；全索引 `(user_id)` + `(user_id, provider)` + `(deleted_at)`（目前未走部分索引 `WHERE deleted_at IS NULL`，见 backlog）。**注**：`idx_api_keys_user_id` 单列与复合索引前导列重合可视为冗余，保留是为匹配 List filter 写法清晰度（单用户本地写入罕见，冗余成本可忽略）。敏感字段 `key_encrypted`（AES-GCM `v1:` 前缀，`json:"-"` 守护永不上线）+ `key_masked` 冗余展示。**feature 列**：`display_name`（UI 展示用）/ `base_url`（ollama / custom 必填）/ `api_format`（custom 必填，openai-compatible / anthropic-compatible 二选一）/ `test_status`（pending / ok / error）/ `test_error`（连通性测试失败原因）/ `last_tested_at`（最近一次测试时间，nullable）/ `models_found TEXT`（GORM `serializer:json`，存 JSON 字符串如 `["deepseek-chat","deepseek-reasoner"]`；测试成功后由 `UpdateTestResult` 写入，测试前为 `[]`）。不加 `UNIQUE(user_id, provider)`，允许同 provider 多 key。Provider / TestStatus 的 DB 层 CHECK 约束**未加**，由 app 层校验。
@@ -143,7 +147,7 @@ HTTP 端点:`GET /api/v1/handlers/{id}/calls` + `GET /api/v1/handler-calls/{call
 #### `workflows` ✅
 详见 [`../service-design-documents/workflow.md`](../service-design-documents/workflow.md) §8.1。
 主键 `wf_<16hex>`;软删;用户作用域;partial UNIQUE `(user_id, name) WHERE deleted_at IS NULL`(schema_extras `idx_workflows_user_name_active`)。
-字段:`name` / `description` / `tags` JSON / `enabled`(无 GORM `default:` tag — Service 层显式赋值,防 GORM 用 column 默认值静默覆盖零值)/ `concurrency`("serial",V1.5 加 "parallel(N)")/ `needs_attention` / `attention_reason`(Plan 05 D20 listener 写)/ `active_version_id` / 时间戳。
+字段:`name` / `description` / `tags` JSON / `enabled`(无 GORM `default:` tag — Service 层显式赋值,防 GORM 用 column 默认值静默覆盖零值)/ `concurrency`("serial",V1.5 加 "parallel(N)")/ `needs_attention` / `attention_reason`(Plan 05 D20 listener 写)/ `active_version_id` / **`timeout_sec INT default 0`**(§5.7 run-level timeout，0 = unlimited，>0 时 scheduler 用 `context.WithTimeout`，超时 → status=failed + RUN_TIMEOUT)/ 时间戳。
 **计算字段**(`gorm:"-"`):`Pending *Version` / `LiveRuns int` / `LastFiredAt *time.Time` / `NextFireAt *time.Time`(后三个 Plan 05 territory,响应形状预留)。`attachComputed` 在 Get 时填 Pending。
 
 #### `workflow_versions` ✅
@@ -159,13 +163,13 @@ AcceptedVersionCap = 50/workflow;RejectPending 不留 rejected 行,直接 HardDe
 #### `flowruns` ✅
 详见 [`../service-design-documents/flowrun.md`](../service-design-documents/flowrun.md) §2.1。
 主键 `fr_<16hex>`;软删;用户作用域;复合索引 `(workflow_id, status, started_at DESC)`。
-字段:`user_id` / `workflow_id` (FK) / `version_id` (锁起跑版本) / `trigger_kind` CHECK cron|fsnotify|webhook|manual / `trigger_input` JSON / `status` CHECK running|paused|completed|failed|cancelled (5 值,V1 无 run-level timeout) / `started_at` / `ended_at` / `elapsed_ms` / `output` JSON / `error_code` / `error_message` / `paused_state` JSON (approval/wait 暂停时持久化 ExecutionContext 快照)。
+字段:`user_id` / `workflow_id` (FK) / `version_id` (锁起跑版本) / `trigger_kind` CHECK cron|fsnotify|webhook|manual / `trigger_input` JSON / `status` CHECK running|paused|completed|failed|cancelled / `started_at` / `ended_at` / `elapsed_ms` / `output` JSON / `error_code`（含 `RUN_TIMEOUT` for §5.7）/ `error_message` / `paused_state` JSON (approval/wait 暂停时持久化 ExecutionContext 快照)/ **`dry_run BOOLEAN default false`**（§19 dry-run preview run，side-effect dispatchers 返 mock outputs）。
 **保留策略 (§6.7)**:每 workflow 默认保留最近 200 行,`HardDeleteOldest` 在 `scheduler.finalizeRun` 后异步剪。
 
 #### `flowrun_nodes` ✅
 详见 [`../service-design-documents/flowrun.md`](../service-design-documents/flowrun.md) §2.2 + [`08-executions.md`](../adhoc-topic-documents/forge_redesign/08-executions.md) §4.5。
 主键 `frn_<16hex>`;软删;用户作用域。
-**通用 16 字段**(spec 08 §2 模板) + **flowrun-specific 4 字段**:`flowrun_id` 索引 / `node_id` (graph 内 ID,如 "filter_cond") / `node_type` (function/handler/mcp/skill/llm/http/condition/loop/parallel/approval/wait/variable/trigger) / `attempts` (retry 次数 default 1)。
+**通用 16 字段**(spec 08 §2 模板) + **flowrun-specific 4 字段**:`flowrun_id` 索引 / `node_id` (graph 内 ID,如 "filter_cond") / `node_type` (function/handler/mcp/skill/llm/http/condition/loop/parallel/approval/wait/variable/trigger) / `attempts` (retry 次数 default 1) + **§5.1 loop body 2 字段**:`parent_loop_node TEXT`(外层 loop 节点 ID，body 子图迭代时填）+ `iteration_index INT default 0`(0-起 item 序号)。
 索引 `(flowrun_id, started_at DESC)`(D22 spec 08 §2.5)。
 **Cross-table linking**(spec 08 §4.5):capability 节点 (function/handler/mcp/skill) dispatch 时**同时写两条** — 一条到 flowrun_nodes (workflow 视角) + 一条到对应 entity 表 (function_executions / handler_calls / mcp_calls / skill_executions),经 `flowrun_node_id` 字段交叉引用。
 

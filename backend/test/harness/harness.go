@@ -40,6 +40,7 @@ import (
 	skillapp "github.com/sunweilin/forgify/backend/internal/app/skill"
 	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	todoapp "github.com/sunweilin/forgify/backend/internal/app/todo"
+	userapp "github.com/sunweilin/forgify/backend/internal/app/user"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
@@ -69,6 +70,7 @@ import (
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 	tododomain "github.com/sunweilin/forgify/backend/internal/domain/todo"
+	userdomain "github.com/sunweilin/forgify/backend/internal/domain/user"
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
 	skilldomain "github.com/sunweilin/forgify/backend/internal/domain/skill"
@@ -92,6 +94,7 @@ import (
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
+	userstore "github.com/sunweilin/forgify/backend/internal/infra/store/user"
 	workflowstore "github.com/sunweilin/forgify/backend/internal/infra/store/workflow"
 	flowrunstore "github.com/sunweilin/forgify/backend/internal/infra/store/flowrun"
 	mcpcallstore "github.com/sunweilin/forgify/backend/internal/infra/store/mcpcalls"
@@ -231,6 +234,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		&memorydomain.Memory{},
 		&documentdomain.Document{},
 		&catalogdomain.HistoryEntry{},
+		&userdomain.User{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -347,6 +351,10 @@ func New(t *testing.T, opts ...Option) *Harness {
 	t.Cleanup(shells.Manager.Stop)
 	tools = append(tools, shells.Tools...)
 	todoService := todoapp.NewService(todostore.New(gdb), notificationsPub, log)
+	userService := userapp.NewService(userstore.New(gdb), log)
+	if _, err := userService.EnsureDefault(context.Background()); err != nil {
+		t.Fatalf("user EnsureDefault: %v", err)
+	}
 	tools = append(tools, todotool.TodoTools(todoService)...)
 	askService := askapp.NewService()
 	tools = append(tools, asktool.AskTools(askService)...)
@@ -552,6 +560,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		CatalogService:      catalogService,
 		MemoryService:       memoryService,
 		DocumentService:     documentService,
+		UserService:         userService,
 		SettingsService:     settingsService,
 		SettingsPath:        settingsPath,
 		PermGate:            permGate,

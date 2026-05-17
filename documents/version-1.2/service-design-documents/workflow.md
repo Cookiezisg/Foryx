@@ -109,7 +109,7 @@ ValidateGraph 在 Service.Create / Edit 时强制以上规则,违反返 `ErrOpIn
 
 ---
 
-## 4. 13 节点类型
+## 4. 14 节点类型（§14.5b 加 agent）
 
 | Type | 用途 | Config 关键字段 |
 |---|---|---|
@@ -121,7 +121,7 @@ ValidateGraph 在 Service.Create / Edit 时强制以上规则,违反返 `ErrOpIn
 | `llm` | 直接 LLM 调用 | `scenario`, `prompt`, `outputVariable` |
 | `http` | HTTP 请求 | `method`, `url`, `headers`, `body` |
 | `condition` | if/else 分支 | `condition`(expression)+ body subgraph |
-| `loop` | for-each / while | `over` 或 `condition` + body subgraph |
+| `loop` | for-each + body 子图（§5.1 ✅ 2026-05-17）| `items` + `body: {nodes, edges}` + `parallel?: bool` + `concurrency?: int` (default cap 5) + `onError?: "stop"\|"continue"` |
 | `parallel` | 并发 | body subgraph(多个起点)|
 | `approval` | 等用户 approve | `prompt`, `timeout` |
 | `wait` | sleep / 等事件 | `duration` 或 `event` |

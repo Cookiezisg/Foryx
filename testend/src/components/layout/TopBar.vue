@@ -3,10 +3,14 @@
  * TopBar — sticky title strip with build + port + catalog snapshot + expand toggle.
  */
 import { onMounted, ref, computed } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { devAPI } from '@/api/dev';
 import { useUIStore } from '@/stores/ui';
 import { useCatalogStore } from '@/stores/catalog';
 import { status as sseStatus } from '@/api/sse';
+import UserSwitcher from '@/components/users/UserSwitcher.vue';
+
+const { t } = useI18n();
 
 const ui = useUIStore();
 const catalog = useCatalogStore();
@@ -43,11 +47,11 @@ const catalogBy = computed(() => catalog.current?.generatedBy ?? '');
   <header class="topbar">
     <div class="title">
       <span class="brand">FORGIFY</span>
-      <span class="brand-sub">tester</span>
+      <span class="brand-sub">{{ t('topbar.brandSub') }}</span>
     </div>
 
     <div class="meta">
-      <span class="meta-item mono">port:{{ info.port ?? '?' }}</span>
+      <span class="meta-item mono">{{ t('topbar.port') }}:{{ info.port ?? '?' }}</span>
       <span v-if="info.gitCommit" class="meta-item mono" :title="info.gitCommit">
         git:{{ info.gitCommit.slice(0, 7) }}
       </span>
@@ -76,12 +80,14 @@ const catalogBy = computed(() => catalog.current?.generatedBy ?? '');
       </span>
     </div>
 
-    <button class="btn ghost icon" @click="ui.toggleExpanded()" :title="ui.expanded ? 'restore 4-column' : 'expand col4 (hide conv + chat)'">
+    <button class="btn ghost icon" @click="ui.toggleExpanded()" :title="ui.expanded ? t('topbar.restore') : t('topbar.expand')">
       <span v-if="ui.expanded">⛶</span>
       <span v-else>⤢</span>
     </button>
 
-    <button class="btn ghost icon" @click="ui.openPalette()" title="⌘K command palette">⌘K</button>
+    <button class="btn ghost icon" @click="ui.openPalette()" :title="`⌘K ${t('topbar.commandPalette')}`">⌘K</button>
+
+    <UserSwitcher />
   </header>
 </template>
 
