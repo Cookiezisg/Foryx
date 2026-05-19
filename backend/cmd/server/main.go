@@ -350,6 +350,7 @@ func main() {
 	todoService := todoapp.NewService(todostore.New(gdb), notificationsPub, log)
 	tools = append(tools, todotool.TodoTools(todoService)...)
 	askService := askapp.NewService()
+	askService.SetNotifications(notificationsPub)
 	tools = append(tools, asktool.AskTools(askService)...)
 
 	memoryService := memoryapp.New(memorystore.New(gdb), notificationsPub, log)

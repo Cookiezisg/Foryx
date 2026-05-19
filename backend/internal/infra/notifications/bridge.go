@@ -153,4 +153,35 @@ func (b *Bridge) Subscribe(ctx context.Context, fromSeq int64) (<-chan notificat
 	return sub.ch, cancel, nil
 }
 
+// List returns up to limit envelopes with Seq > fromSeq from the user's replay buffer.
+//
+// List 从 replay buffer 返最多 limit 条 Seq > fromSeq 的通知。
+func (b *Bridge) List(ctx context.Context, fromSeq int64, limit int) ([]notificationsdomain.Envelope, bool, error) {
+	uid, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return nil, false, fmt.Errorf("notifications.Bridge.List: %w", err)
+	}
+
+	b.mu.Lock()
+	state, ok := b.users[uid]
+	b.mu.Unlock()
+	if !ok {
+		return nil, false, nil
+	}
+
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
+	var matched []notificationsdomain.Envelope
+	for _, env := range state.buffer {
+		if env.Seq > fromSeq {
+			matched = append(matched, env)
+		}
+	}
+	if limit <= 0 || len(matched) <= limit {
+		return matched, false, nil
+	}
+	return matched[:limit], true, nil
+}
+
 var _ notificationsdomain.Bridge = (*Bridge)(nil)

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"go.uber.org/zap"
 
@@ -14,9 +15,9 @@ import (
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
-// NotificationsHandler exposes /api/v1/notifications global SSE stream.
+// NotificationsHandler exposes /api/v1/notifications as SSE stream or REST snapshot.
 //
-// NotificationsHandler 把 /api/v1/notifications 暴露为全局 SSE 流。
+// NotificationsHandler 将 /api/v1/notifications 暴露为 SSE 流或 REST 快照。
 type NotificationsHandler struct {
 	bridge notificationsdomain.Bridge
 	log    *zap.Logger
@@ -30,10 +31,21 @@ func NewNotificationsHandler(bridge notificationsdomain.Bridge, log *zap.Logger)
 }
 
 func (h *NotificationsHandler) Register(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/notifications", h.Stream)
+	mux.HandleFunc("GET /api/v1/notifications", h.Handle)
 }
 
-func (h *NotificationsHandler) Stream(w http.ResponseWriter, r *http.Request) {
+// Handle routes to SSE stream or REST list based on Accept header.
+//
+// Handle 按 Accept header 分发 SSE 流或 REST 快照列表。
+func (h *NotificationsHandler) Handle(w http.ResponseWriter, r *http.Request) {
+	if strings.Contains(r.Header.Get("Accept"), "text/event-stream") {
+		h.stream(w, r)
+		return
+	}
+	h.list(w, r)
+}
+
+func (h *NotificationsHandler) stream(w http.ResponseWriter, r *http.Request) {
 	var fromSeq int64
 	if v := r.Header.Get("Last-Event-ID"); v != "" {
 		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
@@ -69,4 +81,56 @@ func (h *NotificationsHandler) Stream(w http.ResponseWriter, r *http.Request) {
 			return err
 		},
 	)
+}
+
+// notifListItem is the JSON shape for each item in the REST snapshot list.
+type notifListItem struct {
+	Seq            int64  `json:"seq"`
+	Type           string `json:"type"`
+	ID             string `json:"id"`
+	Data           any    `json:"data"`
+	ConversationID string `json:"conversationId,omitempty"`
+}
+
+func (h *NotificationsHandler) list(w http.ResponseWriter, r *http.Request) {
+	var fromSeq int64
+	if v := r.URL.Query().Get("cursor"); v != "" {
+		if n, err := strconv.ParseInt(v, 10, 64); err == nil && n > 0 {
+			fromSeq = n
+		}
+	}
+	limit := 50
+	if v := r.URL.Query().Get("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			limit = n
+		}
+	}
+	if limit > 200 {
+		limit = 200
+	}
+
+	envelopes, hasMore, err := h.bridge.List(r.Context(), fromSeq, limit)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+
+	items := make([]notifListItem, len(envelopes))
+	var lastSeq int64
+	for i, env := range envelopes {
+		items[i] = notifListItem{
+			Seq:            env.Seq,
+			Type:           env.Event.Type,
+			ID:             env.Event.ID,
+			Data:           env.Event.Data,
+			ConversationID: env.Event.ConversationID,
+		}
+		lastSeq = env.Seq
+	}
+
+	var nextCursor string
+	if hasMore {
+		nextCursor = strconv.FormatInt(lastSeq, 10)
+	}
+	responsehttpapi.Paged(w, items, nextCursor, hasMore)
 }

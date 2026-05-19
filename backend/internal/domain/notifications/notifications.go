@@ -40,6 +40,11 @@ type Bridge interface {
 	//
 	// Subscribe 注册订阅者；fromSeq>0 先 replay；过旧返 ErrSeqTooOld。
 	Subscribe(ctx context.Context, fromSeq int64) (<-chan Envelope, func(), error)
+
+	// List returns up to limit envelopes with Seq > fromSeq for the ctx user; bool = hasMore.
+	//
+	// List 返回最多 limit 条 Seq > fromSeq 的 Envelope；bool = hasMore。
+	List(ctx context.Context, fromSeq int64, limit int) ([]Envelope, bool, error)
 }
 
 // ErrSeqTooOld is returned when fromSeq has been evicted; client should resubscribe live + REST refetch.

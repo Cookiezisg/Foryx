@@ -87,7 +87,7 @@ type Error = {
 |---|---|---|---|
 | GET | `/api/v1/health` | 存活探针(Electron 启动后读)| ✅ |
 | GET | `/api/v1/eventlog` | **per-user** SSE 事件流(D-redo-2;Bridge 按 user_id key,payload 带 `conversationId`,client 按 payload demux);递归事件日志协议(5 events × 6 block types);`Last-Event-ID` 重连;超 buffer 返 410 Gone SEQ_TOO_OLD — 详 [`../event-log-protocol.md`](../event-log-protocol.md) | 🔄 |
-| GET | `/api/v1/notifications` | **per-user** SSE entity 状态总线(D-redo-3;Bridge 按 user_id key);单 envelope `{type, id, data, conversationId?}`;`data` 字段瘦身只送 `{action, versionId?, versionNumber?, envStatus?, envError?}`,完整 entity 走 GET 拉取(D-redo-6);`Last-Event-ID` 重连 — 详 [`events-design.md`](./events-design.md) | 🔄 |
+| GET | `/api/v1/notifications` | **per-user** SSE 或 REST 快照：无 `Accept: text/event-stream` header 时返 JSON 分页列表（`?cursor=<seq>&limit=<N>`，max 200，每条含 `{seq,type,id,data,conversationId?}`）；有 SSE header 时走 entity 状态总线（Bridge 按 user_id key；`Last-Event-ID` 重连）— 详 [`events-design.md`](./events-design.md) | ✅ |
 | GET | `/api/v1/forge` | **per-user** SSE 锻造进度流(D-redo-4);trinity entity(function / handler / workflow)的 create/edit/revert/delete 流式;4 event types: `forge_started` / `forge_op_applied` / `forge_env_attempt` / `forge_completed`;payload 含 `scope:{kind,id}` + `operation` + `conversationId?` + `toolCallId?`;`Last-Event-ID` 重连 | ⬜ |
 | GET | `/api/v1/conversations/{id}/eventlog?from=N` | 历史回放:DB 重构 block 事件流(client 收 410 后用此 refetch;返 `{events, tailSeq, count}`)| ✅ |
 

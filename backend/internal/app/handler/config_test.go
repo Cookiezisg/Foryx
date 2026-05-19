@@ -152,6 +152,9 @@ func (silentBridge) Subscribe(_ context.Context, _ int64) (<-chan notificationsd
 func (silentBridge) Replay(_ context.Context, fromSeq int64) ([]notificationsdomain.Envelope, error) {
 	return nil, nil
 }
+func (silentBridge) List(_ context.Context, _ int64, _ int) ([]notificationsdomain.Envelope, bool, error) {
+	return nil, false, nil
+}
 
 func ctxFor(userID string) context.Context {
 	return reqctxpkg.SetUserID(context.Background(), userID)

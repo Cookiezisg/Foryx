@@ -254,12 +254,13 @@ type SlimPayload = {
 | `flowrun` | `app/scheduler/Service` StartRun/finalize/pauseRun/ResumeApproval | started / paused / resumed / completed / failed / cancelled | `{action, workflowId, triggerKind?, nodeID?, decision?, elapsedMs?}`(slim;UI 经 `GET /flowruns/{id}` 拉详情 D-redo-6)|
 | `memory` | `app/memory/Service` 各 mutation 路径 | created / updated / pinned / unpinned / deleted | `{action, name, memType, source}` (slim; UI 经 `GET /api/v1/memories/{name}` 拉全文 — V1.2 §2 final-sweep)|
 | `compaction` | `app/contextmgr/Manager.fullCompact` | completed（暂仅一种 action — 失败仅 log，不推通知）| `{action: "completed", coversToSeq, blocksArchived, summaryBytes}` (slim; UI 经 `GET /api/v1/conversations/{id}` 拉 summary — V1.2 §1 final-sweep)|
+| `ask` | `app/ask/Service.Wait` + `Resolve` | pending（AskUserQuestion 工具注册时推）/ resolved（用户答完或超时/取消后推）| `{toolCallId}` 无 action 时 = pending；`{toolCallId, action: "resolved"}` 已答完。`id` = `conversationId`。前端用此控制 sidebar 红点 |
 
 新增 type 字符串即可(**开放词表** — E2 演化规则)。前端不需协议升级。**已删除**:`handler_instance` / `trigger` 等 forge_redesign 早期表上拟加但未实施的 type。**Plan 05 (2026-05-13)**:加 `flowrun` entity type;scheduler.StartRun 推 `started`,driveLoop 终态推 `completed`/`failed`/`cancelled`,pauseRun 推 `paused`,ResumeApproval 推 `resumed`。**V1.2 §1/§2 final-sweep (2026-05-16)**:加 `memory` + `compaction` entity types(slim payload + GET 拉详情)。
 
 ### 11.3 HTTP 端点
 
-`GET /api/v1/notifications` — per-user SSE 流(无 query 参,后端从 ctx 抽 user_id)。客户端按 `data.type` / `data.conversationId` JSON 字段过滤分派渲染。
+`GET /api/v1/notifications` — 双模式：有 `Accept: text/event-stream` header → per-user SSE 流（`Last-Event-ID` 重连）；否则 → REST 快照（`?cursor=<seq>&limit=<N>`，max 200，每条 `{seq,type,id,data,conversationId?}`）。后端从 ctx 抽 user_id，无 query 参决定 user。
 
 **Wire format**:
 
