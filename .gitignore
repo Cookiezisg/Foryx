@@ -220,3 +220,13 @@ composer.lock   # 如为库项目，取消注释此行
 # downloaded runtimes — large (~100MB+), regenerable, never commit.
 backend/sandbox/
 
+
+# ============================================================
+# Frontend / Wails specific
+# ============================================================
+frontend/wailsjs/
+backend/cmd/desktop/build/
+backend/desktop
+backend/forgify-desktop
+backend/forgify-server
+backend/cmd/desktop/Forgify

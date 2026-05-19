@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Forgify",
+  "outputfilename": "Forgify",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "http://localhost:5173",
+  "frontend:dir": "../../../frontend",
+  "wailsjsdir": "../../../frontend/wailsjs",
+  "author": {
+    "name": "Sun Weilin"
+  },
+  "info": {
+    "productName": "Forgify",
+    "productVersion": "0.1.0",
+    "copyright": "© 2026 Sun Weilin",
+    "comments": "Local-first Agentic Workflow Platform"
+  }
+}

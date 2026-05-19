@@ -1,0 +1,5 @@
+# Build output copied here by `make desktop-build` before wails build.
+# Tracked: only this .gitignore + .gitkeep so the dir exists for go:embed.
+*
+!.gitignore
+!.gitkeep
