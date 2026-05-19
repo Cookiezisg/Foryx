@@ -1,4 +1,47 @@
-/* Phase 0 stub — full base styles in Phase 1. */
+/* ============================================================================
+   Reset & base
+   ============================================================================ */
+
 *, *::before, *::after { box-sizing: border-box; }
-html, body { height: 100%; margin: 0; }
-body { font-family: var(--font-sans); }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--fs-14);
+  line-height: 1.55;
+  color: var(--fg-body);
+  background: var(--bg-window);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: "cv11", "ss01", "ss03";
+  letter-spacing: -0.005em;
+  overflow: hidden;
+}
+
+button { font-family: inherit; font-size: inherit; color: inherit; background: none; border: none; padding: 0; cursor: pointer; }
+input, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+::selection { background: var(--accent-soft); color: var(--fg-strong); }
+hr { border: none; border-top: 1px solid var(--border-soft); margin: 0; }
+code, kbd { font-family: var(--font-mono); font-size: 0.92em; }
+kbd {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 18px; height: 20px; padding: 0 5px;
+  background: var(--bg-elev); border: 1px solid var(--border);
+  border-bottom-width: 2px; border-radius: 4px;
+  font-weight: 500; font-size: 11px; color: var(--fg-muted);
+}
+
+/* Scrollbar */
+*::-webkit-scrollbar { width: 10px; height: 10px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 10px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover { background: var(--border-strong); background-clip: padding-box; border: 2px solid transparent; }
+

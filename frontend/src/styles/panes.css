@@ -1,1 +1,3 @@
-/* Phase 0 stub — pane layouts in Phase 2. */
+/* Pane-specific styles live here. During migration most CSS sits in
+   components.css; pane-specific selectors that don't belong elsewhere
+   migrate here as each pane is implemented. */

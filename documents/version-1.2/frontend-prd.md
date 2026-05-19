@@ -1428,6 +1428,7 @@ ToastTray（position: fixed bottom right）
 | CodeView 高亮 regex 有 quote 误匹配 | `'` `"` 匹配不精确 | 用 state machine 代替 split regex |
 | block_delta append 性能 | 每个 delta 都 re-render 整个 BlockList | useMemo + key-based partial update |
 | WorkflowEditor Palette 过宽 | `.wf-palette` 没有固定宽度，在某些窗口尺寸下会压缩或遮挡右侧 VersionRail | 自己到时候看看 |
+| `.chat-title-row .chat-title-text` 块被一个孤立 `}` 切成两段 | boilerplate styles.css L520-532：第一段以 `overflow:` 结尾就关闭，第二段全是悬空孤儿属性 + 不配对 `}`，esbuild 报 css-syntax-error | 删多余 `}` + 删第二段重复 `overflow:` 行，其余属性并入 `.chat-title-text`。Phase 1 已修。 |
 
 ---
 
