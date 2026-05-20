@@ -6,6 +6,7 @@
 // 剥 §N1 envelope，统一报错带 code/status。
 
 import { apiUrl } from "../bridge/wails.js";
+import { useSettings } from "../store/settings.js";
 
 export class ApiError extends Error {
   constructor(message, { code = "UNKNOWN", status = 0, details } = {}) {
@@ -17,6 +18,16 @@ export class ApiError extends Error {
   }
 }
 
+// activeUserHeader — reads settings.activeUserId (or none) and returns
+// the X-Forgify-User-ID header pair. Backend resolves missing header to
+// the default local-user, so this is always safe to call.
+//
+// 读 settings.activeUserId 注 X-Forgify-User-ID；缺时后端走 local-user。
+function activeUserHeader() {
+  const id = useSettings.getState().activeUserId;
+  return id ? { "X-Forgify-User-ID": id } : {};
+}
+
 export async function apiFetch(path, { method = "GET", body, headers, signal, parseJSON = true } = {}) {
   const url = apiUrl("/api/v1" + path);
 
@@ -25,6 +36,7 @@ export async function apiFetch(path, { method = "GET", body, headers, signal, pa
     headers: {
       Accept: "application/json",
       ...(body ? { "Content-Type": "application/json" } : {}),
+      ...activeUserHeader(),
       ...(headers || {}),
     },
     signal,
@@ -84,6 +96,7 @@ export function pickList(d) {
 // query key 工厂；集中管理，避免散落 magic string。
 export const qk = {
   health:           () => ["health"],
+  users:            () => ["users"],
   conversations:    () => ["conversations"],
   conversation:     (id) => ["conv", id],
   messages:         (convId) => ["conv-messages", convId],

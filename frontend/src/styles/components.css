@@ -4298,3 +4298,203 @@ tr.is-selected { background: var(--accent-soft) !important; }
   box-sizing: border-box;
   vertical-align: -2px;
 }
+
+/* ============================================================================
+   Onboarding wizard (first-run, full-screen)
+   ============================================================================ */
+
+.onb-stage-overlay {
+  position: fixed; inset: 0; z-index: 10000;
+  background: linear-gradient(135deg, var(--bg-elev-2), var(--bg-window));
+  display: grid; place-items: center;
+  overflow: hidden;
+}
+.onb-stage-overlay::before, .onb-stage-overlay::after {
+  content: ""; position: fixed; pointer-events: none;
+  width: 600px; height: 600px; border-radius: 50%;
+  filter: blur(80px); opacity: 0.35; z-index: 0;
+}
+.onb-stage-overlay::before { background: var(--accent); top: -200px; left: -200px; }
+.onb-stage-overlay::after  { background: var(--fg-strong); bottom: -200px; right: -200px; opacity: 0.10; }
+
+.onb-stage {
+  position: relative; z-index: 1;
+  width: min(960px, 100% - 40px);
+  height: min(640px, 100vh - 40px);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 1px 3px rgba(15,15,15,.04), 0 30px 80px -30px rgba(15,15,15,.20);
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: 320px 1fr;
+}
+
+.onb-rail {
+  background: var(--bg-elev-2);
+  padding: 32px 28px;
+  display: flex; flex-direction: column; gap: 32px;
+  border-right: 1px solid var(--border-soft);
+}
+.onb-brand { display: flex; align-items: center; gap: 10px; }
+.onb-mark {
+  width: 32px; height: 32px;
+  border-radius: 7px;
+  background: var(--fg-strong);
+  color: var(--bg-paper);
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-weight: 700;
+  flex-shrink: 0;
+}
+.onb-brand-name { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; color: var(--fg-strong); }
+.onb-brand-sub  { font-size: 11px; color: var(--fg-faint); margin-top: 1px; font-family: var(--font-mono); }
+
+.onb-steps { display: flex; flex-direction: column; gap: 4px; }
+.onb-step {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  transition: background var(--t-fast);
+}
+.onb-step.is-active { background: var(--bg-elev); border: 1px solid var(--border-soft); box-shadow: var(--shadow-sm); }
+.onb-step-num {
+  width: 22px; height: 22px;
+  border-radius: 50%;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  display: grid; place-items: center;
+  font-size: 11px; font-weight: 600;
+  color: var(--fg-faint);
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+.onb-step.is-done .onb-step-num { background: var(--status-success); border-color: var(--status-success); color: white; }
+.onb-step.is-active .onb-step-num { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.onb-step.is-done .onb-step-num svg { width: 11px; height: 11px; }
+.onb-step-text { flex: 1; min-width: 0; }
+.onb-step-title { font-size: 13px; color: var(--fg-strong); font-weight: 500; }
+.onb-step.is-active .onb-step-title { font-weight: 600; }
+.onb-step:not(.is-active):not(.is-done) .onb-step-title { color: var(--fg-faint); }
+.onb-step-desc { font-size: 11px; color: var(--fg-faint); margin-top: 2px; line-height: 1.45; }
+
+.onb-rail-footer {
+  margin-top: auto;
+  font-size: 11px;
+  color: var(--fg-faint);
+  line-height: 1.6;
+}
+.onb-rail-footer code { font-family: var(--font-mono); font-size: 11px; }
+
+.onb-pane { display: flex; flex-direction: column; min-height: 0; }
+.onb-content { flex: 1; min-height: 0; overflow-y: auto; padding: 48px 56px 24px; }
+
+.onb-head { margin-bottom: 28px; }
+.onb-title { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; color: var(--fg-strong); }
+.onb-sub   { font-size: 14px; color: var(--fg-muted); margin-top: 6px; line-height: 1.55; max-width: 520px; }
+
+.onb-bullet-list { display: flex; flex-direction: column; gap: 14px; }
+.onb-bullet { display: flex; align-items: flex-start; gap: 12px; padding: 12px 14px; border: 1px solid var(--border-soft); border-radius: 8px; background: var(--bg-elev-2); }
+.onb-bullet > svg.icon { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; margin-top: 2px; }
+.onb-bullet-title { font-size: 13px; font-weight: 600; color: var(--fg-strong); }
+.onb-bullet-desc  { font-size: 12px; color: var(--fg-muted); margin-top: 4px; line-height: 1.5; }
+
+.onb-field { display: flex; flex-direction: column; gap: 6px; }
+.onb-label { font-size: 11px; font-weight: 600; color: var(--fg-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.onb-hint  { font-size: 11px; color: var(--fg-faint); }
+.onb-input {
+  width: 100%;
+  padding: 10px 12px;
+  font-size: 15px;
+  font-family: var(--font-sans);
+  color: var(--fg-strong);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  outline: none;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+.onb-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
+.onb-input-lg { font-size: 18px; padding: 12px 14px; }
+
+.onb-avatar-row { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+.onb-avatar {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  color: white; font-weight: 600; font-size: 22px;
+  transition: background var(--t-med);
+  flex-shrink: 0;
+}
+
+.onb-swatches { display: flex; gap: 10px; flex-wrap: wrap; }
+.onb-swatch {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  transition: transform var(--t-fast);
+  background: transparent;
+}
+.onb-swatch:hover { transform: scale(1.08); }
+.onb-swatch.is-active { border-color: var(--fg-strong); box-shadow: 0 0 0 2px var(--bg-elev) inset, 0 0 0 4px var(--accent-ring); }
+
+.onb-provider-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+.onb-provider {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  background: var(--bg-elev);
+  cursor: pointer;
+  transition: border-color var(--t-fast), background var(--t-fast);
+  text-align: left;
+  font-family: var(--font-sans);
+}
+.onb-provider:hover { border-color: var(--border); }
+.onb-provider.is-active { border-color: var(--accent); background: var(--accent-soft); }
+.onb-pchip {
+  width: 28px; height: 28px; border-radius: 5px;
+  display: grid; place-items: center;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  color: white;
+  flex-shrink: 0;
+}
+.onb-pname { font-size: 13px; font-weight: 500; color: var(--fg-strong); }
+.onb-pdesc { font-size: 11px; color: var(--fg-faint); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.onb-done-mark {
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  background: var(--status-success);
+  color: white;
+  display: grid; place-items: center;
+  margin: 0 auto 18px;
+  box-shadow: 0 1px 2px rgba(15,123,108,.20), 0 18px 40px -16px rgba(15,123,108,.50);
+}
+.onb-done-mark svg { width: 28px; height: 28px; }
+.onb-done-grid { margin-top: 24px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; max-width: 540px; margin-left: auto; margin-right: auto; }
+.onb-done-card { padding: 12px 14px; border: 1px dashed var(--border); border-radius: 6px; text-align: left; }
+.onb-done-card-label { font-size: 10px; color: var(--fg-faint); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600; }
+.onb-done-card-value { font-size: 13px; color: var(--fg-strong); font-family: var(--font-mono); margin-top: 4px; }
+
+.onb-actions {
+  display: flex; align-items: center;
+  padding: 16px 56px 24px;
+  border-top: 1px solid var(--border-soft);
+  gap: 12px;
+  background: var(--bg-elev-2);
+}
+.onb-progress { flex: 1; font-size: 11px; color: var(--fg-faint); font-family: var(--font-mono); }
+.onb-progress-bar {
+  height: 3px;
+  background: var(--border-soft);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 4px;
+  max-width: 240px;
+}
+.onb-progress-bar > div {
+  height: 100%;
+  background: var(--accent);
+  transition: width 300ms cubic-bezier(.2,.8,.2,1);
+}

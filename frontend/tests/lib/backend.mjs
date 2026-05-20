@@ -22,6 +22,7 @@ async function api(path, opts = {}) {
 
 export const backend = {
   health:      () => api("/health"),
+  users:       () => api("/users"),
   conversations: () => api("/conversations"),
   createConv:  (title) => api("/conversations", { method: "POST", body: { title } }),
   sendMsg:     (id, content) => api(`/conversations/${id}/messages`, { method: "POST", body: { content } }),

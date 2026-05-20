@@ -15,6 +15,8 @@ const DEFAULTS = {
   lang: "zh",            // "zh" | "en"
   reasoningDefault: "collapsed", // "collapsed" | "expanded"
   leftPct: 50,           // saved pane split
+  activeUserId: null,    // local profile id; null → backend default local-user
+  onboarded: false,      // first-run wizard completed flag
 };
 
 export const useSettings = create(

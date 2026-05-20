@@ -4,13 +4,21 @@
 // and /forge handlers honour. We don't manually close on transient
 // errors; we only close if the caller does (component unmount).
 //
-// 共享 SSE 连接工厂。依赖 EventSource 内建自动重连 + 自动 Last-Event-ID
-// 行为（后端三个 SSE 端点都读这个 header）。组件 unmount 才 close。
+// Multi-user: EventSource cannot send custom headers, so we append
+// ?userID=<id> to the URL (backend auth middleware reads it as
+// fallback for SSE clients — see backend/internal/transport/httpapi/
+// middleware/auth.go).
+//
+// 共享 SSE 连接工厂；多账号靠 ?userID= 兜底（EventSource 不能自定义 header）。
 
 import { apiUrl } from "../bridge/wails.js";
+import { useSettings } from "../store/settings.js";
 
 export function createSSE({ path, eventHandlers, onStatus }) {
-  const url = apiUrl("/api/v1" + path);
+  const base = apiUrl("/api/v1" + path);
+  const uid = useSettings.getState().activeUserId;
+  const url = uid ? `${base}${base.includes("?") ? "&" : "?"}userID=${encodeURIComponent(uid)}` : base;
+
   const es = new EventSource(url);
 
   if (onStatus) {
