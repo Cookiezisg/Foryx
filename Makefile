@@ -14,6 +14,9 @@
 #           verify    cross-platform build + lint (release gate)
 #           e2e       end-to-end pipeline tests (needs .env keys)
 #
+#   QA      smoke     playwright frontend walk + screenshots
+#                     (needs 'make dev' running in another terminal)
+#
 #   Misc    testend   legacy testend debug console (pre-frontend era)
 #           mise      download mise binaries (one-time, for sandbox)
 #
@@ -56,6 +59,8 @@ help:
 	@echo "  Ship:    make build     package the macOS .app bundle"
 	@echo "           make verify    cross-platform build + lint (release gate)"
 	@echo "           make e2e       end-to-end pipeline tests (needs .env keys)"
+	@echo ""
+	@echo "  QA:      make smoke     playwright frontend walk (needs 'make dev' running)"
 	@echo ""
 	@echo "  Misc:    make testend   legacy testend debug console (pre-frontend era)"
 	@echo "           make mise      download mise binaries (one-time, for sandbox)"
@@ -238,6 +243,27 @@ e2e:
 	@$(LOAD_ENV) cd backend && go test -count=1 -tags=pipeline -p 1 ./test/...
 
 # ──────────────────────────────────────────────────────────────────
+# QA
+# ──────────────────────────────────────────────────────────────────
+
+# smoke — Playwright-driven frontend walk. Requires `make dev` already
+# running in another terminal (or BACKEND_URL+FRONTEND_URL env vars
+# pointing elsewhere). Reads DEEPSEEK_KEY from .env to enable the live
+# chat tests; skips them cleanly when absent.
+# Screenshots land in /tmp/forgify-tests/.
+#
+# smoke —— Playwright 跑前端冒烟；需另一个终端先 `make dev`。
+# .env 里有 DEEPSEEK_KEY 则跑 live chat 测试，否则优雅 skip。
+# 截图存到 /tmp/forgify-tests/。
+smoke:
+	$(AUTO_DEVBOX)
+	@cd frontend && [ -d node_modules ] || npm install --silent
+	@$(LOAD_ENV) cd frontend && \
+	  BACKEND_URL=http://localhost:$(BACKEND_PORT) \
+	  FRONTEND_URL=http://localhost:$(FRONTEND_PORT) \
+	  node tests/run.mjs
+
+# ──────────────────────────────────────────────────────────────────
 # Misc
 # ──────────────────────────────────────────────────────────────────
 
@@ -266,4 +292,4 @@ mise:
 	$(AUTO_DEVBOX)
 	@cd backend && go run ./cmd/resources $(if $(ALL),--all-platforms,)
 
-.PHONY: help setup dev stop test clean reset build verify e2e testend mise
+.PHONY: help setup dev stop test clean reset build verify e2e smoke testend mise

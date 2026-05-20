@@ -230,3 +230,7 @@ backend/desktop
 backend/forgify-desktop
 backend/forgify-server
 backend/cmd/desktop/Forgify
+
+# Test artifacts
+.env
+/tmp/forgify-tests/
