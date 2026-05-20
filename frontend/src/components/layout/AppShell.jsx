@@ -7,7 +7,7 @@
 // main 宽 < 1000px → narrow 模式只显示一个 pane + 底部 tab 切换。
 // pane 进出动画走 Framer Motion。
 
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Sidebar } from "./Sidebar.jsx";
 import { PaneFrame, PANE_META } from "./PaneFrame.jsx";
@@ -80,12 +80,21 @@ export function AppShell() {
     }
   }, [narrow, openPanes, activeNarrowPane, setActiveNarrowPane]);
 
-  const onPaneDrag = (clientX) => {
+  // Memoise so PaneResize's useEffect deps don't churn. Without this,
+  // every leftPct update triggers a fresh onPaneDrag → PaneResize
+  // re-attaches its window mousemove/mouseup listeners mid-drag →
+  // mousemove events fired during the brief detach window are lost,
+  // causing perceived stutter / completely dropped drags in fast
+  // motion. setLeftPct is stable from zustand; mainRef is a stable ref.
+  //
+  // 必须 memoise；否则每次 leftPct 变就给 PaneResize 一个新 onDrag，
+  // useEffect 反复 attach/detach 监听 → mousemove 丢事件，拖动卡顿。
+  const onPaneDrag = useCallback((clientX) => {
     if (!mainRef.current) return;
     const r = mainRef.current.getBoundingClientRect();
     const pct = ((clientX - r.left) / r.width) * 100;
     setLeftPct(pct);
-  };
+  }, [setLeftPct]);
 
   const isTwoPane = openPanes.length === 2 && !narrow;
 
@@ -102,11 +111,19 @@ export function AppShell() {
               const hideInNarrow = narrow && openPanes.length === 2 && activeNarrowPane && activeNarrowPane !== kind;
               if (hideInNarrow) return null;
 
+              // position:relative is required so PaneResizeBetween's
+              // absolute-positioned strip anchors to THIS pane's wrap
+              // (otherwise it falls back to viewport and ends up 0-height
+              // pinned to the right edge — drag becomes impossible).
+              //
+              // position:relative 必须；否则 PaneResizeBetween 的 absolute
+              // 找不到祖先，挂到 viewport（贴右下、高度 0、拖不动）。
+              const baseStyle = { display: "flex", flexDirection: "column", position: "relative" };
               const style = isTwoPane
                 ? idx === 0
-                  ? { flex: `0 0 calc(${leftPct}% - 2px)`, display: "flex", flexDirection: "column" }
-                  : { flex: "1 1 auto", display: "flex", flexDirection: "column" }
-                : { flex: "1 1 auto", display: "flex", flexDirection: "column" };
+                  ? { ...baseStyle, flex: `0 0 calc(${leftPct}% - 2px)` }
+                  : { ...baseStyle, flex: "1 1 auto" }
+                : { ...baseStyle, flex: "1 1 auto" };
 
               return (
                 <motion.div

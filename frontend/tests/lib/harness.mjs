@@ -12,7 +12,8 @@ const SHOT_DIR = process.env.SHOT_DIR || "/tmp/forgify-tests";
 
 mkdirSync(SHOT_DIR, { recursive: true });
 
-export async function runCase(name, fn) {
+export async function runCase(name, fn, opts = {}) {
+  const { allowConsoleErrors = false } = opts;
   const start = Date.now();
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
@@ -52,8 +53,9 @@ export async function runCase(name, fn) {
     await browser.close();
   }
 
-  if (consoleErrors.length > 0 && result.status === "pass") {
-    // Console errors → automatic fail. Visual smoke must be quiet.
+  if (consoleErrors.length > 0 && result.status === "pass" && !allowConsoleErrors) {
+    // Console errors → automatic fail. Tests intentionally triggering
+    // errors (forced 500s) pass `{allowConsoleErrors:true}` as 3rd arg.
     result.status = "fail";
     result.error = "console errors leaked";
   }
