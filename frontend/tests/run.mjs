@@ -35,6 +35,7 @@ import blocksLive   from "./specs/25-blocks-live.mjs";
 import a11y         from "./specs/26-keyboard-a11y.mjs";
 import viewports    from "./specs/27-viewports.mjs";
 import users        from "./specs/28-users.mjs";
+import onboarding   from "./specs/29-onboarding.mjs";
 
 const all = [
   ...boot, ...panes, ...keyboard, ...overlays,
@@ -44,7 +45,7 @@ const all = [
   ...convCrud, ...memoryCrud, ...apikeyFlow,
   ...errorStates, ...rapid, ...localStore,
   ...multiStream, ...sse, ...blocksLive,
-  ...a11y, ...viewports, ...users,
+  ...a11y, ...viewports, ...users, ...onboarding,
 ];
 
 console.log(`running ${all.length} cases against ${process.env.FRONTEND_URL || "http://localhost:5173"}`);

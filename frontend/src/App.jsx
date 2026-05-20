@@ -11,9 +11,19 @@ import { SSEProvider } from "./sse/SSEProvider.jsx";
 import { useSettings, applyTheme } from "./store/settings.js";
 import { apiFetch, qk, pickList } from "./api/client.js";
 
+// Honor `?onboarding=1` query param for tests / manual reruns of the
+// first-run flow. Production never sets this.
+//
+// `?onboarding=1` 强制显示向导（给测试 / 手工重跑首次启动用）。
+function urlForceOnboarding() {
+  if (typeof window === "undefined") return false;
+  try { return new URLSearchParams(window.location.search).get("onboarding") === "1"; }
+  catch { return false; }
+}
+
 export default function App() {
   const settings = useSettings();
-  const [forceShowOnboarding, setForceShowOnboarding] = useState(false);
+  const [forceShowOnboarding, setForceShowOnboarding] = useState(urlForceOnboarding);
 
   useEffect(() => {
     applyTheme(settings);

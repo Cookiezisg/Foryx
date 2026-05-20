@@ -13,13 +13,32 @@ const SHOT_DIR = process.env.SHOT_DIR || "/tmp/forgify-tests";
 mkdirSync(SHOT_DIR, { recursive: true });
 
 export async function runCase(name, fn, opts = {}) {
-  const { allowConsoleErrors = false } = opts;
+  const { allowConsoleErrors = false, skipOnboarding = true } = opts;
   const start = Date.now();
   const browser = await chromium.launch();
   const ctx = await browser.newContext({
     viewport: { width: 1440, height: 900 },
   });
   const page = await ctx.newPage();
+
+  // Pre-set localStorage BEFORE the page loads. The Onboarding wizard
+  // is gated on settings.onboarded; default tests want to skip past it
+  // and land in AppShell. A dedicated Onboarding spec passes
+  // {skipOnboarding:false} to test the first-run flow itself.
+  //
+  // 测试默认设 onboarded=true 跳过首次启动向导；Onboarding 专门 spec
+  // 显式传 skipOnboarding:false 来测向导本身。
+  if (skipOnboarding) {
+    await ctx.addInitScript(() => {
+      try {
+        const key = "forgify-settings";
+        const raw = localStorage.getItem(key);
+        const cur = raw ? JSON.parse(raw) : { state: {}, version: 1 };
+        cur.state = { ...(cur.state || {}), onboarded: true };
+        localStorage.setItem(key, JSON.stringify(cur));
+      } catch { /* ignore */ }
+    });
+  }
 
   const consoleErrors = [];
   page.on("console", (m) => { if (m.type() === "error") consoleErrors.push(m.text()); });
@@ -34,8 +53,18 @@ export async function runCase(name, fn, opts = {}) {
 
   let result;
   try {
-    await page.goto(FRONTEND_URL, { waitUntil: "domcontentloaded", timeout: 15000 });
-    await page.waitForSelector(".sidebar", { timeout: 8000 });
+    // Onboarding tests append `?onboarding=1` so the wizard mounts
+    // unconditionally regardless of backend user state (which other
+    // tests mutate). Default tests use the bare URL.
+    //
+    // Onboarding 测试加 `?onboarding=1` 强制弹向导；其他测试用裸 URL。
+    const url = skipOnboarding ? FRONTEND_URL : `${FRONTEND_URL}?onboarding=1`;
+    await page.goto(url, { waitUntil: "domcontentloaded", timeout: 15000 });
+    if (skipOnboarding) {
+      await page.waitForSelector(".sidebar", { timeout: 8000 });
+    } else {
+      await page.waitForSelector(".onb-stage", { timeout: 8000 });
+    }
     await page.waitForTimeout(800);
     await fn({ page, ctx, shot, expect });
     result = { name, status: "pass", consoleErrors, durationMs: Date.now() - start };
