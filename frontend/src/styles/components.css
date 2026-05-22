@@ -874,7 +874,8 @@
 .code-block.is-output { color: oklch(from var(--status-success) calc(l - 0.10) c h); }
 [data-theme="dark"] .code-block.is-output { color: oklch(from var(--status-success) l c h); }
 
-/* Language label badge — top-right inside the code block */
+/* Language label badge — top-right inside the code block (read-only,
+   used by chat MarkdownView fences) */
 .code-block-lang {
   position: absolute;
   top: 6px; right: 8px;
@@ -889,6 +890,38 @@
   border-radius: 4px;
   user-select: none;
 }
+
+/* Tiptap CodeBlockNode — editable code block with language picker.
+   .cb-toolbar sits absolutely in the top-right; the <select> is the
+   user's switch between Auto / explicit grammar. */
+.cb-node { position: relative; }
+.cb-toolbar {
+  position: absolute;
+  top: 4px; right: 6px;
+  z-index: 2;
+  opacity: 0.55;
+  transition: opacity var(--t-fast);
+}
+.cb-node:hover .cb-toolbar,
+.cb-node:focus-within .cb-toolbar { opacity: 1; }
+.cb-lang-select {
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--fg-muted);
+  background: var(--bg-elev);
+  border: 1px solid var(--border-soft);
+  padding: 2px 18px 2px 8px;
+  border-radius: 4px;
+  outline: none;
+  cursor: default;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='rgba(0,0,0,.45)' d='M0 0h10L5 6z'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+}
+.cb-lang-select:hover { color: var(--fg-strong); border-color: var(--border); }
+.cb-lang-select:focus { color: var(--fg-strong); border-color: var(--accent); }
 
 /* ============================================================================
    Syntax highlighting — github-light + github-dark approximated via .hljs-*

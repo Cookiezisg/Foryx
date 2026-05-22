@@ -12,13 +12,22 @@
 // 做双向转换。
 
 import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
-import { useEditor, EditorContent, ReactRenderer } from "@tiptap/react";
+import { useEditor, EditorContent, ReactRenderer, ReactNodeViewRenderer } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Placeholder from "@tiptap/extension-placeholder";
 import Mention from "@tiptap/extension-mention";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { Markdown } from "tiptap-markdown";
 import { lowlight } from "../../components/shared/lowlightInstance.js";
+import { CodeBlockNode } from "./CodeBlockNode.jsx";
+
+// Extend CodeBlockLowlight to render its node via our React component
+// (language <select> in the corner). Must extend BEFORE configure().
+const CodeBlockWithLangPicker = CodeBlockLowlight.extend({
+  addNodeView() {
+    return ReactNodeViewRenderer(CodeBlockNode);
+  },
+});
 import { Extension } from "@tiptap/core";
 import Suggestion from "@tiptap/suggestion";
 import tippy from "tippy.js";
@@ -177,7 +186,7 @@ export const DocEditor = forwardRef(function DocEditor({
         codeBlock: false, // replaced by CodeBlockLowlight below
         heading: { levels: [1, 2, 3] },
       }),
-      CodeBlockLowlight.configure({
+      CodeBlockWithLangPicker.configure({
         lowlight,
         defaultLanguage: null,
         HTMLAttributes: { class: "code-block hljs" },
