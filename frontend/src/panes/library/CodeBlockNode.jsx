@@ -1,60 +1,135 @@
 // CodeBlockNode — Tiptap React node view for code blocks.
 //
-//   - Top-right floating language <select> populated from
-//     lowlight.listLanguages() (the same 36 common langs the highlighter
-//     knows about). 'Auto' = leave attrs.language null → highlightAuto
-//     guesses; explicit pick = lock + re-highlight under that grammar.
-//   - <NodeViewContent as="code"> is the contentEditable surface;
-//     selecting / typing / copying behaves normally — the toolbar
-//     itself is marked contentEditable={false} so caret can't land
-//     inside it.
+// Language picker: plain text trigger ("Auto ▾" / "JavaScript ▾") in the
+// top-right; clicking opens a searchable floating popover (Notion-style,
+// not a system <select>). Trigger is hidden until the block is hovered
+// or the caret is inside — same affordance pattern as ActionMenu's
+// rel-more-btn. Popover styling matches .action-menu + .cmdk-row.
 //
-// CodeBlockNode —— code block 的 Tiptap React node view；右上角浮一个
-// 语言下拉，'Auto' 走 highlightAuto，显式选语言则锁定再高亮。
+// CodeBlockNode —— Tiptap React node view；右上角文字按钮 + 浮层选择
+// 语言，风格对齐 .action-menu / .cmdk-row。
 
+import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { NodeViewContent, NodeViewWrapper } from "@tiptap/react";
-import { useMemo } from "react";
+import {
+  useFloating, autoUpdate, offset, flip, shift,
+  useDismiss, useInteractions, useClick, useRole, FloatingPortal,
+} from "@floating-ui/react";
+import { Icon } from "../../components/primitives/Icon.jsx";
 import { lowlight } from "../../components/shared/lowlightInstance.js";
 
-// Friendly labels for the languages we register via `common`. Everything
-// not in here falls back to the raw id, which is already readable
-// (python / javascript / yaml…).
-const LABEL_OVERRIDES = {
+// Friendly labels for languages registered via `common`. Anything not in
+// here falls through to the raw id (already readable: python / go / yaml).
+const LABEL = {
   cpp: "C++", csharp: "C#", javascript: "JavaScript", typescript: "TypeScript",
-  objectivec: "Objective-C", "php-template": "PHP (template)", "python-repl": "Python REPL",
-  vbnet: "VB.NET", xml: "XML / HTML", yaml: "YAML", json: "JSON", sql: "SQL",
-  bash: "Bash", shell: "Shell", scss: "SCSS", css: "CSS", html: "HTML",
-  go: "Go", rust: "Rust", ruby: "Ruby", swift: "Swift", kotlin: "Kotlin",
-  java: "Java", lua: "Lua", perl: "Perl", php: "PHP", python: "Python",
-  markdown: "Markdown", diff: "Diff", ini: "INI", makefile: "Makefile",
-  plaintext: "Plain text", less: "Less", r: "R",
+  objectivec: "Objective-C", "php-template": "PHP (template)",
+  "python-repl": "Python REPL", vbnet: "VB.NET",
+  xml: "XML / HTML", yaml: "YAML", json: "JSON", sql: "SQL",
+  bash: "Bash", shell: "Shell", scss: "SCSS", css: "CSS",
+  go: "Go", rust: "Rust", ruby: "Ruby", swift: "Swift",
+  kotlin: "Kotlin", java: "Java", lua: "Lua", perl: "Perl",
+  php: "PHP", python: "Python", markdown: "Markdown", diff: "Diff",
+  ini: "INI", makefile: "Makefile", plaintext: "Plain text",
+  less: "Less", r: "R",
 };
-
-function label(id) { return LABEL_OVERRIDES[id] || id; }
+function label(id) { return id === "" ? "Auto" : (LABEL[id] || id); }
 
 export function CodeBlockNode({ node, updateAttributes }) {
-  const languages = useMemo(() => lowlight.listLanguages().sort(), []);
-  const current = node.attrs.language || "";
-
   return (
     <NodeViewWrapper className="code-block hljs cb-node">
       <div className="cb-toolbar" contentEditable={false}>
-        <select
-          className="cb-lang-select"
-          value={current}
-          onChange={(e) => {
-            const v = e.target.value;
-            updateAttributes({ language: v === "" ? null : v });
-          }}
-          title="选择代码语言（Auto = 自动识别）"
-        >
-          <option value="">Auto</option>
-          {languages.map((id) => (
-            <option key={id} value={id}>{label(id)}</option>
-          ))}
-        </select>
+        <LangPicker
+          current={node.attrs.language || ""}
+          onChange={(id) => updateAttributes({ language: id === "" ? null : id })}
+        />
       </div>
       <pre><NodeViewContent as="code" /></pre>
     </NodeViewWrapper>
+  );
+}
+
+function LangPicker({ current, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [idx, setIdx] = useState(0);
+
+  const { refs, floatingStyles, context } = useFloating({
+    open, onOpenChange: setOpen,
+    placement: "bottom-end",
+    middleware: [offset(6), flip(), shift({ padding: 8 })],
+    whileElementsMounted: autoUpdate,
+  });
+  const click = useClick(context);
+  const dismiss = useDismiss(context);
+  const role = useRole(context, { role: "listbox" });
+  const { getReferenceProps, getFloatingProps } = useInteractions([click, dismiss, role]);
+
+  // Auto-first, then alphabetical list of registered languages.
+  const languages = useMemo(() => ["", ...lowlight.listLanguages().sort()], []);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return languages;
+    return languages.filter((id) =>
+      label(id).toLowerCase().includes(q) || id.toLowerCase().includes(q)
+    );
+  }, [languages, query]);
+  useEffect(() => setIdx(0), [query]);
+  useEffect(() => { if (!open) setQuery(""); }, [open]);
+
+  const pick = (id) => { onChange(id); setOpen(false); };
+
+  return (
+    <>
+      <button
+        ref={refs.setReference}
+        {...getReferenceProps()}
+        className={"cb-lang-btn" + (open ? " is-open" : "")}
+        title="选择代码语言"
+      >
+        <span>{label(current)}</span>
+        <Icon.ChevronDown style={{ width: 10, height: 10 }} />
+      </button>
+      {open && (
+        <FloatingPortal>
+          <div
+            ref={refs.setFloating}
+            style={floatingStyles}
+            {...getFloatingProps()}
+            className="cb-lang-pop"
+          >
+            <div className="cb-lang-search-wrap">
+              <Icon.Search className="icon" style={{ width: 12, height: 12 }} />
+              <input
+                autoFocus
+                className="cb-lang-search"
+                placeholder="搜索语言…"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "ArrowDown") { e.preventDefault(); setIdx((n) => Math.min(n + 1, filtered.length - 1)); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); setIdx((n) => Math.max(n - 1, 0)); }
+                  else if (e.key === "Enter") { e.preventDefault(); if (filtered[idx] != null) pick(filtered[idx]); }
+                }}
+              />
+            </div>
+            <div className="cb-lang-list">
+              {filtered.length === 0 && <div className="cb-lang-empty">没有匹配</div>}
+              {filtered.map((id, i) => (
+                <button
+                  key={id || "auto"}
+                  className={"cb-lang-row" + (i === idx ? " is-active" : "")}
+                  onMouseEnter={() => setIdx(i)}
+                  onClick={() => pick(id)}
+                >
+                  <span style={{ flex: 1 }}>{label(id)}</span>
+                  {current === id && <Icon.Check style={{ width: 12, height: 12, color: "var(--accent)" }} />}
+                </button>
+              ))}
+            </div>
+          </div>
+        </FloatingPortal>
+      )}
+    </>
   );
 }
