@@ -647,15 +647,20 @@
 .blk-text em { font-style: italic; color: var(--fg-strong); }
 .blk-text ul, .blk-text ol { padding-left: 24px; margin: 0; }
 .blk-text li { margin: 0.2em 0; }
+/* Inline code — classic neutral gray (GitHub-ish), NOT Notion-style red.
+   Background slightly tinted from surrounding text; foreground inherits
+   so it stays legible across themes / accents. */
 .blk-text code:not(pre code) {
-  background: var(--bg-elev);
-  border: 1px solid var(--border-soft);
+  background: rgba(175, 184, 193, 0.2);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
   font-size: 0.86em;
-  color: oklch(from var(--accent) calc(l - 0.05) c h);
+  color: inherit;
 }
-[data-theme="dark"] .blk-text code:not(pre code) { color: oklch(from var(--accent) l c h); }
+[data-theme="dark"] .blk-text code:not(pre code) {
+  background: rgba(110, 118, 129, 0.4);
+}
 .blk-text pre {
   background: var(--bg-elev);
   border: 1px solid var(--border-soft);
@@ -768,7 +773,7 @@
   white-space: nowrap;
 }
 .blk-tool-name > * { white-space: nowrap; }
-.blk-tool-name code { font-family: var(--font-mono); font-size: 12px; color: var(--accent); }
+.blk-tool-name code { font-family: var(--font-mono); font-size: 12px; color: inherit; }
 .blk-tool-summary {
   font-size: var(--fs-12);
   color: var(--fg-muted);
@@ -2535,11 +2540,15 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
   font-style: italic;
 }
 .doc-editor-rich .ProseMirror code {
-  background: var(--bg-elev-2);
+  background: rgba(175, 184, 193, 0.2);
   padding: 2px 4px;
   border-radius: 4px;
   font-family: var(--font-mono);
-  font-size: 13px;
+  font-size: 0.9em;
+  color: inherit;
+}
+[data-theme="dark"] .doc-editor-rich .ProseMirror code {
+  background: rgba(110, 118, 129, 0.4);
 }
 .doc-editor-rich .ProseMirror pre {
   background: var(--bg-elev-2);
@@ -2668,21 +2677,20 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
 .md-body h3 { font-size: 18px; font-weight: 600; color: var(--fg-strong); margin-top: 0.8em; }
 .md-body p { margin: 0; }
 .md-body strong { color: var(--fg-strong); font-weight: 600; }
-/* Inline `code` only — exclude .code-block AND anything inside a <pre>
-   (highlighted block contains <code><span class="hljs-keyword">…</span>
-   which would otherwise inherit the inline-code red and paint everything
-   the same flat colour). */
+/* Inline `code` — classic neutral gray (NOT Notion-style red). Excludes
+   .code-block AND any <code> inside a <pre> (highlighted blocks render
+   spans inside <code>; otherwise the inline rule would paint every
+   syntax-token a flat colour). */
 .md-body code:not(.code-block, .codeview *, pre *) {
-  background: rgba(135, 131, 120, 0.15);
+  background: rgba(175, 184, 193, 0.2);
   padding: 1px 5px;
-  border-radius: 3px;
+  border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 0.9em;
-  color: #eb5757;
+  color: inherit;
 }
 [data-theme="dark"] .md-body code:not(.code-block, .codeview *, pre *) {
-  background: rgba(255, 255, 255, 0.10);
-  color: #ff7e7e;
+  background: rgba(110, 118, 129, 0.4);
 }
 .md-body blockquote {
   margin: 0; padding: 6px 14px;
@@ -3052,7 +3060,7 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
 .fn-field-row:last-of-type { border-bottom: 0; }
 .fn-field-label { color: var(--fg-faint); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; padding-top: 2px; }
 .fn-field-value { color: var(--fg-strong); }
-.fn-field-value code { font-size: 12px; color: var(--accent); }
+.fn-field-value code { font-size: 12px; color: inherit; }
 
 .fn-diff-section {
   display: flex; flex-direction: column; gap: 8px;
