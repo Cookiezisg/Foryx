@@ -51,11 +51,9 @@ export function DocumentsPane() {
     } catch (e) { pushToast({ kind: "error", title: "创建失败", desc: e.message }); }
   };
 
-  const [treeOpen, setTreeOpen] = useState(false);
   const [sidebarOpen, toggleSidebar] = useCollapsible("documents-sidebar", true);
 
   const shellClass = "doc-shell pane-collapse-host"
-    + (treeOpen ? " is-tree-open" : "")
     + (sidebarOpen ? "" : " is-sidebar-collapsed");
 
   return (
@@ -66,16 +64,13 @@ export function DocumentsPane() {
           openSet={openSet}
           setOpenSet={setOpenSet}
           selectedId={activeDoc}
-          onSelect={(id) => { setActiveDocument(id); setTreeOpen(false); }}
-          onCreateRoot={async () => { await onCreateRoot(); setTreeOpen(false); }}
-          onChildCreated={(id) => { setActiveDocument(id); setPendingFocusTitle(id); setTreeOpen(false); }}
+          onSelect={setActiveDocument}
+          onCreateRoot={onCreateRoot}
+          onChildCreated={(id) => { setActiveDocument(id); setPendingFocusTitle(id); }}
           isLoading={treeQ.isLoading}
           onCollapse={toggleSidebar}
         />
       )}
-      <button className="pane-side-toggle" title="切换文档树" onClick={() => setTreeOpen((o) => !o)}>
-        <Icon.Menu />
-      </button>
       {!sidebarOpen && <PaneCollapseToggle onClick={toggleSidebar} title="展开文档树" />}
       <div className="doc-main">
         {activeDoc

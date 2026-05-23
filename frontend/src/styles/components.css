@@ -4341,30 +4341,26 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
    ============================================================================ */
 
 @container pane (max-width: 720px) {
-  /* Documents — collapse tree as overlay drawer */
+  /* Documents — sidebar overlays main instead of sharing grid space.
+     Render is still controlled by useCollapsible in jsx; this only
+     repositions the rendered sidebar from grid column to overlay. */
   .doc-shell { grid-template-columns: 1fr; }
-  .doc-sidebar {
+  .doc-shell:not(.is-sidebar-collapsed) .doc-sidebar {
     position: absolute;
     left: 0; top: 0; bottom: 0; width: 240px;
     z-index: 12;
-    transform: translateX(-110%);
-    transition: transform 200ms cubic-bezier(.2, .8, .2, 1);
     box-shadow: var(--shadow-md);
   }
-  .doc-shell.is-tree-open .doc-sidebar { transform: translateX(0); }
   .doc-shell .doc-page { padding: 32px 24px 60px; }
 
-  /* Handler — collapse method list as overlay */
+  /* Handler methods — same overlay pattern. */
   .hd-class { grid-template-columns: 1fr; }
-  .hd-methods {
+  .hd-class:not(.is-methods-collapsed) .hd-methods {
     position: absolute;
     left: 0; top: 0; bottom: 0; width: 240px;
     z-index: 12;
-    transform: translateX(-110%);
-    transition: transform 200ms;
     box-shadow: var(--shadow-md);
   }
-  .hd-class.is-methods-open .hd-methods { transform: translateX(0); }
 
   /* Function/Skill/Handler-Detail — aside collapses below or hides */
   .split { grid-template-columns: 1fr; }
@@ -4373,24 +4369,14 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
     border-top: 1px solid var(--border-soft);
   }
 
-  /* Workflow editor — palette + props collapse to popovers */
+  /* Workflow editor palette — same overlay pattern. */
   .wf-editor { grid-template-columns: 1fr; position: relative; }
-  .wf-palette, .wf-props {
+  .wf-editor:not(.is-palette-collapsed) .wf-palette {
     position: absolute;
-    top: 0; bottom: 0; width: 240px;
+    left: 0; top: 0; bottom: 0; width: 240px;
     z-index: 12;
-    transform: translateX(-110%);
-    transition: transform 200ms;
     box-shadow: var(--shadow-md);
   }
-  .wf-palette { left: 0; }
-  .wf-props   { right: 0; left: auto; transform: translateX(110%); border-left: 1px solid var(--border-soft); }
-  .wf-editor.is-palette-open .wf-palette { transform: translateX(0); }
-  .wf-editor.is-props-open .wf-props { transform: translateX(0); }
-
-  /* FlowRun — DAG + inspector stack vertically */
-  .fr-shell { grid-template-columns: 1fr; }
-  .fr-inspector { border-left: 0; border-top: 1px solid var(--border-soft); max-height: 320px; }
 
   /* Dashboard KPI — 2 columns */
   .dash-kpis { grid-template-columns: repeat(2, 1fr); }
@@ -4414,28 +4400,6 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
   .kpi-strip { grid-template-columns: repeat(2, 1fr); }
   .dash-kpis { grid-template-columns: 1fr; }
 }
-
-/* Floating "show panel" toggle button for narrow panes */
-.pane-side-toggle {
-  display: none;
-  position: absolute;
-  left: 8px; top: 48px;
-  z-index: 11;
-  width: 28px; height: 28px;
-  border-radius: 6px;
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-sm);
-  display: none;
-  align-items: center; justify-content: center;
-  color: var(--fg-muted);
-  cursor: pointer;
-}
-.pane-side-toggle.right { left: auto; right: 8px; }
-@container pane (max-width: 720px) {
-  .pane-side-toggle { display: flex; }
-}
-.pane-side-toggle:hover { background: var(--bg-hover); color: var(--fg-strong); }
 
 /* ============================================================================
    Whole-window narrow: drop two-pane mode
