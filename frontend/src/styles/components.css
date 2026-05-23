@@ -4289,6 +4289,20 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
 .wf-saved .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--fg-faint); }
 .wf-saved.is-dirty .dot { background: var(--status-warn); animation: pulse-bg 1.2s infinite; }
 
+/* Pinned to canvas top-right so it never collides with the layout/zoom
+   toolbar in the top-left. Styled as a sibling mini-card to match. */
+.wf-saved-overlay {
+  position: absolute;
+  top: 12px; right: 12px;
+  margin-right: 0;
+  background: var(--bg-elev);
+  border: 1px solid var(--border-soft);
+  border-radius: 6px;
+  padding: 6px 10px;
+  box-shadow: var(--shadow-sm);
+  z-index: 5;
+}
+
 /* ============================================================================
    AskAI per-pane positioning
    ============================================================================ */

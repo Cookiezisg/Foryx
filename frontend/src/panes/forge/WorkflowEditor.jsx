@@ -591,7 +591,7 @@ export function WorkflowEditor({ workflowId, version }) {
           <button className="icon-btn" title="复位" onClick={resetView}><Icon.Refresh /></button>
           <div className="wf-zoom">{Math.round(transform.scale * 100)}%</div>
         </div>
-        <div className={"wf-saved is-" + status}>
+        <div className={"wf-saved wf-saved-overlay is-" + status}>
           {status === "saving" && <><span className="spinner" /> 保存中…</>}
           {status === "dirty"  && <><span className="dot" /> 未保存（2s 后自动）</>}
           {status === "saved"  && <><span className="dot" /> 已保存 · Accept 后生效</>}
