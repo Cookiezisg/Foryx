@@ -100,14 +100,16 @@ function renderTextLines(text) {
 // ── TextBlock ────────────────────────────────────────────────────────
 // Renders Markdown so AI replies actually look like Markdown (headings,
 // bullets, code blocks, bold/italic, links). Stream-safe — partial
-// markdown re-parses on each delta.
+// markdown re-parses on each delta; `streaming` propagates so
+// HighlightedCode skips expensive autodetect mid-stream.
 const TextBlock = memo(function TextBlock({ convId, blockId }) {
   const block = useChatStore((s) => selectBlock(convId, blockId, s));
   if (!block) return null;
+  const isStreaming = block.status === "streaming";
   return (
     <div className="blk-text">
-      <MarkdownView source={block.content} />
-      {block.status === "streaming" && <span className="streaming-caret" />}
+      <MarkdownView source={block.content} streaming={isStreaming} />
+      {isStreaming && <span className="streaming-caret" />}
     </div>
   );
 });
@@ -134,10 +136,17 @@ const ReasoningBlock = memo(function ReasoningBlock({ convId, blockId, defaultOp
 });
 
 // ── ToolCallBlock (collapsible) ─────────────────────────────────────
+// CRITICAL perf rule: this component must NOT subscribe to the whole
+// `blocks` Map. Earlier version did, which fan-out re-rendered every
+// tool_call in the conversation on every SSE delta (the Map ref is
+// new each delta even though only one block actually changed). We
+// render children via per-id <ToolChildBlock> dispatchers — each one
+// only re-renders when its own block changes.
+//
+// CRITICAL：禁止订阅整张 blocksMap；只能各 child 自订 selectBlock。
 const ToolCallBlock = memo(function ToolCallBlock({ convId, blockId, defaultOpen }) {
   const block = useChatStore((s) => selectBlock(convId, blockId, s));
   const childIds = useChatStore((s) => selectChildIds(convId, blockId, s));
-  const blocksMap = useChatStore((s) => s.convs[convId]?.blocks);
   const [open, setOpen] = useState(!!defaultOpen);
   if (!block) return null;
 
@@ -145,13 +154,6 @@ const ToolCallBlock = memo(function ToolCallBlock({ convId, blockId, defaultOpen
   const isError = block.status === "error";
   const isSuccess = block.status === "completed";
   const ToolIcon = toolIcon(block.attrs?.tool);
-
-  const children = blocksMap
-    ? childIds.map((id) => blocksMap.get(id)).filter(Boolean)
-    : [];
-  const result = children.find((c) => c.type === "tool_result");
-  const progresses = children.filter((c) => c.type === "progress");
-  const nestedMsgs = children.filter((c) => c.type === "message");
 
   const cls = [
     "blk-tool",
@@ -210,32 +212,48 @@ const ToolCallBlock = memo(function ToolCallBlock({ convId, blockId, defaultOpen
             </pre>
           </div>
 
-          {progresses.map((p) => {
-            const pStreaming = p.status === "streaming";
-            const pError     = p.status === "error";
-            return (
-              <div key={p.id} className={"blk-progress" + (pStreaming ? " is-streaming" : pError ? " is-error" : " is-done")}>
-                <div className="blk-progress-head">
-                  {pStreaming
-                    ? <span className="spinner" />
-                    : pError
-                      ? <Icon.AlertCircle style={{ width: 12, height: 12, color: "var(--status-error)" }} />
-                      : <Icon.Check style={{ width: 12, height: 12, color: "var(--status-success)" }} />}
-                  <span>Progress</span>
-                  {p.attrs?.stage && <span className="stage">· {p.attrs.stage}</span>}
-                </div>
-                <div className="blk-progress-line">{p.content}</div>
-              </div>
-            );
-          })}
-
-          {nestedMsgs.map((m) => (
-            <SubagentBlock key={m.id} convId={convId} blockId={m.id} />
+          {childIds.map((id) => (
+            <ToolChildBlock key={id} convId={convId} blockId={id} />
           ))}
-
-          {result && <ToolResultBlock convId={convId} blockId={result.id} />}
         </div>
       )}
+    </div>
+  );
+});
+
+// ── ToolChildBlock (per-id dispatcher) ──────────────────────────────
+// Subscribes ONLY to its own block's type — type never changes once
+// set, so this hook returns a stable string and re-renders only when
+// the block first appears or is removed. Children components do their
+// own narrow subscriptions for the content/status they care about.
+const ToolChildBlock = memo(function ToolChildBlock({ convId, blockId }) {
+  const type = useChatStore((s) => s.convs[convId]?.blocks.get(blockId)?.type);
+  switch (type) {
+    case "progress":    return <ProgressBlock convId={convId} blockId={blockId} />;
+    case "message":     return <SubagentBlock convId={convId} blockId={blockId} />;
+    case "tool_result": return <ToolResultBlock convId={convId} blockId={blockId} />;
+    default:            return null;
+  }
+});
+
+// ── ProgressBlock ───────────────────────────────────────────────────
+const ProgressBlock = memo(function ProgressBlock({ convId, blockId }) {
+  const p = useChatStore((s) => selectBlock(convId, blockId, s));
+  if (!p) return null;
+  const pStreaming = p.status === "streaming";
+  const pError = p.status === "error";
+  return (
+    <div className={"blk-progress" + (pStreaming ? " is-streaming" : pError ? " is-error" : " is-done")}>
+      <div className="blk-progress-head">
+        {pStreaming
+          ? <span className="spinner" />
+          : pError
+            ? <Icon.AlertCircle style={{ width: 12, height: 12, color: "var(--status-error)" }} />
+            : <Icon.Check style={{ width: 12, height: 12, color: "var(--status-success)" }} />}
+        <span>Progress</span>
+        {p.attrs?.stage && <span className="stage">· {p.attrs.stage}</span>}
+      </div>
+      <div className="blk-progress-line">{p.content}</div>
     </div>
   );
 });

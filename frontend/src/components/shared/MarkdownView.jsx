@@ -11,11 +11,11 @@
 import { useMemo } from "react";
 import { HighlightedCode } from "./HighlightedCode.jsx";
 
-export function MarkdownView({ source }) {
+export function MarkdownView({ source, streaming = false }) {
   const blocks = useMemo(() => parse(source || ""), [source]);
   return (
     <div className="md-body">
-      {blocks.map((b, i) => renderBlock(b, i))}
+      {blocks.map((b, i) => renderBlock(b, i, streaming))}
     </div>
   );
 }
@@ -101,14 +101,14 @@ function parse(src) {
   return out;
 }
 
-function renderBlock(b, key) {
+function renderBlock(b, key, streaming) {
   switch (b.type) {
     case "h":     return renderHeading(b.lvl, inline(b.text), key);
     case "hr":    return <hr key={key} />;
     case "code":  return (
       <pre key={key} className="code-block hljs" data-lang={b.lang || ""}>
         {b.lang && <span className="code-block-lang">{b.lang}</span>}
-        <HighlightedCode source={b.text} lang={b.lang} />
+        <HighlightedCode source={b.text} lang={b.lang} streaming={streaming} />
       </pre>
     );
     case "quote": return <blockquote key={key}>{inline(b.text)}</blockquote>;

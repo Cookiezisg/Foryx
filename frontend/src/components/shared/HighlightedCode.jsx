@@ -1,26 +1,34 @@
 // HighlightedCode — syntax-highlight a code fence.
 //
-// Uses lowlight (highlight.js AST output) so the same tokenizer powers
-// both this (chat MarkdownView) and the Tiptap editor's code-block
-// (extension-code-block-lowlight). One language list + one CSS theme
-// across the app; no duplicated style truth.
+// Rules (industry-standard for streaming chat UIs):
+//   1. streaming + no explicit lang → plain text (autodetect is too
+//      expensive to run on every delta and would flicker mid-stream)
+//   2. explicit lang (registered) → single-language highlight (cheap)
+//   3. no lang + completed → autodetect once
 //
-// HighlightedCode —— 用 lowlight 把代码字符串 token 化后渲染。和 Tiptap
-// 编辑器共用一个 lowlight 实例，保证 chat / 编辑器渲染规则一致。
+// Single-language `lowlight.highlight()` is O(n) over content; the
+// killer was `highlightAuto()` which retries all ~37 registered
+// languages on every keystroke. We never run autodetect mid-stream.
+//
+// HighlightedCode —— 流式中只信显式 lang；没 lang 就保持纯文本；写完
+// 才跑一次 autodetect。autodetect 是真正的 CPU 炸弹。
 
 import { createElement, useMemo } from "react";
 import { lowlight } from "./lowlightInstance.js";
 
-export function HighlightedCode({ source, lang }) {
+export function HighlightedCode({ source, lang, streaming = false }) {
   const tree = useMemo(() => {
     if (!source) return null;
     try {
-      if (lang && lowlight.registered(lang)) return lowlight.highlight(lang, source);
+      if (lang && lowlight.registered(lang)) {
+        return lowlight.highlight(lang, source);
+      }
+      if (streaming) return null; // plain mono until fence closes
       return lowlight.highlightAuto(source);
     } catch {
       return null;
     }
-  }, [source, lang]);
+  }, [source, lang, streaming]);
 
   if (!tree) return source;
   return <>{tree.children.map((c, i) => hastToReact(c, i))}</>;
