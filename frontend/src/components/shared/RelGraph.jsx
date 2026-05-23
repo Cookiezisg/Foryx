@@ -265,17 +265,13 @@ function GraphCanvas({ nodes, edges, focusId, selected, onSelect, width, height 
           const p = positions.current[id];
           if (!n || !p) return null;
           const text = n.label.length > 28 ? n.label.slice(0, 28) + "…" : n.label;
-          const w = Math.min(280, Math.max(60, text.length * 6.2 + 16));
           return (
-            <g pointerEvents="none">
-              <rect x={p.x - w / 2} y={p.y + 6} width={w} height={22} rx="4"
-                fill="var(--bg-elev)" stroke="var(--border)" strokeWidth="1"
-                style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.10))" }} />
-              <text x={p.x} y={p.y + 21} textAnchor="middle" fontSize="11"
-                fontFamily="var(--font-sans)" fontWeight="500" fill="var(--fg-strong)">
-                {text}
-              </text>
-            </g>
+            <text x={p.x} y={p.y + 20} textAnchor="middle" fontSize="11"
+              fontFamily="var(--font-sans)" fontWeight="500" fill="var(--fg-strong)"
+              pointerEvents="none"
+              style={{ paintOrder: "stroke", stroke: "var(--bg-paper)", strokeWidth: 4, strokeLinejoin: "round" }}>
+              {text}
+            </text>
           );
         })()}
       </svg>
