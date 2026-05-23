@@ -102,6 +102,15 @@ function flushNow() {
 export const useChatStore = create((set, get) => ({
   convs: {},
 
+  // Per-conv "seeded from REST" flag. SSE is the source of truth; REST
+  // only seeds initial state once per conv lifecycle. Subsequent
+  // hydrateConv calls (cache refetch, conv switch) MUST no-op or they
+  // overwrite live SSE-accumulated state and the user loses the
+  // in-flight message. Cleared by resetConv (recovery from 410 etc).
+  //
+  // 每个 conv 一次性"REST 撒种子"标记；后续 SSE 是真相，禁止覆盖。
+  hydratedConvs: new Set(),
+
   ensureConv(convId) {
     const state = get();
     if (state.convs[convId]) return;
@@ -109,22 +118,33 @@ export const useChatStore = create((set, get) => ({
   },
 
   resetConv(convId) {
-    set((s) => ({ convs: { ...s.convs, [convId]: emptyConv() } }));
+    set((s) => {
+      const hydratedConvs = new Set(s.hydratedConvs);
+      hydratedConvs.delete(convId);
+      return {
+        convs: { ...s.convs, [convId]: emptyConv() },
+        hydratedConvs,
+      };
+    });
   },
 
   resetAll() {
-    set({ convs: {} });
+    set({ convs: {}, hydratedConvs: new Set() });
   },
 
   // Hydrate from REST history. Backend exposes blocks as a flat list per
   // message with `parentBlockId` (omitted when parent is the message
   // itself). We rebuild the tree: blocks whose parentBlockId targets an
   // existing block become its children; the rest become top-level
-  // message blocks. Safe to call on conv switch / 410 recovery.
+  // message blocks.
   //
-  // REST 给扁平 block 列表 + 顶层 parentBlockId 省略；按 parentBlockId 重
-  // 建树（subagent 嵌套同理）。
+  // Idempotent per conv: first call seeds; subsequent calls (cache
+  // refetch / conv switch) no-op. Recovery from SEQ_TOO_OLD goes via
+  // resetConv(id) which clears the flag.
+  //
+  // REST 给扁平 block 列表；按 parentBlockId 重建树。一个 conv 只撒一次种子。
   hydrateConv(convId, messages) {
+    if (get().hydratedConvs.has(convId)) return;
     const conv = emptyConv();
 
     const installMessage = (m, parentBlockId) => {
@@ -181,7 +201,10 @@ export const useChatStore = create((set, get) => ({
     };
 
     for (const m of messages || []) installMessage(m, null);
-    set((s) => ({ convs: { ...s.convs, [convId]: conv } }));
+    set((s) => ({
+      convs: { ...s.convs, [convId]: conv },
+      hydratedConvs: new Set(s.hydratedConvs).add(convId),
+    }));
   },
 
   // ── SSE handlers ───────────────────────────────────────────────────
