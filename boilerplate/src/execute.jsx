@@ -629,7 +629,7 @@ function ExecuteView() {
       </div>
 
       <div className="page-toolbar">
-        <div className="search-input" style={{ width: 320 }}>
+        <div className="search-input" style={{ maxWidth: 320 }}>
           <Icon.Search className="icon" />
           <input
             placeholder="搜 workflow / run id / 触发源…"

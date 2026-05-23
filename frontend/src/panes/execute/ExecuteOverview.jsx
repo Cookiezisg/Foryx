@@ -70,7 +70,7 @@ export function ExecuteOverview({ onOpen }) {
       </div>
 
       <div className="page-toolbar">
-        <div className="search-input" style={{ width: 320 }}>
+        <div className="search-input" style={{ maxWidth: 320 }}>
           <Icon.Search className="icon" />
           <input placeholder="搜 workflow / run id / 触发源…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
@@ -89,7 +89,7 @@ export function ExecuteOverview({ onOpen }) {
         )}
       </div>
 
-      <div className="page-body" style={{ padding: "16px 32px", overflowY: "auto" }}>
+      <div className="page-body" style={{ padding: "16px 32px" }}>
         <KpiStrip total={flowruns.length} running={running.length} waiting={waiting.length} failed={failed.length} success={completed.length} onOpen={() => {}} />
 
         <div className="page-tabs" style={{ marginTop: 22, padding: 0, border: 0 }}>

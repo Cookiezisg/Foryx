@@ -39,7 +39,7 @@ export function ConfigPane() {
           </button>
         ))}
       </div>
-      <div className="page-body" style={{ overflowY: "auto" }}>
+      <div className="page-body">
         {tab === "keys"       && <ApiKeysTab />}
         {tab === "models"     && <ModelsTab />}
         {tab === "sandbox"    && <SandboxTab />}
@@ -188,7 +188,7 @@ function AddKeyDrawer({ onClose }) {
         <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
           <div>
             <div className="cfg-label">Provider</div>
-            <select className="cfg-input" value={provider} onChange={(e) => setProvider(e.target.value)} style={{ width: "100%" }}>
+            <select className="cfg-input" value={provider} onChange={(e) => setProvider(e.target.value)}>
               {(llmProviders.length ? llmProviders : providers).map((p) => (
                 <option key={p.name} value={p.name}>{p.displayName || p.name}</option>
               ))}
@@ -196,7 +196,7 @@ function AddKeyDrawer({ onClose }) {
           </div>
           <div>
             <div className="cfg-label">显示名 (可选)</div>
-            <input className="cfg-input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder={provider} style={{ width: "100%" }} />
+            <input className="cfg-input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder={provider} />
           </div>
           <div>
             <div className="cfg-label">Key</div>
@@ -206,13 +206,12 @@ function AddKeyDrawer({ onClose }) {
               value={secret}
               onChange={(e) => setSecret(e.target.value)}
               placeholder="sk-…"
-              style={{ width: "100%" }}
               autoFocus
             />
           </div>
           <div>
             <div className="cfg-label">Base URL (可选)</div>
-            <input className="cfg-input" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="留空走默认端点" style={{ width: "100%" }} />
+            <input className="cfg-input" value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="留空走默认端点" />
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 8 }}>
             <Button size="sm" variant="ghost" onClick={onClose}>取消</Button>
@@ -282,7 +281,6 @@ function ModelsTab() {
                   className="cfg-input"
                   value={editing.provider}
                   onChange={(e) => setEditing({ ...editing, provider: e.target.value })}
-                  style={{ width: "100%" }}
                 >
                   {keys.map((k) => (
                     <option key={k.id} value={k.provider}>{k.provider}{k.displayName ? ` (${k.displayName})` : ""}</option>
@@ -301,7 +299,6 @@ function ModelsTab() {
                   value={editing.modelId}
                   onChange={(e) => setEditing({ ...editing, modelId: e.target.value })}
                   placeholder="例如 deepseek-chat / claude-sonnet-4-6"
-                  style={{ width: "100%" }}
                 />
                 {(() => {
                   const k = keys.find((kk) => kk.provider === editing.provider);

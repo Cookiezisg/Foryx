@@ -1387,7 +1387,9 @@
   border-radius: 6px;
   padding: 0 10px;
   height: 30px;
-  width: 280px;
+  width: 100%;
+  max-width: 280px;
+  min-width: 0;
   transition: border-color var(--t-fast);
 }
 .search-input:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-ring); }
@@ -1662,6 +1664,8 @@
    ============================================================================ */
 .wf-inspector {
   width: 300px;
+  max-width: 100%;
+  min-width: 0;
   border-left: 1px solid var(--border-soft);
   background: var(--bg-elev);
   display: flex; flex-direction: column;
@@ -1854,12 +1858,10 @@
 }
 tr:hover .action-menu-wrap .rel-more-btn,
 .sk-row-wrap:hover .action-menu-wrap .rel-more-btn,
-.doc-tree-row:hover .action-menu-wrap .rel-more-btn,
 .mem-row:hover .action-menu-wrap .rel-more-btn,
 .card:hover .action-menu-wrap .rel-more-btn,
 .action-menu-wrap:hover .rel-more-btn,
 .action-menu-wrap .rel-more-btn:focus { opacity: 1; }
-.doc-tree-row.is-selected .action-menu-wrap .rel-more-btn,
 tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
 
 .action-menu {
@@ -2585,43 +2587,68 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
 .doc-search { height: 28px; }
 .doc-search input { font-size: var(--fs-12); }
 .doc-tree { padding: 4px; flex: 1; }
-.doc-tree-item {
-  width: 100%;
-  display: flex; align-items: center; gap: 6px;
+
+/* Notion-style three-zone row: [toggle] [label] [actions(hover-only)].
+   Icon ↔ chevron swap is pure CSS via :hover + data-has-children. */
+.doc-tree-row {
+  display: flex; align-items: center;
   height: 28px;
-  padding: 0 8px 0 4px;
+  padding-right: 4px;
   border-radius: 4px;
-  font-size: var(--fs-13);
   color: var(--fg-body);
-  cursor: pointer;
-  text-align: left;
   position: relative;
 }
-.doc-tree-item:hover { background: var(--bg-hover); }
-.doc-tree-item.is-selected { background: var(--bg-active); color: var(--fg-strong); font-weight: 500; }
-.doc-tree-item .chev { width: 14px; height: 14px; color: var(--fg-faint); transition: transform var(--t-fast); flex-shrink: 0; }
-.doc-tree-item .chev-placeholder { width: 14px; height: 14px; display: inline-block; flex-shrink: 0; }
-.doc-tree-item .doc-icon { font-size: 14px; line-height: 1; flex-shrink: 0; width: 16px; text-align: center; color: var(--fg-muted); }
-.doc-tree-item .doc-icon .icon { width: 13px; height: 13px; }
-.doc-tree-item .doc-label { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.doc-tree-item .row-add {
-  width: 18px; height: 18px; border-radius: 3px;
+.doc-tree-row:hover { background: var(--bg-hover); }
+.doc-tree-row.is-selected { background: var(--bg-active); color: var(--fg-strong); font-weight: 500; }
+
+.dtr-toggle {
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border-radius: 3px;
+  color: var(--fg-muted);
+  flex-shrink: 0;
+  position: relative;
+}
+.dtr-toggle[data-has-children]:hover { background: var(--bg-active); color: var(--fg-strong); }
+.dtr-toggle .dtr-icon,
+.dtr-toggle .dtr-chev {
+  width: 13px; height: 13px;
+  grid-area: 1 / 1;
+  transition: opacity var(--t-fast);
+}
+.dtr-toggle .dtr-chev { opacity: 0; transition: opacity var(--t-fast), transform var(--t-fast); }
+.dtr-toggle .dtr-chev.is-open { transform: rotate(90deg); }
+/* Two ways to surface the chevron:
+   1. row hover + has children (collapsed state affordance)
+   2. expanded state (sticky — visible even without hover) */
+.doc-tree-row:hover .dtr-toggle[data-has-children] .dtr-icon,
+.dtr-toggle[data-open] .dtr-icon { opacity: 0; }
+.doc-tree-row:hover .dtr-toggle[data-has-children] .dtr-chev,
+.dtr-toggle[data-open] .dtr-chev { opacity: 1; }
+
+.dtr-label {
+  flex: 1; min-width: 0;
+  padding: 0 4px 0 6px;
+  font-size: var(--fs-13);
+  color: inherit;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: left; cursor: pointer;
+}
+
+.dtr-actions {
+  display: flex; align-items: center; gap: 2px;
+  opacity: 0;
+  transition: opacity var(--t-fast);
+}
+.doc-tree-row:hover .dtr-actions { opacity: 1; }
+.dtr-act-btn {
+  width: 22px; height: 22px; border-radius: 3px;
   display: grid; place-items: center;
   color: var(--fg-faint);
-  background: transparent;
-  opacity: 0;
-  transition: opacity var(--t-fast), background var(--t-fast);
+  flex-shrink: 0;
 }
-.doc-tree-item:hover .row-add { opacity: 1; }
-.doc-tree-item .row-add:hover { background: var(--bg-active); color: var(--fg-strong); }
-.doc-tree-row {
-  position: relative;
-  display: flex; align-items: center;
-}
-.doc-tree-row .doc-tree-item { flex: 1; min-width: 0; }
-.doc-tree-row .action-menu-wrap { margin-right: 4px; }
-
-.doc-tree-item.is-add { color: var(--fg-muted); }
+.dtr-act-btn .icon { width: 13px; height: 13px; }
+.dtr-act-btn:hover { background: var(--bg-active); color: var(--fg-strong); }
 
 .doc-main {
   overflow-y: auto;
@@ -2785,6 +2812,7 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
   position: absolute;
   right: 0; top: 0; bottom: 0;
   width: 320px;
+  max-width: 100%;
   background: var(--bg-elev);
   border-left: 1px solid var(--border);
   box-shadow: var(--shadow-md);
@@ -2997,6 +3025,8 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
 
 .vr-rail {
   width: 320px;
+  max-width: 100%;
+  min-width: 0;
   flex-shrink: 0;
   border-left: 1px solid var(--border-soft);
   background: var(--bg-elev-2);
@@ -3508,6 +3538,8 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
 .cfg-value { display: flex; align-items: center; gap: 4px; }
 .cfg-input {
   flex: 1;
+  width: 100%;
+  min-width: 0;
   height: 30px;
   padding: 0 10px;
   border: 1px solid var(--border);
@@ -3550,11 +3582,10 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
   overflow-x: hidden;
   display: flex; flex-direction: column; gap: 8px;
   width: 240px;
-  min-width: 240px;
-  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
 }
-.wf-palette .search-input { width: 100%; min-width: 0; box-sizing: border-box; }
-.wf-palette .search-input input { min-width: 0; }
+.wf-palette .search-input { max-width: none; }
 .wf-palette-list { width: 100%; min-width: 0; }
 .wf-palette-label {
   font-size: 10px; font-weight: 600;

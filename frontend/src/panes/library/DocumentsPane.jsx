@@ -167,11 +167,6 @@ function DocTreeNode({ node, depth, openSet, setOpenSet, selectedId, onSelect, o
     });
   };
 
-  const onClick = () => {
-    if (hasChildren) toggle();
-    onSelect(node.id);
-  };
-
   const onNewChild = async () => {
     try {
       const res = await create.mutateAsync({ name: UNTITLED, parentId: node.id });
@@ -187,35 +182,43 @@ function DocTreeNode({ node, depth, openSet, setOpenSet, selectedId, onSelect, o
     });
   };
 
+  const selected = selectedId === node.id;
+
   return (
     <>
-      <div className={"doc-tree-row" + (selectedId === node.id ? " is-selected" : "")}>
+      <div
+        className={"doc-tree-row" + (selected ? " is-selected" : "")}
+        style={{ paddingLeft: 4 + depth * 14 }}
+      >
         <button
-          className={"doc-tree-item" + (selectedId === node.id ? " is-selected" : "")}
-          style={{ paddingLeft: 8 + depth * 14 }}
-          onClick={onClick}
+          className="dtr-toggle"
+          data-has-children={hasChildren || undefined}
+          data-open={isOpen || undefined}
+          onClick={hasChildren ? toggle : () => onSelect(node.id)}
+          title={hasChildren ? (isOpen ? "折叠" : "展开") : undefined}
         >
-          {hasChildren ? (
-            <Icon.ChevronRight className="chev" style={{ transform: isOpen ? "rotate(90deg)" : "none" }} />
-          ) : <span className="chev-placeholder" />}
-          <span className="doc-icon">
-            {hasChildren ? <Icon.Folder /> : <Icon.FileText />}
-          </span>
-          <span className="doc-label">{node.name || UNTITLED}</span>
+          <Icon.FileText className="dtr-icon" />
+          <Icon.ChevronRight className={"dtr-chev" + (isOpen ? " is-open" : "")} />
         </button>
-        <ActionMenu
-          placement="bottom-end"
-          renderTrigger={({ ref, ...rest }) => (
-            <button ref={ref} className="rel-more-btn" title="操作" {...rest}>
-              <Icon.MoreHorizontal />
-            </button>
-          )}
-          items={[
-            { label: "新建子页面", icon: Icon.Plus, onClick: onNewChild },
-            "divider",
-            { label: "删除", icon: Icon.Trash, danger: true, onClick: onDelete },
-          ]}
-        />
+        <button className="dtr-label" onClick={() => onSelect(node.id)}>
+          {node.name || UNTITLED}
+        </button>
+        <div className="dtr-actions">
+          <ActionMenu
+            placement="bottom-end"
+            renderTrigger={({ ref, ...rest }) => (
+              <button ref={ref} className="dtr-act-btn" title="操作" {...rest}>
+                <Icon.MoreHorizontal />
+              </button>
+            )}
+            items={[
+              { label: "删除", icon: Icon.Trash, danger: true, onClick: onDelete },
+            ]}
+          />
+          <button className="dtr-act-btn" title="新建子页面" onClick={onNewChild}>
+            <Icon.Plus />
+          </button>
+        </div>
       </div>
       {isOpen && node.children.map((c) => (
         <DocTreeNode

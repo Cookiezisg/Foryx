@@ -120,7 +120,7 @@ export function RunDrawer({ open, onClose, kind, entity }) {
                   ) : (
                     <select
                       className="cfg-input"
-                      style={{ width: "100%", fontFamily: "var(--font-mono)" }}
+                      style={{ fontFamily: "var(--font-mono)" }}
                       value={method}
                       onChange={(e) => setMethod(e.target.value)}
                     >

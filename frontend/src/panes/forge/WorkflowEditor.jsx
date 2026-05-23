@@ -177,7 +177,7 @@ function Palette({ onAdd }) {
     (k.label + k.desc).toLowerCase().includes(q.toLowerCase()));
   return (
     <aside className="wf-palette">
-      <div className="search-input" style={{ width: "100%" }}>
+      <div className="search-input" style={{ maxWidth: "none" }}>
         <Icon.Search className="icon" />
         <input placeholder="拖入节点…" value={q} onChange={(e) => setQ(e.target.value)} />
       </div>

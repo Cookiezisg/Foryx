@@ -50,7 +50,7 @@ export function MemoryPane() {
         ))}
       </div>
 
-      <div className="page-body" style={{ padding: 24, overflowY: "auto" }}>
+      <div className="page-body" style={{ padding: 24 }}>
         {isLoading ? <div className="empty"><div className="sub">加载中…</div></div>
           : memories.length === 0 ? (
             <div className="empty">
@@ -123,12 +123,12 @@ function MemoryDrawer({ memory, onClose }) {
           {isNew && (
             <div>
               <div className="cfg-label">name</div>
-              <input className="cfg-input" value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} placeholder="kebab-case-slug" />
+              <input className="cfg-input" value={name} onChange={(e) => setName(e.target.value)} placeholder="kebab-case-slug" />
             </div>
           )}
           <div>
             <div className="cfg-label">description</div>
-            <input className="cfg-input" value={description} onChange={(e) => setDescription(e.target.value)} style={{ width: "100%" }} />
+            <input className="cfg-input" value={description} onChange={(e) => setDescription(e.target.value)} />
           </div>
           <div>
             <div className="cfg-label">body</div>
@@ -136,7 +136,7 @@ function MemoryDrawer({ memory, onClose }) {
               className="cfg-input"
               value={body}
               onChange={(e) => setBody(e.target.value)}
-              style={{ width: "100%", minHeight: 240, fontFamily: "var(--font-sans)", padding: 8 }}
+              style={{ minHeight: 240, fontFamily: "var(--font-sans)", padding: 8 }}
             />
           </div>
           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 8 }}>

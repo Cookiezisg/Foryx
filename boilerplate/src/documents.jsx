@@ -15,35 +15,35 @@ function DocTreeItem({ node, openSet, toggleOpen, selectedId, onSelect }) {
   const isFolder = node.kind === "folder";
   const isOpen = openSet.has(node.id);
   return (
-    <div className={"doc-tree-row" + (selectedId === node.id ? " is-selected" : "")}>
+    <div
+      className={"doc-tree-row" + (selectedId === node.id ? " is-selected" : "")}
+      style={{ paddingLeft: 4 + node.depth * 14 }}
+    >
       <button
-        className={"doc-tree-item" + (selectedId === node.id ? " is-selected" : "")}
-        style={{ paddingLeft: 8 + node.depth * 14 }}
-        onClick={() => {
-          if (isFolder) toggleOpen(node.id);
-          else onSelect(node.id);
-        }}
+        className="dtr-toggle"
+        data-has-children={isFolder || undefined}
+        data-open={isFolder && isOpen || undefined}
+        onClick={() => isFolder ? toggleOpen(node.id) : onSelect(node.id)}
+        title={isFolder ? (isOpen ? "折叠" : "展开") : undefined}
       >
-        {isFolder ? (
-          <Icon.ChevronRight className="chev" style={{ transform: isOpen ? "rotate(90deg)" : "none" }} />
-        ) : <span className="chev-placeholder" />}
-        <span className="doc-icon">
-          {isFolder ? <Icon.Folder /> : <Icon.FileText />}
-        </span>
-        <span className="doc-label">{node.title}</span>
+        <Icon.FileText className="dtr-icon" />
+        <Icon.ChevronRight className={"dtr-chev" + (isOpen ? " is-open" : "")} />
       </button>
-      {!isFolder && (
+      <button className="dtr-label" onClick={() => onSelect(node.id)}>
+        {node.title}
+      </button>
+      <div className="dtr-actions">
         <ActionMenu items={[
           { label: "在新 pane 打开", icon: Icon.ArrowRight },
           { label: "重命名", icon: Icon.Edit, shortcut: "F2" },
           { label: "移动到…", icon: Icon.Folder },
-          { label: "复制", icon: Icon.Copy, shortcut: "⌘D" },
           "divider",
-          { label: "导出 Markdown", icon: Icon.Inbox },
-          { label: "归档", icon: Icon.Folder },
           { label: "删除", icon: Icon.Trash, danger: true, shortcut: "⌫" },
         ]} />
-      )}
+        <button className="dtr-act-btn" title="新建子页面">
+          <Icon.Plus />
+        </button>
+      </div>
     </div>
   );
 }

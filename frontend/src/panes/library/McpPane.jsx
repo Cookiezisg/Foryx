@@ -30,7 +30,7 @@ export function McpPane() {
         </div>
       </div>
 
-      <div className="page-body" style={{ padding: 24, overflowY: "auto" }}>
+      <div className="page-body" style={{ padding: 24 }}>
         {isLoading
           ? <div className="empty"><div className="sub">加载中…</div></div>
           : servers.length === 0

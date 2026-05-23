@@ -35,7 +35,7 @@ export function SkillsPane() {
       </div>
 
       <div className="page-toolbar">
-        <div className="search-input" style={{ width: 320 }}>
+        <div className="search-input" style={{ maxWidth: 320 }}>
           <Icon.Search className="icon" />
           <input placeholder="搜技能名 / 描述…" value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
@@ -45,7 +45,7 @@ export function SkillsPane() {
         </span>
       </div>
 
-      <div className="page-body" style={{ padding: 24, overflowY: "auto" }}>
+      <div className="page-body" style={{ padding: 24 }}>
         {isLoading ? <div className="empty"><div className="sub">加载中…</div></div>
           : filtered.length === 0 ? (
             <div className="empty">

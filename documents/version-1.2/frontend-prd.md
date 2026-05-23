@@ -1429,6 +1429,11 @@ ToastTray（position: fixed bottom right）
 | block_delta append 性能 | 每个 delta 都 re-render 整个 BlockList | useMemo + key-based partial update |
 | WorkflowEditor Palette 过宽 | `.wf-palette` 没有固定宽度，在某些窗口尺寸下会压缩或遮挡右侧 VersionRail | 自己到时候看看 |
 | `.chat-title-row .chat-title-text` 块被一个孤立 `}` 切成两段 | boilerplate styles.css L520-532：第一段以 `overflow:` 结尾就关闭，第二段全是悬空孤儿属性 + 不配对 `}`，esbuild 报 css-syntax-error | 删多余 `}` + 删第二段重复 `overflow:` 行，其余属性并入 `.chat-title-text`。Phase 1 已修。 |
+| `.search-input { width: 280px }` 在窄容器（doc-sidebar 240px）必然溢出 | 基类硬编码固定 width 没 max-width 兜底；`.wf-palette .search-input` 单独写了救场规则 = 病信号 | 基类改 `width:100%; max-width:280px; min-width:0`；删 `.wf-palette` 救场规则改为 `max-width:none`；所有 inline `width:320` 改 `maxWidth:320`。两端同步修。 |
+| `.wf-palette` 双锁 `width:240; min-width:240` 在 220px grid track 里撑死 | 父 `.wf-editor` grid 第一列 220px，子 min-width:240 触发 grid overflow | 删 min-width，加 max-width:100%。已修。 |
+| `.doc-backlinks / .vr-rail / .wf-inspector` 固定 width 缺 max-width 兜底 | 主区缩窄时浮层/侧栏溢出 viewport | 统一加 `max-width:100%; min-width:0`。已修。 |
+| `.cfg-input { flex:1 }` 在非 flex 容器里无效，全靠每处 inline `width:100%` 救 | ConfigPane / MemoryPane / RunDrawer 共 8 处都得手写 inline | 基类加 `width:100%; min-width:0`（保留 flex:1 兼容 flex 容器），清掉 8 处 inline。已修。 |
+| `DocTreeNode` 行交互不像 Notion：图标和 chevron 两列并排、`…` 按钮永久可见、整行点击同时 select+toggle | 视觉冗余 + 行为耦合（无法只展开不进页） | 重写为 Notion 三区结构 `[dtr-toggle] [dtr-label] [dtr-actions]`：所有节点统一 FileText 图标（删 Folder 区分）；图标↔chevron 同位 swap（CSS `:hover` + `data-has-children`，零 JS state）；展开态用 `data-open` 让 ▼ 永久 sticky（一眼可辨）；`+`/`…` hover-only；click 严格拆分（toggle / select / new child / more menu 四个独立动作）。叶子节点 hover 时图标不变。已修。|
 
 ---
 
