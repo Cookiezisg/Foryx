@@ -13,10 +13,16 @@
 // HighlightedCode —— 流式中只信显式 lang；没 lang 就保持纯文本；写完
 // 才跑一次 autodetect。autodetect 是真正的 CPU 炸弹。
 
-import { createElement, useMemo } from "react";
+import { createElement, memo, useMemo } from "react";
 import { lowlight } from "./lowlightInstance.js";
 
-export function HighlightedCode({ source, lang, streaming = false }) {
+// memo: stable code blocks (any block whose source/lang/streaming
+// triple is unchanged across MarkdownView re-renders) skip rendering
+// entirely. Without this, every streaming delta to ANY part of the
+// message would re-create JSX for every code block in it.
+//
+// memo —— 防止同一 message 里非流式的代码块跟着 delta 重渲染。
+export const HighlightedCode = memo(function HighlightedCode({ source, lang, streaming = false }) {
   const tree = useMemo(() => {
     if (!source) return null;
     try {
@@ -32,7 +38,7 @@ export function HighlightedCode({ source, lang, streaming = false }) {
 
   if (!tree) return source;
   return <>{tree.children.map((c, i) => hastToReact(c, i))}</>;
-}
+});
 
 // hast → React. lowlight returns hast nodes — element / text.
 // className arrives as an array on properties; join into space-string.

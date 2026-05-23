@@ -26,6 +26,79 @@ function emptyConv() {
   return { messages: new Map(), blocks: new Map(), topMsgIds: [], lastSeq: 0 };
 }
 
+// ── rAF delta coalescing ─────────────────────────────────────────────
+// Backend streams can fire 30-100 deltas/sec per block. Without
+// batching, each delta is one setState → one React render → one full
+// reconcile + highlight pass. For long messages with code blocks this
+// saturates the main thread and locks the tab.
+//
+// We buffer deltas and flush them once per animation frame. Visible
+// effect: text appears in 16ms steps instead of continuously —
+// imperceptible at 60Hz, but caps render rate so the main thread
+// stays responsive.
+//
+// block_stop / message_stop must flush synchronously so terminal state
+// is never applied before the deltas that preceded it.
+//
+// rAF 合并 delta —— 一帧最多 setState 一次；终态事件先冲洗 buffer 再 set。
+let pendingDeltas = []; // [{convId, blockId, delta}]
+let rafHandle = 0;
+let storeApiRef = null; // captured below
+
+function scheduleFlush() {
+  if (rafHandle) return;
+  if (typeof requestAnimationFrame === "undefined") {
+    rafHandle = setTimeout(() => { rafHandle = 0; flushDeltas(); }, 16);
+    return;
+  }
+  rafHandle = requestAnimationFrame(() => { rafHandle = 0; flushDeltas(); });
+}
+
+function cancelFlush() {
+  if (!rafHandle) return;
+  if (typeof cancelAnimationFrame !== "undefined") cancelAnimationFrame(rafHandle);
+  else clearTimeout(rafHandle);
+  rafHandle = 0;
+}
+
+function flushDeltas() {
+  const items = pendingDeltas;
+  if (items.length === 0) return;
+  pendingDeltas = [];
+
+  const byConv = new Map();
+  for (const it of items) {
+    let m = byConv.get(it.convId);
+    if (!m) { m = new Map(); byConv.set(it.convId, m); }
+    m.set(it.blockId, (m.get(it.blockId) || "") + it.delta);
+  }
+
+  storeApiRef.setState((s) => {
+    const convs = { ...s.convs };
+    for (const [convId, blockDeltas] of byConv) {
+      const conv = convs[convId];
+      if (!conv) continue;
+      const blocks = new Map(conv.blocks);
+      for (const [blockId, delta] of blockDeltas) {
+        const cur = blocks.get(blockId);
+        if (!cur) continue;
+        blocks.set(blockId, {
+          ...cur,
+          content: cur.content + delta,
+          version: cur.version + 1,
+        });
+      }
+      convs[convId] = { ...conv, blocks };
+    }
+    return { convs };
+  });
+}
+
+function flushNow() {
+  cancelFlush();
+  flushDeltas();
+}
+
 export const useChatStore = create((set, get) => ({
   convs: {},
 
@@ -151,6 +224,7 @@ export const useChatStore = create((set, get) => ({
   },
 
   onMessageStop(convId, e) {
+    flushNow();
     set((s) => {
       const conv = s.convs[convId];
       if (!conv) return s;
@@ -208,22 +282,13 @@ export const useChatStore = create((set, get) => ({
   },
 
   onBlockDelta(convId, e) {
-    set((s) => {
-      const conv = s.convs[convId];
-      if (!conv) return s;
-      const cur = conv.blocks.get(e.id);
-      if (!cur) return s;
-      const blocks = new Map(conv.blocks);
-      blocks.set(e.id, {
-        ...cur,
-        content: cur.content + (e.delta || ""),
-        version: cur.version + 1,
-      });
-      return { convs: { ...s.convs, [convId]: { ...conv, blocks } } };
-    });
+    if (!e?.id) return;
+    pendingDeltas.push({ convId, blockId: e.id, delta: e.delta || "" });
+    scheduleFlush();
   },
 
   onBlockStop(convId, e) {
+    flushNow();
     set((s) => {
       const conv = s.convs[convId];
       if (!conv) return s;
@@ -240,6 +305,9 @@ export const useChatStore = create((set, get) => ({
     });
   },
 }));
+
+// Wire the rAF batcher to the live store handle (created above).
+storeApiRef = useChatStore;
 
 // Selectors MUST return stable references between snapshots —
 // useSyncExternalStore (under zustand) sees a "new" value otherwise and
