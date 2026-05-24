@@ -1,65 +1,71 @@
-// Sidebar — left navigation rail. Real conversation list via
-// useConversations(); SSE notifications invalidate this query.
+// Sidebar — Gemini-style left rail. Expanded 260px / collapsed 64px.
+// Top logo morphs to PanelLeftClose/PanelLeftOpen on hover (no extra row).
+// "工具" + "最近" are collapsible via SidebarSection. Footer shows avatar
+// (with red-dot badge for combined Help+Bell unread) and reveals a ⚙
+// settings button on hover.
 //
-// Sidebar —— 左侧导航；真实对话列表；SSE 通知触发 invalidation。
+// Sidebar —— Gemini-style 左栏。展开 260 / 收起 64。顶部 logo hover 变
+// panel-toggle 切换收起;"工具" / "最近" 段可折叠。footer 头像角红 dot
+// 是 Help+Bell 合并未读,hover 整行浮出 ⚙ 入设置。
 
-import { useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Icon } from "../primitives/Icon.jsx";
-import { Kbd } from "../primitives/Kbd.jsx";
 import { useUIStore } from "../../store/ui.js";
 import { useConversations, useCreateConversation } from "../../api/conversations.js";
-import { ChatListItem } from "./ChatListItem.jsx";
 import { useSSEHealth } from "../../sse/SSEProvider.jsx";
-import { spring, easeOut } from "../../motion/tokens.js";
+import { useDisplayName } from "../../hooks/useDisplayName.js";
+import { ChatListItem } from "./ChatListItem.jsx";
+import { SidebarSection } from "./SidebarSection.jsx";
 
-const SSE_DOT_COLOR = {
-  ok:      "var(--status-success)",
-  warn:    "var(--status-warn)",
-  err:     "var(--status-error)",
-  unknown: "var(--fg-faint)",
-};
-const SSE_DOT_TITLE = {
-  ok:      "在线",
-  warn:    "连接中",
-  err:     "离线",
-  unknown: "—",
-};
+const SPRING = { type: "spring", stiffness: 280, damping: 28 };
 
-function NavItem({ icon: I, label, active, onClick, badge }) {
+function ForgifyLogo({ size = 22 }) {
+  // Anvil + spark mark. Stroke matches Lucide outline weight.
   return (
-    <button
-      className={"nav-item" + (active ? " is-active" : "")}
-      onClick={onClick}
-    >
-      {I && <I className="icon" />}
-      <span className="label">{label}</span>
-      {badge != null && <span className="badge">{badge}</span>}
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none"
+      stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 2v3" /><path d="M5 5l2 2" /><path d="M19 5l-2 2" />
+      <path d="M4 12h4l2-3l4 6l2-3h4" />
+      <path d="M5 17h14" /><path d="M7 21l1-4" /><path d="M17 21l-1-4" />
+    </svg>
+  );
+}
+
+function NavItem({ icon: I, label, active, primary, onClick, collapsed }) {
+  const cls =
+    "sb-item" +
+    (active  ? " is-active"  : "") +
+    (primary ? " is-primary" : "");
+  return (
+    <button type="button" className={cls} onClick={onClick} title={collapsed ? label : undefined}>
+      <span className="ic-slot"><I size={18} strokeWidth={2} className="ic" /></span>
+      {!collapsed && <span className="label">{label}</span>}
     </button>
   );
 }
 
 export function Sidebar() {
-  const openPanes = useUIStore((s) => s.openPanes);
-  const togglePane = useUIStore((s) => s.togglePane);
-  const openPane = useUIStore((s) => s.openPane);
-  const setActiveConv = useUIStore((s) => s.setActiveConv);
-  const collapsed = useUIStore((s) => s.collapsed);
-  const setCmdkOpen = useUIStore((s) => s.setCmdkOpen);
-  const setNotifsOpen = useUIStore((s) => s.setNotifsOpen);
-  const setAskOpen = useUIStore((s) => s.setAskOpen);
+  const openPanes      = useUIStore((s) => s.openPanes);
+  const togglePane     = useUIStore((s) => s.togglePane);
+  const openPane       = useUIStore((s) => s.openPane);
+  const setActiveConv  = useUIStore((s) => s.setActiveConv);
+  const collapsed      = useUIStore((s) => s.collapsed);
+  const setCollapsed   = useUIStore((s) => s.setCollapsed);
+  const toolsExpanded  = useUIStore((s) => s.toolsExpanded);
+  const setToolsExpanded   = useUIStore((s) => s.setToolsExpanded);
+  const recentExpanded = useUIStore((s) => s.recentExpanded);
+  const setRecentExpanded  = useUIStore((s) => s.setRecentExpanded);
+  const setCmdkOpen        = useUIStore((s) => s.setCmdkOpen);
+  const setNotifsOpen      = useUIStore((s) => s.setNotifsOpen);
   const setSettingsPopOpen = useUIStore((s) => s.setSettingsPopOpen);
-  const settingsPopOpen = useUIStore((s) => s.settingsPopOpen);
 
-  const { data: conversations = [], isLoading } = useConversations();
+  const { data: conversations = [] } = useConversations();
   const createConv = useCreateConversation();
   const sse = useSSEHealth();
+  const [displayName] = useDisplayName();
 
-  const [showArchived, setShowArchived] = useState(false);
-
-  const pinned = conversations.filter((c) => c.pinned && !c.archived);
-  const recent = conversations.filter((c) => !c.pinned && !c.archived);
-  const archived = conversations.filter((c) => c.archived);
+  const pinned   = conversations.filter((c) => c.pinned   && !c.archived);
+  const recent   = conversations.filter((c) => !c.pinned  && !c.archived);
 
   const isOpen = (k) => openPanes.includes(k);
 
@@ -68,166 +74,94 @@ export function Sidebar() {
       const created = await createConv.mutateAsync({});
       if (created?.id) {
         setActiveConv(created.id);
-        if (!openPanes.includes("chat")) openPane("chat");
+        if (!isOpen("chat")) openPane("chat");
       }
     } catch (err) {
       console.error("create conv failed", err);
     }
   };
 
+  const initial = (displayName?.[0] || "?").toUpperCase();
+  const unread = sse.unread || 0;
+  const sseDot = sse.overall === "err" || sse.overall === "warn"
+    ? `var(--status-${sse.overall === "err" ? "error" : "warn"})` : null;
+
   return (
     <motion.aside
       className={"sidebar" + (collapsed ? " is-collapsed" : "")}
-      animate={{ width: collapsed ? 56 : 248 }}
-      transition={spring}
+      animate={{ width: collapsed ? 64 : 260 }}
+      transition={SPRING}
       style={{ overflow: "hidden" }}
     >
-      <div className="sidebar-header">
-        <div className="workspace-pill">
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="workspace-name">Forgify</div>
-            {!collapsed && (
-              <div style={{ fontSize: 10, color: "var(--fg-faint)" }}>local</div>
+      <div className="sb-head">
+        <button
+          type="button"
+          className="sb-logo-slot"
+          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? "展开 ⌘B" : "收起 ⌘B"}
+          aria-label="toggle sidebar"
+        >
+          <span className="ic-logo"><ForgifyLogo /></span>
+          <span className="ic-toggle">
+            {collapsed
+              ? <Icon.PanelLeftOpen  size={20} strokeWidth={2} />
+              : <Icon.PanelLeftClose size={20} strokeWidth={2} />}
+          </span>
+        </button>
+        {!collapsed && <span className="sb-logo-name">Forgify</span>}
+      </div>
+
+      <NavItem icon={Icon.SquarePen} label="新对话"  primary onClick={onNewConv} collapsed={collapsed} />
+      <NavItem icon={Icon.Search}    label="搜索 或 跳转" onClick={() => setCmdkOpen(true)} collapsed={collapsed} />
+
+      <div style={{ height: 8 }} />
+
+      <NavItem icon={Icon.MessageSquare} label="对话" active={isOpen("chat")}      onClick={() => togglePane("chat")}      collapsed={collapsed} />
+      <NavItem icon={Icon.Hammer}        label="工坊" active={isOpen("forge")}     onClick={() => togglePane("forge")}     collapsed={collapsed} />
+      <NavItem icon={Icon.Play}          label="执行" active={isOpen("execute")}   onClick={() => togglePane("execute")}   collapsed={collapsed} />
+      <NavItem icon={Icon.FileText}      label="文档" active={isOpen("documents")} onClick={() => togglePane("documents")} collapsed={collapsed} />
+
+      <SidebarSection label="工具" expanded={toolsExpanded} onToggle={() => setToolsExpanded(!toolsExpanded)} collapsedSidebar={collapsed}>
+        <NavItem icon={Icon.BarChart3} label="洞察"  active={isOpen("observe")} onClick={() => togglePane("observe")} collapsed={collapsed} />
+        <NavItem icon={Icon.Sparkles}  label="Skills" active={isOpen("skills")} onClick={() => togglePane("skills")}  collapsed={collapsed} />
+        <NavItem icon={Icon.Plug}      label="MCP"    active={isOpen("mcp")}    onClick={() => togglePane("mcp")}     collapsed={collapsed} />
+        <NavItem icon={Icon.Brain}     label="Memory" active={isOpen("memory")} onClick={() => togglePane("memory")}  collapsed={collapsed} />
+      </SidebarSection>
+
+      {!collapsed && (
+        <div className="sb-recent-wrap">
+          <SidebarSection label="最近" expanded={recentExpanded} onToggle={() => setRecentExpanded(!recentExpanded)}>
+            {pinned.map((c) => <ChatListItem key={c.id} conv={c} />)}
+            {recent.map((c) => <ChatListItem key={c.id} conv={c} />)}
+            {pinned.length === 0 && recent.length === 0 && (
+              <div className="sb-empty">还没有对话</div>
             )}
-          </div>
-          {!collapsed && <Icon.ChevronDown style={{ width: 12, height: 12, color: "var(--fg-faint)" }} />}
+          </SidebarSection>
         </div>
+      )}
 
-        {!collapsed && (
-          <button className="cmdk-trigger" onClick={() => setCmdkOpen(true)}>
-            <Icon.Search className="icon" />
-            <span className="label">搜索 或 跳转</span>
-            <Kbd>⌘</Kbd>
-            <Kbd>K</Kbd>
-          </button>
-        )}
-      </div>
-
-      <div className="nav-section">
-        <div style={{ height: 4 }} />
-        <NavItem icon={Icon.MessageSquare} label="对话"  active={isOpen("chat")}      onClick={() => togglePane("chat")} />
-        <NavItem icon={Icon.Hammer}        label="工坊"  active={isOpen("forge")}     onClick={() => togglePane("forge")} />
-        <NavItem icon={Icon.Play}          label="执行"  active={isOpen("execute")}   onClick={() => togglePane("execute")} />
-        <NavItem icon={Icon.FileText}      label="文档"  active={isOpen("documents")} onClick={() => togglePane("documents")} />
-        <NavItem icon={Icon.GitBranch}     label="洞察"  active={isOpen("observe")}   onClick={() => togglePane("observe")} />
-      </div>
-
-      <div className="nav-section">
-        {!collapsed && <div className="nav-section-title"><span>资源库</span></div>}
-        <NavItem icon={Icon.Sparkles}      label="Skills" active={isOpen("skills")} onClick={() => togglePane("skills")} />
-        <NavItem icon={Icon.Server}        label="MCP"    active={isOpen("mcp")}    onClick={() => togglePane("mcp")} />
-        <NavItem icon={Icon.Brain}         label="Memory" active={isOpen("memory")} onClick={() => togglePane("memory")} />
-      </div>
-
-      <div className="nav-section nav-conv-section" style={{ overflowY: "auto", flex: 1, paddingBottom: 12 }}>
-        {!collapsed && pinned.length > 0 && (
-          <div className="nav-section-title"><span>置顶</span></div>
-        )}
-        <AnimatePresence initial={false}>
-          {!collapsed && pinned.map((c) => (
-            <motion.div key={c.id} layout
-              initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-              transition={easeOut}>
-              <ChatListItem conv={c} />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {!collapsed && (
-          <div className="nav-section-title" style={{ marginTop: pinned.length ? 6 : 0 }}>
-            <span>最近对话</span>
-            <button className="add-btn" title="新对话" onClick={onNewConv}>
-              <Icon.Plus />
-            </button>
-          </div>
-        )}
-        <AnimatePresence initial={false}>
-          {!collapsed && recent.map((c) => (
-            <motion.div key={c.id} layout
-              initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-              transition={easeOut}>
-              <ChatListItem conv={c} />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        {!collapsed && !isLoading && recent.length === 0 && pinned.length === 0 && (
-          <div style={{ padding: "12px 10px", fontSize: 11, color: "var(--fg-faint)", textAlign: "center" }}>
-            还没有对话 — 点 <Icon.Plus style={{ display: "inline", verticalAlign: "-2px", width: 11, height: 11 }} /> 开始一段
-          </div>
-        )}
-
-        {!collapsed && archived.length > 0 && (
-          <>
-            <button
-              className="nav-section-title nav-section-toggle"
-              onClick={() => setShowArchived((s) => !s)}
-              style={{ marginTop: 10 }}
-            >
-              <span>归档 · {archived.length}</span>
-              <Icon.ChevronRight
-                className="chev"
-                style={{
-                  width: 11, height: 11,
-                  transform: showArchived ? "rotate(90deg)" : "none",
-                  transition: "transform 120ms",
-                }}
-              />
-            </button>
-            <AnimatePresence initial={false}>
-              {showArchived && archived.map((c) => (
-                <motion.div key={c.id} layout
-                  initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}
-                  transition={easeOut}>
-                  <ChatListItem conv={c} />
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </>
-        )}
-      </div>
-
-      <div className="sidebar-footer">
-        <div className="user-pill">
-          <div className="user-avatar">S</div>
-          {!collapsed && <div className="user-name">本地</div>}
-          {!collapsed && (
-            <>
-              <span
-                className="user-status"
-                style={{ background: SSE_DOT_COLOR[sse.overall] }}
-                title={SSE_DOT_TITLE[sse.overall] +
-                  ` · eventlog ${sse.eventlog} · notifs ${sse.notifs} · forge ${sse.forge}`}
-              />
-              <div style={{ flex: 1 }} />
-            </>
-          )}
-          <button className="icon-btn" onClick={() => setAskOpen(true)} title="agent 在等你回答">
-            <Icon.HelpCircle />
-          </button>
-          <button
-            className="icon-btn"
-            onClick={() => { setNotifsOpen(true); sse.clearUnread(); }}
-            title={sse.unread > 0 ? `通知 · ${sse.unread} 未读` : "通知"}
-            style={{ position: "relative" }}
-          >
-            <Icon.Bell />
-            {sse.unread > 0 && (
-              <span style={{
-                position: "absolute", top: 4, right: 4,
-                width: 6, height: 6, borderRadius: "50%",
-                background: "var(--accent)",
-              }} />
-            )}
-          </button>
-          <button
-            className="icon-btn"
-            onClick={() => setSettingsPopOpen(!settingsPopOpen)}
-            title="账号 / 外观 / 完整设置"
-          >
-            <Icon.Settings />
-          </button>
-        </div>
+      <div className="sb-foot-spacer" />
+      <div className="sb-foot">
+        <button
+          type="button"
+          className="sb-avatar-slot"
+          onClick={() => { setNotifsOpen(true); sse.clearUnread?.(); }}
+          title={unread > 0 ? `${unread} 条未读` : "通知"}
+        >
+          <span className="sb-avatar">{initial}</span>
+          {unread > 0 && <span className="sb-badge-dot" />}
+          {sseDot && <span className="sb-sse-dot" style={{ background: sseDot }} />}
+        </button>
+        {!collapsed && <span className="sb-user">{displayName || ""}</span>}
+        <button
+          type="button"
+          className="sb-gear-btn"
+          onClick={() => setSettingsPopOpen(true)}
+          title="设置"
+          aria-label="settings"
+        >
+          <Icon.Settings size={16} strokeWidth={2} />
+        </button>
       </div>
     </motion.aside>
   );
