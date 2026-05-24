@@ -18,11 +18,13 @@ export class ApiError extends Error {
   }
 }
 
-// activeUserHeader — reads settings.activeUserId (or none) and returns
-// the X-Forgify-User-ID header pair. Backend resolves missing header to
-// the default local-user, so this is always safe to call.
+// activeUserHeader — reads settings.activeUserId and returns the
+// X-Forgify-User-ID header pair. Returns {} when null; backend will then
+// reject user-scoped routes with 401 / UNAUTH_NO_USER, triggering
+// self-heal below.
 //
-// 读 settings.activeUserId 注 X-Forgify-User-ID；缺时后端走 local-user。
+// 读 settings.activeUserId 注 X-Forgify-User-ID；为空时用户路由会被
+// 后端 401 拒，触发下方 self-heal。
 function activeUserHeader() {
   const id = useSettings.getState().activeUserId;
   return id ? { "X-Forgify-User-ID": id } : {};
@@ -59,6 +61,15 @@ export async function apiFetch(path, { method = "GET", body, headers, signal, pa
     try { payload = await res.json(); } catch { /* swallow; we surface via message */ }
     const code = payload?.error?.code || `HTTP_${res.status}`;
     const message = payload?.error?.message || `request failed: ${res.status} ${res.statusText}`;
+    // Self-heal: stale or missing activeUserId. Clear it so App.jsx's effect
+    // re-renders into onboarding or auto-selects the only remaining user.
+    // Still throw so the caller can surface the failure.
+    //
+    // 自愈：activeUserId 失效；清掉后 App.jsx 的 effect 会切回 onboarding
+    // 或 auto-select。仍 throw 让调用方知道这次请求失败。
+    if (res.status === 401 && code === "UNAUTH_NO_USER") {
+      try { useSettings.getState().set({ activeUserId: null }); } catch { /* store unavailable in tests */ }
+    }
     throw new ApiError(message, { code, status: res.status, details: payload?.error?.details });
   }
 
