@@ -123,14 +123,20 @@ Server side:
 - Connection without `?userID=` → 401, EventSource closes.
 - Connection with stale `?userID=` → 401, EventSource closes.
 
-Client side (`frontend/src/sse/SSEProvider.jsx` and `frontend/src/sse/shared.js`):
-- **Never create an EventSource when `activeUserId === null`.** Stay idle. This avoids triggering an immediate 401 round-trip during pre-onboarding.
-- When `activeUserId` is set → create EventSource. On the `error` event where `readyState === CLOSED`:
-  - Read current `activeUserId` from store. If it is still the same id we connected with → treat as auth failure: call self-heal (set `activeUserId = null`, invalidate `users` query). UI re-renders into onboarding.
-  - If `activeUserId` has since changed (user already switched accounts, or self-healed by REST first) → no-op; the `activeUserId` watcher below will rebuild.
-- Watch `useSettings(s => s.activeUserId)` with a `useEffect`: on change, close any existing EventSource. If the new value is non-null, create a new one with that id. If null, leave it closed.
+Client side has exactly 4 states (`frontend/src/sse/SSEProvider.jsx` and `frontend/src/sse/shared.js`):
 
-This means the auth-failure round-trip on REST is the primary trigger for self-heal; the SSE-close handler is the secondary path for when only SSE fails (e.g., backend restarted, SSE connection dropped while REST hasn't been called recently).
+| Frontend state | EventSource behaviour |
+|---|---|
+| `activeUserId === null` (pre-onboarding or just self-healed) | **Do not create a connection.** Stay idle. Opening with no id would 401 instantly — pointless. |
+| `activeUserId` set, just mounted | Create one EventSource with `?userID=<id>`. |
+| `activeUserId` changed (account switch or self-heal) | Close old, open new bound to new id. The connection is bound to a user at handshake; can't switch mid-stream. |
+| Connection drops while `activeUserId` still set (backend restart / network) | The `error` event with `readyState === CLOSED` fires. If the id we connected with still equals current `activeUserId` → treat as auth failure; call self-heal. Otherwise no-op (the state-change watcher will handle it). |
+
+Implementation: `useEffect` watching `useSettings(s => s.activeUserId)`. On change, close existing EventSource; if new value non-null, build a new one.
+
+Steady-state: SSE is held open indefinitely. The open/close transitions only happen at the 4 events above.
+
+**REST 401 is the primary self-heal trigger** (most user actions are REST). SSE-close self-heal is the secondary path — for the case where a user opens a tab and just watches without clicking, then the backend restarts: SSE drops first.
 
 ### 4.6 Frontend self-heal
 
@@ -160,9 +166,15 @@ Existing user data is **not** deleted. After upgrading to the new code:
 
 No migration scripts. No data rewrites. The semantics change but the data shape doesn't.
 
-**Auto-select rule** (so existing single-user installs don't suddenly see a picker):
-- App.jsx, after self-heal: if `activeUserId === null && users.length === 1` → `settings.set({ activeUserId: users[0].id })`.
-- This is safe because the only-one-user case is unambiguous.
+**Auto-select rule** — when `activeUserId === null` (fresh boot OR just self-healed OR new browser), the UI's behaviour is dispatched by `users.length`:
+
+| `users.length` | What UI does | Why |
+|---|---|---|
+| 0 | Show Onboarding overlay | No users exist; we need one |
+| **1** | **Auto-select that user** (`settings.set({ activeUserId: users[0].id })`) | Forcing a picker or re-onboarding for the only existing user is dumb. Single-user is the common case; this is the no-friction path. |
+| ≥2 | Show user picker | Genuine ambiguity; user must choose |
+
+The auto-select branch is what makes the migration in §5 step 4 invisible to the dominant single-user case: localStorage gets cleared (browser data wipe, profile switch, our self-heal) → next render sees one user → silently picks them → user notices nothing.
 
 ## 6. Test fixture cleanup
 
