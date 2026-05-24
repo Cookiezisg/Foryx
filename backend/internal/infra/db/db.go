@@ -5,6 +5,7 @@ package db
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -35,9 +36,27 @@ func Open(cfg Config) (*gorm.DB, error) {
 		logLevel = gormlogger.Warn
 	}
 
+	// Lookup-or-default patterns (middleware user resolver, optional model lookups)
+	// intentionally probe by id and tolerate ErrRecordNotFound. The default GORM
+	// logger surfaces those as Warnings → dev-log noise. Suppress just that one
+	// category; everything else stays at the configured LogLevel.
+	//
+	// 查不到-就-默认 模式（middleware user resolver、可选 model 查询）按 id 探
+	// 查，容忍 ErrRecordNotFound；默认 logger 把它当 Warning 打 → dev log 噪
+	// 音。只静默这一类，其它走原 LogLevel。
+	gormLog := gormlogger.New(
+		log.New(os.Stdout, "\r\n", log.LstdFlags),
+		gormlogger.Config{
+			SlowThreshold:             200 * time.Millisecond,
+			LogLevel:                  logLevel,
+			IgnoreRecordNotFoundError: true,
+			Colorful:                  false,
+		},
+	)
+
 	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
 		NowFunc:     func() time.Time { return time.Now().UTC() },
-		Logger:      gormlogger.Default.LogMode(logLevel),
+		Logger:      gormLog,
 		PrepareStmt: true,
 	})
 	if err != nil {
