@@ -234,3 +234,5 @@ backend/cmd/desktop/Forgify
 # Test artifacts
 .env
 /tmp/forgify-tests/
+
+.superpowers/
