@@ -20,10 +20,10 @@ const SSE_DOT_COLOR = {
   unknown: "var(--fg-faint)",
 };
 const SSE_DOT_TITLE = {
-  ok:      "三流全部在线",
-  warn:    "连接中…",
-  err:     "至少一条流断开",
-  unknown: "未知状态",
+  ok:      "在线",
+  warn:    "连接中",
+  err:     "离线",
+  unknown: "—",
 };
 
 function NavItem({ icon: I, label, active, onClick, badge }) {
@@ -96,7 +96,7 @@ export function Sidebar() {
         {!collapsed && (
           <button className="cmdk-trigger" onClick={() => setCmdkOpen(true)}>
             <Icon.Search className="icon" />
-            <span className="label">搜索 · 跳转 · 命令</span>
+            <span className="label">搜索 或 跳转</span>
             <Kbd>⌘</Kbd>
             <Kbd>K</Kbd>
           </button>
@@ -153,7 +153,7 @@ export function Sidebar() {
 
         {!collapsed && !isLoading && recent.length === 0 && pinned.length === 0 && (
           <div style={{ padding: "12px 10px", fontSize: 11, color: "var(--fg-faint)", textAlign: "center" }}>
-            还没有对话 — 点 <Icon.Plus style={{ display: "inline", verticalAlign: "-2px", width: 11, height: 11 }} /> 开启第一段对话
+            还没有对话 — 点 <Icon.Plus style={{ display: "inline", verticalAlign: "-2px", width: 11, height: 11 }} /> 开始一段
           </div>
         )}
 
@@ -202,13 +202,13 @@ export function Sidebar() {
               <div style={{ flex: 1 }} />
             </>
           )}
-          <button className="icon-btn" onClick={() => setAskOpen(true)} title="待回答的 agent 问题">
+          <button className="icon-btn" onClick={() => setAskOpen(true)} title="agent 在等你回答">
             <Icon.HelpCircle />
           </button>
           <button
             className="icon-btn"
             onClick={() => { setNotifsOpen(true); sse.clearUnread(); }}
-            title={"通知" + (sse.unread > 0 ? ` (${sse.unread} 未读)` : "")}
+            title={sse.unread > 0 ? `通知 · ${sse.unread} 未读` : "通知"}
             style={{ position: "relative" }}
           >
             <Icon.Bell />
@@ -223,7 +223,7 @@ export function Sidebar() {
           <button
             className="icon-btn"
             onClick={() => setSettingsPopOpen(!settingsPopOpen)}
-            title="主题 / 密度 / Accent"
+            title="账号 / 外观 / 完整设置"
           >
             <Icon.Settings />
           </button>

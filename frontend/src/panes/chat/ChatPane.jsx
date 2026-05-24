@@ -140,8 +140,8 @@ function EmptyConvPlaceholder() {
           <Icon.MessageSquare />
         </div>
         <div>
-          <div className="empty-shell-title">还没选中任何对话</div>
-          <div className="empty-shell-sub">从左侧打开一个，或在 sidebar 点 <Icon.Plus style={{ display: "inline", verticalAlign: "-2px", width: 12, height: 12 }} /> 开启新对话。</div>
+          <div className="empty-shell-title">还没选中对话</div>
+          <div className="empty-shell-sub">从左边挑一个,或点 <Icon.Plus style={{ display: "inline", verticalAlign: "-2px", width: 12, height: 12 }} /> 开一段新的。</div>
         </div>
       </div>
     </div>
@@ -156,7 +156,7 @@ function EmptyConvHero({ conv }) {
         {conv?.title || "新对话"}
       </div>
       <div style={{ marginTop: 6, fontSize: 12 }}>
-        告诉 Agent 你想做什么。试试 <code>/</code> 调出命令，或 <code>@</code> 引用 forge/skill。
+        说说你想干啥。<code>@</code> 引用 function、handler、workflow、skill、文档。
       </div>
     </div>
   );

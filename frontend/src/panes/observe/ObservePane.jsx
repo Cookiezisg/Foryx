@@ -12,7 +12,7 @@ export function ObservePane() {
       <div className="page-header">
         <div className="page-header-text">
           <div className="page-title"><Icon.GitBranch /> 洞察</div>
-          <div className="page-subtitle">实体引用图 · 拖节点 · 滚轮缩放 · 点节点看出入引用</div>
+          <div className="page-subtitle">实体之间的引用关系。</div>
         </div>
       </div>
       <div style={{ flex: 1, minHeight: 0 }}>

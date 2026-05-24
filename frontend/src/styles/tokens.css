@@ -1,141 +1,194 @@
 /* ============================================================================
-   Forgify — Desktop client visual system
-   Notion-true · 纯白纸面 · 中性灰 · 单一克制蓝色 accent · 双模
+   Forgify — Design tokens (DESIGN.md 落地版)
+   保留所有变量名,只调整值;不破坏任何现存 JSX/CSS。
+     · 配色:黑白灰 + 唯一克制蓝 #378ADD
+     · 字体:Inter
+     · 字重:实质 400 / 500(combinator 在 components.css 控)
+     · 圆角:常规 12/16;按钮徽章用 --radius-pill(999px)
+     · 动效:cubic-bezier(0.22, 1, 0.36, 1)
    ============================================================================ */
 
-@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500&family=JetBrains+Mono:wght@400;500&display=swap");
 
 :root {
   /* ── Typography ─────────────────────────────────────────────────── */
-  --font-sans: "Inter", "Noto Sans SC", -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
-  --font-serif: "Inter", "Noto Sans SC", -apple-system, sans-serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+  --font-serif: "Inter", -apple-system, "PingFang SC", sans-serif;
   --font-mono: "JetBrains Mono", "SF Mono", "Menlo", "Consolas", monospace;
 
-  /* ── Density scale (overridden by [data-density]) ──────────────── */
+  /* ── Density scale ──────────────────────────────────────────────── */
   --row-h: 32px;
   --pad-x: 16px;
   --pad-y: 12px;
-  --gap-1: 6px;
-  --gap-2: 10px;
-  --gap-3: 16px;
-  --gap-4: 24px;
-  --radius-sm: 4px;
-  --radius-md: 6px;
-  --radius-lg: 8px;
-  --radius-xl: 12px;
+  --gap-1: 8px;
+  --gap-2: 12px;
+  --gap-3: 18px;
+  --gap-4: 28px;
+
+  /* Radii — sm/md/lg 适度增大;pill 用于药丸 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 16px;
+  --radius-pill: 999px;
 
   /* ── Type scale ────────────────────────────────────────────────── */
+  --fs-11: 11px;
   --fs-12: 12px;
   --fs-13: 13px;
   --fs-14: 14px;
   --fs-15: 15px;
   --fs-16: 16px;
   --fs-18: 18px;
+  --fs-20: 20px;
   --fs-22: 22px;
   --fs-28: 28px;
+  --fs-30: 30px;
   --fs-36: 36px;
+  --fs-46: 46px;
 
-  /* ── Motion ─────────────────────────────────────────────────────── */
-  --t-fast: 120ms cubic-bezier(.2, .8, .2, 1);
-  --t-med: 220ms cubic-bezier(.2, .8, .2, 1);
-  --t-slow: 360ms cubic-bezier(.2, .8, .2, 1);
+  /* ── Motion — DESIGN.md ease,带轻微弹性的 ease-out ─────────────── */
+  --ease:     cubic-bezier(0.22, 1, 0.36, 1);
+  --t-fast:   180ms var(--ease);
+  --t-med:    240ms var(--ease);
+  --t-slow:   420ms var(--ease);
+  --t-rise:   700ms var(--ease);
+  --t-breathe: 2600ms;
 
-  /* ── Status semantic (Notion-muted) ────────────────────────────── */
-  --status-streaming: #2383e2;
-  --status-success:   #0f7b6c;
-  --status-error:     #e03e3e;
-  --status-info:      #2383e2;
-  --status-warn:      #b25e10;
+  /* ── Status semantic ────────────────────────────────────────────── */
+  --status-streaming: #378ADD;
+  --status-success:   #0F8C5C;
+  --status-error:     #D14343;
+  --status-info:      #378ADD;
+  --status-warn:      #B97818;
 }
 
-/* ── Light theme (Notion true white) ──────────────────────────────── */
+/* ── Light theme — DESIGN.md 纯白纸面 ─────────────────────────────── */
 :root,
 [data-theme="light"] {
-  --bg-window: #ffffff;
-  --bg-sidebar: #f7f7f5;
-  --bg-paper: #ffffff;
-  --bg-elev: #ffffff;
-  --bg-elev-2: #f7f7f5;
-  --bg-input: #ffffff;
-  --bg-hover: rgba(55, 53, 47, 0.06);
-  --bg-active: rgba(55, 53, 47, 0.10);
-  --bg-overlay: rgba(15, 15, 15, 0.40);
+  --bg-window:  #FFFFFF;
+  --bg-sidebar: #FAFAFA;
+  --bg-paper:   #FFFFFF;
+  --bg-elev:    #FAFAFA;
+  --bg-elev-2:  #F4F4F2;
+  --bg-input:   #FFFFFF;
+  --bg-hover:   rgba(26, 26, 26, 0.04);
+  --bg-active:  rgba(26, 26, 26, 0.07);
+  --bg-overlay: rgba(26, 26, 26, 0.32);
 
-  --fg-strong: #37352f;
-  --fg-body:   #37352f;
-  --fg-muted:  rgba(55, 53, 47, 0.65);
-  --fg-faint:  rgba(55, 53, 47, 0.45);
+  --fg-strong: #1A1A1A;
+  --fg-body:   #1A1A1A;
+  --fg-muted:  #6B7280;
+  --fg-faint:  #9CA3AF;
 
-  --border: rgba(55, 53, 47, 0.16);
-  --border-strong: rgba(55, 53, 47, 0.28);
-  --border-soft: rgba(55, 53, 47, 0.09);
+  --border:        rgba(0, 0, 0, 0.08);
+  --border-strong: rgba(0, 0, 0, 0.14);
+  --border-soft:   rgba(0, 0, 0, 0.05);
 
-  --accent: #2383e2;
-  --accent-soft: rgba(35, 131, 226, 0.10);
-  --accent-fg: #ffffff;
-  --accent-ring: rgba(35, 131, 226, 0.22);
+  --accent:      #378ADD;
+  --accent-soft: rgba(55, 138, 221, 0.10);
+  --accent-fg:   #FFFFFF;
+  --accent-ring: rgba(55, 138, 221, 0.18);
 
-  --shadow-sm: 0 1px 2px rgba(15, 15, 15, 0.04);
-  --shadow-md: 0 1px 3px rgba(15, 15, 15, 0.06), 0 6px 14px rgba(15, 15, 15, 0.06);
-  --shadow-lg: 0 4px 12px rgba(15, 15, 15, 0.08), 0 14px 40px rgba(15, 15, 15, 0.10);
-  --shadow-popover: 0 8px 24px rgba(15, 15, 15, 0.12), 0 1px 3px rgba(15, 15, 15, 0.06);
+  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.04);
+  --shadow-md:      0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 14px rgba(0, 0, 0, 0.05);
+  --shadow-lg:      0 4px 12px rgba(0, 0, 0, 0.06), 0 12px 32px rgba(0, 0, 0, 0.08);
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.10), 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
-/* ── Dark theme (Notion-style charcoal) ───────────────────────────── */
+/* ── Dark theme — DESIGN.md 严格说禁深色;保留主题切换的兼容,但跟同一调性 ─ */
 [data-theme="dark"] {
-  --bg-window: #191919;
-  --bg-sidebar: #202020;
-  --bg-paper: #191919;
-  --bg-elev: #252525;
-  --bg-elev-2: #2c2c2c;
-  --bg-input: #2c2c2c;
-  --bg-hover: rgba(255, 255, 255, 0.055);
-  --bg-active: rgba(255, 255, 255, 0.10);
-  --bg-overlay: rgba(0, 0, 0, 0.60);
+  --bg-window:  #0F0F0F;
+  --bg-sidebar: #151515;
+  --bg-paper:   #0F0F0F;
+  --bg-elev:    #161616;
+  --bg-elev-2:  #1F1F1F;
+  --bg-input:   #161616;
+  --bg-hover:   rgba(255, 255, 255, 0.05);
+  --bg-active:  rgba(255, 255, 255, 0.08);
+  --bg-overlay: rgba(0, 0, 0, 0.55);
 
-  --fg-strong: rgba(255, 255, 255, 0.95);
-  --fg-body:   rgba(255, 255, 255, 0.81);
-  --fg-muted:  rgba(255, 255, 255, 0.56);
-  --fg-faint:  rgba(255, 255, 255, 0.35);
+  --fg-strong: rgba(255, 255, 255, 0.92);
+  --fg-body:   rgba(255, 255, 255, 0.80);
+  --fg-muted:  rgba(255, 255, 255, 0.52);
+  --fg-faint:  rgba(255, 255, 255, 0.32);
 
-  --border: rgba(255, 255, 255, 0.13);
-  --border-strong: rgba(255, 255, 255, 0.22);
-  --border-soft: rgba(255, 255, 255, 0.07);
+  --border:        rgba(255, 255, 255, 0.10);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --border-soft:   rgba(255, 255, 255, 0.05);
 
-  --accent: #529cca;
-  --accent-soft: rgba(82, 156, 202, 0.16);
-  --accent-fg: #191919;
-  --accent-ring: rgba(82, 156, 202, 0.28);
+  --accent:      #5DA3E8;
+  --accent-soft: rgba(93, 163, 232, 0.14);
+  --accent-fg:   #0F0F0F;
+  --accent-ring: rgba(93, 163, 232, 0.24);
 
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.40);
-  --shadow-lg: 0 14px 40px rgba(0, 0, 0, 0.55);
+  --shadow-sm:      0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md:      0 4px 12px rgba(0, 0, 0, 0.42);
+  --shadow-lg:      0 14px 40px rgba(0, 0, 0, 0.55);
   --shadow-popover: 0 12px 32px rgba(0, 0, 0, 0.55), 0 1px 3px rgba(0, 0, 0, 0.40);
 }
 
-/* ── Density variants ─────────────────────────────────────────────── */
+/* ── Density variants — milder differences ──────────────────────── */
 [data-density="compact"] {
-  --row-h: 28px; --pad-x: 12px; --pad-y: 8px;
-  --gap-1: 4px; --gap-2: 8px; --gap-3: 12px; --gap-4: 18px;
+  --row-h: 30px; --pad-x: 14px; --pad-y: 10px;
+  --gap-1: 6px; --gap-2: 10px; --gap-3: 14px; --gap-4: 22px;
 }
 [data-density="cozy"] {
   --row-h: 32px; --pad-x: 16px; --pad-y: 12px;
 }
 [data-density="comfortable"] {
-  --row-h: 38px; --pad-x: 20px; --pad-y: 16px;
-  --gap-1: 8px; --gap-2: 14px; --gap-3: 20px; --gap-4: 30px;
+  --row-h: 36px; --pad-x: 20px; --pad-y: 14px;
+  --gap-1: 10px; --gap-2: 14px; --gap-3: 22px; --gap-4: 34px;
 }
 
-/* ── Accent variants (Notion taste — mostly one accent) ─────────────── */
-[data-accent="claude"] { --accent: #d97757; --accent-soft: rgba(217,119,87,.12); --accent-ring: rgba(217,119,87,.25); }
-[data-accent="blue"]   { --accent: #2383e2; --accent-soft: rgba(35,131,226,.10);  --accent-ring: rgba(35,131,226,.22); }
-[data-accent="ink"]    { --accent: #37352f; --accent-soft: rgba(55,53,47,.08);    --accent-ring: rgba(55,53,47,.22); }
-[data-accent="green"]  { --accent: #0f7b6c; --accent-soft: rgba(15,123,108,.10);  --accent-ring: rgba(15,123,108,.22); }
-[data-accent="purple"] { --accent: #6940a5; --accent-soft: rgba(105,64,165,.10);  --accent-ring: rgba(105,64,165,.22); }
+/* ── Accent variants — DESIGN.md 锁死单一 accent;所有变体指向同一蓝 ─ */
+[data-accent="claude"],
+[data-accent="blue"],
+[data-accent="ink"],
+[data-accent="green"],
+[data-accent="purple"] {
+  --accent:      #378ADD;
+  --accent-soft: rgba(55, 138, 221, 0.10);
+  --accent-ring: rgba(55, 138, 221, 0.18);
+  --accent-fg:   #FFFFFF;
+}
+[data-theme="dark"][data-accent="claude"],
+[data-theme="dark"][data-accent="blue"],
+[data-theme="dark"][data-accent="ink"],
+[data-theme="dark"][data-accent="green"],
+[data-theme="dark"][data-accent="purple"] {
+  --accent:      #5DA3E8;
+  --accent-soft: rgba(93, 163, 232, 0.14);
+  --accent-ring: rgba(93, 163, 232, 0.24);
+  --accent-fg:   #0F0F0F;
+}
 
-[data-theme="dark"][data-accent="claude"] { --accent: #e08967; --accent-soft: rgba(224,137,103,.16); --accent-ring: rgba(224,137,103,.30); }
-[data-theme="dark"][data-accent="blue"]   { --accent: #529cca; --accent-soft: rgba(82,156,202,.16); }
-[data-theme="dark"][data-accent="ink"]    { --accent: rgba(255,255,255,.85); --accent-fg: #191919; --accent-soft: rgba(255,255,255,.10); }
-[data-theme="dark"][data-accent="green"]  { --accent: #4dab9a; --accent-soft: rgba(77,171,154,.16); }
-[data-theme="dark"][data-accent="purple"] { --accent: #9a6dd7; --accent-soft: rgba(154,109,215,.16); }
+/* ── Breathe — DESIGN.md 灵魂动效 ───────────────────────────────── */
+@keyframes breathe {
+  0%, 100% { opacity: 1;    transform: scale(1);    }
+  50%      { opacity: 0.45; transform: scale(0.82); }
+}
 
+/* ── Rise — 错峰入场 ───────────────────────────────────────────── */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Spin (kept for spinner compat) ────────────────────────────── */
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Pulse-dot (kept for compat — used by streaming badges) ────── */
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 0 0 0 oklch(from var(--accent) l c h / 0.40); }
+  50%      { box-shadow: 0 0 0 4px oklch(from var(--accent) l c h / 0);    }
+}
+
+/* ── Reduced motion ────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

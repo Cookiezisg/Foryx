@@ -88,17 +88,17 @@ export function NotificationsDrawer() {
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Icon.Bell style={{ width: 14, height: 14, color: "var(--fg-muted)" }} />
                 <div className="drawer-title">通知</div>
-                <Badge kind="muted">{unread} 未读</Badge>
+                {unread > 0 && <Badge kind="muted">{unread} 未读</Badge>}
               </div>
               <div style={{ display: "flex", gap: 4 }}>
                 <button className="btn btn-xs btn-ghost" onClick={clearUnread}>全部已读</button>
-                <button className="icon-btn" onClick={onClose}><Icon.X /></button>
+                <button className="icon-btn" onClick={onClose} title="关闭"><Icon.X /></button>
               </div>
             </div>
             <div className="drawer-list">
               {snapshot.length === 0 && (
                 <div style={{ padding: 32, textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>
-                  暂无通知
+                  这里很安静。
                 </div>
               )}
               {snapshot.map((n) => {

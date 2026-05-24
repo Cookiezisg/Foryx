@@ -41,11 +41,11 @@ const PROVIDER_HINTS = {
 };
 
 const STEPS = [
-  { key: "intro",    title: "欢迎",      desc: "了解一下" },
-  { key: "account",  title: "工作空间",  desc: "隔离对话 / 文档 / 锻造产物" },
-  { key: "look",     title: "外观",      desc: "主题色 · 后续可改" },
-  { key: "provider", title: "API Key",   desc: "至少配一个（可跳过）" },
-  { key: "done",     title: "就绪",      desc: "进入应用" },
+  { key: "intro",    title: "你好",      desc: "看一眼" },
+  { key: "account",  title: "工作空间",  desc: "起个名字" },
+  { key: "look",     title: "外观",      desc: "挑个色调" },
+  { key: "provider", title: "钥匙",      desc: "可以稍后" },
+  { key: "done",     title: "就位",      desc: "开始" },
 ];
 
 export function Onboarding({ onFinish }) {
@@ -260,7 +260,7 @@ export function Onboarding({ onFinish }) {
                 disabled={!canAdvance() || busy}
                 loading={busy}
               >
-                {step === STEPS.length - 1 ? "进入应用" : step === 0 ? "开始" : "继续"}
+                {step === STEPS.length - 1 ? "开始" : step === 0 ? "开始" : "继续"}
                 <Icon.ArrowRight />
               </Button>
             </div>
@@ -292,19 +292,19 @@ function IntroStep() {
   return (
     <>
       <div className="onb-head">
-        <div className="onb-title">欢迎使用 Forgify</div>
+        <div className="onb-title">你好</div>
         <div className="onb-sub">
-          本地优先的 Agentic Workflow Platform。
-          对话 · 锻造工具 · 编排工作流 · 接 MCP · 全部跑在你这台机器。
+          这是 Forgify。一个住在你电脑上的 agent。
+          你说一句话,它做事;事情沉淀成你能反复用的工具。
         </div>
       </div>
       <div className="onb-bullet-list">
-        <Bullet icon={Icon.MessageSquare} title="对话即工作"
-                desc="自然语言告诉 Agent 你要做什么，它会自己挑工具、调 MCP、写函数、跑工作流" />
-        <Bullet icon={Icon.Hammer} title="锻造工具"
-                desc="让 AI 给你写新的 Function / Handler / Workflow，加版本管理，可回滚" />
-        <Bullet icon={Icon.Server} title="本地优先"
-                desc="数据全部在 ~/.forgify/，不上传任何云端，不需要登录" />
+        <Bullet icon={Icon.MessageSquare} title="先对话"
+                desc="说你想做什么。agent 自己挑工具、写代码、跑工作流。" />
+        <Bullet icon={Icon.Hammer} title="再沉淀"
+                desc="agent 帮你造 Function / Handler / Workflow,带版本,可回滚。" />
+        <Bullet icon={Icon.Server} title="都在本地"
+                desc="数据放在 ~/.forgify/,不上传,不需要登录。" />
       </div>
     </>
   );
@@ -315,23 +315,23 @@ function AccountStep({ name, setName, accent }) {
   return (
     <>
       <div className="onb-head">
-        <div className="onb-title">创建本地工作空间</div>
-        <div className="onb-sub">用来隔离对话、文档、锻造产物，互不打扰。可随时新增、切换。</div>
+        <div className="onb-title">起个名字</div>
+        <div className="onb-sub">工作空间的名字。后续可以再加、再切换。</div>
       </div>
       <div className="onb-avatar-row">
         <div className="onb-avatar" style={{ background: color }}>
           {name.trim().slice(0, 1).toUpperCase() || "?"}
         </div>
         <div className="onb-field" style={{ flex: 1 }}>
-          <div className="onb-label">工作空间名称</div>
+          <div className="onb-label">名字</div>
           <input
             className="onb-input onb-input-lg"
-            placeholder="例如 personal / work / side-project"
+            placeholder="例如 私人 / 工作 / 写作"
             value={name}
             onChange={(e) => setName(e.target.value)}
             autoFocus
           />
-          <div className="onb-hint">显示在 sidebar 底部，切换时仅切这个工作空间的数据</div>
+          <div className="onb-hint">显示在 sidebar 底部。切换时只切这一个空间的数据。</div>
         </div>
       </div>
     </>
@@ -342,8 +342,8 @@ function LookStep({ accent, setAccent }) {
   return (
     <>
       <div className="onb-head">
-        <div className="onb-title">选个主题色</div>
-        <div className="onb-sub">这是你的 accent；点击切换看效果。后续可以在设置里改。</div>
+        <div className="onb-title">挑个色调</div>
+        <div className="onb-sub">点睛色。后续在设置里可改。</div>
       </div>
       <div className="onb-swatches">
         {ACCENTS.map(([k, c, label]) => (
@@ -367,8 +367,8 @@ function ProviderStep({ providers, provider, setProvider, apiKey, setApiKey, onS
   return (
     <>
       <div className="onb-head">
-        <div className="onb-title">配一个 LLM</div>
-        <div className="onb-sub">先挑 provider，再填它的 key。可以稍后再配。</div>
+        <div className="onb-title">配一把钥匙</div>
+        <div className="onb-sub">给一个 LLM 厂商,填它的 API key。也可以稍后再配。</div>
       </div>
       <div className="onb-provider-grid">
         {providers.map((p) => {
@@ -402,7 +402,7 @@ function ProviderStep({ providers, provider, setProvider, apiKey, setApiKey, onS
             onChange={(e) => setApiKey(e.target.value)}
             autoFocus
           />
-          <div className="onb-hint">key 经 AES-GCM 加密落地 ~/.forgify/，不上传</div>
+          <div className="onb-hint">key 经 AES-GCM 加密放在 ~/.forgify/,不上传。</div>
         </div>
       )}
 
@@ -412,7 +412,7 @@ function ProviderStep({ providers, provider, setProvider, apiKey, setApiKey, onS
           background: "var(--accent-soft)", fontSize: 12,
           color: "var(--fg-muted)", lineHeight: 1.55,
         }}>
-          Ollama 是本地推理，无需 API key。确保 <code style={{ fontFamily: "var(--font-mono)" }}>ollama serve</code> 已启动。
+          Ollama 是本地推理,不需要 API key。确保 <code style={{ fontFamily: "var(--font-mono)" }}>ollama serve</code> 已启动。
         </div>
       )}
 
@@ -423,7 +423,7 @@ function ProviderStep({ providers, provider, setProvider, apiKey, setApiKey, onS
           onClick={onSkip}
           type="button"
         >
-          跳过 · 稍后在设置里添加 →
+          稍后再配 →
         </button>
       </div>
     </>
@@ -434,14 +434,14 @@ function DoneStep({ name, accent, provider, hasKey }) {
   return (
     <div style={{ textAlign: "center", paddingTop: 16 }}>
       <div className="onb-done-mark"><Icon.Check /></div>
-      <div className="onb-title">就绪</div>
+      <div className="onb-title">好了</div>
       <div className="onb-sub" style={{ marginTop: 8 }}>
-        你的本地 Forgify 配好了。点 "进入应用" 开始第一段对话。
+        点"开始",和 agent 说第一句话。
       </div>
       <div className="onb-done-grid">
         <DoneCard label="工作空间" value={name} />
-        <DoneCard label="主题色" value={accent} />
-        <DoneCard label="LLM" value={hasKey ? provider : "稍后配"} />
+        <DoneCard label="色调" value={accent} />
+        <DoneCard label="LLM" value={hasKey ? provider : "稍后再配"} />
       </div>
     </div>
   );

@@ -15,14 +15,14 @@ import { useFlowRuns } from "../../api/flowruns.js";
 import { scaleIn, fadeIn } from "../../motion/tokens.js";
 
 const NAV_ITEMS = [
-  { group: "导航", icon: Icon.MessageSquare, label: "打开对话",   desc: "切换到对话视图",   target: "chat" },
-  { group: "导航", icon: Icon.Hammer,        label: "打开锻造",   desc: "Function / Handler / Workflow", target: "forge" },
-  { group: "导航", icon: Icon.Play,          label: "打开执行",   desc: "FlowRuns · Approvals · Triggers", target: "execute" },
-  { group: "导航", icon: Icon.FileText,      label: "打开文档",   desc: "Documents", target: "documents" },
-  { group: "导航", icon: Icon.Sparkles,      label: "打开 Skills", desc: "Skill 库",  target: "skills" },
-  { group: "导航", icon: Icon.Server,        label: "打开 MCP",   desc: "MCP server 健康", target: "mcp" },
-  { group: "导航", icon: Icon.Brain,         label: "打开 Memory", desc: "Memory 库", target: "memory" },
-  { group: "导航", icon: Icon.Settings,      label: "打开 设置",  desc: "API keys / Model / Sandbox / 外观", target: "config" },
+  { group: "导航", icon: Icon.MessageSquare, label: "对话",   desc: "",   target: "chat" },
+  { group: "导航", icon: Icon.Hammer,        label: "锻造",   desc: "function / handler / workflow", target: "forge" },
+  { group: "导航", icon: Icon.Play,          label: "执行",   desc: "flowrun · trigger", target: "execute" },
+  { group: "导航", icon: Icon.FileText,      label: "文档",   desc: "", target: "documents" },
+  { group: "导航", icon: Icon.Sparkles,      label: "Skills", desc: "",  target: "skills" },
+  { group: "导航", icon: Icon.Server,        label: "MCP",    desc: "", target: "mcp" },
+  { group: "导航", icon: Icon.Brain,         label: "Memory", desc: "", target: "memory" },
+  { group: "导航", icon: Icon.Settings,      label: "设置",   desc: "", target: "config" },
 ];
 
 export function CommandPalette() {
@@ -50,7 +50,7 @@ export function CommandPalette() {
       a.push({
         group: "对话",
         icon: Icon.MessageSquare,
-        label: c.title || "(无标题)",
+        label: c.title || "(未命名)",
         desc: c.id,
         action: () => { setActiveConv(c.id); openPane("chat"); },
       });
@@ -142,7 +142,7 @@ export function CommandPalette() {
               <input
                 className="cmdk-input"
                 autoFocus
-                placeholder="搜索对话 / Forge / FlowRun / 命令…"
+                placeholder="找点什么"
                 value={q}
                 onChange={(e) => { setQ(e.target.value); setActive(0); }}
               />
@@ -151,7 +151,7 @@ export function CommandPalette() {
             <div className="cmdk-list">
               {groups.length === 0 && (
                 <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--fg-faint)", fontSize: 13 }}>
-                  没有匹配 — 试试别的关键词
+                  没有匹配。
                 </div>
               )}
               {groups.map(([gname, gitems]) => (
@@ -183,7 +183,7 @@ export function CommandPalette() {
               ))}
             </div>
             <div className="cmdk-footer">
-              <div className="hint"><Kbd>↑</Kbd> <Kbd>↓</Kbd> 移动 · <Kbd>↵</Kbd> 选择 · <Kbd>esc</Kbd> 关闭</div>
+              <div className="hint"><Kbd>↑</Kbd><Kbd>↓</Kbd> 选 · <Kbd>↵</Kbd> 打开 · <Kbd>esc</Kbd> 关</div>
               <div className="hint">Forgify · 本地</div>
             </div>
           </motion.div>

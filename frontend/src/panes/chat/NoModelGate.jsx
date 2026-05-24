@@ -18,14 +18,14 @@ export function NoModelGate() {
           <Icon.Sparkles />
         </div>
         <div>
-          <div className="empty-shell-title">还差一步：挑个模型</div>
+          <div className="empty-shell-title">挑一个模型</div>
           <div className="empty-shell-sub">
-            key 已就位，挑一个 chat 用的 model 就能开聊。
+            钥匙在了。挑一个用来聊天的模型,就能开始。
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
           <Button size="sm" variant="accent" onClick={() => openPane("config")}>
-            <Icon.ArrowRight /> 去配置 chat 模型
+            <Icon.ArrowRight /> 去挑一个
           </Button>
         </div>
       </div>

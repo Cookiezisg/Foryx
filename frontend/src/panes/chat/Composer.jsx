@@ -136,7 +136,7 @@ export function Composer({ disabled, isStreaming, onSend, onCancel }) {
           <textarea
             ref={ta}
             className="composer-textarea"
-            placeholder={isStreaming ? "Agent 正在执行… (Esc 停止)" : "描述你想做的事，或向 AI 提问。试试 @ 引用 Function / Skill / 文档"}
+            placeholder={isStreaming ? "agent 在干活,Esc 可停" : "告诉我"}
             value={text}
             onChange={onChange}
             onKeyDown={onKey}

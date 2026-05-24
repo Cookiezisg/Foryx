@@ -39,10 +39,10 @@ export const MessageView = memo(function MessageView({ convId, msgId }) {
           </>
         )}
         {message.status === "streaming" && (
-          <Badge kind="streaming">streaming</Badge>
+          <Badge kind="streaming">在写</Badge>
         )}
         {message.status === "error" && (
-          <Badge kind="error">error</Badge>
+          <Badge kind="error">出错了</Badge>
         )}
         <div style={{ flex: 1 }} />
         <div className="msg-actions">

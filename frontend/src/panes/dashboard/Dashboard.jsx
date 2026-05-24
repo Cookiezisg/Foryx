@@ -117,13 +117,13 @@ export function Dashboard() {
                 <Icon.Plus /> <span>新对话</span>
               </button>
               <button className="dash-quick" onClick={() => openPane("forge")}>
-                <Icon.Hammer /> <span>新建 Function / Handler / Workflow</span>
+                <Icon.Hammer /> <span>造个 function / handler / workflow</span>
               </button>
               <button className="dash-quick" onClick={() => openPane("documents")}>
                 <Icon.FileText /> <span>新文档</span>
               </button>
               <button className="dash-quick" onClick={() => openPane("skills")}>
-                <Icon.Sparkles /> <span>导入 Skill</span>
+                <Icon.Sparkles /> <span>导入 skill</span>
               </button>
             </div>
           </div>

@@ -53,19 +53,19 @@ export function RunDrawer({ open, onClose, kind, entity }) {
 
   const submit = async () => {
     const [parsed, perr] = safeParse(body);
-    if (perr) { setError("JSON 解析失败 · " + perr); return; }
+    if (perr) { setError("JSON 不对 · " + perr); return; }
     setError(null); setResult(null);
     try {
       let res;
       if (kind === "function") {
         res = await run.mutateAsync({ id: entity.id, inputs: parsed });
       } else if (kind === "handler") {
-        if (!method) { setError("请选择方法"); return; }
+        if (!method) { setError("挑一个方法"); return; }
         res = await call.mutateAsync({ id: entity.id, method, args: parsed });
       } else if (kind === "workflow") {
         res = await trig.mutateAsync({ id: entity.id, input: parsed });
         const runId = res?.flowRunId || res?.id || res?.runId;
-        pushToast({ kind: "success", title: "已触发 workflow", desc: runId || "flowrun 创建" });
+        pushToast({ kind: "success", title: "已触发", desc: runId || "flowrun 创建" });
         if (runId) {
           openPane("execute");
           useUIStore.getState().setActiveFlowRun?.(runId);
@@ -83,9 +83,9 @@ export function RunDrawer({ open, onClose, kind, entity }) {
     : [];
 
   const title =
-    kind === "function" ? "试跑 Function" :
-    kind === "handler"  ? "试调用 Handler" :
-                          "触发 Workflow";
+    kind === "function" ? "跑 function" :
+    kind === "handler"  ? "调 handler" :
+                          "触发 workflow";
 
   return (
     <AnimatePresence>
@@ -123,6 +123,7 @@ export function RunDrawer({ open, onClose, kind, entity }) {
                       style={{ fontFamily: "var(--font-mono)" }}
                       value={method}
                       onChange={(e) => setMethod(e.target.value)}
+                      aria-label="方法"
                     >
                       {methods.map((m) => (
                         <option key={m.name} value={m.name}>
@@ -164,7 +165,7 @@ export function RunDrawer({ open, onClose, kind, entity }) {
               <div style={{ flex: 1 }} />
               <Button size="sm" variant="ghost" onClick={onClose}>取消</Button>
               <Button size="sm" variant="accent" onClick={submit} disabled={busy}>
-                {busy ? <><span className="spinner" /> 运行中…</> : <><Icon.Play /> 提交</>}
+                {busy ? <><span className="spinner" /> 在跑</> : <><Icon.Play /> 提交</>}
               </Button>
             </footer>
           </motion.aside>

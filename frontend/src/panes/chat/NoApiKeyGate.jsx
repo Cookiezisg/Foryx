@@ -16,17 +16,14 @@ export function NoApiKeyGate() {
           <Icon.KeyRound />
         </div>
         <div>
-          <div className="empty-shell-title">先来配一个 API Key</div>
+          <div className="empty-shell-title">先配一把钥匙</div>
           <div className="empty-shell-sub">
-            key 加密存在 <code style={{ fontFamily: "var(--font-mono)" }}>~/.forgify/</code>，不上传。
+            一把 LLM 的 API key。只存在这台电脑,放在 <code style={{ fontFamily: "var(--font-mono)" }}>~/.forgify/</code>。
           </div>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
-          <Button size="sm" onClick={() => openPane("config")}>
-            查看 Provider 列表
-          </Button>
           <Button size="sm" variant="accent" onClick={() => openPane("config")}>
-            <Icon.Plus /> 现在去添加
+            <Icon.Plus /> 去配置
           </Button>
         </div>
       </div>

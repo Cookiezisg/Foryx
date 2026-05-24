@@ -56,16 +56,16 @@ export function AskUserModal() {
               <div className="ask-head">
                 <div className="icon-wrap"><Icon.HelpCircle /></div>
                 <div className="meta">
-                  <div className="label">没有待回答的问题</div>
-                  <div className="title">Agent 没在等你</div>
+                  <div className="label">这里很安静</div>
+                  <div className="title">agent 现在没在等你</div>
                 </div>
-                <button className="icon-btn" onClick={() => setAskOpen(false)} style={{ marginLeft: "auto" }}>
+                <button className="icon-btn" onClick={() => setAskOpen(false)} style={{ marginLeft: "auto" }} title="关闭">
                   <Icon.X />
                 </button>
               </div>
               <div className="ask-body">
                 <div className="ask-question">
-                  如果 agent 在工作流中需要你的输入，会在这里弹出。
+                  如果 agent 干活时需要你拿主意,会在这里弹出。
                 </div>
               </div>
             </motion.div>
@@ -83,7 +83,7 @@ export function AskUserModal() {
       await apiFetch(`/conversations/${pending.conversationId}/pending-questions/${pending.toolCallId}:resolve`, {
         method: "POST", body: { answer: selected },
       });
-      pushToast({ kind: "success", title: "已提交答复" });
+      pushToast({ kind: "success", title: "已回答" });
       close();
     } catch (err) {
       pushToast({ kind: "error", title: "提交失败", desc: err.message });
@@ -100,7 +100,7 @@ export function AskUserModal() {
             <div className="ask-head">
               <div className="icon-wrap"><Icon.HelpCircle /></div>
               <div className="meta">
-                <div className="label">AGENT 暂停 · 等待你的输入</div>
+                <div className="label">agent 在等你拿主意</div>
                 <div className="title">{pending.question || "需要你确认一下"}</div>
               </div>
               <button className="icon-btn" onClick={close} style={{ marginLeft: "auto" }}>
@@ -112,7 +112,7 @@ export function AskUserModal() {
               <div className="ask-options">
                 {options.length === 0 && (
                   <div style={{ padding: 16, color: "var(--fg-faint)", fontSize: 12 }}>
-                    （无候选选项 — 请等待 agent 推送）
+                    （没给选项 — 等 agent 把选项推过来）
                   </div>
                 )}
                 {options.map((o, i) => (
@@ -129,11 +129,11 @@ export function AskUserModal() {
               </div>
             </div>
             <div className="ask-footer">
-              <div className="hint">数字键选择 · <Icon.CornerDownLeft style={{ width: 11, height: 11 }} /> 确认 · esc 推迟</div>
+              <div className="hint">数字键选 · <Icon.CornerDownLeft style={{ width: 11, height: 11 }} /> 确认 · esc 稍后</div>
               <div className="actions">
-                <Button size="sm" variant="ghost" onClick={close}>推迟到稍后</Button>
+                <Button size="sm" variant="ghost" onClick={close}>稍后</Button>
                 <Button size="sm" variant="accent" disabled={!selected || submitting} loading={submitting} onClick={submit}>
-                  <Icon.Check /> 提交答复
+                  <Icon.Check /> 提交
                 </Button>
               </div>
             </div>

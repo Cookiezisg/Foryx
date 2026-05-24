@@ -71,7 +71,7 @@ export function SettingsPopover() {
           </div>
 
           <div className="settings-pop-row">
-            <span>Accent</span>
+            <span>色调</span>
             <div className="settings-pop-swatches">
               {ACCENTS.map(([k, c]) => (
                 <button
@@ -120,7 +120,7 @@ export function SettingsPopover() {
               className="settings-pop-link"
               onClick={() => { setOpen(false); openPane("config"); }}
             >
-              <Icon.KeyRound /> API Keys / Model / Sandbox / 数据…
+              <Icon.KeyRound /> 完整设置
             </button>
           </div>
         </motion.div>
@@ -149,7 +149,7 @@ function AccountSection({ settings, onClose, pushToast }) {
     setMode("view");
     // Invalidate every query so the new user's data loads fresh.
     qc.invalidateQueries();
-    pushToast({ kind: "success", title: "已切换账号", desc: id });
+    pushToast({ kind: "success", title: "已切到 " + id });
   };
   const addAccount = async () => {
     const username = name.trim();
@@ -177,7 +177,7 @@ function AccountSection({ settings, onClose, pushToast }) {
             {active?.displayName || active?.username || "无账号"}
           </div>
           <div style={{ fontSize: 10, color: "var(--fg-faint)" }}>
-            本地账号 · {users.length} 个
+            本地 · {users.length} 个
           </div>
         </div>
         <button
@@ -208,7 +208,7 @@ function AccountSection({ settings, onClose, pushToast }) {
           <div className="settings-pop-account-add">
             <input
               className="cfg-input"
-              placeholder="新账号 username…"
+              placeholder="新名字"
               value={name}
               onChange={(e) => setName(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") addAccount(); }}

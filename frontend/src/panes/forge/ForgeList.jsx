@@ -87,8 +87,8 @@ export function ForgeList({ onOpen }) {
         <div className="page-actions">
           <Button size="sm" onClick={() => pushToast({
             kind: "info",
-            title: "新建走对话",
-            desc: "在对话里告诉 AI 你想要什么工具，AI 会生成 pending 版本供你 Accept",
+            title: "在对话里造",
+            desc: "去对话里告诉 agent 你要什么。agent 会生成 pending 版本,你 accept 即可。",
             duration: 6000,
           })}>
             <Icon.Plus /> 新建
@@ -131,7 +131,7 @@ export function ForgeList({ onOpen }) {
           <div className="batch-bar-buttons">
             <Button size="xs" variant="danger" onClick={() => {
               const picked = filtered.filter((f) => selected.has(f.id));
-              if (!confirm(`确认删除 ${picked.length} 个 forge? 不可撤销`)) return;
+              if (!confirm(`删除选中的 ${picked.length} 个?这一步不可撤销。`)) return;
               picked.forEach((f) => {
                 const m = f.kind === "function" ? deleteFn
                        : f.kind === "handler"  ? deleteHd
@@ -150,8 +150,8 @@ export function ForgeList({ onOpen }) {
         {filtered.length === 0 ? (
           <div className="empty" style={{ padding: 48 }}>
             <Icon.Hammer className="icon" />
-            <div className="title">还没有 {tab === "all" ? "" : tab} 锻造产物</div>
-            <div className="sub">在对话里告诉 AI："帮我做一个 X 工具"</div>
+            <div className="title">还没有{tab === "all" ? "" : " " + tab + " "}锻造产物</div>
+            <div className="sub">去对话里说一句：「帮我做一个 X」</div>
           </div>
         ) : (
           <table className="t">
@@ -221,7 +221,7 @@ export function ForgeList({ onOpen }) {
                           { label: "查看详情", icon: Icon.GitBranch, onClick: () => onOpen(f) },
                           "divider",
                           { label: "删除", icon: Icon.Trash, danger: true, onClick: () => {
-                            if (!confirm(`确认删除 ${f.kind} "${f.name}"? 此操作不可撤销`)) return;
+                            if (!confirm(`删除 ${f.kind} "${f.name}"?这一步不可撤销。`)) return;
                             const m = f.kind === "function" ? deleteFn
                                    : f.kind === "handler"  ? deleteHd
                                    :                          deleteWf;

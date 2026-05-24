@@ -75,7 +75,7 @@ function ConvMenu({ conv }) {
     );
   };
   const rename = () => {
-    const next = prompt("新名称", conv.title || "");
+    const next = prompt("新名字", conv.title || "");
     if (!next || next === conv.title) return;
     update.mutate(
       { title: next },
@@ -83,7 +83,7 @@ function ConvMenu({ conv }) {
     );
   };
   const onDelete = () => {
-    if (!confirm(`确认删除 "${conv.title || conv.id}"? 此操作不可撤销`)) return;
+    if (!confirm(`删除 "${conv.title || conv.id}"?这一步不可撤销。`)) return;
     del.mutate(conv.id, {
       onSuccess: () => {
         if (activeConv === conv.id) setActiveConv(null);

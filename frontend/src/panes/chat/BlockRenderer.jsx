@@ -201,9 +201,9 @@ const ToolCallBlock = memo(function ToolCallBlock({ convId, blockId, defaultOpen
         <div className="blk-tool-body">
           <div className="blk-tool-section">
             <div className="blk-tool-section-label">
-              <span>Arguments</span>
+              <span>参数</span>
               <div className="actions">
-                <button onClick={copyArgs}>copy</button>
+                <button onClick={copyArgs}>复制</button>
               </div>
             </div>
             <pre className="code-block">
@@ -250,7 +250,7 @@ const ProgressBlock = memo(function ProgressBlock({ convId, blockId }) {
           : pError
             ? <Icon.AlertCircle style={{ width: 12, height: 12, color: "var(--status-error)" }} />
             : <Icon.Check style={{ width: 12, height: 12, color: "var(--status-success)" }} />}
-        <span>Progress</span>
+        <span>进度</span>
         {p.attrs?.stage && <span className="stage">· {p.attrs.stage}</span>}
       </div>
       <div className="blk-progress-line">{p.content}</div>
@@ -268,7 +268,7 @@ const ToolResultBlock = memo(function ToolResultBlock({ convId, blockId }) {
       <div className={"tool-result" + (isErr ? " is-error" : "")}>
         <div className="tool-result-head">
           <span className="status-dot" />
-          <span>{isErr ? "Result · error" : "Result"}</span>
+          <span>{isErr ? "结果 · 出错" : "结果"}</span>
         </div>
         <div className="tool-result-content">{block.content}</div>
       </div>
@@ -293,7 +293,7 @@ const SubagentBlock = memo(function SubagentBlock({ convId, blockId, depth = 0 }
         <div className="blk-subagent-icon"><Icon.Bot /></div>
         <div className="blk-subagent-meta">
           <div className="blk-subagent-title">
-            Subagent
+            子 agent
             {a.agentType && (
               <>
                 {" · "}
