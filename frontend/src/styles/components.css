@@ -3830,104 +3830,88 @@ tr.is-selected .action-menu-wrap .rel-more-btn { opacity: 0.6; }
    Dashboard (empty-pane daily summary)
    ============================================================================ */
 
-.dash {
-  flex: 1;
-  overflow-y: auto;
-  background: var(--bg-paper);
-  display: flex;
-  justify-content: center;
+/* ============================================================================
+   Welcome page (Dashboard) — Gemini-style centered greeting + input + strip
+   ============================================================================ */
+
+.wel {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 36px;
+  min-height: 100%;
+  padding: 80px 40px 60px;
+  background: var(--bg-window);
 }
-.dash-inner {
-  max-width: 880px;
-  width: 100%;
-  padding: 56px 48px 80px 48px;
-  display: flex; flex-direction: column; gap: 28px;
-}
-.dash-greeting { display: flex; flex-direction: column; gap: 4px; }
-.dash-greet-text {
-  font-size: 32px;
+
+.wel-greet {
+  font-size: 42px;
   font-weight: 500;
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+  text-align: center;
   color: var(--fg-strong);
-  letter-spacing: -0.02em;
+  animation: rise var(--t-rise) forwards;
 }
-.dash-greet-sub { font-size: 14px; color: var(--fg-muted); }
 
-.dash-kpis {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 8px;
+.wel-input {
+  width: 560px; max-width: 90%;
+  min-height: 58px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--bg-paper);
+  box-shadow: var(--shadow-sm), 0 4px 14px rgba(0,0,0,0.04);
+  display: flex; align-items: center;
+  padding: 8px 22px;
+  gap: 12px;
+  animation: rise var(--t-rise) 120ms backwards;
 }
-.dash-kpi {
-  padding: 14px 16px;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
-  background: var(--bg-elev);
-  cursor: pointer;
-  transition: border-color var(--t-fast), background var(--t-fast);
-}
-.dash-kpi:hover { border-color: var(--border); }
-.dash-kpi.is-active { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
-.dash-kpi.is-warn   { border-color: color-mix(in srgb, var(--status-warn) 35%, var(--border)); background: color-mix(in srgb, var(--status-warn) 4%, var(--bg-elev)); }
-.dash-kpi.is-error  { border-color: color-mix(in srgb, var(--status-error) 35%, var(--border)); background: color-mix(in srgb, var(--status-error) 4%, var(--bg-elev)); }
-.dash-kpi-num   { font-size: 32px; font-weight: 500; color: var(--fg-strong); font-family: var(--font-mono); letter-spacing: -0.02em; line-height: 1.05; }
-.dash-kpi.is-warn  .dash-kpi-num { color: var(--status-warn); }
-.dash-kpi.is-error .dash-kpi-num { color: var(--status-error); }
-.dash-kpi-label { font-size: 11px; color: var(--fg-muted); font-weight: 500; text-transform: none; letter-spacing: 0; margin-top: 6px; }
-.dash-kpi-sub { font-size: 11px; color: var(--fg-faint); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-.dash-section { display: flex; flex-direction: column; gap: 8px; }
-.dash-section-head {
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; font-weight: 500;
+.wel-input-icon {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 50%;
   color: var(--fg-muted);
-  text-transform: none;
-  letter-spacing: 0;
+  flex-shrink: 0;
 }
-.dash-section-count { font-family: var(--font-mono); color: var(--fg-faint); }
-
-.dash-card-list { display: flex; flex-direction: column; gap: 6px; }
-.dash-action-card {
-  display: flex; align-items: center; justify-content: space-between; gap: 14px;
-  padding: 12px 14px;
-  border: 1px solid var(--border-soft);
-  border-radius: 6px;
-  background: var(--bg-elev);
+.wel-input-area {
+  flex: 1;
+  min-height: 24px; max-height: 200px;
+  background: transparent; border: 0; outline: 0;
+  resize: none;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  color: var(--fg-strong);
+  line-height: 1.5;
 }
-.dash-action-card.is-error { border-left: 3px solid var(--status-error); }
-.dash-action-meta { flex: 1; min-width: 0; }
-.dash-action-title { font-size: 13px; font-weight: 500; color: var(--fg-strong); font-family: var(--font-mono); }
-.dash-action-sub { font-size: 12px; color: var(--fg-muted); margin-top: 2px; }
-.dash-action-buttons { display: flex; gap: 4px; flex-shrink: 0; }
+.wel-input-area::placeholder { color: var(--fg-faint); }
+.wel-input-area:disabled { opacity: 0.5; cursor: not-allowed; }
+.wel-input-send {
+  width: 36px; height: 36px; border-radius: 50%;
+  background: var(--bg-elev-2); color: var(--fg-muted);
+  border: 0; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background var(--t-fast), color var(--t-fast);
+  flex-shrink: 0;
+}
+.wel-input-send:hover:not(:disabled) { background: var(--accent); color: var(--accent-fg); }
+.wel-input-send:disabled { opacity: 0.4; cursor: not-allowed; }
 
-.dash-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-.dash-conv-list { display: flex; flex-direction: column; gap: 2px; }
-.dash-conv {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  padding: 8px 10px;
+.wel-strip {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 13px; color: var(--fg-muted);
+  animation: rise var(--t-rise) 240ms backwards;
+}
+.wel-strip strong { color: var(--fg-strong); font-weight: 500; }
+.wel-strip-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.wel-strip-link {
   background: transparent; border: 0;
-  border-radius: 4px;
-  cursor: pointer;
-  text-align: left;
+  color: var(--fg-strong); cursor: pointer;
+  border-bottom: 1px solid var(--border-strong);
+  padding: 0 0 1px; font-size: 13px;
+  transition: border-color var(--t-fast);
 }
-.dash-conv:hover { background: var(--bg-hover); }
-.dash-conv-title { font-size: 13px; color: var(--fg-strong); font-weight: 500; }
-.dash-conv-sub   { font-size: 11px; color: var(--fg-muted); font-family: var(--font-mono); }
-
-.dash-quick-list { display: flex; flex-direction: column; gap: 4px; }
-.dash-quick {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px;
-  border: 1px dashed var(--border);
-  border-radius: 6px;
-  background: transparent;
-  font-size: 13px;
-  color: var(--fg-body);
-  cursor: pointer;
-  transition: background var(--t-fast), border-color var(--t-fast), color var(--t-fast);
-  text-align: left;
-}
-.dash-quick:hover { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 40%, transparent); color: var(--accent); }
-.dash-quick svg { width: 14px; height: 14px; flex-shrink: 0; }
+.wel-strip-link:hover { border-color: var(--accent); }
 
 /* ============================================================================
    Relgraph (Obsidian-style entity relations)
