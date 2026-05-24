@@ -9,12 +9,16 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// RehydrateOnBoot scans paused FlowRuns and re-registers cancel handles for Service.Cancel.
+// RehydrateOnBoot scans paused FlowRuns and re-registers cancel handles
+// for Service.Cancel. Caller MUST pass a non-empty userID — typically by
+// iterating userService.List at boot (see cmd/server/main.go). No
+// magic-id fallback.
 //
-// RehydrateOnBoot 扫 paused FlowRun 并重新注册 cancel 句柄。
+// RehydrateOnBoot 扫 paused FlowRun 并重注册 cancel 句柄。
+// 调用方必须传非空 userID(主 main.go 会遍历 users.List 调用)。
 func (s *Service) RehydrateOnBoot(ctx context.Context, userID string) error {
 	if userID == "" {
-		userID = reqctxpkg.DefaultLocalUserID
+		return fmt.Errorf("schedulerapp.RehydrateOnBoot: %w", reqctxpkg.ErrMissingUserID)
 	}
 	scopedCtx := reqctxpkg.SetUserID(ctx, userID)
 	rows, err := s.repo.ListPaused(scopedCtx)
