@@ -634,6 +634,63 @@
 
 .msg-body { padding-left: 30px; }
 
+/* Inline error card — assistant message status=error,显示具体 provider 报错 */
+.msg-error {
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: oklch(from var(--status-error) l c h / 0.04);
+  border: 0.5px solid oklch(from var(--status-error) l c h / 0.20);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-width: 720px;
+}
+.msg-error-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.msg-error-hint {
+  font-size: 13px;
+  color: var(--fg-body);
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+}
+.msg-error-raw summary {
+  font-size: 11px;
+  color: var(--fg-faint);
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  user-select: none;
+}
+.msg-error-raw summary::-webkit-details-marker { display: none; }
+.msg-error-raw summary::before {
+  content: "▸";
+  display: inline-block;
+  transition: transform var(--t-fast);
+  font-size: 10px;
+}
+.msg-error-raw[open] summary::before { transform: rotate(90deg); }
+.msg-error-raw pre {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  background: var(--bg-elev-2);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
 /* ── Block: text ─────────────────────────────────────────────────── */
 .blk-text {
   font-size: var(--fs-15);

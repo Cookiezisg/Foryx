@@ -59,6 +59,14 @@ export const MessageView = memo(function MessageView({ convId, msgId }) {
       </div>
       <div className="msg-body">
         <BlockList convId={convId} blockIds={message.blocks} defaultOpenTools={false} />
+        {message.status === "error" && (message.errorMessage || message.errorCode) && (
+          <ErrorCard
+            code={message.errorCode}
+            message={message.errorMessage}
+            provider={message.provider}
+            model={message.model}
+          />
+        )}
         {message.attachments?.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 12 }}>
             {message.attachments.map((a) => (
@@ -88,4 +96,63 @@ function extractText(convId, message) {
     .filter((b) => b && b.type === "text")
     .map((b) => b.content)
     .join("\n\n");
+}
+
+// friendlyError — turns common provider errors into one calm line.
+// Returns { hint, action? } where hint 是要给用户看的话。
+//
+// 常见 provider 报错 → 一句人话。
+function friendlyError(code, message) {
+  const m = (message || "").toLowerCase();
+  if (m.includes("insufficient balance") || m.includes("insufficient_quota")) {
+    return { hint: "LLM 厂商余额不足。去 provider 后台充值,或在设置里换一个 provider。", kind: "余额" };
+  }
+  if (m.includes("invalid_api_key") || m.includes("401") || m.includes("unauthorized")) {
+    return { hint: "API key 无效或已过期。在设置里重新填一次。", kind: "key" };
+  }
+  if (m.includes("rate limit") || m.includes("rate_limit") || m.includes("429")) {
+    return { hint: "请求太密。等几秒再试,或换一个 provider。", kind: "限流" };
+  }
+  if (m.includes("model_not_found") || m.includes("model not found") || m.includes("404")) {
+    return { hint: "这个模型 ID 在 provider 那边没有。在设置里换一个有效的模型。", kind: "模型" };
+  }
+  if (m.includes("context length") || m.includes("context_length") || m.includes("too many tokens")) {
+    return { hint: "上下文太长了。开一段新对话,或让 agent 自动压缩。", kind: "上下文" };
+  }
+  if (code === "MODEL_NOT_CONFIGURED" || code === "API_KEY_PROVIDER_NOT_FOUND") {
+    return { hint: "模型或 API key 没配好。去设置看一眼。", kind: "配置" };
+  }
+  if (code === "LLM_PROVIDER_ERROR" || code === "LLM_STREAM_ERROR") {
+    return { hint: "LLM 厂商返回了错误。看下面的原文。", kind: "provider" };
+  }
+  return null;
+}
+
+function ErrorCard({ code, message, provider, model }) {
+  const friendly = friendlyError(code, message);
+  return (
+    <div className="msg-error">
+      <div className="msg-error-head">
+        <Icon.AlertCircle style={{ width: 13, height: 13, color: "var(--status-error)" }} />
+        <span style={{ color: "var(--status-error)", fontWeight: 500 }}>
+          {friendly?.kind ? friendly.kind : "出错"}
+        </span>
+        {(provider || model) && (
+          <span style={{ color: "var(--fg-faint)", fontFamily: "var(--font-mono)", fontSize: 11 }}>
+            {[provider, model].filter(Boolean).join(" / ")}
+          </span>
+        )}
+      </div>
+      {friendly?.hint && (
+        <div className="msg-error-hint">{friendly.hint}</div>
+      )}
+      <details className="msg-error-raw">
+        <summary>原文</summary>
+        <pre>
+          {code && <span style={{ color: "var(--fg-faint)" }}>{code + "\n"}</span>}
+          {message || "(无信息)"}
+        </pre>
+      </details>
+    </div>
+  );
 }
