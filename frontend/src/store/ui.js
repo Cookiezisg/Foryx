@@ -9,6 +9,17 @@ import { create } from "zustand";
 
 const MAX_PANES = 2;
 
+function readBool(key, fallback) {
+  try {
+    const v = localStorage.getItem(key);
+    if (v === null) return fallback;
+    return v === "1";
+  } catch { return fallback; }
+}
+function writeBool(key, value) {
+  try { localStorage.setItem(key, value ? "1" : "0"); } catch {}
+}
+
 export const useUIStore = create((set, get) => ({
   baseUrl: null,
   openPanes: ["chat"],
@@ -16,7 +27,9 @@ export const useUIStore = create((set, get) => ({
   activeFlowRun: null,
   activeDocument: null,
   leftPct: 50,
-  collapsed: false,
+  collapsed:      readBool("sidebar.collapsed",      false),
+  toolsExpanded:  readBool("sidebar.toolsExpanded",  true),
+  recentExpanded: readBool("sidebar.recentExpanded", true),
   narrow: false,
   activeNarrowPane: null,
   focusEntity: {},
@@ -88,7 +101,23 @@ export const useUIStore = create((set, get) => ({
 
   setLeftPct: (n) => set({ leftPct: Math.max(20, Math.min(80, n)) }),
 
-  setCollapsed: (b) => set({ collapsed: typeof b === "function" ? b(get().collapsed) : b }),
+  setCollapsed: (b) => {
+    const next = typeof b === "function" ? b(get().collapsed) : !!b;
+    writeBool("sidebar.collapsed", next);
+    set({ collapsed: next });
+  },
+
+  setToolsExpanded: (b) => {
+    const next = typeof b === "function" ? b(get().toolsExpanded) : !!b;
+    writeBool("sidebar.toolsExpanded", next);
+    set({ toolsExpanded: next });
+  },
+
+  setRecentExpanded: (b) => {
+    const next = typeof b === "function" ? b(get().recentExpanded) : !!b;
+    writeBool("sidebar.recentExpanded", next);
+    set({ recentExpanded: next });
+  },
 
   setNarrow: (b) => set({ narrow: !!b }),
 
