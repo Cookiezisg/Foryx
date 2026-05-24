@@ -178,3 +178,22 @@ button:active { transform: scale(0.98); }
 ## 九、给 AI 的一句话自检
 
 > 生成任何 UI 前,先自问:背景是不是干净的白?是不是只有一个克制的强调色?字体层级是否清晰、字重只用 400/500?动效是不是柔和、错峰、像呼吸?有没有不小心加了渐变?文案是不是简短、不喊、没黑话、没 emoji?——全过再写代码。
+
+---
+
+## 十、问候语调性(Voice for Greetings)
+
+欢迎页问候语是品牌触点,每次进首屏都见。调性原则:
+
+- **语言:** 英文 only。中文与硅谷腔不搭。
+- **腔调:** 硅谷腔 — 自信、克制、惜字如金。像一个有把握的工程师拍你肩说一句话。
+- **禁:** 感叹号、表情、营销词("超级"/"极致"/"颠覆")、励志金句、咖啡 emoji。
+- **可用:** 锻造/锤/铁/火/锚的隐喻;时间感(早 / 深夜);AI 自我引述("I'm all ears.");留 30% 中性/温柔避免硬核疲劳。
+- **个性化:** 含 `{name}` 占位的句子用 displayName 替换;displayName 空时,池里 name-bearing 句不参与抽签。
+
+参考池:`frontend/src/panes/dashboard/greetings.js`(380 句,15 类标签 A-O)。
+
+新增/修改问候语规则:
+- 添加前 grep 池子防重复:`grep -F "Your phrase" frontend/src/panes/dashboard/greetings.js`
+- 加 tag 至少一个;含 `{name}` 必带 M tag
+- ≤ 50 字符。超过容易在 input 框上方溢出。
