@@ -118,5 +118,21 @@
   "placeholderPane": {
     "implementing": "{{phase}} 实现中",
     "subtitle": "Phase 2 仅 shell 验证；真实功能见 PRD §15。"
+  },
+  "notificationsDrawer": {
+    "title": "收件箱",
+    "unread": "{{count}} 未读",
+    "markAllRead": "全部已读",
+    "closeTitle": "关闭",
+    "tabTodo": "待办",
+    "tabTodoPending": "待办 · 1",
+    "tabNotifs": "通知",
+    "emptyTodo": "无待办",
+    "emptyNotifs": "这里很安静。",
+    "askHeadLabel": "agent 在等你拿主意",
+    "askHeadFallback": "需要你确认一下",
+    "askNoOptions": "（没给选项 — 等 agent 把选项推过来）",
+    "askHint": "数字键选 · 确认",
+    "submitLabel": "提交"
   }
 }

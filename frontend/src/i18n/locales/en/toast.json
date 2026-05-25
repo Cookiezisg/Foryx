@@ -1,0 +1,7 @@
+{
+  "notifications": {
+    "answerSubmitted": "Answer submitted",
+    "submitFailed": "Failed to submit",
+    "undoLabel": "Undo"
+  }
+}

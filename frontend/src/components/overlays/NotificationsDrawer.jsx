@@ -5,6 +5,7 @@
 // NotificationsDrawer —— 右滑抽屉；待办（Help/Ask）+ 通知两 tab。
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "framer-motion";
 import { Icon } from "../primitives/Icon.jsx";
 import { Badge } from "../primitives/Badge.jsx";
@@ -44,13 +45,14 @@ const TYPE_TO_ICON = {
 };
 
 function TodoTab({ pendingAsk, setPendingAsk, pushToast }) {
+  const { t } = useTranslation("misc");
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
   if (!pendingAsk) {
     return (
       <div style={{ padding: 32, textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>
-        无待办
+        {t("notificationsDrawer.emptyTodo")}
       </div>
     );
   }
@@ -65,10 +67,10 @@ function TodoTab({ pendingAsk, setPendingAsk, pushToast }) {
         `/conversations/${pendingAsk.conversationId}/pending-questions/${pendingAsk.toolCallId}:resolve`,
         { method: "POST", body: { answer: selected } }
       );
-      pushToast({ kind: "success", title: "已回答" });
+      pushToast({ kind: "success", title: t("toast:notifications.answerSubmitted") });
       setPendingAsk(null);
     } catch (err) {
-      pushToast({ kind: "error", title: "提交失败", desc: err.message });
+      pushToast({ kind: "error", title: t("toast:notifications.submitFailed"), desc: err.message });
     } finally {
       setSubmitting(false);
     }
@@ -79,8 +81,8 @@ function TodoTab({ pendingAsk, setPendingAsk, pushToast }) {
       <div className="ask-head" style={{ padding: "12px 16px", borderBottom: "1px solid var(--border-soft)" }}>
         <div className="icon-wrap"><Icon.HelpCircle /></div>
         <div className="meta">
-          <div className="label">agent 在等你拿主意</div>
-          <div className="title">{pendingAsk.question || "需要你确认一下"}</div>
+          <div className="label">{t("notificationsDrawer.askHeadLabel")}</div>
+          <div className="title">{pendingAsk.question || t("notificationsDrawer.askHeadFallback")}</div>
         </div>
       </div>
       <div className="ask-body" style={{ padding: "12px 16px" }}>
@@ -88,7 +90,7 @@ function TodoTab({ pendingAsk, setPendingAsk, pushToast }) {
         <div className="ask-options">
           {options.length === 0 && (
             <div style={{ padding: 16, color: "var(--fg-faint)", fontSize: 12 }}>
-              （没给选项 — 等 agent 把选项推过来）
+              {t("notificationsDrawer.askNoOptions")}
             </div>
           )}
           {options.map((o, i) => (
@@ -105,10 +107,10 @@ function TodoTab({ pendingAsk, setPendingAsk, pushToast }) {
         </div>
       </div>
       <div className="ask-footer" style={{ padding: "8px 16px" }}>
-        <div className="hint">数字键选 · <Icon.CornerDownLeft style={{ width: 11, height: 11 }} /> 确认</div>
+        <div className="hint">{t("notificationsDrawer.askHint")} <Icon.CornerDownLeft style={{ width: 11, height: 11 }} /></div>
         <div className="actions">
           <Button size="sm" variant="accent" disabled={!selected || submitting} loading={submitting} onClick={submit}>
-            <Icon.Check /> 提交
+            <Icon.Check /> {t("notificationsDrawer.submitLabel")}
           </Button>
         </div>
       </div>
@@ -117,10 +119,11 @@ function TodoTab({ pendingAsk, setPendingAsk, pushToast }) {
 }
 
 function NotifsTab({ snapshot, onClick }) {
+  const { t } = useTranslation("misc");
   if (snapshot.length === 0) {
     return (
       <div style={{ padding: 32, textAlign: "center", color: "var(--fg-faint)", fontSize: 12 }}>
-        这里很安静。
+        {t("notificationsDrawer.emptyNotifs")}
       </div>
     );
   }
@@ -155,6 +158,7 @@ function NotifsTab({ snapshot, onClick }) {
 }
 
 export function NotificationsDrawer() {
+  const { t } = useTranslation("misc");
   const open = useUIStore((s) => s.notifsOpen);
   const setOpen = useUIStore((s) => s.setNotifsOpen);
   const openPane = useUIStore((s) => s.openPane);
@@ -206,12 +210,12 @@ export function NotificationsDrawer() {
             <div className="drawer-head">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <Icon.Bell style={{ width: 14, height: 14, color: "var(--fg-muted)" }} />
-                <div className="drawer-title">收件箱</div>
-                {unread > 0 && <Badge kind="muted">{unread} 未读</Badge>}
+                <div className="drawer-title">{t("notificationsDrawer.title")}</div>
+                {unread > 0 && <Badge kind="muted">{t("notificationsDrawer.unread", { count: unread })}</Badge>}
               </div>
               <div style={{ display: "flex", gap: 4 }}>
-                <button className="btn btn-xs btn-ghost" onClick={clearUnread}>全部已读</button>
-                <button className="icon-btn" onClick={onClose} title="关闭"><Icon.X /></button>
+                <button className="btn btn-xs btn-ghost" onClick={clearUnread}>{t("notificationsDrawer.markAllRead")}</button>
+                <button className="icon-btn" onClick={onClose} title={t("notificationsDrawer.closeTitle")}><Icon.X /></button>
               </div>
             </div>
             <div className="notif-tabs">
@@ -219,13 +223,13 @@ export function NotificationsDrawer() {
                 className={"notif-tab" + (tab === "todo" ? " is-active" : "")}
                 onClick={() => setTab("todo")}
               >
-                待办{pendingAsk ? " · 1" : ""}
+                {pendingAsk ? t("notificationsDrawer.tabTodoPending") : t("notificationsDrawer.tabTodo")}
               </button>
               <button
                 className={"notif-tab" + (tab === "notifs" ? " is-active" : "")}
                 onClick={() => setTab("notifs")}
               >
-                通知
+                {t("notificationsDrawer.tabNotifs")}
               </button>
             </div>
             <div className="drawer-list">

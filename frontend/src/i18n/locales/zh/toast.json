@@ -1,0 +1,7 @@
+{
+  "notifications": {
+    "answerSubmitted": "已回答",
+    "submitFailed": "提交失败",
+    "undoLabel": "撤销"
+  }
+}

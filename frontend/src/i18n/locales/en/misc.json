@@ -118,5 +118,21 @@
   "placeholderPane": {
     "implementing": "{{phase}} in progress",
     "subtitle": "Phase 2 shell only; full implementation in PRD §15."
+  },
+  "notificationsDrawer": {
+    "title": "Inbox",
+    "unread": "{{count}} unread",
+    "markAllRead": "Mark all read",
+    "closeTitle": "Close",
+    "tabTodo": "To-do",
+    "tabTodoPending": "To-do · 1",
+    "tabNotifs": "Notifications",
+    "emptyTodo": "Nothing to do",
+    "emptyNotifs": "All quiet here.",
+    "askHeadLabel": "Agent is waiting for your input",
+    "askHeadFallback": "Your confirmation needed",
+    "askNoOptions": "(No options yet — waiting for agent to push them)",
+    "askHint": "Number keys to select · Confirm",
+    "submitLabel": "Submit"
   }
 }

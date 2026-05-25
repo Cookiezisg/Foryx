@@ -3,42 +3,44 @@
 //
 // ToastTray —— 右下角；Framer Motion AnimatePresence + layout 动画。
 
+import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "framer-motion";
 import { Icon } from "../primitives/Icon.jsx";
 import { useUIStore } from "../../store/ui.js";
 
 export function ToastTray() {
+  const { t } = useTranslation("toast");
   const toasts = useUIStore((s) => s.toasts);
   const dismiss = useUIStore((s) => s.dismissToast);
 
   return (
     <div className="toast-tray">
       <AnimatePresence initial={false}>
-        {toasts.map((t) => (
+        {toasts.map((toast) => (
           <motion.div
-            key={t.id}
+            key={toast.id}
             layout
             initial={{ opacity: 0, y: 16, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 4, scale: 0.96 }}
             transition={{ duration: 0.22, ease: [0.2, 0.8, 0.2, 1] }}
-            className={"toast" + (t.kind ? " is-" + t.kind : "")}
+            className={"toast" + (toast.kind ? " is-" + toast.kind : "")}
           >
             <div className="toast-icon">
-              {t.kind === "error" ? <Icon.AlertCircle />
-               : t.kind === "warn" ? <Icon.AlertCircle />
+              {toast.kind === "error" ? <Icon.AlertCircle />
+               : toast.kind === "warn" ? <Icon.AlertCircle />
                : <Icon.CheckCircle />}
             </div>
             <div className="toast-body">
-              {t.title && <div className="toast-title">{t.title}</div>}
-              {t.desc && <div className="toast-desc">{t.desc}</div>}
+              {toast.title && <div className="toast-title">{toast.title}</div>}
+              {toast.desc && <div className="toast-desc">{toast.desc}</div>}
             </div>
-            {t.undo && (
-              <button className="btn btn-xs btn-ghost" onClick={() => { t.undo(); dismiss(t.id); }}>
-                <Icon.Refresh /> 撤销
+            {toast.undo && (
+              <button className="btn btn-xs btn-ghost" onClick={() => { toast.undo(); dismiss(toast.id); }}>
+                <Icon.Refresh /> {t("notifications.undoLabel")}
               </button>
             )}
-            <button className="icon-btn" onClick={() => dismiss(t.id)}><Icon.X /></button>
+            <button className="icon-btn" onClick={() => dismiss(toast.id)}><Icon.X /></button>
           </motion.div>
         ))}
       </AnimatePresence>
