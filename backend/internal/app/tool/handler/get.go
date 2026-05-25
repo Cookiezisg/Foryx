@@ -16,16 +16,14 @@ type GetHandler struct {
 func (t *GetHandler) Name() string { return "get_handler" }
 
 func (t *GetHandler) Description() string {
-	return "Get full details of a handler: methods, init_args schema, configState " +
-		"(ready / partially_configured / unconfigured), pending version if any, and " +
-		"a masked view of stored config (sensitive values replaced with ********)."
+	return "Full handler details: methods, init_args schema, configState (ready|partially_configured|unconfigured), pending version, and masked config (sensitive values shown as ********)."
 }
 
 func (t *GetHandler) Parameters() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"id": {"type": "string", "description": "Handler ID (hd_xxx)"}
+			"id": {"type": "string"}
 		},
 		"required": ["id"]
 	}`)

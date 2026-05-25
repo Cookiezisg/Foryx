@@ -32,34 +32,10 @@ type CreateHandler struct {
 func (t *CreateHandler) Name() string { return "create_handler" }
 
 func (t *CreateHandler) Description() string {
-	return `Create a new handler (stateful Python class) by applying a sequence of ops.
-v1 is auto-accepted; user must configure init_args via update_handler_config before
-call_handler can succeed. If the venv install fails, an internal env-fix loop retries
-up to 3 times by asking the LLM to revise the dependency list.
+	return `Create a new handler (stateful Python class) by applying a sequence of ops. v1 is auto-accepted; user must configure init_args via update_handler_config before call_handler can succeed. If the venv install fails, an internal env-fix loop retries up to 3 times by asking the LLM to revise the dependency list.
 
-MINIMAL COMPLETE EXAMPLE — a counter handler with persistent state:
-  ops = [
-    {"op":"set_meta", "name":"counter", "description":"In-memory counter; bump/get"},
-    {"op":"set_init_args_schema", "args":[
-        {"name":"start","type":"integer","required":true,"description":"initial count"}
-    ]},
-    {"op":"set_init", "initBody":"self.count = start"},
-    {"op":"add_method", "method":{
-        "name":"bump",
-        "args":[{"name":"by","type":"integer","required":false,"default":1}],
-        "body":"self.count += by\nreturn self.count"
-    }},
-    {"op":"add_method", "method":{
-        "name":"get",
-        "args":[],
-        "body":"return self.count"
-    }}
-  ]
-This generates user_handler.py with class HandlerImpl __init__(self, start: int)
-plus bump(self, by: int = 1) and get(self) — bare-name access throughout.
-
-OPS:
-  {"op":"set_meta", "name":"...", "description":"..."}
+OPS (each op is a JSON object with "op" key):
+  {"op":"set_meta", "name":"...", "description":"...", "tags":[...]}
   {"op":"set_imports", "imports":"import psycopg2\nimport json"}
   {"op":"set_init_args_schema", "args":[
       {"name":"dsn", "type":"string", "required":true, "sensitive":true, "description":"PG DSN"},
@@ -71,40 +47,22 @@ OPS:
   {"op":"update_method", "name":"query", "patch":{"body":"new body"}}
   {"op":"delete_method", "name":"query"}
   {"op":"set_dependencies", "dependencies":["psycopg2-binary"]}
+  {"op":"set_python_version", "version":"3.11"}
 
-CRITICAL — METHOD BODY CONTRACT (2026-05 refactor):
-The framework generates user_handler.py with EXPLODED named params from your
-schemas — both __init__ and methods get real Python signatures. Write bodies
-using BARE NAMES, not dict access:
+BODY CONTRACT — the framework generates user_handler.py with EXPLODED named params from your schemas. Write bodies using BARE NAMES, not dict access:
+  set_init_args_schema: [{"name":"dsn","type":"string","required":true}]
+  set_init body:        self.db = connect(dsn)          ← bare name 'dsn', NOT init_args["dsn"]
+  add_method args:      [{"name":"sql","type":"string","required":true}]
+  method body:          return self.db.run(sql)          ← bare name 'sql', NOT args["sql"]
 
-  ✅ CORRECT — bare names match the generated signature:
-     set_init_args_schema: [{"name":"start","type":"integer","required":true}]
-     set_init body:        self.count = start
-     add_method query args: [{"name":"key","type":"string","required":true}]
-     query body:            return self.data.get(key)
+ARG TYPES: string / integer / number / boolean / object / array
 
-  ❌ WRONG — old dict-access pattern is no longer needed:
-     ❌ self.count = init_args["start"]
-     ❌ key = args["key"]; return self.data.get(key)
-
-The generated class looks like:
-    class HandlerImpl:
-        def __init__(self, start: int):
-            self.count = start
-        def query(self, key: str):
-            return self.data.get(key)
-
-ARG TYPES (JSON Schema names, required):
-  string / integer / number / boolean / object / array
-
-NAMES — strict Python identifier rules (the framework rejects invalid):
+NAMES — strict Python identifier rules (framework rejects invalid):
   - method names / arg names / init_arg names: [a-zA-Z_][a-zA-Z0-9_]*
   - no dashes, no Python keywords (class / def / return / for / if / ...)
-  - sensitive=true on init_args masks the value in GET / list output
+  - sensitive=true on init_args masks the value in get_handler / search_handler output
 
-State (self.X) persists across method calls when invoked from a workflow node
-with persistent-instance scope; HTTP :call invocations get a fresh instance
-per call (chat-scope = per-call lifetime).`
+State (self.X) persists across method calls in workflow persistent-instance scope; chat-scope = per-call lifetime (spawn → run → destroy).`
 }
 
 func (t *CreateHandler) Parameters() json.RawMessage {

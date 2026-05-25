@@ -22,36 +22,25 @@ type EditWorkflow struct {
 func (t *EditWorkflow) Name() string { return "edit_workflow" }
 
 func (t *EditWorkflow) Description() string {
-	return `Edit an existing workflow by applying a sequence of ops. Same op shapes as create_workflow (see that tool's description for the cheatsheet + branching/port rules).
+	return `Edit a workflow by applying ops. Repeated edits while a pending exists rewrite the same pending row (iterate-same-pending — no conflict error). User must accept or reject the pending result.
 
-Iterate-same-pending semantic — repeated edits while a pending exists rewrite the same pending row (no ErrPendingConflict). User must accept_pending or reject_pending the result.
+add_node / add_edge / set_meta / set_variable: same shapes as create_workflow (see that tool for node types, branching/port rules, and loop body format).
 
-KEY OP SHAPES:
-  {"op":"add_node", "node":{"id":"...", "type":"...", "config":{...}}}
-  {"op":"update_node", "nodeId":"<nodeId>", "patch":{...}} // RFC 7396 JSON Merge Patch
-  {"op":"delete_node", "nodeId":"<nodeId>"}                // cascades incident edges
-  {"op":"add_edge", "edge":{"from":"...", "to":"...", "fromPort":"<port if source is approval/loop/condition>"}}
+EDIT-ONLY OPS:
+  {"op":"update_node", "nodeId":"<nodeId>", "patch":{...}}  // RFC 7396 JSON Merge Patch
+  {"op":"delete_node", "nodeId":"<nodeId>"}                 // cascades incident edges
   {"op":"update_edge", "edgeId":"<edgeId>", "patch":{...}}
   {"op":"delete_edge", "edgeId":"<edgeId>"}
-  {"op":"set_meta", "name":"...", "description":"...", "tags":[...]}
-  {"op":"set_variable", "variable":{"name":"...", "type":"...", "default":...}}
   {"op":"unset_variable", "name":"..."}
 
-BRANCHING-NODE EDGES (required fromPort):
-  - approval node:  fromPort must be "approved" or "rejected"
-  - loop node:      fromPort must be "iterate" or "done"
-  - condition node: fromPort must match one case in config.cases
-
-Single-output nodes (trigger/function/handler/mcp/skill/llm/http/wait/variable/parallel) must leave fromPort empty.
-
-The schema validates after every batch — partial edits that violate rules get WORKFLOW_OP_INVALID with the specific reason.`
+Schema validates after every batch — violations return WORKFLOW_OP_INVALID with the specific reason.`
 }
 
 func (t *EditWorkflow) Parameters() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"id": {"type": "string", "description": "Workflow ID (wf_xxx)"},
+			"id": {"type": "string"},
 			"ops": {
 				"type": "array",
 				"description": "Sequence of ops to apply on top of current pending (or active if no pending)",

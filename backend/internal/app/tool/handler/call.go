@@ -18,12 +18,9 @@ type CallHandler struct {
 func (t *CallHandler) Name() string { return "call_handler" }
 
 func (t *CallHandler) Description() string {
-	return "Invoke a method on a handler. The instance lifetime is per-call when " +
-		"invoked from chat (each call_handler spawns a fresh subprocess, runs the " +
-		"method, and destroys it). Streaming methods (Python body using `yield`) emit " +
-		"progress deltas; the final return value comes back as the tool_result. If " +
-		"the handler's configState is not ready, the call fails — use update_handler_" +
-		"config first to set init_args."
+	return "Invoke a method on a handler. Chat-scope calls are per-call (spawn → run → destroy). " +
+		"Streaming methods (Python yield) emit progress deltas; the final return is the tool_result. " +
+		"Fails if configState != ready — set init_args via update_handler_config first."
 }
 
 func (t *CallHandler) Parameters() json.RawMessage {

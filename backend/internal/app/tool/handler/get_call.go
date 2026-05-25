@@ -16,16 +16,14 @@ type GetHandlerCall struct {
 func (t *GetHandlerCall) Name() string { return "get_handler_call" }
 
 func (t *GetHandlerCall) Description() string {
-	return "Get full details of one handler call by id, including complete input " +
-		"+ output (truncated at 4KB) and machine-computed hints (outputEmpty, " +
-		"significantlySlower) for fast diagnosis."
+	return "Full detail of one handler call: complete input/output (truncated at 4KB) plus computed hints (outputEmpty, significantlySlower) for diagnosis."
 }
 
 func (t *GetHandlerCall) Parameters() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"id": {"type": "string", "description": "Call id (hcl_xxx)"}
+			"id": {"type": "string"}
 		},
 		"required": ["id"]
 	}`)

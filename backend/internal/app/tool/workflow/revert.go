@@ -21,17 +21,15 @@ type RevertWorkflow struct {
 func (t *RevertWorkflow) Name() string { return "revert_workflow" }
 
 func (t *RevertWorkflow) Description() string {
-	return "Revert a workflow's active version to a previously accepted " +
-		"version number. Soft action — the historical version remains in " +
-		"the version list; revert just flips the active pointer."
+	return "Flip a workflow's active version to a previously accepted version number; historical versions are kept."
 }
 
 func (t *RevertWorkflow) Parameters() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"id": {"type": "string", "description": "Workflow ID (wf_xxx)"},
-			"targetVersion": {"type": "integer", "description": "Accepted version number to flip active to"}
+			"id": {"type": "string"},
+			"targetVersion": {"type": "integer"}
 		},
 		"required": ["id", "targetVersion"]
 	}`)

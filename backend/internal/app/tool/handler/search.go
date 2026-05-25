@@ -28,9 +28,8 @@ type SearchHandler struct {
 func (t *SearchHandler) Name() string { return "search_handler" }
 
 func (t *SearchHandler) Description() string {
-	return "Search the user's handler library for handlers matching a query. " +
-		"Returns up to limit handlers ranked by relevance. Use get_handler to " +
-		"inspect a candidate's methods + configState before call_handler."
+	return "Search the user's handler library by natural-language query, ranked by relevance. " +
+		"Inspect a hit with get_handler (methods + configState) before call_handler."
 }
 
 func (t *SearchHandler) Parameters() json.RawMessage {

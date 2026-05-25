@@ -22,67 +22,31 @@ type CreateWorkflow struct {
 func (t *CreateWorkflow) Name() string { return "create_workflow" }
 
 func (t *CreateWorkflow) Description() string {
-	return `Create a new workflow by applying a sequence of ops. V1 auto-accepts the created workflow as v1.
+	return `Create a new workflow by applying a sequence of ops. v1 auto-accepts.
 
-MINIMAL COMPLETE EXAMPLE — manual trigger → one function → done:
-  ops = [
-    {"op":"set_meta", "name":"daily_report", "description":"Generate and email"},
-    {"op":"add_node", "node":{"id":"t1", "type":"trigger", "config":{"kind":"manual"}}},
-    {"op":"add_node", "node":{"id":"f1", "type":"function", "config":{"functionId":"fn_xxx"}}},
-    {"op":"add_edge", "edge":{"from":"t1", "to":"f1"}}
-  ]
-DAG terminates implicitly after f1 — DO NOT add an "end" / "output" / "finish"
-node, those types do not exist. trigger node has no incoming edges; any node
-with no outgoing edge is a leaf.
-
-OP CHEATSHEET (write each op as a JSON object with the listed shape):
-
+OPS (each op is a JSON object with "op" key):
   {"op":"set_meta", "name":"...", "description":"...", "tags":[...]}
-  {"op":"add_node", "node":{"id":"n1", "type":"trigger|function|handler|mcp|skill|llm|http|condition|loop|parallel|approval|wait|variable", "config":{...}}}
+  {"op":"add_node", "node":{"id":"n1", "type":"<nodeType>", "config":{...}}}
   {"op":"add_edge", "edge":{"from":"<sourceNodeId>", "to":"<targetNodeId>", "fromPort":"<port>"}}
-  {"op":"set_variable", "variable":{"name":"...", "type":"...", "default":...}}
+  {"op":"set_variable", "variable":{"name":"...", "type":"string|number|integer|boolean|object|array", "default":...}}
 
-WORKFLOW GRAPH RULES:
-  - Need at least one trigger node. Workflow ENDS when the DAG runs out of edges (no "end" node type — don't add one).
-  - Plain capability nodes (function/handler/mcp/skill/llm/http) reference existing entities via config.functionId / handlerName / serverName / skillName.
+NODE TYPES: trigger | function | handler | mcp | skill | llm | agent | http | condition | loop | parallel | approval | wait | variable
+
+GRAPH RULES:
+  - At least one trigger node required. DAG ends implicitly when no outgoing edges remain — DO NOT add "end"/"output"/"finish" nodes, those types do not exist.
+  - Capability nodes (function/handler/mcp/skill/llm/agent/http) reference entities via config.functionId / handlerName / serverName / skillName.
   - Edges connect node IDs directly (no dots, no port-in-id).
 
-BRANCHING NODES (require fromPort on outgoing edges):
-  - approval node → fromPort must be "approved" or "rejected"
-  - loop node    → fromPort must be "iterate" or "done"
-  - condition node → fromPort must be one of the case names declared in the node's config.cases
+BRANCHING NODES (require fromPort on each outgoing edge):
+  - approval → fromPort: "approved" | "rejected"
+  - loop     → fromPort: "iterate" | "done"
+  - condition → fromPort: one of the case names declared in config.cases
 
-  Example approval routing:
-    {"op":"add_node", "node":{"id":"a1", "type":"approval", "config":{"prompt":"OK to proceed?"}}}
-    {"op":"add_edge", "edge":{"from":"a1", "to":"on_ok",     "fromPort":"approved"}}
-    {"op":"add_edge", "edge":{"from":"a1", "to":"on_cancel", "fromPort":"rejected"}}
+SINGLE-OUTPUT NODES (trigger/function/handler/mcp/skill/llm/agent/http/wait/variable/parallel): omit fromPort.
 
-SINGLE-OUTPUT NODES (trigger / function / handler / mcp / skill / llm / http / wait / variable / parallel):
-  - fromPort must be empty/omitted on their outgoing edges.
+LOOP BODY SUBGRAPH — put {nodes,edges} under config.body. Each iteration binds {{ .loop.item }} and {{ .loop.index }} for template substitution inside body nodes. Default = sequential, fail-fast. Set "parallel":true + "concurrency":N for fan-out (cap 5). Set "onError":"continue" to collect failures instead of stopping. Body output: {out:[terminalNodeOutput×N], count, successes, failures:[{index,error}]}. Body cannot contain approval nodes (V1 limit). Nesting depth ≤ 3.
 
-LOOP BODY SUBGRAPH (§5.1) — run a sub-DAG per item:
-  Put a {nodes,edges} object under config.body. Each iteration binds {{ .loop.item }}
-  and {{ .loop.index }} for template substitution inside body nodes. Default = sequential,
-  fail-fast. Set "parallel": true + "concurrency": N for fan-out (default cap 5).
-  Set "onError": "continue" to collect failed iterations instead of stopping.
-
-  Example "for each CSV row, classify via LLM, save via function":
-    {"op":"add_node", "node":{"id":"loop1", "type":"loop", "config":{
-       "items": ["row1","row2","row3"],
-       "parallel": true, "concurrency": 3, "onError": "continue",
-       "body": {
-         "nodes": [
-           {"id":"b_classify", "type":"llm",      "config":{"prompt":"Classify {{ .loop.item }}"}},
-           {"id":"b_save",     "type":"function", "config":{"functionId":"fn_save",
-                                                            "args":{"row":"{{ .loop.item }}"}}}
-         ],
-         "edges": [{"from":"b_classify", "to":"b_save"}]
-       }
-    }}}
-  Body output: {out: [terminalNodeOutput x N], count, successes, failures: [{index,error}]}
-  Body cannot contain approval nodes (V1 limit). Nesting depth ≤ 3.
-
-The schema rejects mismatches at create time — if your edge violates these rules you'll get WORKFLOW_OP_INVALID with the specific reason.`
+Schema rejects rule violations at create time with WORKFLOW_OP_INVALID + specific reason.`
 }
 
 func (t *CreateWorkflow) Parameters() json.RawMessage {

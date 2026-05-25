@@ -16,14 +16,13 @@ type GetWorkflowExecution struct {
 func (t *GetWorkflowExecution) Name() string { return "get_workflow_execution" }
 
 func (t *GetWorkflowExecution) Description() string {
-	return "Fetch one workflow node execution by id (frn_xxx). Returns full input + " +
-		"output JSON (no truncation), error details, timing, attempts."
+	return "Get one workflow node execution by id, with full input/output JSON, error, timing, and attempts."
 }
 
 func (t *GetWorkflowExecution) Parameters() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
-		"properties": {"id": {"type": "string", "description": "FlowRunNode ID (frn_xxx)"}},
+		"properties": {"id": {"type": "string"}},
 		"required": ["id"]
 	}`)
 }

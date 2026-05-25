@@ -17,10 +17,7 @@ type SearchWorkflowExecutions struct {
 func (t *SearchWorkflowExecutions) Name() string { return "search_workflow_executions" }
 
 func (t *SearchWorkflowExecutions) Description() string {
-	return "Search workflow node execution history (flowrun_nodes table). Filter by flowrunId / " +
-		"nodeType / status (ok|failed|cancelled|timeout|skipped) / conversationId. " +
-		"Returns previews (200-byte snippets of input/output) + node count. Use " +
-		"get_workflow_execution to drill into one node-execution by id."
+	return "Search workflow node-execution history. Filters: flowrunId, nodeType, status, conversationId. Returns 200-byte input/output previews; use get_workflow_execution for full detail."
 }
 
 func (t *SearchWorkflowExecutions) Parameters() json.RawMessage {
@@ -29,7 +26,7 @@ func (t *SearchWorkflowExecutions) Parameters() json.RawMessage {
 		"properties": {
 			"flowrunId":      {"type": "string"},
 			"nodeType":       {"type": "string"},
-			"status":         {"type": "string"},
+			"status":         {"type": "string", "enum": ["ok","failed","cancelled","timeout","skipped"]},
 			"conversationId": {"type": "string"},
 			"limit":          {"type": "integer"},
 			"cursor":         {"type": "string"}

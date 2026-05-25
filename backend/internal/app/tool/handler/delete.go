@@ -16,8 +16,7 @@ type DeleteHandler struct {
 func (t *DeleteHandler) Name() string { return "delete_handler" }
 
 func (t *DeleteHandler) Description() string {
-	return "Soft-delete a handler. Any live instances across owners are destroyed. " +
-		"Workflows referencing this handler will be marked needs_attention until remediated."
+	return "Soft-delete a handler. Destroys all live instances; workflows referencing it become needs_attention."
 }
 
 func (t *DeleteHandler) Parameters() json.RawMessage {

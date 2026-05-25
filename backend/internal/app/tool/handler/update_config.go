@@ -16,11 +16,7 @@ type UpdateHandlerConfig struct {
 func (t *UpdateHandlerConfig) Name() string { return "update_handler_config" }
 
 func (t *UpdateHandlerConfig) Description() string {
-	return "Set or update init_args values for a handler (e.g. DB connection " +
-		"strings, API keys). Values are merged into stored config (nil deletes a " +
-		"key) and encrypted at rest. Sensitive values per the handler's schema " +
-		"are masked in get_handler / search_handler responses — they are NEVER " +
-		"echoed in tool results, including this one. Returns the new configState."
+	return "Set/merge a handler's init_args values (DB strings, API keys); null deletes a key. Encrypted at rest; sensitive values are never echoed in any tool result. Returns the new configState."
 }
 
 func (t *UpdateHandlerConfig) Parameters() json.RawMessage {

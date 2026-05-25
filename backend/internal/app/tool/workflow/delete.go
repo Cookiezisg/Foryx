@@ -21,16 +21,14 @@ type DeleteWorkflow struct {
 func (t *DeleteWorkflow) Name() string { return "delete_workflow" }
 
 func (t *DeleteWorkflow) Description() string {
-	return "Soft-delete a workflow. The historical versions remain in DB " +
-		"but the workflow disappears from listings + LLM search. Triggers " +
-		"that referenced it stop firing."
+	return "Soft-delete a workflow: hidden from listings/search and its triggers stop firing; historical versions stay in DB."
 }
 
 func (t *DeleteWorkflow) Parameters() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"id": {"type": "string", "description": "Workflow ID (wf_xxx)"}
+			"id": {"type": "string"}
 		},
 		"required": ["id"]
 	}`)

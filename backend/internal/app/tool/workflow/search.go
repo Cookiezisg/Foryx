@@ -19,10 +19,7 @@ type SearchWorkflow struct {
 func (t *SearchWorkflow) Name() string { return "search_workflow" }
 
 func (t *SearchWorkflow) Description() string {
-	return "Search the user's workflow library by case-insensitive substring " +
-		"over name / description / tags. Returns up to limit (default 10) " +
-		"matches with id, name, description, tags, enabled, activeVersionId, " +
-		"and needsAttention flag."
+	return "Search the user's workflows by substring over name/description/tags (empty=list all). Returns id, name, description, tags, enabled, activeVersionId, needsAttention."
 }
 
 func (t *SearchWorkflow) Parameters() json.RawMessage {

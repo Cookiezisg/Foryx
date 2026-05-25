@@ -32,24 +32,9 @@ type EditHandler struct {
 func (t *EditHandler) Name() string { return "edit_handler" }
 
 func (t *EditHandler) Description() string {
-	return `Edit an existing handler by applying ops. Same op shapes as create_handler
-(see that tool's description for the full cheatsheet + body contract rules).
+	return `Edit a handler by applying ops (same op shapes as create_handler). Creates/iterates a pending version awaiting user accept; pass ops=[] to force-rebuild the active version's env. Use update_method for in-place body changes (JSON Merge Patch). A failed venv install triggers an internal env-fix loop (≤3 LLM dep-revision retries).
 
-Creates (or iterates) a pending version. Pass ops=[] to force-rebuild the active
-version's env (D-redo-22). Use update_method for in-place method body changes
-(JSON Merge Patch). If the venv install fails, an internal env-fix loop retries
-up to 3 times by asking the LLM to revise the dependency list.
-
-CRITICAL — METHOD BODY CONTRACT (2026-05):
-Method/init bodies use BARE NAMES from the schema (NOT args["x"] dict access).
-The framework explodes initArgsSchema / method.args into Python named params:
-  def __init__(self, dsn: str, port: int = 5432):  ← framework generates this
-      self.x = dsn                                  ← you write the body
-  def query(self, sql: str):                        ← framework generates
-      return self.run(sql)                          ← bare name 'sql', not args["sql"]
-
-When using update_method to fix a body, write bare names matching the method's
-declared args. The previous dict-style ('args["key"]') is no longer valid.`
+BODY CONTRACT: method/init bodies use BARE NAMES from the schema — write 'self.x = dsn' not 'self.x = init_args["dsn"]'; write 'return self.run(sql)' not 'args["sql"]'.`
 }
 
 func (t *EditHandler) Parameters() json.RawMessage {

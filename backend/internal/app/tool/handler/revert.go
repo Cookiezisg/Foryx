@@ -16,7 +16,7 @@ type RevertHandler struct {
 func (t *RevertHandler) Name() string { return "revert_handler" }
 
 func (t *RevertHandler) Description() string {
-	return "Revert a handler's active version pointer to a previously-accepted version number."
+	return "Point a handler's active version at a previously-accepted version number."
 }
 
 func (t *RevertHandler) Parameters() json.RawMessage {

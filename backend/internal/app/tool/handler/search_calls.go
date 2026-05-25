@@ -18,11 +18,7 @@ type SearchHandlerCalls struct {
 func (t *SearchHandlerCalls) Name() string { return "search_handler_calls" }
 
 func (t *SearchHandlerCalls) Description() string {
-	return "Search the handler call log. Filter by handlerId / versionId / method / " +
-		"instanceId / ownerKind / status (ok|failed|cancelled|timeout) / conversationId / " +
-		"flowrunId / since-until ISO8601. Returns 200-byte previews + aggregates (ok/" +
-		"failed/cancelled/timeout counts + avg/p95 elapsed_ms). Use get_handler_call to " +
-		"drill into full input/output by id."
+	return "Search the handler call log (filters: handlerId, versionId, method, instanceId, ownerKind, status, conversationId, flowrunId, since/until as RFC3339). Returns 200-byte input/output previews + aggregates (per-status counts, avg/p95 elapsedMs). Drill into one call via get_handler_call."
 }
 
 func (t *SearchHandlerCalls) Parameters() json.RawMessage {

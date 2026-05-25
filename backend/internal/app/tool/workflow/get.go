@@ -16,17 +16,14 @@ type GetWorkflow struct {
 func (t *GetWorkflow) Name() string { return "get_workflow" }
 
 func (t *GetWorkflow) Description() string {
-	return "Get full details of a workflow including the parsed graph " +
-		"(nodes / edges / variables) of the active version and the pending " +
-		"version if one exists. Use before edit_workflow to inspect the " +
-		"current shape."
+	return "Get a workflow with the parsed graph (nodes/edges/variables) of its active and pending versions. Use before edit_workflow to inspect current shape."
 }
 
 func (t *GetWorkflow) Parameters() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
 		"properties": {
-			"id": {"type": "string", "description": "Workflow ID (wf_xxx)"}
+			"id": {"type": "string"}
 		},
 		"required": ["id"]
 	}`)
