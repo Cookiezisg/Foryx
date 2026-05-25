@@ -272,10 +272,10 @@ CSS:把原型的 `.set-*`/section/手风琴样式(参照 §9 风格规约,radius
   - 模型改变 = 同上 upsert(若该 key 是对话默认)。
 - "+ API Key" 加号 → 本地 `adding` state 切换出 `<ProviderGrid providers={llm} configured={已有key的provider} onPick>` + 选中后 `<KeyVerifyField>`(create→test 流,复用引导页 verify 逻辑)+ `<ModelSelect>` + 保存(写 api-key,若用户勾对话默认则 upsert model-config)。
 
-- [ ] Step 1: 写组件(按上)。
-- [ ] Step 2: ApiKeysSection.test.jsx(mock config hooks):列表渲染;"+ API Key"→ ProviderGrid 出现;选 provider→KeyVerifyField 出现;验证成功→ ModelSelect 出现。
-- [ ] Step 3: build + vitest。
-- [ ] Step 4: 提交 `feat(frontend): settings ApiKeysSection (key-centric + onboarding-style add)`。
+- [x] Step 1: 写组件(按上)。
+- [x] Step 2: ApiKeysSection.test.jsx(mock config hooks):列表渲染;"+ API Key"→ ProviderGrid 出现;选 provider→KeyVerifyField 出现;验证成功→ ModelSelect 出现。
+- [x] Step 3: build + vitest。
+- [x] Step 4: 提交 `feat(frontend): settings ApiKeysSection (key-centric + onboarding-style add)`。
 
 ---
 
