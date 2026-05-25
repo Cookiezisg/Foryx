@@ -10,7 +10,6 @@ vi.mock("../../api/forge.js", () => ({
   useWorkflows: () => ({ data: [{ id: "wf_1", name: "Flow" }] }),
 }));
 vi.mock("../../api/library.js", () => ({
-  useSkills:    () => ({ data: [{ id: "sk_1", name: "Helper" }] }),
   useDocuments: () => ({ data: [{ id: "doc_1", name: "Notes" }] }),
 }));
 
@@ -68,8 +67,9 @@ describe("Composer", () => {
     render(<Composer onSend={() => {}} />);
     const ta = screen.getByPlaceholderText(/告诉我/);
     await userEvent.type(ta, "@");
-    expect(screen.getByText(/addNumbers/)).toBeInTheDocument();
-    expect(screen.getByText(/Helper/)).toBeInTheDocument();
+    expect(screen.getByText(/addNumbers/)).toBeInTheDocument(); // function
+    expect(screen.getByText(/Notes/)).toBeInTheDocument();      // document
+    expect(screen.queryByText(/Helper/)).not.toBeInTheDocument(); // skill excluded by design
   });
 
   it("mentionPick_addsToMentionList_andClearsAtToken", async () => {
