@@ -62,6 +62,7 @@ type Service struct {
 	keyProvider   apikeydomain.KeyProvider
 	llmFactory    *llminfra.Factory
 	tools         []toolapp.Tool
+	toolset       toolapp.Toolset
 	emitter       eventlogpkg.Emitter
 	notifications notificationspkg.Publisher
 	dataDir       string
@@ -155,6 +156,16 @@ func (s *Service) emitUserMessage(ctx context.Context, msg *chatdomain.Message) 
 // SetTools 注入 system tools 到 ReAct Agent。
 func (s *Service) SetTools(tools []toolapp.Tool) {
 	s.tools = tools
+}
+
+// SetToolset stores the partitioned toolset; host.Tools() returns the full set (Resident + all Lazy)
+// so behavior is unchanged until T8 gates lazy groups behind activate_tools.
+//
+// SetToolset 存储拆分后的 toolset；host.Tools() 返全集（Resident + 全部 Lazy），
+// 行为不变，直到 T8 用 activate_tools 按需加载 Lazy 组。
+func (s *Service) SetToolset(ts toolapp.Toolset) {
+	s.toolset = ts
+	s.tools = ts.All()
 }
 
 // SetSystemPromptProvider plugs the Capability Catalog; nil-tolerant.

@@ -15,6 +15,9 @@ type AgentState struct {
 	cwd   string
 
 	activeSkill activeSkillSlot
+
+	groupMu         sync.Mutex
+	activatedGroups map[string]bool
 }
 
 // MarkRead records path as Read this conversation with its current size.

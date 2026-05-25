@@ -55,6 +55,7 @@ import (
 	skilltool "github.com/sunweilin/forgify/backend/internal/app/tool/skill"
 	subagenttool "github.com/sunweilin/forgify/backend/internal/app/tool/subagent"
 	todotool "github.com/sunweilin/forgify/backend/internal/app/tool/todo"
+	toolsettool "github.com/sunweilin/forgify/backend/internal/app/tool/toolset"
 	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
 	workflowtool "github.com/sunweilin/forgify/backend/internal/app/tool/workflow"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
@@ -546,7 +547,15 @@ func main() {
 	tools = append(tools, mcptool.MCPCallLogTools(mcpCallRepo)...)
 	tools = append(tools, skilltool.SkillExecutionTools(skillExecRepo)...)
 
-	chatService.SetTools(tools)
+	// Partition into Resident + Lazy groups; activate_tools is injected as RESIDENT.
+	// T8 will switch host.Tools() to return only the activated subset; today All() = full set.
+	//
+	// 分拆为 Resident + Lazy 组；activate_tools 注入为 RESIDENT。
+	// T8 将把 host.Tools() 改成只返已激活子集；目前 All() = 全集。
+	ts := buildToolset(tools)
+	ts.Resident = append(ts.Resident, toolsettool.NewActivateTools(ts))
+	chatService.SetToolset(ts)
+	tools = ts.All()
 
 	listener, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", *port))
 	if err != nil {
@@ -668,5 +677,76 @@ func registerSandboxStack(svc *sandboxapp.Service, _ *zap.Logger) {
 	}
 	svc.RegisterEnvManager(sandboxinfra.NewPythonEnvManager(svc))
 	svc.RegisterEnvManager(sandboxinfra.NewNodeEnvManager())
+}
+
+// lazyGroups is the closed name→category mapping for tools that belong to lazy groups.
+// Any tool Name() absent from this map lands in Resident automatically.
+//
+// lazyGroups 是 lazy 工具 Name()→category 的封闭映射；不在表中的 Name() 自动归 Resident。
+var lazyGroups = map[string]string{
+	// function group
+	"create_function":          "function",
+	"edit_function":            "function",
+	"delete_function":          "function",
+	"revert_function":          "function",
+	"get_function":             "function",
+	"get_function_execution":   "function",
+	"search_function_executions": "function",
+	// handler group
+	"create_handler":       "handler",
+	"edit_handler":         "handler",
+	"delete_handler":       "handler",
+	"revert_handler":       "handler",
+	"get_handler":          "handler",
+	"update_handler_config": "handler",
+	"get_handler_call":     "handler",
+	"search_handler_calls": "handler",
+	// workflow group
+	"create_workflow":             "workflow",
+	"edit_workflow":               "workflow",
+	"delete_workflow":             "workflow",
+	"revert_workflow":             "workflow",
+	"get_workflow":                "workflow",
+	"get_workflow_execution":      "workflow",
+	"search_workflow_executions":  "workflow",
+	"trigger_workflow":            "workflow",
+	// mcp group
+	"call_mcp_tool":         "mcp",
+	"install_mcp_server":    "mcp",
+	"uninstall_mcp_server":  "mcp",
+	"list_mcp_marketplace":  "mcp",
+	"get_mcp_call":          "mcp",
+	"search_mcp_calls":      "mcp",
+	// document group
+	"create_document": "document",
+	"edit_document":   "document",
+	"delete_document": "document",
+	"move_document":   "document",
+	"read_document":   "document",
+	"list_documents":  "document",
+	"search_documents": "document",
+	// skill group
+	"get_skill_execution":    "skill",
+	"search_skill_executions": "skill",
+}
+
+// buildToolset partitions all assembled tools into Resident + Lazy groups.
+// Tools whose Name() has no lazyGroups entry are resident.
+// Any unrecognised Name() is logged below — here we panic so misconfiguration is caught at startup.
+//
+// buildToolset 把所有已装配工具分入 Resident + Lazy 组。
+// Name() 不在 lazyGroups 中的归 Resident；不认识的 Name() 在此捕获。
+func buildToolset(all []toolapp.Tool) toolapp.Toolset {
+	ts := toolapp.Toolset{
+		Lazy: make(map[string][]toolapp.Tool),
+	}
+	for _, t := range all {
+		if cat, ok := lazyGroups[t.Name()]; ok {
+			ts.Lazy[cat] = append(ts.Lazy[cat], t)
+		} else {
+			ts.Resident = append(ts.Resident, t)
+		}
+	}
+	return ts
 }
 
