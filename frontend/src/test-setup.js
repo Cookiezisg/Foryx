@@ -10,22 +10,6 @@ afterEach(() => cleanup());
 
 i18n.changeLanguage("zh"); // resources eager 已在内存,同步生效;t() 立即返回中文
 
-// jsdom ships localStorage but vitest's module isolation occasionally
-// races with zustand-persist hydration. Force a deterministic in-memory
-// shim so persist middleware finds setItem/getItem regardless.
-if (typeof globalThis.localStorage === "undefined" ||
-    typeof globalThis.localStorage.setItem !== "function") {
-  const m = new Map();
-  globalThis.localStorage = {
-    getItem: (k) => (m.has(k) ? m.get(k) : null),
-    setItem: (k, v) => m.set(k, String(v)),
-    removeItem: (k) => m.delete(k),
-    clear: () => m.clear(),
-    key: (i) => Array.from(m.keys())[i] ?? null,
-    get length() { return m.size; },
-  };
-}
-
 if (typeof window !== "undefined") {
   if (!window.matchMedia) {
     window.matchMedia = (q) => ({

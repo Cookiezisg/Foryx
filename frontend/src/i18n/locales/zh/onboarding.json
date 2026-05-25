@@ -1,0 +1,92 @@
+{
+  "brandSub": "本地 AI 工作台 · v1.2",
+  "footer1": "数据本地存储于",
+  "footer2": "不上传 · 无需登录",
+  "stepWord": "步骤",
+  "back": "上一步",
+  "next": "继续",
+  "start": "开始",
+  "skip": "跳过",
+  "enter": "进入 Forgify",
+  "auto": "已根据系统",
+  "journey": {
+    "welcome": ["欢迎", "了解 Forgify"],
+    "workspace": ["工作空间", "命名"],
+    "appearance": ["外观", "主题与语言"],
+    "model": ["模型", "API Key 与模型"],
+    "search": ["搜索", "可选"],
+    "done": ["完成", "开始使用"]
+  },
+  "welcome": {
+    "kicker": "第 1 步 · 欢迎",
+    "title": "欢迎使用 Forgify",
+    "sub": "本地优先的 AI agent 工作台。用自然语言驱动它完成任务,并将过程沉淀为可复用的工具。",
+    "features": [
+      ["对话驱动", "描述目标,agent 自主选择工具、编写代码、运行工作流。"],
+      ["能力沉淀", "协助构建 Function、Handler、Workflow,内置版本管理与回滚。"],
+      ["本地运行", "数据存储于本地,不上传云端,无需登录。"]
+    ]
+  },
+  "workspace": {
+    "kicker": "第 2 步 · 工作空间",
+    "title": "创建工作空间",
+    "sub": "为工作空间命名。后续可在设置中新增或切换,各空间的数据相互隔离。",
+    "label": "工作空间名称",
+    "placeholder": "例如 个人 / 工作 / 写作",
+    "hint": "显示在侧边栏底部。切换工作空间时仅切换该空间的数据。"
+  },
+  "appearance": {
+    "kicker": "第 3 步 · 外观",
+    "title": "外观与语言",
+    "sub": "语言与主题已根据系统设置自动选择,可随时调整。以下均可在「设置」中修改。",
+    "accent": "主题色",
+    "language": "语言",
+    "theme": "主题",
+    "themeOpts": {
+      "light": "浅色",
+      "dark": "深色",
+      "system": "跟随系统"
+    }
+  },
+  "model": {
+    "kicker": "第 4 步 · 模型",
+    "title": "配置模型",
+    "sub": "选择厂商、填入 API Key,验证后选择要使用的模型。也可稍后在「设置」中配置。",
+    "providerLabel": "模型服务商",
+    "scrollNote": "可滚动查看全部厂商",
+    "keyLabel": "{{provider}} API Key",
+    "keyPlaceholder": "sk-…",
+    "verify": "验证并获取模型",
+    "verifying": "验证中…",
+    "verified": "已验证",
+    "modelLabel": "模型",
+    "verifyFail": "验证未通过 —— 请检查 API Key 是否正确",
+    "availHint": "可用模型:{{list}}(下拉切换)"
+  },
+  "search": {
+    "kicker": "第 5 步 · 联网搜索",
+    "optional": "· 可选",
+    "title": "联网搜索",
+    "sub": "配置一个搜索服务,agent 即可联网检索资料。不配也能正常使用 —— 需要时在「设置」里再加。",
+    "providerLabel": "搜索服务商",
+    "keyLabel": "{{provider}} API Key",
+    "keyPlaceholder": "填入 key,或跳过此步"
+  },
+  "done": {
+    "title": "设置完成",
+    "sub": "一切就绪。开始你的第一个对话,或让 agent 为你构建第一个工具。",
+    "recap": {
+      "workspace": "工作空间",
+      "accent": "主题色",
+      "model": "模型",
+      "search": "搜索"
+    },
+    "none": "稍后"
+  },
+  "toast": {
+    "keyVerified": "API Key 已验证",
+    "keyFail": "Key 已保存,但验证未通过",
+    "opFail": "操作失败",
+    "welcome": "欢迎使用 Forgify"
+  }
+}

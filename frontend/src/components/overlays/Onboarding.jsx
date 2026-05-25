@@ -13,7 +13,9 @@
 // 6 步 toB 首启向导。workspace 步即建 user(后续步才能写 user 作用域的 key);
 // App 的 latch 保证建 user 后不被卸载。finish 置 onboarded。
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
+import i18n from "../../i18n/index.js";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../primitives/Icon.jsx";
@@ -22,7 +24,7 @@ import { useSettings } from "../../store/settings.js";
 import { useUIStore } from "../../store/ui.js";
 import { useCreateUser } from "../../api/users.js";
 import { useProviders, useCreateApiKey, useTestApiKey, useUpsertModelConfig, useDeleteApiKey } from "../../api/config.js";
-import { STRINGS, ACCENTS, LLM_HINTS, SEARCH_HINTS, PROVIDER_DEFAULT_MODEL } from "./onboarding-strings.js";
+import { ACCENTS, LLM_HINTS, SEARCH_HINTS, PROVIDER_DEFAULT_MODEL } from "./onboarding-strings.js";
 import { ProviderGrid } from "../config/ProviderGrid.jsx";
 import { KeyVerifyField } from "../config/KeyVerifyField.jsx";
 import { ModelSelect } from "../config/ModelSelect.jsx";
@@ -36,7 +38,10 @@ export function Onboarding({ onFinish }) {
   const settings = useSettings();
   const qc = useQueryClient();
   const pushToast = useUIStore((s) => s.pushToast);
-  const t = STRINGS[settings.lang] || STRINGS.zh;
+  const { t } = useTranslation("onboarding");
+
+  // Sync settings.lang → i18n when changed inside the wizard (before App mounts).
+  useEffect(() => { i18n.changeLanguage(settings.lang); }, [settings.lang]);
 
   const createUser = useCreateUser();
   const { data: providers = [] } = useProviders();
@@ -73,7 +78,7 @@ export function Onboarding({ onFinish }) {
   const run = async (fn) => {
     setBusy(true);
     try { await fn(); }
-    catch (err) { pushToast({ kind: "error", title: t.toast.opFail, desc: err.message }); }
+    catch (err) { pushToast({ kind: "error", title: t("toast.opFail"), desc: err.message }); }
     finally { setBusy(false); }
   };
 
@@ -124,10 +129,10 @@ export function Onboarding({ onFinish }) {
       setModels(opts);
       setModelId(opts[0] || "");
       setVerified(true);
-      pushToast({ kind: "success", title: t.toast.keyVerified });
+      pushToast({ kind: "success", title: t("toast.keyVerified") });
     } catch {
       setVerified(false);
-      setVerifyError(t.model.verifyFail);
+      setVerifyError(t("model.verifyFail"));
     } finally {
       setVerifying(false);
     }
@@ -136,7 +141,7 @@ export function Onboarding({ onFinish }) {
   const finish = () => {
     settings.set({ onboarded: true });
     qc.invalidateQueries();
-    pushToast({ kind: "success", title: t.toast.welcome, desc: name.trim() });
+    pushToast({ kind: "success", title: t("toast.welcome"), desc: name.trim() });
     onFinish?.();
   };
 
@@ -167,8 +172,8 @@ export function Onboarding({ onFinish }) {
   const jdesc = (key, fallback) => {
     if (key === "workspace" && createdUserId) return name.trim();
     if (key === "appearance" && step > 2) return `${settings.accent} · ${settings.lang === "zh" ? "中文" : "EN"}`;
-    if (key === "model" && step > 3) return verified ? providerDisplay(provider) : t.done.none;
-    if (key === "search" && step > 4) return searchProvider ? providerDisplay(searchProvider) : t.done.none;
+    if (key === "model" && step > 3) return verified ? providerDisplay(provider) : t("done.none");
+    if (key === "search" && step > 4) return searchProvider ? providerDisplay(searchProvider) : t("done.none");
     return fallback;
   };
 
@@ -186,12 +191,12 @@ export function Onboarding({ onFinish }) {
               <div className="onb-mark">{ANVIL}</div>
               <div>
                 <div className="onb-brand-name">Forgify</div>
-                <div className="onb-brand-sub">{t.brandSub}</div>
+                <div className="onb-brand-sub">{t("brandSub")}</div>
               </div>
             </div>
             <div className="onb-journey">
               {STEP_KEYS.map((key, i) => {
-                const [jt, jd] = t.journey[key];
+                const [jt, jd] = t(`journey.${key}`, { returnObjects: true });
                 const cls = "onb-jstep" + (i === step ? " is-active" : "") + (i < step ? " is-done" : "");
                 return (
                   <div key={key} className={cls}>
@@ -207,7 +212,7 @@ export function Onboarding({ onFinish }) {
             </div>
             <div className="onb-foot">
               <Icon.KeyRound />
-              <span>{t.footer1} <code>~/.forgify/</code><br />{t.footer2}</span>
+              <span>{t("footer1")} <code>~/.forgify/</code><br />{t("footer2")}</span>
             </div>
           </aside>
 
@@ -236,19 +241,19 @@ export function Onboarding({ onFinish }) {
             <div className="onb-actions">
               {stepKey !== "done" && (
                 <div className="onb-progress">
-                  <div className="onb-progress-label">{t.stepWord} {step + 1} / {STEP_KEYS.length}</div>
+                  <div className="onb-progress-label">{t("stepWord")} {step + 1} / {STEP_KEYS.length}</div>
                   <div className="onb-progress-track">
                     <div className="onb-progress-fill" style={{ width: `${((step + 1) / STEP_KEYS.length) * 100}%` }} />
                   </div>
                 </div>
               )}
               {stepKey === "search" ? (
-                <Button variant="ghost" size="sm" onClick={advance} disabled={busy}>{t.skip}</Button>
+                <Button variant="ghost" size="sm" onClick={advance} disabled={busy}>{t("skip")}</Button>
               ) : step > 0 && stepKey !== "done" ? (
-                <Button variant="ghost" size="sm" onClick={back} disabled={busy}>← {t.back}</Button>
+                <Button variant="ghost" size="sm" onClick={back} disabled={busy}>← {t("back")}</Button>
               ) : null}
               <Button variant="accent" size="sm" onClick={handleNext} disabled={!canNext() || busy} loading={busy}>
-                {stepKey === "done" ? t.enter : stepKey === "welcome" ? t.start : t.next}
+                {stepKey === "done" ? t("enter") : stepKey === "welcome" ? t("start") : t("next")}
                 <Icon.ArrowRight />
               </Button>
             </div>
@@ -263,11 +268,11 @@ function Welcome({ t }) {
   const icons = [Icon.MessageSquare, Icon.Wrench, Icon.Server];
   return (
     <>
-      <div className="onb-kicker">{t.welcome.kicker}</div>
-      <div className="onb-title">{t.welcome.title}</div>
-      <div className="onb-sub">{t.welcome.sub}</div>
+      <div className="onb-kicker">{t("welcome.kicker")}</div>
+      <div className="onb-title">{t("welcome.title")}</div>
+      <div className="onb-sub">{t("welcome.sub")}</div>
       <div className="onb-features">
-        {t.welcome.features.map(([title, desc], i) => {
+        {t("welcome.features", { returnObjects: true }).map(([title, desc], i) => {
           const I = icons[i];
           return (
             <div className="onb-feature" key={i}>
@@ -285,15 +290,15 @@ function Workspace({ t, name, setName, accent }) {
   const color = ACCENTS.find(([k]) => k === accent)?.[1] || "#d97757";
   return (
     <>
-      <div className="onb-kicker">{t.workspace.kicker}</div>
-      <div className="onb-title">{t.workspace.title}</div>
-      <div className="onb-sub">{t.workspace.sub}</div>
+      <div className="onb-kicker">{t("workspace.kicker")}</div>
+      <div className="onb-title">{t("workspace.title")}</div>
+      <div className="onb-sub">{t("workspace.sub")}</div>
       <div className="onb-ws">
         <div className="onb-avatar" style={{ background: color }}>{name.trim().slice(0, 1).toUpperCase() || "W"}</div>
         <div className="onb-field">
-          <div className="onb-label">{t.workspace.label}</div>
-          <input className="onb-input" placeholder={t.workspace.placeholder} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
-          <div className="onb-hint">{t.workspace.hint}</div>
+          <div className="onb-label">{t("workspace.label")}</div>
+          <input className="onb-input" placeholder={t("workspace.placeholder")} value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+          <div className="onb-hint">{t("workspace.hint")}</div>
         </div>
       </div>
     </>
@@ -303,12 +308,12 @@ function Workspace({ t, name, setName, accent }) {
 function Appearance({ t, settings }) {
   return (
     <>
-      <div className="onb-kicker">{t.appearance.kicker}</div>
-      <div className="onb-title">{t.appearance.title}</div>
-      <div className="onb-sub">{t.appearance.sub}</div>
+      <div className="onb-kicker">{t("appearance.kicker")}</div>
+      <div className="onb-title">{t("appearance.title")}</div>
+      <div className="onb-sub">{t("appearance.sub")}</div>
 
       <div className="onb-fg">
-        <div className="onb-label">{t.appearance.accent}</div>
+        <div className="onb-label">{t("appearance.accent")}</div>
         <div className="onb-swatches">
           {ACCENTS.map(([k, c]) => (
             <button key={k} className={"onb-swatch" + (settings.accent === k ? " is-active" : "")} style={{ background: c }} onClick={() => settings.set({ accent: k })} />
@@ -317,7 +322,7 @@ function Appearance({ t, settings }) {
       </div>
 
       <div className="onb-fg">
-        <div className="onb-label">{t.appearance.language} <span className="onb-auto">{t.auto}</span></div>
+        <div className="onb-label">{t("appearance.language")} <span className="onb-auto">{t("auto")}</span></div>
         <div className="onb-seg">
           {[["zh", "中文"], ["en", "English"]].map(([k, label]) => (
             <button key={k} className={"onb-seg-opt" + (settings.lang === k ? " is-active" : "")} onClick={() => settings.set({ lang: k })}>{label}</button>
@@ -326,9 +331,9 @@ function Appearance({ t, settings }) {
       </div>
 
       <div className="onb-fg">
-        <div className="onb-label">{t.appearance.theme} <span className="onb-auto">{t.auto}</span></div>
+        <div className="onb-label">{t("appearance.theme")} <span className="onb-auto">{t("auto")}</span></div>
         <div className="onb-seg">
-          {[["light", t.appearance.themeOpts.light], ["dark", t.appearance.themeOpts.dark], ["system", t.appearance.themeOpts.system]].map(([k, label]) => (
+          {[["light", t("appearance.themeOpts.light")], ["dark", t("appearance.themeOpts.dark")], ["system", t("appearance.themeOpts.system")]].map(([k, label]) => (
             <button key={k} className={"onb-seg-opt" + (settings.theme === k ? " is-active" : "")} onClick={() => settings.set({ theme: k })}>{label}</button>
           ))}
         </div>
@@ -342,39 +347,39 @@ function Model({ t, providers, provider, pickProvider, apiKey, onKeyChange, veri
   const display = providers.find((p) => p.name === provider)?.displayName || provider;
   return (
     <>
-      <div className="onb-kicker">{t.model.kicker}</div>
-      <div className="onb-title">{t.model.title}</div>
-      <div className="onb-sub">{t.model.sub}</div>
+      <div className="onb-kicker">{t("model.kicker")}</div>
+      <div className="onb-title">{t("model.title")}</div>
+      <div className="onb-sub">{t("model.sub")}</div>
       <ProviderGrid providers={providers} hints={LLM_HINTS} selected={provider} onPick={pickProvider} />
-      <div className="onb-scrollnote">{t.model.scrollNote}</div>
+      <div className="onb-scrollnote">{t("model.scrollNote")}</div>
 
       {provider && (
         <>
           <div className="onb-twofield">
             <div className="onb-keyfield" style={{ flex: 1.3 }}>
               <KeyVerifyField
-                label={isOllama ? display : t.model.keyLabel(display)}
+                label={isOllama ? display : t("model.keyLabel", { provider: display })}
                 value={isOllama ? "localhost:11434" : apiKey}
                 onChange={onKeyChange}
                 onVerify={verify}
                 verifying={verifying}
                 verified={verified}
                 error={verifyError}
-                verifyLabel={t.model.verify}
-                verifyingLabel={t.model.verifying}
-                verifiedLabel={t.model.verified}
-                placeholder={t.model.keyPlaceholder}
+                verifyLabel={t("model.verify")}
+                verifyingLabel={t("model.verifying")}
+                verifiedLabel={t("model.verified")}
+                placeholder={t("model.keyPlaceholder")}
                 readOnly={isOllama}
               />
             </div>
             {verified && models.length > 0 && (
               <div className="onb-keyfield" style={{ flex: 1 }}>
-                <div className="onb-klabel">{t.model.modelLabel}</div>
+                <div className="onb-klabel">{t("model.modelLabel")}</div>
                 <ModelSelect models={models} value={modelId} onChange={setModelId} />
               </div>
             )}
           </div>
-          {verified && models.length > 0 && <div className="onb-khint">{t.model.availHint(models)}</div>}
+          {verified && models.length > 0 && <div className="onb-khint">{t("model.availHint", { list: models.join(" · ") })}</div>}
         </>
       )}
     </>
@@ -385,19 +390,19 @@ function Search({ t, providers, provider, setProvider, apiKey, setApiKey }) {
   const display = providers.find((p) => p.name === provider)?.displayName || provider;
   return (
     <>
-      <div className="onb-kicker">{t.search.kicker} <span style={{ color: "var(--fg-faint)", fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>{t.search.optional}</span></div>
-      <div className="onb-title">{t.search.title}</div>
-      <div className="onb-sub">{t.search.sub}</div>
+      <div className="onb-kicker">{t("search.kicker")} <span style={{ color: "var(--fg-faint)", fontWeight: 500, textTransform: "none", letterSpacing: 0 }}>{t("search.optional")}</span></div>
+      <div className="onb-title">{t("search.title")}</div>
+      <div className="onb-sub">{t("search.sub")}</div>
       <div className="onb-fg">
-        <div className="onb-label">{t.search.providerLabel}</div>
+        <div className="onb-label">{t("search.providerLabel")}</div>
         <ProviderGrid providers={providers} hints={SEARCH_HINTS} selected={provider} onPick={setProvider} tall />
       </div>
       {provider && (
         <div className="onb-keyfield">
-          <div className="onb-klabel">{t.search.keyLabel(display)}</div>
+          <div className="onb-klabel">{t("search.keyLabel", { provider: display })}</div>
           <div className="onb-kinput is-plain">
             <Icon.KeyRound />
-            <input type="password" placeholder={t.search.keyPlaceholder} value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoFocus />
+            <input type="password" placeholder={t("search.keyPlaceholder")} value={apiKey} onChange={(e) => setApiKey(e.target.value)} autoFocus />
           </div>
         </div>
       )}
@@ -410,13 +415,13 @@ function Done({ t, name, accent, provider, search }) {
   return (
     <>
       <div className="onb-donemark"><Icon.Check /></div>
-      <div className="onb-title">{t.done.title}</div>
-      <div className="onb-sub">{t.done.sub}</div>
+      <div className="onb-title">{t("done.title")}</div>
+      <div className="onb-sub">{t("done.sub")}</div>
       <div className="onb-recap">
-        <Recap label={t.done.recap.workspace} value={name} />
-        <Recap label={t.done.recap.accent}><span className="onb-recap-dot" style={{ background: color }} /></Recap>
-        <Recap label={t.done.recap.model} value={provider} muted={!provider} fallback={t.done.none} />
-        <Recap label={t.done.recap.search} value={search} muted={!search} fallback={t.done.none} />
+        <Recap label={t("done.recap.workspace")} value={name} />
+        <Recap label={t("done.recap.accent")}><span className="onb-recap-dot" style={{ background: color }} /></Recap>
+        <Recap label={t("done.recap.model")} value={provider} muted={!provider} fallback={t("done.none")} />
+        <Recap label={t("done.recap.search")} value={search} muted={!search} fallback={t("done.none")} />
       </div>
     </>
   );
