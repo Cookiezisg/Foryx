@@ -19,11 +19,12 @@ import (
 	permgate "github.com/sunweilin/forgify/backend/internal/app/tool/permissionsgate"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	catalogdomain "github.com/sunweilin/forgify/backend/internal/domain/catalog"
-	memorydomain "github.com/sunweilin/forgify/backend/internal/domain/memory"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	documentdomain "github.com/sunweilin/forgify/backend/internal/domain/document"
 	eventlogdomain "github.com/sunweilin/forgify/backend/internal/domain/eventlog"
+	memorydomain "github.com/sunweilin/forgify/backend/internal/domain/memory"
+	mentiondomain "github.com/sunweilin/forgify/backend/internal/domain/mention"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	agentstatepkg "github.com/sunweilin/forgify/backend/internal/pkg/agentstate"
@@ -67,11 +68,12 @@ type Service struct {
 	log           *zap.Logger
 	queues        sync.Map
 
-	catalog     catalogdomain.SystemPromptProvider
-	memory      memorydomain.SystemPromptProvider
-	documents   DocumentResolver
-	compactor   ContextCompactor
-	interceptor *toolInterceptor
+	catalog          catalogdomain.SystemPromptProvider
+	memory           memorydomain.SystemPromptProvider
+	documents        DocumentResolver
+	mentionResolvers map[mentiondomain.MentionType]mentiondomain.Resolver
+	compactor        ContextCompactor
+	interceptor      *toolInterceptor
 }
 
 // DocumentResolver is the chat-side port for documentapp.Service —
@@ -185,6 +187,16 @@ func (s *Service) SetDocumentResolver(r DocumentResolver) {
 	s.documents = r
 }
 
+// RegisterMentionResolver wires one capability app's @-mention resolver, keyed by its Type().
+//
+// RegisterMentionResolver 注册一个 app 的 @ resolver，按 Type() 入表。
+func (s *Service) RegisterMentionResolver(r mentiondomain.Resolver) {
+	if s.mentionResolvers == nil {
+		s.mentionResolvers = map[mentiondomain.MentionType]mentiondomain.Resolver{}
+	}
+	s.mentionResolvers[r.Type()] = r
+}
+
 // SetPermissionsAndHooks plugs the V1.2 §3 permissions gate + hook runner.
 // Either arg may be nil → that stage skipped. Call after main constructs
 // the gate / runner; chat.runAgent installs the resulting interceptor
@@ -200,6 +212,7 @@ func (s *Service) SetPermissionsAndHooks(gate *permgate.Gate, hooks *hooksapp.Ru
 type SendInput struct {
 	Content       string
 	AttachmentIDs []string
+	Mentions      []mentiondomain.MentionInput
 }
 
 // UploadAttachment copies bytes to data dir, persists metadata, returns the Attachment.
@@ -248,7 +261,7 @@ func (s *Service) UploadAttachment(ctx context.Context, fileBytes []byte, mimeTy
 //
 // Send 保存用户消息并入队 Agent 任务（202 语义）；队列满返 ErrStreamInProgress。
 func (s *Service) Send(ctx context.Context, conversationID string, in SendInput) (string, error) {
-	if strings.TrimSpace(in.Content) == "" && len(in.AttachmentIDs) == 0 {
+	if strings.TrimSpace(in.Content) == "" && len(in.AttachmentIDs) == 0 && len(in.Mentions) == 0 {
 		return "", fmt.Errorf("chat.Service.Send: %w", chatdomain.ErrEmptyContent)
 	}
 	conv, err := s.convRepo.Get(ctx, conversationID)
@@ -273,6 +286,30 @@ func (s *Service) Send(ctx context.Context, conversationID string, in SendInput)
 			})
 		}
 		attrs["attachments"] = refs
+	}
+	if len(in.Mentions) > 0 {
+		mrefs := make([]mentiondomain.Reference, 0, len(in.Mentions))
+		for _, mi := range in.Mentions {
+			resolver, ok := s.mentionResolvers[mi.Type]
+			if !ok {
+				s.log.Warn("chat.Service.Send: no resolver for mention type; skipping",
+					zap.String("type", string(mi.Type)), zap.String("id", mi.ID))
+				continue
+			}
+			ref, err := resolver.Resolve(ctx, mi.ID)
+			if err != nil {
+				// Deleted / transient / any error → stub; never fail the send.
+				// 删了 / 瞬时 / 任何错误 → stub；绝不因引用毁掉发消息。
+				s.log.Warn("chat.Service.Send: mention resolve failed; storing stub",
+					zap.String("type", string(mi.Type)), zap.String("id", mi.ID), zap.Error(err))
+				mrefs = append(mrefs, mentiondomain.Reference{Type: mi.Type, ID: mi.ID, Name: "(无法加载)"})
+				continue
+			}
+			mrefs = append(mrefs, *ref)
+		}
+		if len(mrefs) > 0 {
+			attrs["mentions"] = mrefs
+		}
 	}
 	var attrsField map[string]any
 	if len(attrs) > 0 {
@@ -323,7 +360,6 @@ func (s *Service) Send(ctx context.Context, conversationID string, in SendInput)
 		zap.Int("queue_depth", len(q.ch)))
 	return msgID, nil
 }
-
 
 // Cancel stops the running Agent and drains pending tasks.
 //

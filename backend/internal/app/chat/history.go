@@ -10,6 +10,7 @@ import (
 	loopapp "github.com/sunweilin/forgify/backend/internal/app/loop"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	eventlogdomain "github.com/sunweilin/forgify/backend/internal/domain/eventlog"
+	mentiondomain "github.com/sunweilin/forgify/backend/internal/domain/mention"
 	chatinfra "github.com/sunweilin/forgify/backend/internal/infra/chat"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 )
@@ -98,6 +99,21 @@ func (s *Service) buildUserLLMMessage(ctx context.Context, m *chatdomain.Message
 	for _, b := range m.Blocks {
 		if b.Type == eventlogdomain.BlockTypeText && b.Content != "" {
 			parts = append(parts, llminfra.ContentPart{Type: "text", Text: b.Content})
+		}
+	}
+
+	if len(m.Attrs) > 0 {
+		if rawMentions, ok := m.Attrs["mentions"]; ok {
+			raw, err := json.Marshal(rawMentions)
+			if err == nil {
+				var refs []mentiondomain.Reference
+				if err := json.Unmarshal(raw, &refs); err != nil {
+					s.log.Warn("chat.Service.buildUserLLMMessage: malformed Message.Attrs mentions; dropped",
+						zap.String("message_id", m.ID), zap.Error(err))
+				} else if len(refs) > 0 {
+					parts = append(parts, llminfra.ContentPart{Type: "text", Text: renderMentionsXML(refs, m.CreatedAt)})
+				}
+			}
 		}
 	}
 
