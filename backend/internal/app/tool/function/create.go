@@ -34,7 +34,8 @@ func (t *CreateFunction) Name() string { return "create_function" }
 func (t *CreateFunction) Description() string {
 	return "Build a new function from ops: set_meta, set_code, set_parameters required; " +
 		"set_return_schema/set_dependencies/set_python_version optional. " +
-		"v1 auto-accepts; failed venv installs auto-retry deps (≤3)."
+		"v1 auto-accepts; failed venv installs auto-retry deps (≤3). " +
+		"Keep the entity description (set_meta.description) to one short line — it appears in the capability menu."
 }
 
 func (t *CreateFunction) Parameters() json.RawMessage {

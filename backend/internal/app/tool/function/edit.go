@@ -33,7 +33,8 @@ func (t *EditFunction) Name() string { return "edit_function" }
 
 func (t *EditFunction) Description() string {
 	return "Apply ops to a function as a pending version for user accept/reject. " +
-		"ops=[] force-rebuilds the active env. Failed venv installs auto-retry deps (≤3)."
+		"ops=[] force-rebuilds the active env. Failed venv installs auto-retry deps (≤3). " +
+		"Keep the entity description (set_meta.description) to one short line — it appears in the capability menu."
 }
 
 func (t *EditFunction) Parameters() json.RawMessage {

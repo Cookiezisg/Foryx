@@ -34,7 +34,9 @@ func (t *EditHandler) Name() string { return "edit_handler" }
 func (t *EditHandler) Description() string {
 	return `Edit a handler by applying ops (same op shapes as create_handler). Creates/iterates a pending version awaiting user accept; pass ops=[] to force-rebuild the active version's env. Use update_method for in-place body changes (JSON Merge Patch). A failed venv install triggers an internal env-fix loop (≤3 LLM dep-revision retries).
 
-BODY CONTRACT: method/init bodies use BARE NAMES from the schema — write 'self.x = dsn' not 'self.x = init_args["dsn"]'; write 'return self.run(sql)' not 'args["sql"]'.`
+BODY CONTRACT: method/init bodies use BARE NAMES from the schema — write 'self.x = dsn' not 'self.x = init_args["dsn"]'; write 'return self.run(sql)' not 'args["sql"]'.
+
+Keep the entity description (set_meta.description) to one short line — it appears in the capability menu.`
 }
 
 func (t *EditHandler) Parameters() json.RawMessage {

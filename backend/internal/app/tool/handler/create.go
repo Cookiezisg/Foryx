@@ -62,7 +62,9 @@ NAMES — strict Python identifier rules (framework rejects invalid):
   - no dashes, no Python keywords (class / def / return / for / if / ...)
   - sensitive=true on init_args masks the value in get_handler / search_handler output
 
-State (self.X) persists across method calls in workflow persistent-instance scope; chat-scope = per-call lifetime (spawn → run → destroy).`
+State (self.X) persists across method calls in workflow persistent-instance scope; chat-scope = per-call lifetime (spawn → run → destroy).
+
+Keep the entity description (set_meta.description) to one short line — it appears in the capability menu.`
 }
 
 func (t *CreateHandler) Parameters() json.RawMessage {

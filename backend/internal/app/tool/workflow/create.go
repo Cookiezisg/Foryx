@@ -46,7 +46,9 @@ SINGLE-OUTPUT NODES (trigger/function/handler/mcp/skill/llm/agent/http/wait/vari
 
 LOOP BODY SUBGRAPH — put {nodes,edges} under config.body. Each iteration binds {{ .loop.item }} and {{ .loop.index }} for template substitution inside body nodes. Default = sequential, fail-fast. Set "parallel":true + "concurrency":N for fan-out (cap 5). Set "onError":"continue" to collect failures instead of stopping. Body output: {out:[terminalNodeOutput×N], count, successes, failures:[{index,error}]}. Body cannot contain approval nodes (V1 limit). Nesting depth ≤ 3.
 
-Schema rejects rule violations at create time with WORKFLOW_OP_INVALID + specific reason.`
+Schema rejects rule violations at create time with WORKFLOW_OP_INVALID + specific reason.
+
+Keep the entity description (set_meta.description) to one short line — it appears in the capability menu.`
 }
 
 func (t *CreateWorkflow) Parameters() json.RawMessage {

@@ -33,7 +33,9 @@ EDIT-ONLY OPS:
   {"op":"delete_edge", "edgeId":"<edgeId>"}
   {"op":"unset_variable", "name":"..."}
 
-Schema validates after every batch — violations return WORKFLOW_OP_INVALID with the specific reason.`
+Schema validates after every batch — violations return WORKFLOW_OP_INVALID with the specific reason.
+
+Keep the entity description (set_meta.description) to one short line — it appears in the capability menu.`
 }
 
 func (t *EditWorkflow) Parameters() json.RawMessage {
