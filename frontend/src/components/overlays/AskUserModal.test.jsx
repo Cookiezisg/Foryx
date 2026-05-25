@@ -24,7 +24,7 @@ describe("AskUserModal", () => {
   it("askOpenWithoutPending_showsEmptyState", () => {
     useUIStore.setState({ askOpen: true });
     render(<AskUserModal />);
-    expect(screen.getByText("Agent 没在等你")).toBeInTheDocument();
+    expect(screen.getByText("agent 现在没在等你")).toBeInTheDocument();
   });
 
   it("pendingAsk_rendersQuestionAndOptions", () => {
@@ -61,7 +61,7 @@ describe("AskUserModal", () => {
       },
     });
     render(<AskUserModal />);
-    const submit = screen.getByText("提交答复").closest("button");
+    const submit = screen.getByRole("button", { name: /提交/ });
     expect(submit.disabled).toBe(true);
   });
 
@@ -74,7 +74,7 @@ describe("AskUserModal", () => {
     });
     render(<AskUserModal />);
     await userEvent.click(screen.getByText("OK"));
-    await userEvent.click(screen.getByText("提交答复"));
+    await userEvent.click(screen.getByRole("button", { name: /提交/ }));
     await waitFor(() => expect(calls.length).toBeGreaterThan(0));
     expect(calls[0].url).toContain("/conversations/cv_p/pending-questions/tc_x:resolve");
     expect(JSON.parse(calls[0].body)).toEqual({ answer: "ok" });

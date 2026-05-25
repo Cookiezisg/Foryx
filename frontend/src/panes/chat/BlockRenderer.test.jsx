@@ -137,7 +137,7 @@ describe("BlockList — 7 block types", () => {
 
     const { container } = render(<BlockList convId={CV} blockIds={["b_sub"]} />);
     expect(container.querySelector(".blk-subagent")).toBeTruthy();
-    expect(container.textContent).toContain("Subagent");
+    expect(container.textContent).toContain("子 agent");
     expect(container.textContent).toContain("research");
     expect(container.textContent).toContain("find foo");
     expect(container.textContent).toContain("1 步");

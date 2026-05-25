@@ -58,13 +58,13 @@ describe("MessageView", () => {
   it("streamingStatus_showsStreamingBadge", () => {
     seedMessage({ id: "m_3", role: "assistant", status: "streaming", blocks: [], createdAt: "2026-01-01" });
     render(<MessageView convId={CV} msgId="m_3" />);
-    expect(screen.getByText("streaming")).toBeInTheDocument();
+    expect(screen.getByText("在写")).toBeInTheDocument();
   });
 
   it("errorStatus_showsErrorBadge", () => {
     seedMessage({ id: "m_4", role: "assistant", status: "error", blocks: [], createdAt: "2026-01-01" });
     render(<MessageView convId={CV} msgId="m_4" />);
-    expect(screen.getByText("error")).toBeInTheDocument();
+    expect(screen.getByText("出错了")).toBeInTheDocument();
   });
 
   it("tokens_renderedInMetaRow", () => {

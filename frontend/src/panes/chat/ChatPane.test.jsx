@@ -64,7 +64,7 @@ describe("ChatPane", () => {
   it("noActiveConv_rendersPlaceholder", () => {
     useUIStore.setState({ activeConv: null });
     render(<ChatPane />, { wrapper: wrap });
-    expect(screen.getByText(/还没选中任何对话/)).toBeInTheDocument();
+    expect(screen.getByText(/还没选中对话/)).toBeInTheDocument();
   });
 
   it("withActiveConv_rendersHeader", () => {

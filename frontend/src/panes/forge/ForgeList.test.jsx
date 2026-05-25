@@ -125,7 +125,7 @@ describe("ForgeList", () => {
     await userEvent.click(screen.getByText("新建"));
     const t = useUIStore.getState().toasts[0];
     expect(t.kind).toBe("info");
-    expect(t.title).toBe("新建走对话");
+    expect(t.title).toBe("在对话里造");
   });
 
   it("noData_emptyStateShown", () => {

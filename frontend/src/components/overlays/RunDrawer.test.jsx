@@ -36,7 +36,7 @@ describe("RunDrawer", () => {
       <RunDrawer open kind="function" entity={{ id: "fn_1", name: "fn" }} onClose={() => {}} />,
       { wrapper: wrap }
     );
-    expect(screen.getByText("试跑 Function")).toBeInTheDocument();
+    expect(screen.getByText("跑 function")).toBeInTheDocument();
   });
 
   it("workflowKind_titleShowsTriggerWorkflow", () => {
@@ -44,7 +44,7 @@ describe("RunDrawer", () => {
       <RunDrawer open kind="workflow" entity={{ id: "wf_1" }} onClose={() => {}} />,
       { wrapper: wrap }
     );
-    expect(screen.getByText("触发 Workflow")).toBeInTheDocument();
+    expect(screen.getByText("触发 workflow")).toBeInTheDocument();
   });
 
   it("handlerKind_methodSelector_showsAvailableMethods", () => {
@@ -65,7 +65,7 @@ describe("RunDrawer", () => {
     await userEvent.clear(ta);
     await userEvent.type(ta, "not json");
     await userEvent.click(screen.getByText("提交"));
-    expect(screen.getByText(/JSON 解析失败/)).toBeInTheDocument();
+    expect(screen.getByText(/JSON 不对/)).toBeInTheDocument();
   });
 
   it("submitFunction_postsRunEndpoint", async () => {

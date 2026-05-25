@@ -38,7 +38,7 @@ describe("SettingsPopover", () => {
   it("opensWithThemeAccentDensityLangControls", () => {
     render(<SettingsPopover />, { wrapper: wrap });
     expect(screen.getByText("主题")).toBeInTheDocument();
-    expect(screen.getByText("Accent")).toBeInTheDocument();
+    expect(screen.getByText("色调")).toBeInTheDocument();
     expect(screen.getByText("密度")).toBeInTheDocument();
     expect(screen.getByText("语言")).toBeInTheDocument();
   });

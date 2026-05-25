@@ -42,22 +42,22 @@ describe("CommandPalette", () => {
 
   it("openState_rendersNavItemsAndSeededEntities", () => {
     render(<CommandPalette />, { wrapper: wrap });
-    expect(screen.getByText("打开对话")).toBeInTheDocument();
+    expect(screen.getAllByText("对话").length).toBeGreaterThan(0);
     expect(screen.getByText("My Chat")).toBeInTheDocument();
     expect(screen.getByText("addNumbers")).toBeInTheDocument();
   });
 
   it("queryFilters_matchesLabelAndDesc", async () => {
     render(<CommandPalette />, { wrapper: wrap });
-    const input = screen.getByPlaceholderText(/搜索/);
+    const input = screen.getByPlaceholderText(/找点什么/);
     await userEvent.type(input, "MyHandler");
     expect(screen.getByText("MyHandler")).toBeInTheDocument();
-    expect(screen.queryByText("打开对话")).toBeNull();
+    expect(screen.queryByText("对话")).toBeNull();
   });
 
   it("emptyMatch_showsEmptyHintMessage", async () => {
     render(<CommandPalette />, { wrapper: wrap });
-    const input = screen.getByPlaceholderText(/搜索/);
+    const input = screen.getByPlaceholderText(/找点什么/);
     await userEvent.type(input, "zzz-nope-zzz");
     expect(screen.getByText(/没有匹配/)).toBeInTheDocument();
   });
@@ -77,7 +77,7 @@ describe("CommandPalette", () => {
 
   it("clickItem_runsActionAndCloses", async () => {
     render(<CommandPalette />, { wrapper: wrap });
-    await userEvent.click(screen.getByText("打开工坊"));
+    await userEvent.click(screen.getByText("工坊"));
     expect(useUIStore.getState().openPanes).toContain("forge");
     expect(useUIStore.getState().cmdkOpen).toBe(false);
   });

@@ -11,22 +11,21 @@ beforeEach(() => {
 });
 
 describe("NoApiKeyGate", () => {
-  it("rendersHeadingAndBothButtons", () => {
+  it("rendersHeadingAndConfigButton", () => {
     render(<NoApiKeyGate />);
-    expect(screen.getByText(/先来配一个 API Key/)).toBeInTheDocument();
-    expect(screen.getByText("查看 Provider 列表")).toBeInTheDocument();
-    expect(screen.getByText(/现在去添加/)).toBeInTheDocument();
+    expect(screen.getByText(/先配一把钥匙/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /去配置/ })).toBeInTheDocument();
   });
 
-  it("clickPrimaryButton_opensConfigPane", async () => {
+  it("clickConfigButton_opensConfigPane", async () => {
     render(<NoApiKeyGate />);
-    await userEvent.click(screen.getByText(/现在去添加/));
+    await userEvent.click(screen.getByRole("button", { name: /去配置/ }));
     expect(useUIStore.getState().openPanes).toContain("config");
   });
 
-  it("clickSecondaryButton_alsoOpensConfigPane", async () => {
+  it("noSecondaryButton_onlyOneActionButton", () => {
     render(<NoApiKeyGate />);
-    await userEvent.click(screen.getByText("查看 Provider 列表"));
-    expect(useUIStore.getState().openPanes).toContain("config");
+    const buttons = screen.getAllByRole("button");
+    expect(buttons).toHaveLength(1);
   });
 });

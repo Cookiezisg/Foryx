@@ -18,7 +18,7 @@ describe("ObservePane", () => {
 
   it("renders_subtitleHintingInteractions", () => {
     render(<ObservePane />);
-    expect(screen.getByText(/拖节点 · 滚轮缩放/)).toBeInTheDocument();
+    expect(screen.getByText(/实体之间的引用关系/)).toBeInTheDocument();
   });
 
   it("mountsRelGraph_inBody", () => {
