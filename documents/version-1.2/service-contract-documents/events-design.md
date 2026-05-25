@@ -5,7 +5,7 @@
 - [`../event-log-protocol.md`](../event-log-protocol.md) — 完整 eventlog 协议设计文档(事件流示例 / 后端架构 / migration SQL)
 - [`../adhoc-topic-documents/forge_redesign/discussions/2026-05-12-env-and-sse-rework.md`](../adhoc-topic-documents/forge_redesign/discussions/2026-05-12-env-and-sse-rework.md) §B-C — SSE 三流统一 + payload 瘦身 的事实源
 - **配套实现**(eventlog):
-  - `domain/eventlog/` — Event 接口 + 5 events + 6 block types + Bridge 接口 + ValidateEvent
+  - `domain/eventlog/` — Event 接口 + 5 events + 7 block types + Bridge 接口 + ValidateEvent
   - `infra/eventlog/` — in-process Bridge(per-user 单调 seq + replay buffer + 慢订阅者阻塞)
   - `pkg/eventlog/` — Emitter (auto-mint ID + ctx-injected) + ctx helpers
 - **配套实现**(notifications):
@@ -23,13 +23,13 @@
 - **历史 refetch**:`GET /api/v1/conversations/{id}/eventlog?from=<seq>`(eventlog 协议 — 410 Gone 时的全态刷新)
 
 **三协议(CLAUDE.md §E1)**:本契约覆盖后端**三条** SSE 流,**永远不再加**(D-redo-5):
-1. **eventlog**(per-user;payload 带 `conversationId`,client demux)— recursive event log 协议(5 events × 6 block types),流式 chat 内容
+1. **eventlog**(per-user;payload 带 `conversationId`,client demux)— recursive event log 协议(5 events × 7 block types),流式 chat 内容
 2. **notifications**(per-user)— 1 通用 envelope,entity 状态变更;`data` 字段瘦身只送 ID + 必要小字段,完整 entity 走 GET 拉取
 3. **forge**(per-user)— 4 events,trinity(function / handler / workflow)的 create/edit/revert/delete 流式锻造
 
 三流共享 Bridge pattern(per-user seq + replay buffer + Last-Event-ID 重连),订阅一律按 user_id key,**没有** `?conversationId=` / `?entityId=` 之类 query 参 — 客户端按 payload 自己 demux / filter。§1-§10 是 eventlog 主体;§11 是 notifications 协议;§12 是 forge 协议;§13 是测试参考。
 
-**遵守标准**:§E1(三协议;eventlog 5 events + 6 block types 封闭;forge 4 events 封闭;notifications 开放词表)/ §E2(eventlog parentId 路由;notifications + forge 按 payload 字段过滤)/ §N7(SSE wire format)/ §S21(事件流 invariants)
+**遵守标准**:§E1(三协议;eventlog 5 events + 7 block types 封闭;forge 4 events 封闭;notifications 开放词表)/ §E2(eventlog parentId 路由;notifications + forge 按 payload 字段过滤)/ §N7(SSE wire format)/ §S21(事件流 invariants)
 
 ---
 
@@ -189,7 +189,7 @@ Conversation (cv_xx)
 | message_id | text NOT NULL idx | 顶层归属 |
 | parent_block_id | text idx | 嵌套用；顶层 block 此列空 |
 | seq | int NOT NULL UNIQUE(conv_id, seq) idx 2 | per-conv 单调（Bridge 分配） |
-| type | text NOT NULL CHECK in 6 值 | block 类型 |
+| type | text NOT NULL CHECK in 7 值 | block 类型（含 compaction）|
 | attrs | text | JSON |
 | content | text NOT NULL DEFAULT '' | append-only 累积 |
 | status | text NOT NULL CHECK in 4 值 | streaming → 终态 |
@@ -247,9 +247,10 @@ type SlimPayload = {
 | `mcp_server` | `app/mcp/Service` | server 增删改 / 重连 / 健康检查 | `{action, status?, error?}` |
 | `skill` | `app/skill/Service.Scan` 轮询 | 添 / 改 / 删 SKILL.md | `{action}`(client 全部重读 skill 库)|
 | `sandbox_env` | `app/sandbox/Service` | env 状态变 / env 软删 | `{action}` |
-| `function` | `app/function/Service` 各 CRUD 端点 | created / updated / pending_created / version_accepted / pending_rejected / reverted / deleted | `{action, versionId?, versionNumber?}`(D-redo-7 删除 `env_synced` / `env_failed` 两 action — env 终态由 LLM tool_result 携带,UI 经 GET 拉)|
-| `handler` | `app/handler/Service` 各 CRUD 端点 | 同 function 7 个 + `config_updated` / `config_cleared` | `{action, versionId?, versionNumber?}`(同 D-redo-7 删除 env action)|
+| `function` | `app/function/Service` 各 CRUD 端点 | created / updated / pending_created / version_accepted / pending_rejected / reverted / deleted | `{action, versionId?, versionNumber?}`(D-redo-7 删除 `env_synced`/`env_failed`;但 `env_rebuilt` 仍在 venv 重建后 emit — `function/crud.go`;env 详情仍经 GET 拉)|
+| `handler` | `app/handler/Service` 各 CRUD 端点 | 同 function 7 个 + `config_updated` / `config_cleared` | `{action, versionId?, versionNumber?}`(同 D-redo-7 删除 env_synced/env_failed;但 `env_rebuilt` 仍 emit — `handler/crud.go`)|
 | `workflow` | `app/workflow/Service` 各 CRUD 端点 | created / updated / pending_created / version_accepted / pending_rejected / reverted / deleted | `{action, versionId?, versionNumber?}`(slim payload D-redo-6;无 env action,workflow 域无 sandbox)|
+| `document` | `app/document/Service` 各 CRUD 路径 | created / updated / deleted 等（开放词表）| `{action}`(slim;UI 经 `GET /api/v1/documents/{id}` 拉详情)|
 | `flowrun` | `app/scheduler/Service` StartRun/finalize/pauseRun/ResumeApproval | started / paused / resumed / completed / failed / cancelled | `{action, workflowId, triggerKind?, nodeID?, decision?, elapsedMs?}`(slim;UI 经 `GET /flowruns/{id}` 拉详情 D-redo-6)|
 | `memory` | `app/memory/Service` 各 mutation 路径 | created / updated / pinned / unpinned / deleted | `{action, name, memType, source}` (slim; UI 经 `GET /api/v1/memories/{name}` 拉全文 — V1.2 §2 final-sweep)|
 | `compaction` | `app/contextmgr/Manager.fullCompact` | completed（暂仅一种 action — 失败仅 log，不推通知）| `{action: "completed", coversToSeq, blocksArchived, summaryBytes}` (slim; UI 经 `GET /api/v1/conversations/{id}` 拉 summary — V1.2 §1 final-sweep)|
@@ -299,7 +300,7 @@ s.notif.Publish(ctx, "function", fnID, slimPayload, convID)
 | 维度 | eventlog | notifications | forge |
 |---|---|---|---|
 | 订阅域 | per-user(无 query)| per-user(无 query)| per-user(无 query)|
-| envelope | 5 封闭事件 × 6 封闭 block type | 1 通用 envelope(type 自由) | 4 封闭事件 × 3 封闭 kind(function/handler/workflow)|
+| envelope | 5 封闭事件 × 7 封闭 block type | 1 通用 envelope(type 自由) | 4 封闭事件 × 3 封闭 kind(function/handler/workflow)|
 | 路由 / demux | `parentId` 递归 + client 按 payload.conversationId 分派 | client 按 type / conversationId 过滤 | client 按 scope.kind / scope.id 过滤 |
 | 演化 | 加事件 / block type 必须改 [`../event-log-protocol.md`](../event-log-protocol.md) | 加 type 字符串即可,无协议升级 | 加 kind 必须改 [`../adhoc-topic-documents/forge_redesign/07-notifications-and-eventlog.md`](../adhoc-topic-documents/forge_redesign/07-notifications-and-eventlog.md);加 event type 同样封闭演化 |
 | 用途 | 流式 chat 内容(含 subagent 嵌套)| entity 状态变更(CRUD action)| trinity entity 锻造流式(ops apply + env attempts)|

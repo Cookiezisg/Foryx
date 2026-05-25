@@ -43,6 +43,19 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 ### 兜底
 未注册到 `errTable` 的错误自动降级为 `500 INTERNAL_ERROR`，原始 message **不**暴露给客户端（防泄漏实现细节）。
 
+### 内联错误码（handler 直接 `Error()` 写，不进 errmap）
+
+部分 handler 不走 sentinel → errmap，而是直接 `responsehttpapi.Error(...)`，故不在下方 errTable 清单里，但客户端会在 wire 上见到：
+
+| Code | HTTP | 位置 | 场景 |
+|---|---|---|---|
+| `ASKAI_NOT_AVAILABLE` | 503 | function / handler / workflow / flowrun handler | `:iterate` / `:triage` 时 askai spawner 未挂载（背书契约端点，最该知晓）|
+| `CONTEXT_STATS_UNAVAILABLE` | 503 | context_stats.go | chat service 未挂 token 统计 |
+| `MCP_COMMAND_REQUIRED` | 400 | mcp.go | 添加 MCP server 缺 `command` 字段 |
+| `UNKNOWN_ACTION` | 404 | sandbox.go | sandbox `:action` 后缀不识别 |
+| `SCHEDULER_NOT_AVAILABLE` | 503 | flowrun / workflow handler | Plan 05 scheduler 未挂时（见下方 §execution plane）|
+| `TRACER_DISABLED` | 503 | dev_mock_llm.go（dev-only）| 非 `--dev` 模式访问 LLM trace |
+
 ---
 
 ## 错误码清单
@@ -58,6 +71,7 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 | `INTERNAL_ERROR` | 500 | `reqctxpkg.ErrMissingUserID` | auth middleware 未跑（接线 bug）。显式登记以抑制 "unmapped" 警告 | ✅ |
 | `INTERNAL_ERROR` | 500 | `reqctxpkg.ErrMissingConversationID` | chat-runner 未在 ctx 印 conversation ID（接线 bug）。todo / ask 工具依赖此 ID | ✅ |
 | `INTERNAL_ERROR` | 500 | `cryptoinfra.ErrUnsupportedVersion` | DB 中密文版本前缀（如 `v2:`）超出当前 encryptor 支持范围（升降级 / 数据损坏）| ✅ |
+| `UNAUTH_NO_USER` | 401 | `errorsdomain.ErrUnauthorizedNoUser` | 请求头无有效 user id（unknown / 缺失）；非 `/users` `/health` 路由都要求有效 id，前端 self-heal 清 id 重建 | ✅ |
 | `NOT_FOUND` | 404 | (middleware 直接发，不走 errmap) | 路由未匹配 | ✅ |
 | `SEQ_TOO_OLD` | 410 | (handler inline，不走 errmap) | SSE replay buffer 超时——client 经 `/api/v1/conversations/{id}/eventlog?from=<seq>` refetch（事件日志）或重订（通知）；handler `/eventlog`+`/notifications` 直写 wire | ✅ |
 | `CLIENT_CLOSED` | 499 | `context.Canceled` (stdlib) | 客户端断开（浏览器 hard refresh / 关 tab）；登记仅为抑制 unmapped warning，响应反正没人收 | ✅ |
@@ -182,6 +196,11 @@ handler 侧调 `response.FromDomainError(w, log, err)` 自动翻译。
 | `HANDLER_CONFIG_INVALID`        | 400 | `handlerdomain.ErrConfigInvalid`       | update_config 提供的值类型不符 schema(V1 占位,Plan 02 V1 没真做 schema check) | ⬜ |
 | `HANDLER_CONFIG_DECRYPT_FAILED` | 500 | `handlerdomain.ErrConfigDecryptFailed` | AES-GCM Decrypt 失败(密钥不对 / 密文损坏);用户不可自愈,需 ClearConfig 重填 | ✅ |
 | `HANDLER_CALL_NOT_FOUND`        | 404 | `handlerdomain.ErrCallNotFound`        | get_handler_call / GET /handler-calls/{id} 查不到 | ✅ |
+| `HANDLER_CALL_FAILED` | 422 | `handlerinfra.ErrCallFailed` | instance 方法调用返回业务失败（infra RPC 层 sentinel）| ✅ |
+| `HANDLER_INIT_FAILED` | 422 | `handlerinfra.ErrInitFailed` | instance `__init__` 执行失败（infra RPC 层）| ✅ |
+| `HANDLER_INSTANCE_CRASHED_INFRA` | 422 | `handlerinfra.ErrCrashed` | infra 层探测到 instance 进程崩溃（与 domain `HANDLER_INSTANCE_CRASHED` 并行）| ✅ |
+| `HANDLER_PROTOCOL_ERROR` | 500 | `handlerinfra.ErrProtocol` | stdio JSON-line RPC 协议错（driver 输出非法帧）| ✅ |
+| `HANDLER_SHUTDOWN_ALREADY` | 422 | `handlerinfra.ErrShutdownAlready` | 对已 shutdown 的 instance 再调用 | ✅ |
 
 **已删除**:`HANDLER_PENDING_CONFLICT`(409,`handlerdomain.ErrPendingConflict`)— Edit 改"iterate same pending"后无冲突场景(D-redo-11)。**新增**:`HANDLER_SANDBOX_UNAVAILABLE`(503,⬜ 待实施)— 跟 function 同 sentinel,D-redo-20。
 
@@ -326,7 +345,7 @@ AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 
 
 | Code | HTTP | Sentinel | 场景 | 状态 |
 |---|---|---|---|---|
-| `INVALID_CONFIG` | 400 | `triggerdomain.ErrInvalidConfig` | webhook spec `signatureAlgo` 未识别 / algo 缺 secret 等（§12.4 HMAC）| ✅ |
+| `INVALID_CONFIG` | 400 | `triggerdomain.ErrInvalidConfig` | webhook spec `signatureAlgo` 未识别 / algo 缺 secret 等（§12.4 HMAC）| ⏳ sentinel 在，但**未进 errTable**；且注册路径暂无非测试 handler 调用方 → 当前不可达，接线后须补 errmap 才返 400（否则落 500）|
 
 ---
 

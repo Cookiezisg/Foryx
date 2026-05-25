@@ -137,7 +137,7 @@ type Error = {
 | POST | `/api/v1/attachments` | 上传附件（multipart，50MB 限制）→ 201 返回 attachment_id |
 | POST | `/api/v1/conversations/{id}/messages` | 发送消息（202，队列化异步 Agent 运行）；body 含 `attachmentIds[]` + `mentions[]`（`{type,id}`，@ 引用实体内容快照进消息，type ∈ document/function/handler/workflow；详见 service-design-documents/mention.md）|
 | DELETE | `/api/v1/conversations/{id}/stream` | 取消正在运行的 Agent（204）；404 STREAM_NOT_FOUND |
-| GET | `/api/v1/conversations/{id}/messages` | 消息历史（cursor 分页，ASC 时序）；每条消息含 `blocks[]`（**6 类型**：text/reasoning/tool_call/tool_result/progress/message）+ `attrs`（user msg 含 `attachments[]` 引用、subagent sub-message 含 `kind=subagent_run`）+ `inputTokens` + `outputTokens`。**注**：附件不是 block 类型，是 `attrs.attachments[]` 引用 `attachments` 表 |
+| GET | `/api/v1/conversations/{id}/messages` | 消息历史（cursor 分页，ASC 时序）；每条消息含 `blocks[]`（**7 类型**：text/reasoning/tool_call/tool_result/progress/message/compaction）+ `attrs`（user msg 含 `attachments[]` 引用、subagent sub-message 含 `kind=subagent_run`）+ `inputTokens` + `outputTokens`。**注**：附件不是 block 类型，是 `attrs.attachments[]` 引用 `attachments` 表 |
 
 ---
 
@@ -153,9 +153,7 @@ type Error = {
 | GET | `/api/v1/functions/{id}` | 详情(含 pending + active version env 状态镜像字段) |
 | PATCH | `/api/v1/functions/{id}` | 改元数据(name/description/tags;code/deps 走 LLM ops 流) |
 | DELETE | `/api/v1/functions/{id}` | 软删(D20 级联:workflow domain 收到 notification 标 needs_attention) |
-| POST | `/api/v1/functions/{id}:run` | 执行(body `{args, version?}`);取消走 caller ctx,无 per-call timeout knob |
-| POST | `/api/v1/functions/{id}:resync` | 强制重建 active version 的 venv(后台);幂等 |
-| POST | `/api/v1/functions/{id}:revert` | 回滚到指定 accepted 版本号 |
+| POST | `/api/v1/functions/{id}:run` | 执行(body `{args, version?}`);取消走 caller ctx,无 per-call timeout knob || POST | `/api/v1/functions/{id}:revert` | 回滚到指定 accepted 版本号 |
 | GET | `/api/v1/functions/{id}/versions` | 版本分页(?status= filter) |
 | GET | `/api/v1/functions/{id}/versions/{v}` | 单版本(integer→ByNumber, fnv_*→ById) |
 | GET | `/api/v1/functions/{id}/pending` | 当前 pending(无则 404 FUNCTION_PENDING_NOT_FOUND) |

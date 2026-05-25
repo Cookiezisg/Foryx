@@ -8,7 +8,7 @@
 ## 项目一句话
 
 - **本地优先 Agentic Workflow Platform**，目标 **Wails 桌面 app**（不做 SaaS）
-- **单人项目**；当前阶段：**V1.2 后端**，Phase 0-3 完成；Phase 4（工作流）/ Phase 5（智能化）未启动
+- **单人项目**；后端 Phase 0-4 完成、Phase 5（智能化）部分交付（document / mcp / skill / memory / compaction ✅；intent / chat 终极版未做）；**当前重心：前端**（V1.2 桌面 app）
 - 架构：**4 层 clean arch**，依赖方向 `transport → app → (domain ∪ infra/store) → infra/db`
 
 ## 文档地图
@@ -34,7 +34,7 @@
 1. **每个 Phase 独立交付价值** — 不会出现"做了 80% 但啥都用不了"
 2. **依赖严格自下而上** — 每个 Phase 只依赖前面已完成的
 3. **复杂度阶梯式增长** — CRUD → 编排 → 智能
-4. **V1.2 后端阶段不动前端** — 开发期用 curl + testend 控制台验证
+4. **前后端分阶段、不并行开发** — 后端 Phase 0-4 已交付定型，现转入前端阶段（见末节"前端开发守则"）；后端如需改动走 curl / testend / `make test-backend` 验证
 5. **端到端推演先行** — 开工前必走完整数据流 + 列出跨域依赖，**不走不开工**
 6. **反校验剧场** — 本地单用户同人写前后端；只保留有价值的校验（JSON 畸形、必填非空、NotFound、DB CHECK/UNIQUE）；加校验前问："前端能防住？下游自然炸？"两者都是则不加
 7. **📌 文档与代码同步（最高优先级）** — 每个代码改动必须伴随文档更新（见 §S14）。**文档落后于代码 = bug**
@@ -76,7 +76,7 @@
 ## SSE（E 系列）
 
 **E1 三协议**（全部 per-user_id 订阅；**SSE 上限三条，永不再加**）：
-- **事件日志** `GET /api/v1/eventlog`：5 events × 6 block types（text/reasoning/tool_call/tool_result/progress/message）；payload 带 `conversationId` + `seq`
+- **事件日志** `GET /api/v1/eventlog`：5 events × 7 block types（text/reasoning/tool_call/tool_result/progress/message/compaction）；payload 带 `conversationId` + `seq`
 - **通知** `GET /api/v1/notifications`：envelope `{type, id, data, conversationId?}`；data 只送轻字段（禁完整 entity）；开放词表
 - **锻造流** `GET /api/v1/forge`：4 events × 3 kinds（function/handler/workflow）；payload 嵌 `scope:{kind,id}`；封闭枚举
 
@@ -94,7 +94,7 @@
 - **S12** 包结构 — 见 §S12
 - **S13** 包命名 — 见 §S13
 - **S14** 📌 文档同步纪律 — 见 §S14（**最高优先级**）
-- **S15** ID 格式：`<prefix>_<16hex>`（`crypto/rand` 8 字节，失败 panic）。前缀：`u_` user / `aki_` apikey / `mc_` model-config / `cv_` conv / `msg_` message / `att_` attachment / `blk_` block / `f_` forge / `fv_` forge-version / `tc_` test-case / `fe_` forge-exec / `b_` batch / `td_` todo / `bsh_` bash-shell / `sar_` subagent-run / `smm_` subagent-msg / `fnenv_` fn-venv / `hdenv_` hd-venv / `rel_` relation / `mch_` mcp-health / `fr_` flowrun / `frn_` flowrun-node
+- **S15** ID 格式：`<prefix>_<16hex>`（`crypto/rand` 8 字节，失败 panic）。前缀（trinity 后实测全集，按域分组）：`u_` user / `aki_` apikey / `mc_` model-config；`cv_` conv / `msg_` message / `blk_` block / `att_` attachment；`fn_` function / `fnv_` function-version / `fne_` function-exec / `fnenv_` fn-venv；`hd_` handler / `hdv_` handler-version / `hcl_` handler-call / `hdi_` handler-instance / `hdenv_` hd-venv；`wf_` workflow / `wfv_` workflow-version；`fr_` flowrun / `frn_` flowrun-node；`mcl_` mcp-call / `mch_` mcp-health / `ske_` skill-exec；`doc_` document / `mem_` memory / `rel_` relation / `td_` todo；`sr_` sandbox-runtime / `se_` sandbox-env / `bsh_` bash-shell。（skill / mcp 实体以 name 作主键、无实体前缀；`ske_`/`mcl_` 是其执行/调用子记录 ID）
 - **S16** 错误包装：`fmt.Errorf("<pkg>.<Method>: %w", err)`；`errors.Is` 必须能从最外层 unwrap 到 sentinel
 - **S17** 每个到达 handler 的 sentinel 必须登记到 `errmap.go::errTable`
 - **S18** Tool 接口规约 — 见 §S18
@@ -240,14 +240,14 @@ type Tool interface {
 - **已摆脱 Eino**：自有 LLM 客户端 `infra/llm`（OpenAI-compat + Anthropic 原生）
 - **modernc.org/sqlite** 纯 Go；DSN 用 `_pragma=...` 语法；跨平台 build 一行命令
 - **桌面端**：Wails 窗口外壳 + 复用 httpapi（不走 Wails native binding）
-- **三条 SSE**：eventlog（5×6）+ notifications（全局 entity 变更）+ forge（4×3）；`domain/events` 已删
+- **三条 SSE**：eventlog（5×7）+ notifications（全局 entity 变更）+ forge（4×3）；`domain/events` 已删
 - **subagent 数据**：统一 `messages` 行（attrs.kind=subagent_run），无独立表
 - **sandbox v2**：捆绑 mise binary（`go:embed`）；`make resources` 拉到 `mise/<goos>-<goarch>/`；v1 已废弃
-- **测试基线**：~170 单测全绿；5 个集成测试因 env 缺 key skip，与基线一致
+- **测试基线**：`make test-backend`（单测，in-memory SQLite）全绿；⚠️ `make e2e`（pipeline tag）当前因 harness 签名漂移（`LocalCtxAs` 签名变 / `reqctxpkg.DefaultLocalUserID` 已删）编译失败、待修；LLM 集成测试缺 key 时优雅 skip
 
 ---
 
-# 前端开发守则（进入前端阶段后生效）
+# 前端开发守则（前端阶段 — 现已生效）
 
 > 前端 PRD 全文见 [`documents/version-1.2/frontend-prd.md`](documents/version-1.2/frontend-prd.md)。
 > 本节是 PRD 的工程纪律摘要，两者不矛盾时以本节为准（本节更简洁）。
