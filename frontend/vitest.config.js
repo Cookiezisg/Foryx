@@ -49,7 +49,6 @@ export default defineConfig({
         "src/components/layout/AppShell.jsx",
         "src/panes/PlaceholderPane.jsx",
         "src/panes/dashboard/Dashboard.jsx",
-        "src/panes/config/ConfigPane.jsx",
         "src/panes/library/DocEditor.jsx",
         "src/panes/library/CodeBlockNode.jsx",
         "src/panes/forge/WorkflowEditor.jsx",
