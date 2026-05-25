@@ -49,30 +49,36 @@ export function ActionMenu({ items, renderTrigger, placement = "bottom-end" }) {
       {trigger}
       {open && (
         <FloatingPortal>
+          {/* Outer = positioning only (Floating UI owns its transform). Inner
+              = the visible menu + entrance animation. Splitting them stops the
+              keyframe transform from overriding the positioning transform,
+              which made the menu animate at (0,0) then snap into place. */}
           <div
             ref={refs.setFloating}
             style={floatingStyles}
-            className="action-menu"
+            className="action-menu-pos"
             {...getFloatingProps()}
           >
-            {items.map((it, i) => {
-              if (it === "divider") return <div key={i} className="action-menu-divider" />;
-              const IconC = it.icon;
-              return (
-                <button
-                  key={i}
-                  className={"action-menu-item" + (it.danger ? " is-danger" : "")}
-                  onClick={() => {
-                    setOpen(false);
-                    it.onClick?.();
-                  }}
-                >
-                  {IconC && <IconC className="icon" />}
-                  <span className="label">{it.label}</span>
-                  {it.shortcut && <kbd>{it.shortcut}</kbd>}
-                </button>
-              );
-            })}
+            <div className="action-menu">
+              {items.map((it, i) => {
+                if (it === "divider") return <div key={i} className="action-menu-divider" />;
+                const IconC = it.icon;
+                return (
+                  <button
+                    key={i}
+                    className={"action-menu-item" + (it.danger ? " is-danger" : "")}
+                    onClick={() => {
+                      setOpen(false);
+                      it.onClick?.();
+                    }}
+                  >
+                    {IconC && <IconC className="icon" />}
+                    <span className="label">{it.label}</span>
+                    {it.shortcut && <kbd>{it.shortcut}</kbd>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </FloatingPortal>
       )}

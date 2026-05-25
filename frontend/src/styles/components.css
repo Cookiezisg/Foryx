@@ -4753,8 +4753,9 @@ tr.is-selected { background: var(--accent-soft) !important; }
    ActionMenu — generic dropdown menu (replaces ad-hoc .conv-more-menu in many places)
    ============================================================================ */
 
+/* Positioning wrapper — Floating UI sets its transform; no animation here. */
+.action-menu-pos { z-index: 1000; }
 .action-menu {
-  z-index: 1000;
   min-width: 184px;
   background: var(--bg-paper);
   border: 1px solid var(--border);
@@ -4762,7 +4763,8 @@ tr.is-selected { background: var(--accent-soft) !important; }
   box-shadow: var(--shadow-popover);
   padding: 6px;
   display: flex; flex-direction: column;
-  animation: action-menu-in 120ms cubic-bezier(.2,.8,.2,1);
+  transform-origin: top center;
+  animation: action-menu-in var(--t-fast) var(--ease);
 }
 @keyframes action-menu-in {
   from { opacity: 0; transform: translateY(-4px) scale(0.98); }
