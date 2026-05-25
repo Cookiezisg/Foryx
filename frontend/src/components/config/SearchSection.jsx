@@ -6,6 +6,7 @@
 // 后端保证同 category 单默认;设置一个即服务端清除其他。
 
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Icon } from "../primitives/Icon.jsx";
 import { Button } from "../primitives/Button.jsx";
 import { useUIStore } from "../../store/ui.js";
@@ -13,7 +14,7 @@ import {
   useApiKeys, useProviders, useCreateApiKey,
   useTestApiKey, useDeleteApiKey, useUpdateApiKey,
 } from "../../api/config.js";
-import { apiFetch } from "../../api/client.js";
+import { apiFetch, qk } from "../../api/client.js";
 import { SEARCH_HINTS } from "../overlays/onboarding-strings.js";
 import { ProviderGrid } from "./ProviderGrid.jsx";
 import { KeyVerifyField } from "./KeyVerifyField.jsx";
@@ -197,6 +198,7 @@ function KeyItem({ apiKey, isDefault, displayName, open, onToggle }) {
 // 内联验证流;无模型选择。首个搜索 key 保存时尽力设为搜索默认。
 function AddPanel({ providers, configured, hasSearchDefault, providerDisplay, onDone }) {
   const pushToast = useUIStore((s) => s.pushToast);
+  const qc = useQueryClient();
   const createKey = useCreateApiKey();
   const testKey = useTestApiKey();
   const deleteKey = useDeleteApiKey();
@@ -272,6 +274,7 @@ function AddPanel({ providers, configured, hasSearchDefault, providerDisplay, on
       if (!hasSearchDefault && createdKeyId) {
         try {
           await apiFetch(`/api-keys/${createdKeyId}`, { method: "PATCH", body: { isDefault: true } });
+          await qc.invalidateQueries({ queryKey: qk.apikeys() });
         } catch {
           // Non-fatal: user can set default manually from key detail.
         }
