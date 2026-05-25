@@ -29,6 +29,7 @@ import { NotificationsDrawer } from "../overlays/NotificationsDrawer.jsx";
 import { AskUserModal } from "../overlays/AskUserModal.jsx";
 import { ToastTray } from "../overlays/ToastTray.jsx";
 import { SettingsPopover } from "../overlays/SettingsPopover.jsx";
+import { SettingsModal } from "../overlays/SettingsModal.jsx";
 import { useUIStore } from "../../store/ui.js";
 import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts.js";
 import { easeOut } from "../../motion/tokens.js";
@@ -160,6 +161,7 @@ export function AppShell() {
       <NotificationsDrawer />
       <AskUserModal />
       <SettingsPopover />
+      <SettingsModal />
       <ToastTray />
     </div>
   );

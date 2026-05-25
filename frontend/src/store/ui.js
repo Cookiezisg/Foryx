@@ -40,6 +40,7 @@ export const useUIStore = create((set, get) => ({
   notifsOpen: false,
   askOpen: false,
   settingsPopOpen: false,
+  settingsOpen: false,
   pendingAsk: null,
 
   toasts: [],
@@ -134,6 +135,7 @@ export const useUIStore = create((set, get) => ({
   setNotifsOpen: (b) => set({ notifsOpen: !!b }),
   setAskOpen: (b) => set({ askOpen: !!b }),
   setSettingsPopOpen: (b) => set({ settingsPopOpen: !!b }),
+  setSettingsOpen: (b) => set({ settingsOpen: !!b }),
   setPendingAsk: (v) => set({ pendingAsk: v }),
 
   pushToast: (t) => {
