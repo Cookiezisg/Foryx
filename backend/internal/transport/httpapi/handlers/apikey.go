@@ -50,6 +50,7 @@ type updateRequest struct {
 	DisplayName *string `json:"displayName"`
 	BaseURL     *string `json:"baseUrl"`
 	Key         *string `json:"key"`
+	IsDefault   *bool   `json:"isDefault"`
 }
 
 func (h *APIKeyHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -101,6 +102,7 @@ func (h *APIKeyHandler) Update(w http.ResponseWriter, r *http.Request) {
 		DisplayName: req.DisplayName,
 		BaseURL:     req.BaseURL,
 		Key:         req.Key,
+		IsDefault:   req.IsDefault,
 	})
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)

@@ -143,7 +143,11 @@ func (t *WebSearch) Execute(ctx context.Context, argsJSON string) (string, error
 	args.normalize()
 
 	if t.keys != nil {
-		for _, provider := range apikeydomain.SearchProviderPriority {
+		order := apikeydomain.SearchProviderPriority
+		if def := t.keys.DefaultSearchProvider(ctx); def != "" {
+			order = append([]string{def}, removeStr(apikeydomain.SearchProviderPriority, def)...)
+		}
+		for _, provider := range order {
 			if ctx.Err() != nil {
 				break
 			}
@@ -265,5 +269,18 @@ func marshalSearchResponse(args searchArgs, source string, results []searchResul
 	return string(body), nil
 }
 
+
+// removeStr returns a copy of s with all occurrences of x removed.
+//
+// removeStr 返回去除所有 x 后的 s 副本。
+func removeStr(s []string, x string) []string {
+	out := make([]string, 0, len(s))
+	for _, v := range s {
+		if v != x {
+			out = append(out, v)
+		}
+	}
+	return out
+}
 
 var _ toolapp.Tool = (*WebSearch)(nil)

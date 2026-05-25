@@ -31,6 +31,7 @@ func (f *fakeKeys) HasKeyForProvider(_ context.Context, provider string) (bool, 
 	}
 	return f.available[provider], nil
 }
+func (f *fakeKeys) DefaultSearchProvider(context.Context) string { return "" }
 
 type fakeRepo struct {
 	rows      map[string]*modeldomain.ModelConfig // keyed by ID

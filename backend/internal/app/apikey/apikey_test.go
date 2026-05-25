@@ -90,6 +90,32 @@ func (r *fakeRepo) UpdateTestResult(_ context.Context, id, status, errMsg string
 	return nil
 }
 
+func (r *fakeRepo) ClearDefaultForCategory(_ context.Context, providers []string) error {
+	set := make(map[string]bool, len(providers))
+	for _, p := range providers {
+		set[p] = true
+	}
+	for _, k := range r.items {
+		if set[k.Provider] {
+			k.IsDefault = false
+		}
+	}
+	return nil
+}
+
+func (r *fakeRepo) DefaultProvider(_ context.Context, providers []string) (string, error) {
+	set := make(map[string]bool, len(providers))
+	for _, p := range providers {
+		set[p] = true
+	}
+	for _, k := range r.items {
+		if set[k.Provider] && k.IsDefault {
+			return k.Provider, nil
+		}
+	}
+	return "", nil
+}
+
 type fakeTester struct {
 	result *TestResult
 	err    error
@@ -449,5 +475,61 @@ func TestMaskKey_NeverLeaksMiddle(t *testing.T) {
 	masked := maskKey(secret)
 	if strings.Contains(masked, "MIDDLE_SECRET_PART") {
 		t.Errorf("mask leaked middle of key: %q", masked)
+	}
+}
+
+func TestUpdate_SetDefault_ClearsSiblings(t *testing.T) {
+	svc, repo := newTestService(t, &fakeTester{})
+	ctx := ctxFor("u-default-test")
+
+	brave, _ := svc.Create(ctx, CreateInput{Provider: "brave", Key: "brave-key-123456789"})
+	bocha, _ := svc.Create(ctx, CreateInput{Provider: "bocha", Key: "bocha-key-123456789"})
+
+	trueVal := true
+	updated, err := svc.Update(ctx, brave.ID, UpdateInput{IsDefault: &trueVal})
+	if err != nil {
+		t.Fatalf("Update brave IsDefault=true: %v", err)
+	}
+	if !updated.IsDefault {
+		t.Error("brave.IsDefault should be true after Update")
+	}
+
+	// bocha must still be false (sibling in same search category, never touched).
+	storedBocha := repo.items[bocha.ID]
+	if storedBocha.IsDefault {
+		t.Error("bocha.IsDefault should be false (sibling not set yet)")
+	}
+
+	// Now mark bocha as default; brave should be cleared.
+	updated2, err := svc.Update(ctx, bocha.ID, UpdateInput{IsDefault: &trueVal})
+	if err != nil {
+		t.Fatalf("Update bocha IsDefault=true: %v", err)
+	}
+	if !updated2.IsDefault {
+		t.Error("bocha.IsDefault should be true after second Update")
+	}
+	storedBrave := repo.items[brave.ID]
+	if storedBrave.IsDefault {
+		t.Error("brave.IsDefault should be false after bocha was set as default (ClearDefaultForCategory)")
+	}
+}
+
+func TestDefaultProvider_ReturnsMarked(t *testing.T) {
+	svc, repo := newTestService(t, &fakeTester{})
+	ctx := ctxFor("u-default-provider-test")
+
+	brave, _ := svc.Create(ctx, CreateInput{Provider: "brave", Key: "brave-key-123456789"})
+	_, _ = svc.Create(ctx, CreateInput{Provider: "serper", Key: "serper-key-12345678"})
+
+	// Nothing marked yet: DefaultSearchProvider returns "".
+	if got := svc.DefaultSearchProvider(ctx); got != "" {
+		t.Errorf("DefaultSearchProvider before any default set = %q, want \"\"", got)
+	}
+
+	// Mark brave as default.
+	repo.items[brave.ID].IsDefault = true
+
+	if got := svc.DefaultSearchProvider(ctx); got != "brave" {
+		t.Errorf("DefaultSearchProvider after brave marked = %q, want \"brave\"", got)
 	}
 }

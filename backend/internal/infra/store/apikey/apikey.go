@@ -173,6 +173,45 @@ func (s *Store) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// ClearDefaultForCategory unsets is_default on all of the user's keys whose provider is
+// in the given list, enforcing single-choice default per category.
+//
+// ClearDefaultForCategory 清除该用户在指定 provider 列表内所有 key 的 is_default 标志。
+func (s *Store) ClearDefaultForCategory(ctx context.Context, providers []string) error {
+	uid, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return err
+	}
+	if err := s.db.WithContext(ctx).Model(&apikeydomain.APIKey{}).
+		Where("user_id = ? AND provider IN ?", uid, providers).
+		Update("is_default", false).Error; err != nil {
+		return fmt.Errorf("apikeystore.ClearDefaultForCategory: %w", err)
+	}
+	return nil
+}
+
+// DefaultProvider returns the provider name of the user's is_default key among the given
+// providers, or "" if none is marked.
+//
+// DefaultProvider 返回该用户在 providers 列表中标为 is_default 的 provider 名，无则返 ""。
+func (s *Store) DefaultProvider(ctx context.Context, providers []string) (string, error) {
+	uid, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return "", err
+	}
+	var k apikeydomain.APIKey
+	err = s.db.WithContext(ctx).
+		Where("user_id = ? AND provider IN ? AND is_default = ?", uid, providers, true).
+		First(&k).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return "", nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("apikeystore.DefaultProvider: %w", err)
+	}
+	return k.Provider, nil
+}
+
 // UpdateTestResult writes only test_status / test_error / last_tested_at / models_found.
 //
 // UpdateTestResult 仅写测试相关字段，避免整行往返。

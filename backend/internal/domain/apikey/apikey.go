@@ -27,6 +27,7 @@ type APIKey struct {
 	TestError    string         `gorm:"type:text;default:''" json:"testError"`
 	LastTestedAt *time.Time     `json:"lastTestedAt"`
 	ModelsFound  []string       `gorm:"serializer:json;type:text;default:'[]'" json:"modelsFound"`
+	IsDefault    bool           `gorm:"not null;default:false" json:"isDefault"`
 	CreatedAt    time.Time      `json:"createdAt"`
 	UpdatedAt    time.Time      `json:"updatedAt"`
 	DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
@@ -83,6 +84,14 @@ type Repository interface {
 	Save(ctx context.Context, k *APIKey) error
 	Delete(ctx context.Context, id string) error
 	UpdateTestResult(ctx context.Context, id, status, errMsg string, models []string) error
+
+	// ClearDefaultForCategory unsets is_default on all of the user's keys whose
+	// provider is in the given list (keeps "default" single-choice per category).
+	ClearDefaultForCategory(ctx context.Context, providers []string) error
+
+	// DefaultProvider returns the provider name of the user's is_default key among
+	// the given providers, or "" if none.
+	DefaultProvider(ctx context.Context, providers []string) (string, error)
 }
 
 // KeyProvider is the cross-domain port for resolving ready-to-use credentials.
@@ -92,6 +101,12 @@ type KeyProvider interface {
 	ResolveCredentials(ctx context.Context, provider string) (Credentials, error)
 	MarkInvalid(ctx context.Context, provider string, reason string) error
 	HasKeyForProvider(ctx context.Context, provider string) (bool, error)
+
+	// DefaultSearchProvider returns the provider name of the user's is_default search key,
+	// or "" if none is marked. Used by WebSearch to put the preferred provider first.
+	//
+	// DefaultSearchProvider 返回当前用户标记为 is_default 的搜索 provider 名，无则返 ""。
+	DefaultSearchProvider(ctx context.Context) string
 }
 
 // SearchProviderPriority is the order WebSearch tries BYOK keys; must match app/apikey/providers.go.

@@ -104,7 +104,7 @@ type Error = {
 |---|---|---|
 | POST | `/api/v1/api-keys` | 创建 |
 | GET | `/api/v1/api-keys` | 列表（分页 + `?provider=` 过滤）|
-| PATCH | `/api/v1/api-keys/{id}` | 更新 displayName / baseUrl |
+| PATCH | `/api/v1/api-keys/{id}` | 更新 displayName / baseUrl / key（旋转）/ isDefault（单选默认，同 category 其他 key 自动取消）|
 | DELETE | `/api/v1/api-keys/{id}` | 软删 |
 | POST | `/api/v1/api-keys/{id}:test` | 连通性测试 |
 | GET | `/api/v1/providers` | 列 ProviderMeta 注册表（`?category=llm` 或 `?category=search` 过滤）；前端用以替代客户端硬编码 provider 列表（屎山拯救计划 #4 收尾）|

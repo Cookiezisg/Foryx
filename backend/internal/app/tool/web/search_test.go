@@ -298,6 +298,7 @@ func (f *fakeKeys) HasKeyForProvider(_ context.Context, provider string) (bool, 
 	_, ok := f.creds[provider]
 	return ok, nil
 }
+func (f *fakeKeys) DefaultSearchProvider(_ context.Context) string { return "" }
 
 // fakeMCPRouter implements MCPSearchRouter.
 //

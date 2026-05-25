@@ -51,13 +51,16 @@ type CreateInput struct {
 
 // UpdateInput is the partial-update payload; nil fields unchanged, "" clears.
 // Key rotation: non-nil non-empty Key re-encrypts + masks + resets test_status to pending.
+// IsDefault true clears siblings in the same category before setting this key as default.
 //
 // UpdateInput 部分更新载荷；nil 不动、空串清空。Key 非空时旋转密钥（重新加密 +
 // 重新 mask + 重置 test_status=pending），不允许改 Provider/APIFormat（删了重建）。
+// IsDefault=true 先清除同 category 其他 key 的 is_default，再设置此 key 为 default。
 type UpdateInput struct {
 	DisplayName *string
 	BaseURL     *string
 	Key         *string
+	IsDefault   *bool
 }
 
 var _ apikeydomain.KeyProvider = (*Service)(nil)
@@ -122,7 +125,7 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*apike
 	}
 	// No-op: empty PATCH `{}` returns the row unchanged (skip updated_at bump).
 	// No-op:空 PATCH `{}` 不 bump updated_at,直接返当前行。
-	if in.DisplayName == nil && in.BaseURL == nil && in.Key == nil {
+	if in.DisplayName == nil && in.BaseURL == nil && in.Key == nil && in.IsDefault == nil {
 		return k, nil
 	}
 	if in.DisplayName != nil {
@@ -146,6 +149,15 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*apike
 		k.TestError = ""
 		k.LastTestedAt = nil
 		k.ModelsFound = nil
+	}
+	if in.IsDefault != nil {
+		if *in.IsDefault {
+			cat := providerCategory(k.Provider)
+			if err := s.repo.ClearDefaultForCategory(ctx, providersInCategory(cat)); err != nil {
+				return nil, fmt.Errorf("apikey.Update: %w", err)
+			}
+		}
+		k.IsDefault = *in.IsDefault
 	}
 	k.UpdatedAt = time.Now().UTC()
 	if err := s.repo.Save(ctx, k); err != nil {
@@ -266,6 +278,43 @@ func (s *Service) MarkInvalid(ctx context.Context, provider, reason string) erro
 		zap.String("provider", provider),
 		zap.String("reason", reason))
 	return nil
+}
+
+// DefaultSearchProvider returns the provider name of the user's is_default search key,
+// or "" on error or if none is marked. Implements apikeydomain.KeyProvider.
+//
+// DefaultSearchProvider 返回用户标为 is_default 的搜索 provider 名，出错或无则返 ""。
+func (s *Service) DefaultSearchProvider(ctx context.Context) string {
+	p, err := s.repo.DefaultProvider(ctx, apikeydomain.SearchProviderPriority)
+	if err != nil {
+		s.log.Debug("apikey.Service.DefaultSearchProvider: repo error; returning empty",
+			zap.Error(err))
+		return ""
+	}
+	return p
+}
+
+// providerCategory maps a provider name to its ProviderCategory using the providers registry.
+//
+// providerCategory 通过 providers 注册表把 provider 名映射到 ProviderCategory。
+func providerCategory(name string) ProviderCategory {
+	if meta, ok := GetProviderMeta(name); ok {
+		return meta.Category
+	}
+	return CategoryLLM
+}
+
+// providersInCategory returns all provider names belonging to the given category.
+//
+// providersInCategory 返回属于指定 category 的全部 provider 名。
+func providersInCategory(cat ProviderCategory) []string {
+	var out []string
+	for name, meta := range providers {
+		if meta.Category == cat {
+			out = append(out, name)
+		}
+	}
+	return out
 }
 
 func maskKey(key string) string {
