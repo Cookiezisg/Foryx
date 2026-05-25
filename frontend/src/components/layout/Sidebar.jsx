@@ -94,21 +94,34 @@ export function Sidebar() {
       style={{ overflow: "hidden" }}
     >
       <div className="sb-head">
-        <button
-          type="button"
-          className="sb-logo-slot"
-          onClick={() => setCollapsed(!collapsed)}
-          title={collapsed ? "展开 ⌘B" : "收起 ⌘B"}
-          aria-label="toggle sidebar"
-        >
-          <span className="ic-logo"><ForgifyLogo /></span>
-          <span className="ic-toggle">
-            {collapsed
-              ? <Icon.PanelLeftOpen  size={20} strokeWidth={2} />
-              : <Icon.PanelLeftClose size={20} strokeWidth={2} />}
-          </span>
-        </button>
-        {!collapsed && <span className="sb-logo-name">Forgify</span>}
+        {collapsed ? (
+          // Collapsed rail has no room for a separate button — the logo itself
+          // is the expand toggle (hover morphs logo → PanelLeftOpen).
+          <button
+            type="button"
+            className="sb-logo-slot"
+            onClick={() => setCollapsed(false)}
+            title="展开 ⌘B"
+            aria-label="toggle sidebar"
+          >
+            <span className="ic-logo"><ForgifyLogo /></span>
+            <span className="ic-toggle"><Icon.PanelLeftOpen size={20} strokeWidth={2} /></span>
+          </button>
+        ) : (
+          <>
+            <span className="sb-logo-mark"><ForgifyLogo /></span>
+            <span className="sb-logo-name">Forgify</span>
+            <button
+              type="button"
+              className="sb-collapse-btn"
+              onClick={() => setCollapsed(true)}
+              title="收起 ⌘B"
+              aria-label="toggle sidebar"
+            >
+              <Icon.PanelLeftClose size={18} strokeWidth={2} />
+            </button>
+          </>
+        )}
       </div>
 
       <NavItem icon={Icon.SquarePen} label="新对话"  primary onClick={onNewConv} collapsed={collapsed} />
