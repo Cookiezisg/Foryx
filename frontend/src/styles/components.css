@@ -277,19 +277,18 @@
 .sb-foot:hover .sb-gear-btn { opacity: 1; }
 .sb-gear-btn:hover { background: var(--bg-hover); color: var(--fg-strong); }
 
-/* Collapsed footer: fixed 64px width (= rail width) so contents center on the
-   32px column REGARDLESS of the aside's animating width — without this the
-   avatar centers in the mid-animation width and slides in from the right. */
+/* Collapsed footer: keep the SAME 48px row height as expanded and just center
+   the avatar in the fixed 64px rail — so the avatar lands at the exact same
+   (x:32, y:center-of-48) point in both states. The previous column-reverse +
+   height:auto let the hover-only gear (still occupying layout at opacity:0)
+   inflate the footer to ~66px and shove the avatar ~10px down on collapse. */
 .sidebar.is-collapsed .sb-foot {
   width: 64px;
-  flex-direction: column-reverse;
-  height: auto;
-  padding: 8px 0 0;
-  gap: 6px;
   justify-content: center;
-  align-items: center;
+  padding: 0;
 }
 .sidebar.is-collapsed .sb-user { display: none; }
+.sidebar.is-collapsed .sb-gear-btn { display: none; }
 
 /* ── Main panel ───────────────────────────────────────────────────── */
 .main {
