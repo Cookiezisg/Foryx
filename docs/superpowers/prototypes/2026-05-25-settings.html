@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>设置 — 完整可交互原型</title>
+<style>
+  :root{
+    --accent:#d97757; --accent-soft:#fdf1ec; --accent-ring:rgba(217,119,87,.2);
+    --fg-strong:#1a1a1a; --fg:#37352f; --fg-muted:#6b7280; --fg-faint:#9ca3af;
+    --paper:#fff; --subtle:#faf9f7; --elev:#f1efec; --input:#fff;
+    --hover:rgba(0,0,0,.04); --active:rgba(0,0,0,.06);
+    --border:rgba(0,0,0,.08); --border-soft:rgba(0,0,0,.05); --border-strong:rgba(0,0,0,.14);
+    --ok:#0f7b6c; --ok-soft:#e7f3f0; --err:#c4554d;
+    --r-sm:6px; --r-md:10px; --r-lg:14px; --r-xl:16px; --r-pill:999px;
+    --mono:ui-monospace,SFMono-Regular,Menlo,monospace;
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Inter,system-ui,sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:var(--font);background:#cfcbc4;color:var(--fg);-webkit-font-smoothing:antialiased;min-height:100vh;display:grid;place-items:center;padding:24px}
+  .scrim{position:fixed;inset:0;background:rgba(20,16,12,.34);display:grid;place-items:center;padding:24px}
+
+  .modal{width:600px;max-height:88vh;background:var(--paper);border-radius:var(--r-xl);box-shadow:0 30px 80px -24px rgba(20,16,12,.6);overflow:hidden;display:flex;flex-direction:column}
+  .m-head{display:flex;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border-soft)}
+  .m-head .t{font-size:17px;font-weight:640;flex:1;color:var(--fg-strong)}
+  .m-x{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;cursor:pointer;color:var(--fg-faint);background:none;border:0}
+  .m-x:hover{background:var(--hover);color:var(--fg-strong)}
+  .m-x svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+  .m-body{padding:12px 16px 18px;overflow-y:auto;display:flex;flex-direction:column;gap:10px}
+
+  .acct{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--subtle);border-radius:var(--r-lg)}
+  .ava{width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:16px;font-weight:600;flex:none}
+  .acct .nm{font-size:14px;font-weight:600;color:var(--fg-strong)}
+  .acct .sm{font-size:11px;color:var(--fg-faint);margin-top:1px}
+  .pill-ghost{font-family:var(--font);font-size:12.5px;font-weight:500;background:none;color:var(--fg-muted);border:1px solid var(--border-strong);border-radius:var(--r-pill);padding:6px 13px;cursor:pointer}
+  .pill-ghost:hover{background:var(--hover);color:var(--fg-strong)}
+
+  .sec{border:1px solid var(--border-soft);border-radius:var(--r-lg);overflow:hidden;background:var(--paper)}
+  .sec-h{display:flex;align-items:center;gap:12px;padding:13px 15px;cursor:pointer;user-select:none}
+  .sec-h:hover{background:var(--hover)}
+  .sec-ic{width:18px;height:18px;stroke:var(--fg-muted);fill:none;stroke-width:1.8;flex:none}
+  .sec-h .tt{flex:1;min-width:0}
+  .sec-h .t1{font-size:14px;font-weight:600;color:var(--fg-strong);display:flex;align-items:center;gap:6px}
+  .sec-h .t2{font-size:11.5px;color:var(--fg-faint);margin-top:1px}
+  .opt-tag{font-size:10px;font-weight:600;color:var(--fg-faint);border:1px solid var(--border-strong);border-radius:var(--r-pill);padding:1px 8px}
+  .sec-chev{width:16px;height:16px;stroke:var(--fg-faint);fill:none;stroke-width:2;transition:transform .2s;flex:none}
+  .sec.open .sec-chev{transform:rotate(90deg)}
+  .sec-p{display:none;padding:12px 14px 14px;border-top:1px solid var(--border-soft)}
+  .sec.open .sec-p{display:block}
+
+  /* key list */
+  .klist{display:flex;flex-direction:column;gap:8px}
+  .kitem{border:1px solid var(--border);border-radius:var(--r-md);overflow:hidden;background:var(--paper)}
+  .kitem.use{border-color:color-mix(in srgb,var(--accent) 45%,var(--border))}
+  .kitem-row{display:flex;align-items:center;gap:11px;padding:11px 12px;cursor:pointer;user-select:none}
+  .kitem-row:hover{background:var(--hover)}
+  .pchip{width:26px;height:26px;border-radius:6px;color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;font-family:var(--mono);flex:none}
+  .pn{font-size:13.5px;font-weight:600;color:var(--fg-strong)}
+  .pk{font-family:var(--mono);font-size:11px;color:var(--fg-faint);margin-top:1px}
+  .badge{font-size:10px;font-weight:600;border-radius:var(--r-pill);padding:2px 9px;white-space:nowrap}
+  .badge.use{background:var(--accent-soft);color:var(--accent)}
+  .badge.ok{background:var(--ok-soft);color:var(--ok)}
+  .badge.gray{background:var(--elev);color:var(--fg-muted)}
+  .chev{width:15px;height:15px;stroke:var(--fg-faint);fill:none;stroke-width:2;transition:transform .2s;flex:none}
+  .kitem.open .chev{transform:rotate(90deg)}
+  .mtag{font-family:var(--mono);font-size:11px;color:var(--fg-muted)}
+  .kdetail{display:none;padding:4px 14px 13px;border-top:1px dashed var(--border);background:var(--subtle)}
+  .kitem.open .kdetail{display:block}
+  .drow{display:flex;align-items:center;gap:12px;padding:8px 0}
+  .drow .dk{width:56px;font-size:12.5px;color:var(--fg-muted);flex:none}
+  .dact{display:flex;gap:14px;padding-top:6px}
+  .link{font-size:12px;color:var(--fg-muted);background:none;border:0;cursor:pointer;padding:0}
+  .link:hover{color:var(--fg-strong)}
+  .link.danger:hover{color:var(--err)}
+
+  .seg{display:inline-flex;background:var(--elev);border-radius:var(--r-md);padding:3px;gap:2px}
+  .seg-opt{font-size:12px;font-weight:500;color:var(--fg-muted);padding:5px 13px;border-radius:7px;cursor:pointer;border:0;background:none;font-family:var(--font)}
+  .seg-opt.on{background:var(--paper);color:var(--accent);font-weight:600;box-shadow:0 1px 2px rgba(0,0,0,.07)}
+  .seg.neutral .seg-opt.on{color:var(--fg-strong)}
+  .dot{width:24px;height:24px;border-radius:50%;cursor:pointer;border:0;padding:0}
+  .dot.on{box-shadow:0 0 0 2px var(--paper),0 0 0 4px var(--accent)}
+
+  /* model select (styled native) */
+  .mselect{appearance:none;-webkit-appearance:none;height:36px;border:1px solid var(--border-strong);border-radius:var(--r-md);padding:0 30px 0 11px;background:var(--input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239ca3af' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E") no-repeat right 9px center;color:var(--fg-strong);font-size:12.5px;font-family:var(--mono);cursor:pointer;outline:none;min-width:170px}
+  .mselect:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-ring)}
+  .mselect:disabled{opacity:.5;cursor:default;color:var(--fg-faint)}
+
+  /* + trigger */
+  .addbtn{display:flex;align-items:center;justify-content:center;gap:7px;width:100%;margin-top:10px;padding:11px;border:1px dashed var(--border-strong);border-radius:var(--r-md);background:none;color:var(--fg-muted);font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer}
+  .addbtn:hover{border-color:var(--accent);color:var(--accent)}
+  .addbtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2.2}
+
+  /* add panel — 引导页式双列 */
+  .addpanel{display:none;margin-top:10px;border:1px solid var(--accent);border-radius:var(--r-lg);background:var(--paper);box-shadow:0 6px 22px -10px var(--accent-ring);overflow:hidden}
+  .addpanel.open{display:block}
+  .ap-head{display:flex;align-items:center;padding:11px 15px;border-bottom:1px solid var(--border-soft);background:var(--accent-soft)}
+  .ap-head .t{flex:1;font-size:13.5px;font-weight:650;color:var(--fg-strong)}
+  .ap-x{width:24px;height:24px;border-radius:7px;display:grid;place-items:center;cursor:pointer;color:var(--fg-muted);background:none;border:0}
+  .ap-x svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2}
+  .ap-body{padding:14px 15px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:172px;overflow-y:auto;padding-right:6px}
+  .grid.tall{max-height:none}
+  .prov{display:flex;align-items:center;gap:10px;padding:9px 11px;border:1px solid var(--border);border-radius:var(--r-md);cursor:pointer;background:var(--paper);position:relative}
+  .prov:hover{border-color:var(--border-strong)}
+  .prov.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:0 0 0 1px var(--accent) inset}
+  .pchip2{width:26px;height:26px;border-radius:6px;color:#fff;font-size:10px;font-weight:700;display:grid;place-items:center;font-family:var(--mono);flex:none}
+  .pname{font-size:12.5px;font-weight:550;color:var(--fg-strong)}
+  .pdesc{font-size:10px;color:var(--fg-faint);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+  .ck{position:absolute;top:7px;right:8px;width:14px;height:14px;border-radius:50%;background:var(--ok);display:grid;place-items:center}
+  .ck svg{width:9px;height:9px;stroke:#fff;fill:none;stroke-width:3}
+  .scrollnote{font-size:10.5px;color:var(--fg-faint);margin-top:7px}
+  .twofield{margin-top:14px;display:flex;gap:12px;align-items:flex-end}
+  .field{flex:1}
+  .klabel{font-size:12px;font-weight:550;color:var(--fg-muted);margin-bottom:6px}
+  .kinput{display:flex;align-items:center;gap:8px;border:1px solid var(--accent);border-radius:var(--r-md);padding:0 12px;height:40px;box-shadow:0 0 0 3px var(--accent-soft);background:var(--input)}
+  .kinput.err{border-color:var(--err);box-shadow:0 0 0 3px color-mix(in srgb,var(--err) 12%,transparent)}
+  .kinput svg{width:14px;height:14px;stroke:var(--fg-faint);fill:none;stroke-width:1.7;flex:none}
+  .kinput input{flex:1;border:0;outline:none;background:transparent;font-size:13px;font-family:var(--font);color:var(--fg-strong);min-width:0}
+  .vbtn{font-family:var(--font);font-size:12px;font-weight:600;color:var(--accent);background:none;border:0;cursor:pointer;white-space:nowrap}
+  .vbtn:disabled{color:var(--fg-faint);cursor:default}
+  .verified{font-size:11px;font-weight:600;color:var(--ok);white-space:nowrap;display:flex;align-items:center;gap:3px}
+  .verified svg{width:12px;height:12px;stroke:var(--ok);fill:none;stroke-width:2.6}
+  .ap-hint{font-size:11px;color:var(--fg-faint);margin-top:8px}
+  .ap-hint.err{color:var(--err)}
+  .ap-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+  .btn-accent{font-family:var(--font);font-size:12.5px;font-weight:550;background:var(--accent);color:#fff;border:0;border-radius:var(--r-pill);padding:8px 16px;cursor:pointer}
+  .btn-accent:disabled{opacity:.45;cursor:default}
+  .btn-ghost2{font-family:var(--font);font-size:12.5px;font-weight:500;background:#fff;color:var(--fg-muted);border:1px solid var(--border-strong);border-radius:var(--r-pill);padding:7px 15px;cursor:pointer}
+
+  /* appearance */
+  .opt-row{display:flex;align-items:center;gap:14px;padding:9px 2px}
+  .opt-row .k{width:84px;font-size:13px;color:var(--fg-muted);flex:none}
+  .opt-row .v{flex:1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  /* system */
+  .sys-row{display:flex;align-items:baseline;gap:12px;padding:8px 2px}
+  .sys-row .k{width:84px;font-size:13px;color:var(--fg-muted);flex:none}
+  .mono{font-family:var(--mono);font-size:12.5px;color:var(--fg-strong)}
+  .hint{font-size:11px;color:var(--fg-faint);margin-left:6px}
+  .empty{font-size:12px;color:var(--fg-faint);padding:14px;text-align:center}
+</style>
+</head>
+<body>
+  <div class="scrim">
+    <div class="modal">
+      <div class="m-head"><div class="t">设置</div><button class="m-x"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+      <div class="m-body">
+
+        <!-- account -->
+        <div class="acct">
+          <div class="ava">W</div>
+          <div style="flex:1;min-width:0"><div class="nm">Weilin</div><div class="sm">本地工作空间 · 共 1 个</div></div>
+          <button class="pill-ghost">切换 / 新建</button>
+        </div>
+
+        <!-- ===== API Keys ===== -->
+        <div class="sec open" data-sec="keys">
+          <div class="sec-h">
+            <svg class="sec-ic" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.6 7.6a5.5 5.5 0 1 1-7.8 7.8 5.5 5.5 0 0 1 7.8-7.8zm0 0L15.5 7.5l3 3L22 7l-3-3"/></svg>
+            <div class="tt"><div class="t1">API Keys</div><div class="t2" id="keys-sub">2 个 · 对话默认 DeepSeek</div></div>
+            <svg class="sec-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+          <div class="sec-p">
+            <div class="klist" id="llm-list" data-kind="llm">
+              <div class="kitem use" data-prov="deepseek">
+                <div class="kitem-row">
+                  <span class="pchip" style="background:#4D6BFE">DS</span>
+                  <div style="flex:1;min-width:0"><div class="pn">DeepSeek</div><div class="pk">sk-••••••••3f2a</div></div>
+                  <span class="mtag">deepseek-v4-pro</span>
+                  <span class="badge use usebadge">对话默认</span>
+                  <svg class="chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                </div>
+                <div class="kdetail">
+                  <div class="drow"><div class="dk">模型</div><select class="mselect"><option>deepseek-v4-pro</option><option>deepseek-v4-flash</option></select></div>
+                  <div class="drow"><div class="dk">用途</div><div class="seg use-seg"><span class="seg-opt on">对话默认</span><span class="seg-opt">仅备用</span></div></div>
+                  <div class="dact"><button class="link">重新验证</button><button class="link danger">删除</button></div>
+                </div>
+              </div>
+              <div class="kitem" data-prov="anthropic">
+                <div class="kitem-row">
+                  <span class="pchip" style="background:#D97757">AN</span>
+                  <div style="flex:1;min-width:0"><div class="pn">Anthropic</div><div class="pk">sk-••••••••9c1d</div></div>
+                  <span class="badge gray">未验证</span>
+                  <svg class="chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                </div>
+                <div class="kdetail">
+                  <div class="drow"><div class="dk">模型</div><select class="mselect"><option>claude-sonnet-4-6</option><option>claude-opus-4-7</option></select></div>
+                  <div class="drow"><div class="dk">用途</div><div class="seg use-seg"><span class="seg-opt">对话默认</span><span class="seg-opt on">仅备用</span></div></div>
+                  <div class="dact"><button class="link">验证</button><button class="link danger">删除</button></div>
+                </div>
+              </div>
+            </div>
+            <button class="addbtn" data-add="llm"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> API Key</button>
+            <div class="addpanel" data-panel="llm">
+              <div class="ap-head"><div class="t">添加 API Key</div><button class="ap-x" data-close="llm"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+              <div class="ap-body">
+                <div class="grid"></div>
+                <div class="scrollnote">可滚动查看全部厂商 · 右上角 ✓ = 已存 Key</div>
+                <div class="add-key-area" style="display:none">
+                  <div class="twofield">
+                    <div class="field" style="flex:1.3"><div class="klabel keylabel">API Key</div><div class="kinput"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><input type="password" placeholder="sk-…" class="keyinput"><button class="vbtn">验证并获取模型</button></div></div>
+                    <div class="field"><div class="klabel">模型</div><select class="mselect modelsel" disabled><option>验证后可选</option></select></div>
+                  </div>
+                  <div class="ap-hint hintline"></div>
+                </div>
+                <div class="ap-actions"><button class="btn-ghost2" data-close="llm">取消</button><button class="btn-accent savebtn" disabled>保存</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 网络搜索 ===== -->
+        <div class="sec" data-sec="search">
+          <div class="sec-h">
+            <svg class="sec-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.3-4.3"/></svg>
+            <div class="tt"><div class="t1">网络搜索 <span class="opt-tag">可选</span></div><div class="t2">博查 Bocha · 搜索默认</div></div>
+            <svg class="sec-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+          <div class="sec-p">
+            <div class="klist" id="search-list" data-kind="search">
+              <div class="kitem use" data-prov="bocha">
+                <div class="kitem-row">
+                  <span class="pchip" style="background:#1f9d55">BC</span>
+                  <div style="flex:1;min-width:0"><div class="pn">博查 Bocha</div><div class="pk">sk-••••••••2b7e</div></div>
+                  <span class="badge use usebadge">搜索默认</span>
+                  <svg class="chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+                </div>
+                <div class="kdetail">
+                  <div class="drow"><div class="dk">用途</div><div class="seg use-seg"><span class="seg-opt on">搜索默认</span><span class="seg-opt">仅备用</span></div></div>
+                  <div class="dact"><button class="link">重新验证</button><button class="link danger">删除</button></div>
+                </div>
+              </div>
+            </div>
+            <button class="addbtn" data-add="search"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg> 搜索服务</button>
+            <div class="addpanel" data-panel="search">
+              <div class="ap-head"><div class="t">添加搜索服务</div><button class="ap-x" data-close="search"><svg viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg></button></div>
+              <div class="ap-body">
+                <div class="grid tall"></div>
+                <div class="add-key-area" style="display:none">
+                  <div class="field" style="margin-top:14px"><div class="klabel keylabel">API Key</div><div class="kinput"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg><input type="password" placeholder="填入 key" class="keyinput"><button class="vbtn">验证</button></div></div>
+                  <div class="ap-hint hintline"></div>
+                </div>
+                <div class="ap-actions"><button class="btn-ghost2" data-close="search">取消</button><button class="btn-accent savebtn" disabled>保存</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- ===== 外观 ===== -->
+        <div class="sec" data-sec="look">
+          <div class="sec-h">
+            <svg class="sec-ic" viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="2.3"/><circle cx="18" cy="13" r="2.3"/><circle cx="6" cy="12" r="2.3"/><circle cx="10" cy="19" r="2.3"/><path d="M12 2a10 10 0 1 0 0 20"/></svg>
+            <div class="tt"><div class="t1">外观</div><div class="t2">跟随系统 · 赭橙 · 中文</div></div>
+            <svg class="sec-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+          <div class="sec-p">
+            <div class="opt-row"><div class="k">主题</div><div class="v"><div class="seg neutral"><span class="seg-opt">浅色</span><span class="seg-opt">深色</span><span class="seg-opt on">跟随系统</span></div></div></div>
+            <div class="opt-row"><div class="k">主题色</div><div class="v swrow"><button class="dot on" style="background:#d97757"></button><button class="dot" style="background:#2383e2"></button><button class="dot" style="background:#37352f"></button><button class="dot" style="background:#0f7b6c"></button><button class="dot" style="background:#6940a5"></button></div></div>
+            <div class="opt-row"><div class="k">密度</div><div class="v"><div class="seg neutral"><span class="seg-opt">紧凑</span><span class="seg-opt on">适中</span><span class="seg-opt">舒展</span></div></div></div>
+            <div class="opt-row"><div class="k">语言</div><div class="v"><div class="seg neutral"><span class="seg-opt on">中文</span><span class="seg-opt">English</span></div></div></div>
+            <div class="opt-row"><div class="k">推理过程</div><div class="v"><div class="seg neutral"><span class="seg-opt on">默认折叠</span><span class="seg-opt">默认展开</span></div></div></div>
+          </div>
+        </div>
+
+        <!-- ===== 系统 ===== -->
+        <div class="sec" data-sec="sys">
+          <div class="sec-h">
+            <svg class="sec-ic" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="10" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <div class="tt"><div class="t1">系统</div><div class="t2">本地存储 · 内置运行时</div></div>
+            <svg class="sec-chev" viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg>
+          </div>
+          <div class="sec-p">
+            <div class="sys-row"><div class="k">数据目录</div><div><span class="mono">~/.forgify/</span><span class="hint">本地 · 不上传 · 无需登录</span></div></div>
+            <div class="sys-row"><div class="k">沙箱运行时</div><div><span class="mono">mise</span> <span class="badge ok" style="vertical-align:middle">内置</span><span class="hint">python / node 按需安装</span></div></div>
+            <div class="sys-row"><div class="k">版本</div><div><span class="mono">Forgify v1.2</span></div></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const LLM = [
+      {name:"deepseek", abbr:"DS", color:"#4D6BFE", label:"DeepSeek", url:"api.deepseek.com", has:true, models:["deepseek-v4-pro","deepseek-v4-flash"]},
+      {name:"openai", abbr:"OA", color:"#10A37F", label:"OpenAI", url:"api.openai.com", models:["gpt-4o","gpt-4o-mini","o3"]},
+      {name:"anthropic", abbr:"AN", color:"#D97757", label:"Anthropic", url:"api.anthropic.com", has:true, models:["claude-sonnet-4-6","claude-opus-4-7"]},
+      {name:"google", abbr:"GO", color:"#4285F4", label:"Google Gemini", url:"generativelanguage", models:["gemini-2.5-pro","gemini-2.5-flash"]},
+      {name:"qwen", abbr:"QW", color:"#615CED", label:"通义千问", url:"dashscope", models:["qwen-max","qwen-plus"]},
+      {name:"zhipu", abbr:"ZP", color:"#3870E0", label:"智谱 GLM", url:"bigmodel.cn", models:["glm-4-plus"]},
+      {name:"moonshot", abbr:"MS", color:"#37352F", label:"Moonshot", url:"moonshot.cn", models:["kimi-k2"]},
+      {name:"ollama", abbr:"OL", color:"#6b6459", label:"Ollama", url:"本地 · 无需 key", models:["llama3.1","qwen2.5"]},
+      {name:"custom", abbr:"··", color:"#9ca3af", label:"Custom", url:"OpenAI/Anthropic 兼容", models:[]},
+    ];
+    const SEARCH = [
+      {name:"bocha", abbr:"BC", color:"#1f9d55", label:"博查 Bocha", url:"国内搜索", has:true},
+      {name:"brave", abbr:"BR", color:"#fb542b", label:"Brave Search", url:"search.brave.com"},
+      {name:"serper", abbr:"SE", color:"#5436da", label:"Serper", url:"Google 搜索"},
+      {name:"tavily", abbr:"TV", color:"#0f7b6c", label:"Tavily", url:"AI 优化搜索"},
+    ];
+    const ck = '<span class="ck"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg></span>';
+    function provCard(p){
+      return `<div class="prov" data-p="${p.name}"><span class="pchip2" style="background:${p.color}">${p.abbr}</span>`+
+        `<div style="min-width:0"><div class="pname">${p.label}</div><div class="pdesc">${p.url}</div></div>${p.has?ck:""}</div>`;
+    }
+    document.querySelectorAll('.addpanel[data-panel="llm"] .grid').forEach(g=>g.innerHTML=LLM.map(provCard).join(""));
+    document.querySelectorAll('.addpanel[data-panel="search"] .grid').forEach(g=>g.innerHTML=SEARCH.map(provCard).join(""));
+
+    // section accordion — single-open (互斥)
+    document.querySelectorAll(".sec-h").forEach(h=>h.addEventListener("click",()=>{
+      const sec=h.parentElement, wasOpen=sec.classList.contains("open");
+      document.querySelectorAll(".sec").forEach(s=>s.classList.remove("open"));
+      if(!wasOpen) sec.classList.add("open");
+    }));
+    // key rows — single-open within their list (互斥)
+    document.querySelectorAll(".kitem-row").forEach(r=>r.addEventListener("click",()=>{
+      const item=r.parentElement, list=item.closest(".klist"), wasOpen=item.classList.contains("open");
+      list.querySelectorAll(".kitem").forEach(k=>k.classList.remove("open"));
+      if(!wasOpen) item.classList.add("open");
+    }));
+
+    // 用途 radio across a list (only one default per kind)
+    document.querySelectorAll(".klist").forEach(list=>{
+      list.querySelectorAll(".use-seg").forEach(seg=>{
+        seg.addEventListener("click",e=>{
+          const opt=e.target.closest(".seg-opt"); if(!opt) return;
+          const isDefault=opt.textContent.includes("默认");
+          const item=seg.closest(".kitem");
+          if(isDefault){
+            list.querySelectorAll(".kitem").forEach(k=>{
+              const s=k.querySelector(".use-seg"); const b=k.querySelector(".usebadge");
+              if(k===item){ k.classList.add("use"); s.children[0].classList.add("on"); s.children[1].classList.remove("on"); }
+              else { k.classList.remove("use"); if(s){s.children[0].classList.remove("on");s.children[1].classList.add("on");} if(b)b.remove(); }
+            });
+            if(!item.querySelector(".usebadge")){
+              const b=document.createElement("span"); b.className="badge use usebadge";
+              b.textContent = list.dataset.kind==="search"?"搜索默认":"对话默认";
+              item.querySelector(".kitem-row .chev").before(b);
+            }
+          } else {
+            seg.children[0].classList.remove("on"); seg.children[1].classList.add("on");
+            item.classList.remove("use"); const b=item.querySelector(".usebadge"); if(b)b.remove();
+          }
+        });
+      });
+    });
+
+    // add panel toggle
+    document.querySelectorAll(".addbtn").forEach(b=>b.addEventListener("click",()=>{
+      const kind=b.dataset.add; const panel=document.querySelector(`.addpanel[data-panel="${kind}"]`);
+      panel.classList.add("open"); b.style.display="none";
+      resetPanel(panel);
+    }));
+    document.querySelectorAll("[data-close]").forEach(x=>x.addEventListener("click",()=>{
+      const kind=x.dataset.close; const panel=document.querySelector(`.addpanel[data-panel="${kind}"]`);
+      panel.classList.remove("open"); document.querySelector(`.addbtn[data-add="${kind}"]`).style.display="flex";
+    }));
+    function resetPanel(panel){
+      panel.querySelectorAll(".prov").forEach(p=>p.classList.remove("on"));
+      panel.querySelector(".add-key-area").style.display="none";
+      const sb=panel.querySelector(".savebtn"); sb.disabled=true;
+    }
+
+    // provider pick inside add panel
+    document.querySelectorAll(".addpanel .grid").forEach(g=>{
+      const panel=g.closest(".addpanel"); const kind=panel.dataset.panel;
+      const data = kind==="llm"?LLM:SEARCH;
+      g.addEventListener("click",e=>{
+        const c=e.target.closest(".prov"); if(!c) return;
+        g.querySelectorAll(".prov").forEach(p=>p.classList.toggle("on",p===c));
+        const p=data.find(x=>x.name===c.dataset.p);
+        const area=panel.querySelector(".add-key-area"); area.style.display="block";
+        panel.querySelector(".keylabel").textContent = p.label+" API Key"+(p.name==="ollama"?"(本地无需)":"");
+        const inp=panel.querySelector(".keyinput"); inp.value=""; inp.closest(".kinput").classList.remove("err");
+        const hint=panel.querySelector(".hintline"); hint.textContent=""; hint.classList.remove("err");
+        const sel=panel.querySelector(".modelsel"); if(sel){sel.disabled=true;sel.innerHTML="<option>验证后可选</option>";}
+        panel.querySelector(".savebtn").disabled=true;
+        panel.querySelector(".vbtn").textContent = kind==="llm"?"验证并获取模型":"验证";
+      });
+    });
+
+    // verify simulation
+    document.querySelectorAll(".addpanel .vbtn").forEach(v=>{
+      v.addEventListener("click",()=>{
+        const panel=v.closest(".addpanel"); const kind=panel.dataset.panel;
+        const data=kind==="llm"?LLM:SEARCH;
+        const sel=panel.querySelector(".prov.on"); if(!sel){return;}
+        const inp=panel.querySelector(".keyinput");
+        const p=data.find(x=>x.name===sel.dataset.p);
+        const isOllama=p.name==="ollama";
+        if(!isOllama && !inp.value.trim()){ inp.closest(".kinput").classList.add("err"); panel.querySelector(".hintline").textContent="请先填 Key"; panel.querySelector(".hintline").classList.add("err"); return; }
+        v.textContent="验证中…"; v.disabled=true;
+        setTimeout(()=>{
+          // simulate: "bad" if key contains 'bad'
+          const bad = inp.value.includes("bad");
+          if(bad){
+            inp.closest(".kinput").classList.add("err");
+            const h=panel.querySelector(".hintline"); h.textContent="验证未通过 —— 请检查 API Key"; h.classList.add("err");
+            v.textContent="验证并获取模型"; if(kind==="search")v.textContent="验证"; v.disabled=false; return;
+          }
+          inp.closest(".kinput").classList.remove("err");
+          // replace verify button with ✓
+          const wrap=v.parentElement;
+          v.outerHTML='<span class="verified"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>已验证</span>';
+          const h=panel.querySelector(".hintline");
+          if(kind==="llm"){
+            const msel=panel.querySelector(".modelsel"); msel.disabled=false;
+            msel.innerHTML=p.models.map(m=>`<option>${m}</option>`).join("");
+            h.textContent="可用模型:"+p.models.join(" · "); h.classList.remove("err");
+          } else { h.textContent="已验证,可保存"; h.classList.remove("err"); }
+          panel.querySelector(".savebtn").disabled=false;
+        }, 650);
+      });
+    });
+
+    // appearance segmented + swatches
+    document.querySelectorAll(".sec[data-sec='look'] .seg").forEach(s=>s.addEventListener("click",e=>{const o=e.target.closest(".seg-opt");if(!o)return;s.querySelectorAll(".seg-opt").forEach(x=>x.classList.toggle("on",x===o));}));
+    document.querySelectorAll(".swrow").forEach(r=>r.addEventListener("click",e=>{const d=e.target.closest(".dot");if(!d)return;r.querySelectorAll(".dot").forEach(x=>x.classList.toggle("on",x===d));}));
+  </script>
+</body>
+</html>
