@@ -92,8 +92,8 @@ func applyOne(g *workflowdomain.Graph, op Op) error {
 
 func applySetMeta(g *workflowdomain.Graph, raw json.RawMessage) error {
 	var p struct {
-		Name        *string  `json:"name"`
-		Description *string  `json:"description"`
+		Name        *string   `json:"name"`
+		Description *string   `json:"description"`
 		Tags        *[]string `json:"tags"`
 	}
 	if err := json.Unmarshal(raw, &p); err != nil {
@@ -137,18 +137,18 @@ func applyAddNode(g *workflowdomain.Graph, raw json.RawMessage) error {
 
 func applyUpdateNode(g *workflowdomain.Graph, raw json.RawMessage) error {
 	var p struct {
-		ID    string          `json:"id"`
-		Patch json.RawMessage `json:"patch"`
+		NodeID string          `json:"nodeId"`
+		Patch  json.RawMessage `json:"patch"`
 	}
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return fmt.Errorf("update_node unmarshal: %w", err)
 	}
-	if p.ID == "" {
-		return fmt.Errorf("update_node: empty id")
+	if p.NodeID == "" {
+		return fmt.Errorf("update_node: empty nodeId")
 	}
-	idx := findNode(g, p.ID)
+	idx := findNode(g, p.NodeID)
 	if idx < 0 {
-		return fmt.Errorf("update_node: node %q not found", p.ID)
+		return fmt.Errorf("update_node: node %q not found", p.NodeID)
 	}
 	merged, err := mergeNodePatch(g.Nodes[idx], p.Patch)
 	if err != nil {
@@ -160,17 +160,17 @@ func applyUpdateNode(g *workflowdomain.Graph, raw json.RawMessage) error {
 
 func applyDeleteNode(g *workflowdomain.Graph, raw json.RawMessage) error {
 	var p struct {
-		ID string `json:"id"`
+		NodeID string `json:"nodeId"`
 	}
 	if err := json.Unmarshal(raw, &p); err != nil {
 		return fmt.Errorf("delete_node unmarshal: %w", err)
 	}
-	if p.ID == "" {
-		return fmt.Errorf("delete_node: empty id")
+	if p.NodeID == "" {
+		return fmt.Errorf("delete_node: empty nodeId")
 	}
-	idx := findNode(g, p.ID)
+	idx := findNode(g, p.NodeID)
 	if idx < 0 {
-		return fmt.Errorf("delete_node: node %q not found", p.ID)
+		return fmt.Errorf("delete_node: node %q not found", p.NodeID)
 	}
 	g.Nodes = append(g.Nodes[:idx], g.Nodes[idx+1:]...)
 	// Cascade delete edges touching this node — orphan edges would fail final
@@ -181,7 +181,7 @@ func applyDeleteNode(g *workflowdomain.Graph, raw json.RawMessage) error {
 	// 顺带清掉让批次中后续 op 看到干净 state。
 	kept := g.Edges[:0]
 	for _, e := range g.Edges {
-		if edgeRefsNode(e, p.ID) {
+		if edgeRefsNode(e, p.NodeID) {
 			continue
 		}
 		kept = append(kept, e)

@@ -114,3 +114,22 @@ func TestApplyOps_ASTScanRejectsHandlerImport(t *testing.T) {
 		t.Errorf("expected D7 handler-import error, got %v", err)
 	}
 }
+
+func TestApplyOps_SetDependencies_UsesDependenciesKey(t *testing.T) {
+	s := &Service{}
+	rawMeta, _ := json.Marshal(map[string]any{"name": "to_pdf", "description": "x"})
+	rawCode, _ := json.Marshal(map[string]any{"code": "def to_pdf():\n    return 1\n"})
+	rawDeps, _ := json.Marshal(map[string]any{"dependencies": []string{"reportlab"}})
+	ops := []Op{
+		{Type: "set_meta", Raw: rawMeta},
+		{Type: "set_code", Raw: rawCode},
+		{Type: "set_dependencies", Raw: rawDeps},
+	}
+	out, _, err := s.ApplyOps(context.Background(), &VersionDraft{}, ops, "")
+	if err != nil {
+		t.Fatalf("ApplyOps: %v", err)
+	}
+	if len(out.Dependencies) != 1 || out.Dependencies[0] != "reportlab" {
+		t.Fatalf("Dependencies = %v, want [reportlab] (set_dependencies must read the \"dependencies\" key)", out.Dependencies)
+	}
+}

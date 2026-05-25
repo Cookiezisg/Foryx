@@ -128,7 +128,7 @@ func applyOne(state *VersionDraft, op Op) error {
 
 	case "set_init":
 		var p struct {
-			InitBody string `json:"init_body"`
+			InitBody string `json:"initBody"`
 		}
 		if err := json.Unmarshal(op.Raw, &p); err != nil {
 			return fmt.Errorf("set_init unmarshal: %w", err)
@@ -137,7 +137,7 @@ func applyOne(state *VersionDraft, op Op) error {
 
 	case "set_shutdown":
 		var p struct {
-			ShutdownBody string `json:"shutdown_body"`
+			ShutdownBody string `json:"shutdownBody"`
 		}
 		if err := json.Unmarshal(op.Raw, &p); err != nil {
 			return fmt.Errorf("set_shutdown unmarshal: %w", err)
@@ -203,12 +203,12 @@ func applyOne(state *VersionDraft, op Op) error {
 
 	case "set_dependencies":
 		var p struct {
-			Deps []string `json:"deps"`
+			Dependencies []string `json:"dependencies"`
 		}
 		if err := json.Unmarshal(op.Raw, &p); err != nil {
 			return fmt.Errorf("set_dependencies unmarshal: %w", err)
 		}
-		state.Dependencies = p.Deps
+		state.Dependencies = p.Dependencies
 
 	case "set_python_version":
 		var p struct {

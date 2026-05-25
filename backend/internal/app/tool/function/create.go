@@ -143,7 +143,7 @@ func (t *CreateFunction) Execute(ctx context.Context, argsJSON string) (string, 
 			//
 			// 每次重试调 svc.Edit 加 set_dependencies op;iterate-same-pending
 			// 保证行数不爆炸。
-			depsOp, _ := json.Marshal(map[string]any{"deps": newDeps})
+			depsOp, _ := json.Marshal(map[string]any{"dependencies": newDeps})
 			editV, err := t.svc.Edit(ctx, functionapp.EditInput{
 				ID: f.ID,
 				Ops: []functionapp.Op{{

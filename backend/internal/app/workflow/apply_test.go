@@ -70,7 +70,7 @@ func TestApply_AddNode_UnknownType(t *testing.T) {
 func TestApply_UpdateNode_MergePatch(t *testing.T) {
 	ops := opsFromJSON(t, `[
 		{"op":"add_node","node":{"id":"n1","type":"http","config":{"method":"GET","url":"https://a"}}},
-		{"op":"update_node","id":"n1","patch":{"config":{"method":"POST","headers":{"X":"1"}}}}
+		{"op":"update_node","nodeId":"n1","patch":{"config":{"method":"POST","headers":{"X":"1"}}}}
 	]`)
 	g, err := ApplyOps(context.Background(), nil, ops, "")
 	if err != nil {
@@ -91,7 +91,7 @@ func TestApply_UpdateNode_MergePatch(t *testing.T) {
 func TestApply_UpdateNode_MergePatch_NullDeletes(t *testing.T) {
 	ops := opsFromJSON(t, `[
 		{"op":"add_node","node":{"id":"n1","type":"http","config":{"method":"GET","timeout":10}}},
-		{"op":"update_node","id":"n1","patch":{"config":{"timeout":null}}}
+		{"op":"update_node","nodeId":"n1","patch":{"config":{"timeout":null}}}
 	]`)
 	g, _ := ApplyOps(context.Background(), nil, ops, "")
 	if _, present := g.Nodes[0].Config["timeout"]; present {
@@ -106,7 +106,7 @@ func TestApply_DeleteNode_CascadesEdges(t *testing.T) {
 		{"op":"add_node","node":{"id":"c","type":"function","config":{"functionId":"fn"}}},
 		{"op":"add_edge","edge":{"from": "a","to": "b"}},
 		{"op":"add_edge","edge":{"from": "b","to": "c"}},
-		{"op":"delete_node","id":"b"}
+		{"op":"delete_node","nodeId":"b"}
 	]`)
 	g, err := ApplyOps(context.Background(), nil, ops, "")
 	if err != nil {

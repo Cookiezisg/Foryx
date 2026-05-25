@@ -134,7 +134,7 @@ func (t *EditFunction) Execute(ctx context.Context, argsJSON string) (string, er
 		},
 		MaxAttempts: envfixpkg.DefaultMaxAttempts,
 		ApplyDeps: func(ctx context.Context, newDeps []string) (string, string, error) {
-			depsOp, _ := json.Marshal(map[string]any{"deps": newDeps})
+			depsOp, _ := json.Marshal(map[string]any{"dependencies": newDeps})
 			retryV, err := t.svc.Edit(ctx, functionapp.EditInput{
 				ID: args.ID,
 				Ops: []functionapp.Op{{

@@ -310,11 +310,11 @@ func buildOpsFromDirect(in DirectCreateInput) ([]Op, error) {
 		ops = append(ops, Op{Type: "set_imports", Raw: raw})
 	}
 	if in.InitBody != "" {
-		raw, _ := json.Marshal(map[string]any{"init_body": in.InitBody})
+		raw, _ := json.Marshal(map[string]any{"initBody": in.InitBody})
 		ops = append(ops, Op{Type: "set_init", Raw: raw})
 	}
 	if in.ShutdownBody != "" {
-		raw, _ := json.Marshal(map[string]any{"shutdown_body": in.ShutdownBody})
+		raw, _ := json.Marshal(map[string]any{"shutdownBody": in.ShutdownBody})
 		ops = append(ops, Op{Type: "set_shutdown", Raw: raw})
 	}
 	if len(in.InitArgsSchema) > 0 {
@@ -329,7 +329,7 @@ func buildOpsFromDirect(in DirectCreateInput) ([]Op, error) {
 		ops = append(ops, Op{Type: "add_method", Raw: raw})
 	}
 	if len(in.Dependencies) > 0 {
-		raw, _ := json.Marshal(map[string]any{"deps": in.Dependencies})
+		raw, _ := json.Marshal(map[string]any{"dependencies": in.Dependencies})
 		ops = append(ops, Op{Type: "set_dependencies", Raw: raw})
 	}
 	if in.PythonVersion != "" {

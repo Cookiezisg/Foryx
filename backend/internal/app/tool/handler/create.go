@@ -43,7 +43,7 @@ MINIMAL COMPLETE EXAMPLE — a counter handler with persistent state:
     {"op":"set_init_args_schema", "args":[
         {"name":"start","type":"integer","required":true,"description":"initial count"}
     ]},
-    {"op":"set_init", "init_body":"self.count = start"},
+    {"op":"set_init", "initBody":"self.count = start"},
     {"op":"add_method", "method":{
         "name":"bump",
         "args":[{"name":"by","type":"integer","required":false,"default":1}],
@@ -65,8 +65,8 @@ OPS:
       {"name":"dsn", "type":"string", "required":true, "sensitive":true, "description":"PG DSN"},
       {"name":"timeout", "type":"integer", "required":false, "default":30}
   ]}
-  {"op":"set_init", "init_body":"self.conn = psycopg2.connect(dsn, connect_timeout=timeout)"}
-  {"op":"set_shutdown", "shutdown_body":"self.conn.close()"}
+  {"op":"set_init", "initBody":"self.conn = psycopg2.connect(dsn, connect_timeout=timeout)"}
+  {"op":"set_shutdown", "shutdownBody":"self.conn.close()"}
   {"op":"add_method", "method":{"name":"query", "args":[{"name":"sql","type":"string","required":true}], "body":"return self.conn.cursor().execute(sql).fetchall()"}}
   {"op":"update_method", "name":"query", "patch":{"body":"new body"}}
   {"op":"delete_method", "name":"query"}
@@ -188,7 +188,7 @@ func (t *CreateHandler) Execute(ctx context.Context, argsJSON string) (string, e
 		},
 		MaxAttempts: envfixpkg.DefaultMaxAttempts,
 		ApplyDeps: func(ctx context.Context, newDeps []string) (string, string, error) {
-			depsOp, _ := json.Marshal(map[string]any{"deps": newDeps})
+			depsOp, _ := json.Marshal(map[string]any{"dependencies": newDeps})
 			editV, err := t.svc.Edit(ctx, handlerapp.EditInput{
 				ID: h.ID,
 				Ops: []handlerapp.Op{{

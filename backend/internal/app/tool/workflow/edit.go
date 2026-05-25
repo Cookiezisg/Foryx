@@ -28,11 +28,11 @@ Iterate-same-pending semantic — repeated edits while a pending exists rewrite 
 
 KEY OP SHAPES:
   {"op":"add_node", "node":{"id":"...", "type":"...", "config":{...}}}
-  {"op":"update_node", "id":"<nodeId>", "patch":{...}}     // RFC 7396 JSON Merge Patch
-  {"op":"delete_node", "id":"<nodeId>"}                    // cascades incident edges
+  {"op":"update_node", "nodeId":"<nodeId>", "patch":{...}} // RFC 7396 JSON Merge Patch
+  {"op":"delete_node", "nodeId":"<nodeId>"}                // cascades incident edges
   {"op":"add_edge", "edge":{"from":"...", "to":"...", "fromPort":"<port if source is approval/loop/condition>"}}
-  {"op":"update_edge", "id":"<edgeId>", "patch":{...}}
-  {"op":"delete_edge", "id":"<edgeId>"}
+  {"op":"update_edge", "edgeId":"<edgeId>", "patch":{...}}
+  {"op":"delete_edge", "edgeId":"<edgeId>"}
   {"op":"set_meta", "name":"...", "description":"...", "tags":[...]}
   {"op":"set_variable", "variable":{"name":"...", "type":"...", "default":...}}
   {"op":"unset_variable", "name":"..."}

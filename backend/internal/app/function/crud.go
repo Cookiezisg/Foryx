@@ -291,7 +291,7 @@ func buildOpsFromDirect(in DirectCreateInput) ([]Op, error) {
 		ops = append(ops, Op{Type: "set_return_schema", Raw: raw})
 	}
 	if len(in.Dependencies) > 0 {
-		raw, err := json.Marshal(map[string]any{"deps": in.Dependencies})
+		raw, err := json.Marshal(map[string]any{"dependencies": in.Dependencies})
 		if err != nil {
 			return nil, fmt.Errorf("marshal set_dependencies: %w", err)
 		}

@@ -114,12 +114,12 @@ func applyOne(state *VersionDraft, op Op) error {
 		state.ReturnSchema = p.ReturnSchema
 	case "set_dependencies":
 		var p struct {
-			Deps []string `json:"deps"`
+			Dependencies []string `json:"dependencies"`
 		}
 		if err := json.Unmarshal(op.Raw, &p); err != nil {
 			return fmt.Errorf("set_dependencies unmarshal: %w", err)
 		}
-		state.Dependencies = p.Deps
+		state.Dependencies = p.Dependencies
 	case "set_python_version":
 		var p struct {
 			Version string `json:"version"`

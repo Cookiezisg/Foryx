@@ -140,7 +140,7 @@ func (t *EditHandler) Execute(ctx context.Context, argsJSON string) (string, err
 		},
 		MaxAttempts: envfixpkg.DefaultMaxAttempts,
 		ApplyDeps: func(ctx context.Context, newDeps []string) (string, string, error) {
-			depsOp, _ := json.Marshal(map[string]any{"deps": newDeps})
+			depsOp, _ := json.Marshal(map[string]any{"dependencies": newDeps})
 			retryV, err := t.svc.Edit(ctx, handlerapp.EditInput{
 				ID: args.ID,
 				Ops: []handlerapp.Op{{

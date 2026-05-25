@@ -13,7 +13,7 @@ func TestApplyOps_FullClassAssembly(t *testing.T) {
 	s := &Service{}
 	rawMeta, _ := json.Marshal(map[string]any{"name": "pg_handler", "description": "PG handler"})
 	rawImports, _ := json.Marshal(map[string]any{"imports": "import psycopg2"})
-	rawInit, _ := json.Marshal(map[string]any{"init_body": "self.conn = psycopg2.connect(**init_args)"})
+	rawInit, _ := json.Marshal(map[string]any{"initBody": "self.conn = psycopg2.connect(**init_args)"})
 	rawMethod1, _ := json.Marshal(map[string]any{
 		"method": map[string]any{
 			"name": "query",
@@ -232,6 +232,37 @@ func TestParseOps_PreservesDiscriminator(t *testing.T) {
 	}
 	if ops[0].Type != "set_meta" || ops[1].Type != "add_method" {
 		t.Errorf("ops types = %q/%q", ops[0].Type, ops[1].Type)
+	}
+}
+
+func TestApplyOps_CamelCaseAndDependencyKeys(t *testing.T) {
+	s := &Service{}
+	rawMeta, _ := json.Marshal(map[string]any{"name": "pg"})
+	rawInit, _ := json.Marshal(map[string]any{"initBody": "self.x = 1"})
+	rawShutdown, _ := json.Marshal(map[string]any{"shutdownBody": "self.conn.close()"})
+	rawDeps, _ := json.Marshal(map[string]any{"dependencies": []string{"psycopg2-binary"}})
+	rawMethod, _ := json.Marshal(map[string]any{
+		"method": map[string]any{"name": "m", "args": []map[string]any{}, "body": "pass"},
+	})
+	ops := []Op{
+		{Type: "set_meta", Raw: rawMeta},
+		{Type: "set_init", Raw: rawInit},
+		{Type: "set_shutdown", Raw: rawShutdown},
+		{Type: "set_dependencies", Raw: rawDeps},
+		{Type: "add_method", Raw: rawMethod},
+	}
+	out, _, err := s.ApplyOps(context.Background(), nil, ops, "")
+	if err != nil {
+		t.Fatalf("ApplyOps: %v", err)
+	}
+	if out.InitBody != "self.x = 1" {
+		t.Errorf("InitBody = %q, want set (set_init must read \"initBody\")", out.InitBody)
+	}
+	if out.ShutdownBody != "self.conn.close()" {
+		t.Errorf("ShutdownBody = %q, want set (set_shutdown must read \"shutdownBody\")", out.ShutdownBody)
+	}
+	if len(out.Dependencies) != 1 || out.Dependencies[0] != "psycopg2-binary" {
+		t.Errorf("Dependencies = %v, want [psycopg2-binary] (set_dependencies must read \"dependencies\")", out.Dependencies)
 	}
 }
 
