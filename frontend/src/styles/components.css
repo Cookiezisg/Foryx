@@ -174,10 +174,12 @@
   white-space: nowrap; overflow: hidden;
 }
 
-/* Collapsed sidebar: items shrink to 40x40 button, label hidden */
+/* Collapsed sidebar: 40px-wide centered hit area, label hidden. Height MUST
+   stay 38px (same as expanded) — a taller collapsed item makes every row grow
+   ~2px on collapse, which reads as the whole column "swelling" vertically. */
 .sidebar.is-collapsed .sb-item {
   padding: 0; margin: 0 12px;
-  width: 40px; height: 40px;
+  width: 40px; height: 38px;
   justify-content: center;
 }
 .sidebar.is-collapsed .sb-item .label { display: none; }
@@ -203,9 +205,10 @@
 .sb-section .sb-section-chev.is-closed { transform: rotate(-90deg); }
 .sb-section:hover .sb-section-chev { opacity: 1; }
 
-/* Collapsed sidebar: section shows a short line instead of label */
+/* Collapsed sidebar: section shows a short line instead of label. Height stays
+   32px (same as expanded) so the section row doesn't jump vertically. */
 .sb-section.is-collapsed-sb {
-  justify-content: center; height: 24px;
+  justify-content: center; height: 32px;
   padding: 0; margin: 14px 12px 0 12px;
 }
 .sb-section-divider {
