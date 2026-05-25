@@ -1,0 +1,152 @@
+{
+  "overview": {
+    "title": "执行",
+    "subtitle": "运行历史 · 待批准 · 触发器",
+    "refreshBtn": "刷新",
+    "searchPlaceholder": "搜 workflow / run id / 触发源…",
+    "clearFilter": "清除筛选",
+    "tabs": {
+      "runs": "FlowRuns",
+      "approvals": "待批准",
+      "triggers": "触发器"
+    },
+    "statusFilter": {
+      "all": "全部",
+      "running": "运行中",
+      "waitingApproval": "待批准",
+      "failed": "失败",
+      "completed": "完成"
+    },
+    "kpi": {
+      "total": "运行总数",
+      "running": "运行中",
+      "waiting": "待批准",
+      "needsAttention": "需关注",
+      "successRate": "{{rate}}% 成功率",
+      "none": "无"
+    },
+    "runs": {
+      "loading": "加载中…",
+      "empty": {
+        "title": "没有匹配的运行",
+        "sub": "调整筛选条件，或先去 forge 部署一个 workflow"
+      },
+      "cols": {
+        "status": "状态",
+        "nodes": "节点",
+        "trigger": "触发",
+        "startedAt": "开始",
+        "duration": "耗时"
+      }
+    },
+    "approvals": {
+      "empty": {
+        "title": "没有待批准的任务",
+        "sub": "workflow 暂停于 approval 节点时会出现在这里"
+      },
+      "nodeCount": "节点 {{done}}/{{total}}",
+      "triggeredBy": "由 {{trigger}} 触发",
+      "rejectBtn": "拒绝",
+      "approveBtn": "批准并继续",
+      "toast": {
+        "approveSuccess": "已批准并继续",
+        "approveFail": "批准失败"
+      }
+    },
+    "triggers": {
+      "cron": {
+        "label": "Cron 定时",
+        "desc": "robfig/cron v3 表达式"
+      },
+      "fsnotify": {
+        "label": "文件触发",
+        "desc": "fsnotify watch 路径"
+      },
+      "webhook": {
+        "desc": "HTTP POST 入口"
+      },
+      "manual": {
+        "label": "手动入口",
+        "desc": "从 UI 或 API 触发"
+      }
+    }
+  },
+  "status": {
+    "running": "运行中",
+    "completed": "完成",
+    "failed": "失败",
+    "waitingApproval": "待批准",
+    "paused": "已暂停",
+    "cancelled": "已取消"
+  },
+  "detail": {
+    "loading": "加载 flowrun…",
+    "back": "← 返回",
+    "triggeredBy": "由",
+    "triggeredByFull": "由 <0>{{trigger}}</0> 触发",
+    "cancelBtn": "取消",
+    "triageBtn": "AI 排查",
+    "rerunBtn": "重跑",
+    "toast": {
+      "triageSuccess": "AI 排查对话已开启",
+      "triageFail": "排查失败"
+    },
+    "dag": {
+      "empty": "没有节点数据",
+      "nodeRunning": "运行中…",
+      "nodeWaiting": "等待"
+    },
+    "inspector": {
+      "empty": "没有 input/output/log（跳过或未运行）"
+    },
+    "gantt": {
+      "title": "时间线",
+      "totalDuration": "总耗时 {{duration}} · 0ms 起点",
+      "notRun": "未运行"
+    }
+  },
+  "approval": {
+    "banner": {
+      "title": "等待审批",
+      "pendingCount": "· {{count}} 个节点需要决定"
+    },
+    "row": {
+      "addReason": "加理由",
+      "collapseReason": "收起",
+      "rejectBtn": "拒绝",
+      "approveBtn": "批准",
+      "reasonPlaceholder": "审批理由（可选，会写到 flowrun 日志）",
+      "decided": {
+        "approved": "已批准",
+        "rejected": "已拒绝"
+      },
+      "toast": {
+        "approveSuccess": "已批准",
+        "approveFail": "批准失败",
+        "rejectSuccess": "已拒绝",
+        "rejectFail": "拒绝失败"
+      }
+    }
+  },
+  "runDrawer": {
+    "title": {
+      "function": "跑 function",
+      "handler": "调 handler",
+      "workflow": "触发 workflow"
+    },
+    "closeTitle": "关闭",
+    "methodLabel": "方法",
+    "methodAriaLabel": "方法",
+    "noMethods": "当前版本没有方法",
+    "jsonError": "JSON 不对 · {{detail}}",
+    "noMethod": "挑一个方法",
+    "resultLabel": "结果",
+    "footerHint": "Esc 关闭 · Cmd+Enter 提交",
+    "submitBtn": "提交",
+    "submittingBtn": "在跑",
+    "toast": {
+      "triggerSuccess": "已触发",
+      "triggerDefaultDesc": "flowrun 创建"
+    }
+  }
+}

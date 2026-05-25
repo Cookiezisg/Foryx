@@ -6,6 +6,7 @@
 // 接 approve/reject + 可选 reason。
 
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "../../components/primitives/Icon.jsx";
 import { Button } from "../../components/primitives/Button.jsx";
@@ -14,6 +15,7 @@ import { useUIStore } from "../../store/ui.js";
 import { slideDown } from "../../motion/tokens.js";
 
 export function ApprovalBanner({ runId, nodes }) {
+  const { t } = useTranslation("execute");
   const pending = (nodes || []).filter((n) =>
     n.status === "waiting_approval" || n.status === "waiting" || n.status === "wait"
   );
@@ -23,8 +25,8 @@ export function ApprovalBanner({ runId, nodes }) {
     <motion.div className="approval-banner" {...slideDown}>
       <div className="approval-banner-head">
         <Icon.Pause style={{ width: 14, height: 14, color: "var(--status-warn)" }} />
-        <strong>等待审批</strong>
-        <span style={{ color: "var(--fg-muted)" }}>· {pending.length} 个节点需要决定</span>
+        <strong>{t("approval.banner.title")}</strong>
+        <span style={{ color: "var(--fg-muted)" }}>{t("approval.banner.pendingCount", { count: pending.length })}</span>
       </div>
       <div className="approval-banner-list">
         {pending.map((n) => (
@@ -36,6 +38,7 @@ export function ApprovalBanner({ runId, nodes }) {
 }
 
 function ApprovalRow({ runId, node }) {
+  const { t } = useTranslation("execute");
   const approve = useApproveNode();
   const reject = useRejectNode();
   const pushToast = useUIStore((s) => s.pushToast);
@@ -47,8 +50,8 @@ function ApprovalRow({ runId, node }) {
     approve.mutate(
       { runId, nodeId: node.id, decision: "approve", reason },
       {
-        onSuccess: () => { setDecided("approved"); pushToast({ kind: "success", title: "已批准", desc: node.label || node.id }); },
-        onError: (e) => pushToast({ kind: "error", title: "批准失败", desc: e.message }),
+        onSuccess: () => { setDecided("approved"); pushToast({ kind: "success", title: t("approval.row.toast.approveSuccess"), desc: node.label || node.id }); },
+        onError: (e) => pushToast({ kind: "error", title: t("approval.row.toast.approveFail"), desc: e.message }),
       }
     );
   };
@@ -56,8 +59,8 @@ function ApprovalRow({ runId, node }) {
     reject.mutate(
       { runId, nodeId: node.id, reason },
       {
-        onSuccess: () => { setDecided("rejected"); pushToast({ kind: "warn", title: "已拒绝", desc: node.label || node.id }); },
-        onError: (e) => pushToast({ kind: "error", title: "拒绝失败", desc: e.message }),
+        onSuccess: () => { setDecided("rejected"); pushToast({ kind: "warn", title: t("approval.row.toast.rejectSuccess"), desc: node.label || node.id }); },
+        onError: (e) => pushToast({ kind: "error", title: t("approval.row.toast.rejectFail"), desc: e.message }),
       }
     );
   };
@@ -67,7 +70,7 @@ function ApprovalRow({ runId, node }) {
       <div className={"approval-row is-" + decided}>
         <Icon.Check style={{ width: 12, height: 12 }} />
         <span className="cell-mono">{node.label || node.id}</span>
-        <span style={{ color: "var(--fg-muted)" }}>{decided === "approved" ? "已批准" : "已拒绝"}</span>
+        <span style={{ color: "var(--fg-muted)" }}>{t(`approval.row.decided.${decided}`)}</span>
         {reason && <span style={{ color: "var(--fg-faint)", fontSize: 11 }}>· {reason}</span>}
       </div>
     );
@@ -83,13 +86,13 @@ function ApprovalRow({ runId, node }) {
         {node.kind && <span className="kind-chip">{node.kind}</span>}
         <div style={{ flex: 1 }} />
         <Button size="xs" variant="ghost" onClick={() => setReasonOpen((o) => !o)}>
-          {reasonOpen ? "收起" : "加理由"}
+          {reasonOpen ? t("approval.row.collapseReason") : t("approval.row.addReason")}
         </Button>
         <Button size="xs" variant="danger" onClick={onReject} disabled={busy}>
-          <Icon.X /> 拒绝
+          <Icon.X /> {t("approval.row.rejectBtn")}
         </Button>
         <Button size="xs" variant="accent" onClick={onApprove} disabled={busy}>
-          <Icon.Check /> 批准
+          <Icon.Check /> {t("approval.row.approveBtn")}
         </Button>
       </div>
       <AnimatePresence>
@@ -100,7 +103,7 @@ function ApprovalRow({ runId, node }) {
             exit={{ opacity: 0, height: 0 }}
             className="cfg-input"
             style={{ marginTop: 6 }}
-            placeholder="审批理由（可选，会写到 flowrun 日志）"
+            placeholder={t("approval.row.reasonPlaceholder")}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
           />

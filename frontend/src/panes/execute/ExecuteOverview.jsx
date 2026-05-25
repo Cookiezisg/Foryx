@@ -4,6 +4,7 @@
 // ExecuteOverview —— KPI 条 + heatmap + 三标签内容；数据全真实。
 
 import { useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/primitives/Icon.jsx";
 import { Button } from "../../components/primitives/Button.jsx";
 import { Badge } from "../../components/primitives/Badge.jsx";
@@ -11,14 +12,6 @@ import { RelTime } from "../../components/shared/RelTime.jsx";
 import { useFlowRuns, useApproveNode, useRejectNode } from "../../api/flowruns.js";
 import { useUIStore } from "../../store/ui.js";
 
-const STATUS_LABEL = {
-  running: "运行中",
-  completed: "完成",
-  failed: "失败",
-  waiting_approval: "待批准",
-  paused: "已暂停",
-  cancelled: "已取消",
-};
 const STATUS_KIND = {
   running: "streaming",
   completed: "success",
@@ -28,12 +21,17 @@ const STATUS_KIND = {
   cancelled: "muted",
 };
 
-function flowStatusBadge(s) {
-  const k = STATUS_KIND[s] || "muted";
-  return <Badge kind={k}>{STATUS_LABEL[s] || s}</Badge>;
+function FlowStatusBadge({ status }) {
+  const { t } = useTranslation("execute");
+  const k = STATUS_KIND[status] || "muted";
+  const label = t(`status.${
+    status === "waiting_approval" ? "waitingApproval" : status
+  }`, status);
+  return <Badge kind={k}>{label}</Badge>;
 }
 
 export function ExecuteOverview({ onOpen }) {
+  const { t } = useTranslation("execute");
   const [tab, setTab] = useState("runs");
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -61,21 +59,27 @@ export function ExecuteOverview({ onOpen }) {
     <div className="page">
       <div className="page-header">
         <div className="page-header-text">
-          <div className="page-title"><Icon.Play /> 执行</div>
-          <div className="page-subtitle">运行历史 · 待批准 · 触发器</div>
+          <div className="page-title"><Icon.Play /> {t("overview.title")}</div>
+          <div className="page-subtitle">{t("overview.subtitle")}</div>
         </div>
         <div className="page-actions">
-          <Button size="sm"><Icon.Refresh /> 刷新</Button>
+          <Button size="sm"><Icon.Refresh /> {t("overview.refreshBtn")}</Button>
         </div>
       </div>
 
       <div className="page-toolbar">
         <div className="search-input" style={{ maxWidth: 320 }}>
           <Icon.Search className="icon" />
-          <input placeholder="搜 workflow / run id / 触发源…" value={q} onChange={(e) => setQ(e.target.value)} />
+          <input placeholder={t("overview.searchPlaceholder")} value={q} onChange={(e) => setQ(e.target.value)} />
         </div>
         <div className="seg">
-          {[["all", "全部"], ["running", "运行中"], ["waiting_approval", "待批准"], ["failed", "失败"], ["completed", "完成"]].map(([k, l]) => (
+          {[
+            ["all",              t("overview.statusFilter.all")],
+            ["running",          t("overview.statusFilter.running")],
+            ["waiting_approval", t("overview.statusFilter.waitingApproval")],
+            ["failed",           t("overview.statusFilter.failed")],
+            ["completed",        t("overview.statusFilter.completed")],
+          ].map(([k, l]) => (
             <button key={k} className={"seg-btn" + (statusFilter === k ? " is-active" : "")} onClick={() => setStatusFilter(k)}>
               {l}
             </button>
@@ -84,7 +88,7 @@ export function ExecuteOverview({ onOpen }) {
         <div style={{ flex: 1 }} />
         {(q || statusFilter !== "all") && (
           <Button size="xs" variant="ghost" onClick={() => { setQ(""); setStatusFilter("all"); }}>
-            <Icon.X /> 清除筛选
+            <Icon.X /> {t("overview.clearFilter")}
           </Button>
         )}
       </div>
@@ -94,9 +98,9 @@ export function ExecuteOverview({ onOpen }) {
 
         <div className="page-tabs" style={{ marginTop: 22, padding: 0, border: 0 }}>
           {[
-            ["runs", "FlowRuns", filtered.length],
-            ["approvals", "待批准", waiting.length],
-            ["triggers", "触发器", null],
+            ["runs",      t("overview.tabs.runs"),      filtered.length],
+            ["approvals", t("overview.tabs.approvals"), waiting.length],
+            ["triggers",  t("overview.tabs.triggers"),  null],
           ].map(([k, l, c]) => (
             <button key={k} className={"page-tab" + (tab === k ? " is-active" : "")} onClick={() => setTab(k)}>
               {l}{c != null && <span className="count">{c}</span>}
@@ -121,13 +125,14 @@ export function ExecuteOverview({ onOpen }) {
 }
 
 function KpiStrip({ total, running, waiting, failed, success }) {
+  const { t } = useTranslation("execute");
   const rate = total === 0 ? 0 : Math.round((success / total) * 100);
   return (
     <div className="kpi-strip">
-      <Kpi label="运行总数" value={total} sub={`${rate}% 成功率`} />
-      <Kpi label="运行中" value={running} sub={running ? "" : "无"} active={running > 0} />
-      <Kpi label="待批准" value={waiting} sub={waiting ? "" : "无"} warn={waiting > 0} />
-      <Kpi label="需关注" value={failed} sub={failed ? "" : "无"} error={failed > 0} />
+      <Kpi label={t("overview.kpi.total")}          value={total}   sub={t("overview.kpi.successRate", { rate })} />
+      <Kpi label={t("overview.kpi.running")}        value={running} sub={running ? "" : t("overview.kpi.none")} active={running > 0} />
+      <Kpi label={t("overview.kpi.waiting")}        value={waiting} sub={waiting ? "" : t("overview.kpi.none")} warn={waiting > 0} />
+      <Kpi label={t("overview.kpi.needsAttention")} value={failed}  sub={failed  ? "" : t("overview.kpi.none")} error={failed > 0} />
     </div>
   );
 }
@@ -168,13 +173,14 @@ function fmtDuration(ms) {
 }
 
 function FlowRunsTable({ runs, loading, onOpen }) {
-  if (loading) return <div className="empty" style={{ padding: 32 }}><div className="sub">加载中…</div></div>;
+  const { t } = useTranslation("execute");
+  if (loading) return <div className="empty" style={{ padding: 32 }}><div className="sub">{t("overview.runs.loading")}</div></div>;
   if (runs.length === 0) {
     return (
       <div className="empty" style={{ padding: 32 }}>
         <Icon.Play className="icon" />
-        <div className="title">没有匹配的运行</div>
-        <div className="sub">调整筛选条件，或先去 forge 部署一个 workflow</div>
+        <div className="title">{t("overview.runs.empty.title")}</div>
+        <div className="sub">{t("overview.runs.empty.sub")}</div>
       </div>
     );
   }
@@ -183,11 +189,11 @@ function FlowRunsTable({ runs, loading, onOpen }) {
       <thead>
         <tr>
           <th style={{ paddingLeft: 32 }}>Workflow</th>
-          <th>状态</th>
-          <th>节点</th>
-          <th>触发</th>
-          <th>开始</th>
-          <th>耗时</th>
+          <th>{t("overview.runs.cols.status")}</th>
+          <th>{t("overview.runs.cols.nodes")}</th>
+          <th>{t("overview.runs.cols.trigger")}</th>
+          <th>{t("overview.runs.cols.startedAt")}</th>
+          <th>{t("overview.runs.cols.duration")}</th>
           <th />
         </tr>
       </thead>
@@ -200,7 +206,7 @@ function FlowRunsTable({ runs, loading, onOpen }) {
                 <div className="cell-mono" style={{ marginTop: 2 }}>{fr.id}</div>
               </div>
             </td>
-            <td>{flowStatusBadge(fr.status)}</td>
+            <td><FlowStatusBadge status={fr.status} /></td>
             <td>
               <ProgressMini done={fr.nodes?.done ?? 0} total={fr.nodes?.total ?? 0} status={fr.status} />
             </td>
@@ -216,6 +222,7 @@ function FlowRunsTable({ runs, loading, onOpen }) {
 }
 
 function ApprovalsQueue({ runs }) {
+  const { t } = useTranslation("execute");
   const pushToast = useUIStore((s) => s.pushToast);
   const approve = useApproveNode();
   const reject = useRejectNode();
@@ -224,8 +231,8 @@ function ApprovalsQueue({ runs }) {
     return (
       <div className="empty">
         <Icon.CheckCircle className="icon" />
-        <div className="title">没有待批准的任务</div>
-        <div className="sub">workflow 暂停于 approval 节点时会出现在这里</div>
+        <div className="title">{t("overview.approvals.empty.title")}</div>
+        <div className="sub">{t("overview.approvals.empty.sub")}</div>
       </div>
     );
   }
@@ -253,25 +260,25 @@ function ApprovalsQueue({ runs }) {
               <div>
                 <div className="card-title">{fr.workflow || fr.workflowId}</div>
                 <div className="cell-mono" style={{ fontSize: 11, color: "var(--fg-faint)" }}>
-                  {fr.id} · 节点 {fr.nodes?.done ?? 0}/{fr.nodes?.total ?? 0}
+                  {fr.id} · {t("overview.approvals.nodeCount", { done: fr.nodes?.done ?? 0, total: fr.nodes?.total ?? 0 })}
                 </div>
               </div>
             </div>
-            {flowStatusBadge(fr.status)}
+            <FlowStatusBadge status={fr.status} />
           </div>
           <div className="card-foot">
-            <span>由 {fr.trigger || fr.triggerKind || "?"} 触发 · <RelTime ts={fr.startedAt} /></span>
+            <span>{t("overview.approvals.triggeredBy", { trigger: fr.trigger || fr.triggerKind || "?" })} · <RelTime ts={fr.startedAt} /></span>
             <div style={{ display: "flex", gap: 6 }}>
               <Button size="xs" variant="danger" onClick={() => reject.mutate({ runId: fr.id, nodeId: fr.pausedNodeId || "" })}>
-                <Icon.X /> 拒绝
+                <Icon.X /> {t("overview.approvals.rejectBtn")}
               </Button>
               <Button size="xs" variant="accent" onClick={() => {
                 approve.mutate({ runId: fr.id, nodeId: fr.pausedNodeId || "" }, {
-                  onSuccess: () => pushToast({ kind: "success", title: "已批准并继续" }),
-                  onError: (e) => pushToast({ kind: "error", title: "批准失败", desc: e.message }),
+                  onSuccess: () => pushToast({ kind: "success", title: t("overview.approvals.toast.approveSuccess") }),
+                  onError: (e) => pushToast({ kind: "error", title: t("overview.approvals.toast.approveFail"), desc: e.message }),
                 });
               }}>
-                <Icon.Check /> 批准并继续
+                <Icon.Check /> {t("overview.approvals.approveBtn")}
               </Button>
             </div>
           </div>
@@ -282,20 +289,21 @@ function ApprovalsQueue({ runs }) {
 }
 
 function TriggersGrid() {
+  const { t } = useTranslation("execute");
   // Backend trigger listing endpoint is internal-only. Show static info
   // about supported trigger kinds for now.
   const triggers = [
-    { kind: "cron",     icon: Icon.Clock,    label: "Cron 定时", desc: "robfig/cron v3 表达式" },
-    { kind: "fsnotify", icon: Icon.Folder,   label: "文件触发",  desc: "fsnotify watch 路径" },
-    { kind: "webhook",  icon: Icon.Globe,    label: "Webhook",   desc: "HTTP POST 入口" },
-    { kind: "manual",   icon: Icon.Play,     label: "手动入口",  desc: "从 UI 或 API 触发" },
+    { kind: "cron",     icon: Icon.Clock,  label: t("overview.triggers.cron.label"),    desc: t("overview.triggers.cron.desc") },
+    { kind: "fsnotify", icon: Icon.Folder, label: t("overview.triggers.fsnotify.label"), desc: t("overview.triggers.fsnotify.desc") },
+    { kind: "webhook",  icon: Icon.Globe,  label: "Webhook",                             desc: t("overview.triggers.webhook.desc") },
+    { kind: "manual",   icon: Icon.Play,   label: t("overview.triggers.manual.label"),   desc: t("overview.triggers.manual.desc") },
   ];
   return (
     <div className="card-grid" style={{ marginTop: 10 }}>
-      {triggers.map((t) => {
-        const I = t.icon;
+      {triggers.map((trigger) => {
+        const I = trigger.icon;
         return (
-          <div key={t.kind} className="card" style={{ cursor: "default" }}>
+          <div key={trigger.kind} className="card" style={{ cursor: "default" }}>
             <div className="card-head">
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{
@@ -305,11 +313,11 @@ function TriggersGrid() {
                 }}>
                   <I style={{ width: 13, height: 13 }} />
                 </div>
-                <div className="cell-mono" style={{ fontSize: 12, color: "var(--fg-strong)" }}>{t.label}</div>
+                <div className="cell-mono" style={{ fontSize: 12, color: "var(--fg-strong)" }}>{trigger.label}</div>
               </div>
               <Badge kind="success">available</Badge>
             </div>
-            <div className="card-desc">{t.desc}</div>
+            <div className="card-desc">{trigger.desc}</div>
           </div>
         );
       })}

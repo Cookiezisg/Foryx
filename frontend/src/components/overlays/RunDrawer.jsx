@@ -5,6 +5,7 @@
 // RunDrawer —— function/handler/workflow 三种触发入口的统一表单 drawer。
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import { Icon } from "../primitives/Icon.jsx";
 import { Button } from "../primitives/Button.jsx";
@@ -21,6 +22,7 @@ function safeParse(text) {
 }
 
 export function RunDrawer({ open, onClose, kind, entity }) {
+  const { t } = useTranslation("execute");
   const run = useRunFunction();
   const call = useCallHandler();
   const trig = useRunWorkflow();
@@ -54,19 +56,19 @@ export function RunDrawer({ open, onClose, kind, entity }) {
 
   const submit = async () => {
     const [parsed, perr] = safeParse(body);
-    if (perr) { setError("JSON 不对 · " + perr); return; }
+    if (perr) { setError(t("runDrawer.jsonError", { detail: perr })); return; }
     setError(null); setResult(null);
     try {
       let res;
       if (kind === "function") {
         res = await run.mutateAsync({ id: entity.id, inputs: parsed });
       } else if (kind === "handler") {
-        if (!method) { setError("挑一个方法"); return; }
+        if (!method) { setError(t("runDrawer.noMethod")); return; }
         res = await call.mutateAsync({ id: entity.id, method, args: parsed });
       } else if (kind === "workflow") {
         res = await trig.mutateAsync({ id: entity.id, input: parsed });
         const runId = res?.flowRunId || res?.id || res?.runId;
-        pushToast({ kind: "success", title: "已触发", desc: runId || "flowrun 创建" });
+        pushToast({ kind: "success", title: t("runDrawer.toast.triggerSuccess"), desc: runId || t("runDrawer.toast.triggerDefaultDesc") });
         if (runId) {
           openPane("execute");
           useUIStore.getState().setActiveFlowRun?.(runId);
@@ -83,10 +85,7 @@ export function RunDrawer({ open, onClose, kind, entity }) {
     ? (entity?.methods || entity?.currentVersion?.methods || [])
     : [];
 
-  const title =
-    kind === "function" ? "跑 function" :
-    kind === "handler"  ? "调 handler" :
-                          "触发 workflow";
+  const title = t(`runDrawer.title.${kind}`, kind);
 
   return (
     <AnimatePresence>
@@ -102,7 +101,7 @@ export function RunDrawer({ open, onClose, kind, entity }) {
               <div className="drawer-title">
                 <Icon.Play /> {title}
               </div>
-              <button className="icon-btn" onClick={onClose} title="关闭"><Icon.X /></button>
+              <button className="icon-btn" onClick={onClose} title={t("runDrawer.closeTitle")}><Icon.X /></button>
             </header>
 
             <div className="drawer-body" style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -113,15 +112,15 @@ export function RunDrawer({ open, onClose, kind, entity }) {
 
               {kind === "handler" && (
                 <div>
-                  <label className="drawer-label">方法</label>
+                  <label className="drawer-label">{t("runDrawer.methodLabel")}</label>
                   {methods.length === 0 ? (
                     <div className="empty" style={{ padding: 12 }}>
-                      <div className="sub">当前版本没有方法</div>
+                      <div className="sub">{t("runDrawer.noMethods")}</div>
                     </div>
                   ) : (
                     <Select
                       mono
-                      ariaLabel="方法"
+                      ariaLabel={t("runDrawer.methodAriaLabel")}
                       value={method}
                       onChange={setMethod}
                       options={methods.map((m) => ({
@@ -150,7 +149,7 @@ export function RunDrawer({ open, onClose, kind, entity }) {
 
               {result != null && (
                 <div>
-                  <label className="drawer-label">结果</label>
+                  <label className="drawer-label">{t("runDrawer.resultLabel")}</label>
                   <pre className="code-block run-drawer-result">{JSON.stringify(result, null, 2)}</pre>
                 </div>
               )}
@@ -158,12 +157,12 @@ export function RunDrawer({ open, onClose, kind, entity }) {
 
             <footer className="drawer-foot">
               <span style={{ fontSize: 11, color: "var(--fg-faint)" }}>
-                Esc 关闭 · Cmd+Enter 提交
+                {t("runDrawer.footerHint")}
               </span>
               <div style={{ flex: 1 }} />
-              <Button size="sm" variant="ghost" onClick={onClose}>取消</Button>
+              <Button size="sm" variant="ghost" onClick={onClose}>{t("common:cancel", "取消")}</Button>
               <Button size="sm" variant="accent" onClick={submit} disabled={busy}>
-                {busy ? <><span className="spinner" /> 在跑</> : <><Icon.Play /> 提交</>}
+                {busy ? <><span className="spinner" /> {t("runDrawer.submittingBtn")}</> : <><Icon.Play /> {t("runDrawer.submitBtn")}</>}
               </Button>
             </footer>
           </motion.aside>

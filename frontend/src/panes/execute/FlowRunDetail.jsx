@@ -6,6 +6,7 @@
 // 面板 inline 折叠。
 
 import { useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { Icon } from "../../components/primitives/Icon.jsx";
 import { Button } from "../../components/primitives/Button.jsx";
 import { Badge } from "../../components/primitives/Badge.jsx";
@@ -27,13 +28,11 @@ const STATUS_KIND = {
   paused: "info",
   cancelled: "muted",
 };
-const STATUS_LABEL = {
-  running: "运行中", completed: "完成", failed: "失败",
-  waiting_approval: "待批准", paused: "已暂停", cancelled: "已取消",
-};
 
-function statusBadge(s) {
-  return <Badge kind={STATUS_KIND[s] || "muted"}>{STATUS_LABEL[s] || s}</Badge>;
+function StatusBadge({ status }) {
+  const { t } = useTranslation("execute");
+  const label = t(`status.${status === "waiting_approval" ? "waitingApproval" : status}`, status);
+  return <Badge kind={STATUS_KIND[status] || "muted"}>{label}</Badge>;
 }
 
 function fmtDuration(ms) {
@@ -46,6 +45,7 @@ function fmtDuration(ms) {
 }
 
 export function FlowRunDetail({ runId, onBack }) {
+  const { t } = useTranslation("execute");
   const { data: fr } = useFlowRun(runId);
   const { data: nodes = [] } = useFlowRunNodes(runId);
   const cancel = useCancelFlowRun();
@@ -57,7 +57,7 @@ export function FlowRunDetail({ runId, onBack }) {
   const [selectedNodeId, setSelectedNodeId] = useState(null);
   const shellRef = useRef(null);
 
-  if (!fr) return <div className="empty" style={{ padding: 48 }}><div className="sub">加载 flowrun…</div></div>;
+  if (!fr) return <div className="empty" style={{ padding: 48 }}><div className="sub">{t("detail.loading")}</div></div>;
 
   const okCount   = nodes.filter((n) => n.status === "ok"      || n.status === "completed").length;
   const failCount = nodes.filter((n) => n.status === "fail"    || n.status === "failed").length;
@@ -72,10 +72,10 @@ export function FlowRunDetail({ runId, onBack }) {
       if (cid) {
         setActiveConv(cid);
         openPane("chat");
-        pushToast({ kind: "success", title: "AI 排查对话已开启" });
+        pushToast({ kind: "success", title: t("detail.toast.triageSuccess") });
       }
     } catch (e) {
-      pushToast({ kind: "error", title: "排查失败", desc: e.message });
+      pushToast({ kind: "error", title: t("detail.toast.triageFail"), desc: e.message });
     }
   };
 
@@ -84,17 +84,17 @@ export function FlowRunDetail({ runId, onBack }) {
       <div className="page-header" style={{ paddingTop: 18 }}>
         <div className="page-header-text" style={{ gap: 6 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "var(--fg-muted)" }}>
-            <Button size="xs" variant="ghost" onClick={onBack}>← 返回</Button>
+            <Button size="xs" variant="ghost" onClick={onBack}>{t("detail.back")}</Button>
             <span>·</span>
             <span className="cell-mono">{fr.id}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <div className="page-title" style={{ fontFamily: "var(--font-mono)" }}>{fr.workflow || fr.workflowId}</div>
-            {statusBadge(fr.status)}
+            <StatusBadge status={fr.status} />
           </div>
           <div className="page-subtitle" style={{ display: "flex", alignItems: "center", gap: 4, flexWrap: "wrap" }}>
             <span>
-              由 <code style={{ fontFamily: "var(--font-mono)" }}>{fr.trigger || fr.triggerKind || "?"}</code> 触发 · <RelTime ts={fr.startedAt} />
+              {t("detail.triggeredBy")} <code style={{ fontFamily: "var(--font-mono)" }}>{fr.trigger || fr.triggerKind || "?"}</code> · <RelTime ts={fr.startedAt} />
             </span>
             <span style={{ color: "var(--status-success)" }}> · {okCount} ok</span>
             {failCount > 0 && <span style={{ color: "var(--status-error)" }}> · {failCount} fail</span>}
@@ -105,15 +105,15 @@ export function FlowRunDetail({ runId, onBack }) {
         <div className="page-actions">
           {fr.status === "running" && (
             <Button size="sm" variant="danger" onClick={() => cancel.mutate(runId)}>
-              <Icon.StopCircle /> 取消
+              <Icon.StopCircle /> {t("detail.cancelBtn")}
             </Button>
           )}
           {fr.status === "failed" && (
             <Button size="sm" onClick={onTriage}>
-              <Icon.Sparkles /> AI 排查
+              <Icon.Sparkles /> {t("detail.triageBtn")}
             </Button>
           )}
-          <Button size="sm"><Icon.Refresh /> 重跑</Button>
+          <Button size="sm"><Icon.Refresh /> {t("detail.rerunBtn")}</Button>
         </div>
       </div>
 
@@ -145,8 +145,9 @@ function nodeStatusIcon(status) {
 }
 
 function FlowRunDag({ nodes, selected, onSelect }) {
+  const { t } = useTranslation("execute");
   if (!nodes || nodes.length === 0) {
-    return <div className="empty" style={{ padding: 32, flex: 1 }}><div className="sub">没有节点数据</div></div>;
+    return <div className="empty" style={{ padding: 32, flex: 1 }}><div className="sub">{t("detail.dag.empty")}</div></div>;
   }
   // Lay out nodes by their layer (if absent, simple stack).
   const positioned = nodes.map((n, i) => ({
@@ -189,7 +190,7 @@ function FlowRunDag({ nodes, selected, onSelect }) {
           </div>
           <div className="fr-dag-node-title">{n.label || n.id}</div>
           <div className="fr-dag-node-sub">
-            {n.durationMs != null ? fmtDuration(n.durationMs) : n.status === "running" ? "运行中…" : n.status === "pending" ? "等待" : "—"}
+            {n.durationMs != null ? fmtDuration(n.durationMs) : n.status === "running" ? t("detail.dag.nodeRunning") : n.status === "pending" ? t("detail.dag.nodeWaiting") : "—"}
           </div>
         </div>
       ))}
@@ -198,6 +199,7 @@ function FlowRunDag({ nodes, selected, onSelect }) {
 }
 
 function NodeInspectorBody({ node, fr }) {
+  const { t } = useTranslation("execute");
   return (
     <div className="fr-inspector-content">
       <div className="fr-inspector-meta-row">
@@ -235,7 +237,7 @@ function NodeInspectorBody({ node, fr }) {
         )}
         {node.input == null && node.output == null && (!node.log || node.log.length === 0) && (
           <div className="empty" style={{ padding: 20 }}>
-            <div className="sub" style={{ color: "var(--fg-faint)" }}>没有 input/output/log（跳过或未运行）</div>
+            <div className="sub" style={{ color: "var(--fg-faint)" }}>{t("detail.inspector.empty")}</div>
           </div>
         )}
       </div>
@@ -248,14 +250,15 @@ function prettyJSON(v) {
 }
 
 function GanttTimeline({ nodes }) {
+  const { t } = useTranslation("execute");
   if (!nodes || nodes.length === 0) return null;
   const total = Math.max(...nodes.map((n) => (n.startedMs ?? 0) + (n.durationMs ?? 0)), 1);
   return (
     <div className="fr-gantt">
       <div className="fr-gantt-head">
-        <span className="fr-gantt-title">时间线</span>
+        <span className="fr-gantt-title">{t("detail.gantt.title")}</span>
         <span className="cell-mono" style={{ color: "var(--fg-faint)" }}>
-          总耗时 {fmtDuration(total)} · 0ms 起点
+          {t("detail.gantt.totalDuration", { duration: fmtDuration(total) })}
         </span>
       </div>
       <div className="fr-gantt-body">
@@ -274,7 +277,7 @@ function GanttTimeline({ nodes }) {
               <div className="fr-gantt-track">
                 {n.startedMs != null
                   ? <div className={"fr-gantt-bar status-" + (n.status || "pending")} style={{ left, width, background: color }} />
-                  : <div className="fr-gantt-pending">未运行</div>}
+                  : <div className="fr-gantt-pending">{t("detail.gantt.notRun")}</div>}
               </div>
               <div className="fr-gantt-dur cell-mono">{dur ? fmtDuration(dur) : "—"}</div>
             </div>

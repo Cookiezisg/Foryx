@@ -1,0 +1,152 @@
+{
+  "overview": {
+    "title": "Execute",
+    "subtitle": "Run history · Awaiting approval · Triggers",
+    "refreshBtn": "Refresh",
+    "searchPlaceholder": "Search workflow / run id / trigger…",
+    "clearFilter": "Clear filter",
+    "tabs": {
+      "runs": "FlowRuns",
+      "approvals": "Awaiting approval",
+      "triggers": "Triggers"
+    },
+    "statusFilter": {
+      "all": "All",
+      "running": "Running",
+      "waitingApproval": "Awaiting approval",
+      "failed": "Failed",
+      "completed": "Succeeded"
+    },
+    "kpi": {
+      "total": "Total runs",
+      "running": "Running",
+      "waiting": "Awaiting approval",
+      "needsAttention": "Needs attention",
+      "successRate": "{{rate}}% success rate",
+      "none": "None"
+    },
+    "runs": {
+      "loading": "Loading…",
+      "empty": {
+        "title": "No matching runs",
+        "sub": "Adjust filters, or deploy a workflow in Forge first"
+      },
+      "cols": {
+        "status": "Status",
+        "nodes": "Node(s)",
+        "trigger": "Trigger",
+        "startedAt": "Started",
+        "duration": "Duration"
+      }
+    },
+    "approvals": {
+      "empty": {
+        "title": "No pending approvals",
+        "sub": "Runs paused at an approval node will appear here"
+      },
+      "nodeCount": "Node(s) {{done}}/{{total}}",
+      "triggeredBy": "Triggered by {{trigger}}",
+      "rejectBtn": "Reject",
+      "approveBtn": "Approve & continue",
+      "toast": {
+        "approveSuccess": "Approved and continued",
+        "approveFail": "Approval failed"
+      }
+    },
+    "triggers": {
+      "cron": {
+        "label": "Cron",
+        "desc": "robfig/cron v3 expressions"
+      },
+      "fsnotify": {
+        "label": "File watch",
+        "desc": "fsnotify watch path"
+      },
+      "webhook": {
+        "desc": "HTTP POST endpoint"
+      },
+      "manual": {
+        "label": "Manual",
+        "desc": "Triggered from UI or API"
+      }
+    }
+  },
+  "status": {
+    "running": "Running",
+    "completed": "Succeeded",
+    "failed": "Failed",
+    "waitingApproval": "Awaiting approval",
+    "paused": "Paused",
+    "cancelled": "Cancelled"
+  },
+  "detail": {
+    "loading": "Loading flow run…",
+    "back": "← Back",
+    "triggeredBy": "Triggered by",
+    "triggeredByFull": "Triggered by <0>{{trigger}}</0>",
+    "cancelBtn": "Cancel",
+    "triageBtn": "AI triage",
+    "rerunBtn": "Re-run",
+    "toast": {
+      "triageSuccess": "AI triage conversation started",
+      "triageFail": "Triage failed"
+    },
+    "dag": {
+      "empty": "No node data",
+      "nodeRunning": "Running…",
+      "nodeWaiting": "Waiting"
+    },
+    "inspector": {
+      "empty": "No input/output/log (skipped or not yet run)"
+    },
+    "gantt": {
+      "title": "Timeline",
+      "totalDuration": "Total {{duration}} · origin 0ms",
+      "notRun": "Not run"
+    }
+  },
+  "approval": {
+    "banner": {
+      "title": "Awaiting approval",
+      "pendingCount": "· {{count}} node(s) need a decision"
+    },
+    "row": {
+      "addReason": "Add reason",
+      "collapseReason": "Collapse",
+      "rejectBtn": "Reject",
+      "approveBtn": "Approve",
+      "reasonPlaceholder": "Reason (optional — will be written to the flow run log)",
+      "decided": {
+        "approved": "Approved",
+        "rejected": "Rejected"
+      },
+      "toast": {
+        "approveSuccess": "Approved",
+        "approveFail": "Approval failed",
+        "rejectSuccess": "Rejected",
+        "rejectFail": "Rejection failed"
+      }
+    }
+  },
+  "runDrawer": {
+    "title": {
+      "function": "Run function",
+      "handler": "Call handler",
+      "workflow": "Trigger workflow"
+    },
+    "closeTitle": "Close",
+    "methodLabel": "Method",
+    "methodAriaLabel": "Method",
+    "noMethods": "No methods in current version",
+    "jsonError": "Invalid JSON · {{detail}}",
+    "noMethod": "Select a method",
+    "resultLabel": "Result",
+    "footerHint": "Esc to close · Cmd+Enter to submit",
+    "submitBtn": "Submit",
+    "submittingBtn": "Running",
+    "toast": {
+      "triggerSuccess": "Triggered",
+      "triggerDefaultDesc": "Flow run created"
+    }
+  }
+}
