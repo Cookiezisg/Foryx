@@ -114,3 +114,38 @@ func TestSetSystemPromptProvider_AfterConstruction(t *testing.T) {
 		t.Errorf("setter wired wrong provider; got %q", got)
 	}
 }
+
+func TestSystemPromptSections_ToolConventionsSection(t *testing.T) {
+	s := &Service{}
+	conv := &convdomain.Conversation{}
+	sections := s.SystemPromptSections(context.Background(), conv)
+
+	var found *PromptSection
+	for i := range sections {
+		if sections[i].Name == "tool_conventions" {
+			found = &sections[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("tool_conventions section missing from SystemPromptSections")
+	}
+	if !strings.Contains(found.Content, "execution_group") {
+		t.Errorf("tool_conventions content missing 'execution_group': %q", found.Content)
+	}
+	if !strings.Contains(found.Content, "destructive") {
+		t.Errorf("tool_conventions content missing 'destructive': %q", found.Content)
+	}
+
+	// Must appear immediately after "base" (index 1).
+	if len(sections) < 2 || sections[1].Name != "tool_conventions" {
+		t.Errorf("tool_conventions not at index 1 (after base); order: %v",
+			func() []string {
+				names := make([]string, len(sections))
+				for i, s := range sections {
+					names[i] = s.Name
+				}
+				return names
+			}())
+	}
+}

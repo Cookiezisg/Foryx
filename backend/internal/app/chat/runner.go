@@ -202,8 +202,9 @@ type PromptSection struct {
 //
 // SystemPromptSections 返按 cache-friendly 顺序（静态前 / 动态后）排好的命名段；外部预览端点直接消费。
 func (s *Service) SystemPromptSections(ctx context.Context, conv *convdomain.Conversation) []PromptSection {
-	out := make([]PromptSection, 0, 8)
+	out := make([]PromptSection, 0, 9)
 	out = append(out, PromptSection{Name: "base", Content: chatBasePrompt})
+	out = append(out, PromptSection{Name: "tool_conventions", Content: toolConventionsSection})
 	out = append(out, PromptSection{Name: "multi_agent_forging", Content: multiAgentForgingPromptSection})
 
 	if s.catalog != nil {
@@ -240,11 +241,21 @@ func (s *Service) SystemPromptSections(ctx context.Context, conv *convdomain.Con
 // chatBasePrompt 是每轮 chat system prompt 的身份开头。
 const chatBasePrompt = "You are Forgify, an AI assistant that helps users build tools, automate workflows, and work with data."
 
-// BasePromptText / MultiAgentForgingPromptText expose static chat prompt segments to the §18 inventory endpoint.
+// toolConventionsSection teaches the LLM the three standard tool fields once here
+// instead of duplicating the explanation across every tool schema.
 //
-// BasePromptText / MultiAgentForgingPromptText 把静态段暴露给 §18 prompt 总览端点。
-func BasePromptText() string                  { return chatBasePrompt }
-func MultiAgentForgingPromptText() string     { return multiAgentForgingPromptSection }
+// toolConventionsSection 把三个标准注入字段的说明集中在此，避免在 64 个 tool schema 里重复。
+const toolConventionsSection = `Every tool call accepts three standard fields:
+- summary (required): one sentence on what you're doing and why.
+- destructive (optional): true if the call may be irreversible (delete, force-push, writes to external state); the user sees a warning.
+- execution_group (optional, int): calls sharing a group run in parallel; different groups run in ascending order. Group only calls with no interdependence and no shared state. Omit when unsure.`
+
+// BasePromptText / MultiAgentForgingPromptText / ToolConventionsText expose static chat prompt segments to the §18 inventory endpoint.
+//
+// BasePromptText / MultiAgentForgingPromptText / ToolConventionsText 把静态段暴露给 §18 prompt 总览端点。
+func BasePromptText() string              { return chatBasePrompt }
+func MultiAgentForgingPromptText() string { return multiAgentForgingPromptSection }
+func ToolConventionsText() string         { return toolConventionsSection }
 
 func (s *Service) buildSystemPrompt(ctx context.Context, conv *convdomain.Conversation) string {
 	return AssemblePromptSections(s.SystemPromptSections(ctx, conv))
