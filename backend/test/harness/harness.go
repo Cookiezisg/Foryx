@@ -9,6 +9,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -656,55 +657,96 @@ func New(t *testing.T, opts ...Option) *Harness {
 //
 // lazyGroupsHarness 与 main.go::lazyGroups 相同，因 pipeline build tag 隔离而复制。
 var lazyGroupsHarness = map[string]string{
-	"create_function":           "function",
-	"edit_function":             "function",
-	"delete_function":           "function",
-	"revert_function":           "function",
-	"get_function":              "function",
-	"get_function_execution":    "function",
+	"create_function":            "function",
+	"edit_function":              "function",
+	"delete_function":            "function",
+	"revert_function":            "function",
+	"get_function":               "function",
+	"get_function_execution":     "function",
 	"search_function_executions": "function",
-	"create_handler":            "handler",
-	"edit_handler":              "handler",
-	"delete_handler":            "handler",
-	"revert_handler":            "handler",
-	"get_handler":               "handler",
-	"update_handler_config":     "handler",
-	"get_handler_call":          "handler",
-	"search_handler_calls":      "handler",
-	"create_workflow":            "workflow",
-	"edit_workflow":              "workflow",
-	"delete_workflow":            "workflow",
-	"revert_workflow":            "workflow",
-	"get_workflow":               "workflow",
-	"get_workflow_execution":     "workflow",
-	"search_workflow_executions": "workflow",
-	"trigger_workflow":           "workflow",
-	"call_mcp_tool":              "mcp",
-	"install_mcp_server":         "mcp",
-	"uninstall_mcp_server":       "mcp",
-	"list_mcp_marketplace":       "mcp",
-	"get_mcp_call":               "mcp",
-	"search_mcp_calls":           "mcp",
-	"create_document":            "document",
-	"edit_document":              "document",
-	"delete_document":            "document",
-	"move_document":              "document",
-	"read_document":              "document",
-	"list_documents":             "document",
-	"search_documents":           "document",
-	"get_skill_execution":        "skill",
-	"search_skill_executions":    "skill",
+	"create_handler":             "handler",
+	"edit_handler":               "handler",
+	"delete_handler":             "handler",
+	"revert_handler":             "handler",
+	"get_handler":                "handler",
+	"update_handler_config":      "handler",
+	"get_handler_call":           "handler",
+	"search_handler_calls":       "handler",
+	"create_workflow":             "workflow",
+	"edit_workflow":               "workflow",
+	"delete_workflow":             "workflow",
+	"revert_workflow":             "workflow",
+	"get_workflow":                "workflow",
+	"get_workflow_execution":      "workflow",
+	"search_workflow_executions":  "workflow",
+	// trigger_workflow is mapped here for consistency but WorkflowTriggerTool is not assembled in harness.
+	"trigger_workflow":  "workflow",
+	"call_mcp_tool":     "mcp",
+	"install_mcp_server":   "mcp",
+	"uninstall_mcp_server": "mcp",
+	"list_mcp_marketplace": "mcp",
+	"get_mcp_call":         "mcp",
+	"search_mcp_calls":     "mcp",
+	"create_document":  "document",
+	"edit_document":    "document",
+	"delete_document":  "document",
+	"move_document":    "document",
+	"read_document":    "document",
+	"list_documents":   "document",
+	"search_documents": "document",
+	"get_skill_execution":    "skill",
+	"search_skill_executions": "skill",
 }
 
+// residentToolNamesHarness mirrors cmd/server/main.go::residentToolNames.
+// activate_tools is excluded: it is appended to ts.Resident after buildHarnessToolset returns.
+//
+// residentToolNamesHarness 镜像 main.go::residentToolNames；activate_tools 在函数返回后追加。
+var residentToolNamesHarness = map[string]bool{
+	"search_function":  true,
+	"search_handler":   true,
+	"search_workflow":  true,
+	"search_skills":    true,
+	"search_mcp_tools": true,
+	"run_function":     true,
+	"call_handler":     true,
+	"Read":             true,
+	"Write":            true,
+	"Edit":             true,
+	"Grep":             true,
+	"Glob":             true,
+	"Bash":             true,
+	"BashOutput":       true,
+	"KillShell":        true,
+	"WebSearch":        true,
+	"WebFetch":         true,
+	"AskUserQuestion":  true,
+	"TodoCreate":       true,
+	"TodoUpdate":       true,
+	"TodoList":         true,
+	"TodoGet":          true,
+	"read_memory":      true,
+	"write_memory":     true,
+	"forget_memory":    true,
+	"activate_skill":   true,
+	"Subagent":         true,
+}
+
+// buildHarnessToolset mirrors cmd/server/main.go::buildToolset with the same closed-mapping panic.
+//
+// buildHarnessToolset 镜像 main.go::buildToolset，使用相同的封闭映射+panic。
 func buildHarnessToolset(all []toolapp.Tool) toolapp.Toolset {
 	ts := toolapp.Toolset{
 		Lazy: make(map[string][]toolapp.Tool),
 	}
 	for _, t := range all {
-		if cat, ok := lazyGroupsHarness[t.Name()]; ok {
+		name := t.Name()
+		if cat, ok := lazyGroupsHarness[name]; ok {
 			ts.Lazy[cat] = append(ts.Lazy[cat], t)
-		} else {
+		} else if residentToolNamesHarness[name] {
 			ts.Resident = append(ts.Resident, t)
+		} else {
+			panic(fmt.Sprintf("buildHarnessToolset: tool %q is not classified — add it to lazyGroupsHarness or residentToolNamesHarness", name))
 		}
 	}
 	return ts

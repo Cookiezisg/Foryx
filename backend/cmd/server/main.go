@@ -680,17 +680,16 @@ func registerSandboxStack(svc *sandboxapp.Service, _ *zap.Logger) {
 }
 
 // lazyGroups is the closed name→category mapping for tools that belong to lazy groups.
-// Any tool Name() absent from this map lands in Resident automatically.
 //
-// lazyGroups 是 lazy 工具 Name()→category 的封闭映射；不在表中的 Name() 自动归 Resident。
+// lazyGroups 是 lazy 工具 Name()→category 的封闭映射。
 var lazyGroups = map[string]string{
 	// function group
-	"create_function":          "function",
-	"edit_function":            "function",
-	"delete_function":          "function",
-	"revert_function":          "function",
-	"get_function":             "function",
-	"get_function_execution":   "function",
+	"create_function":           "function",
+	"edit_function":             "function",
+	"delete_function":           "function",
+	"revert_function":           "function",
+	"get_function":              "function",
+	"get_function_execution":    "function",
 	"search_function_executions": "function",
 	// handler group
 	"create_handler":       "handler",
@@ -702,49 +701,91 @@ var lazyGroups = map[string]string{
 	"get_handler_call":     "handler",
 	"search_handler_calls": "handler",
 	// workflow group
-	"create_workflow":             "workflow",
-	"edit_workflow":               "workflow",
-	"delete_workflow":             "workflow",
-	"revert_workflow":             "workflow",
-	"get_workflow":                "workflow",
-	"get_workflow_execution":      "workflow",
-	"search_workflow_executions":  "workflow",
-	"trigger_workflow":            "workflow",
+	"create_workflow":            "workflow",
+	"edit_workflow":              "workflow",
+	"delete_workflow":            "workflow",
+	"revert_workflow":            "workflow",
+	"get_workflow":               "workflow",
+	"get_workflow_execution":     "workflow",
+	"search_workflow_executions": "workflow",
+	"trigger_workflow":           "workflow",
 	// mcp group
-	"call_mcp_tool":         "mcp",
-	"install_mcp_server":    "mcp",
-	"uninstall_mcp_server":  "mcp",
-	"list_mcp_marketplace":  "mcp",
-	"get_mcp_call":          "mcp",
-	"search_mcp_calls":      "mcp",
+	"call_mcp_tool":        "mcp",
+	"install_mcp_server":   "mcp",
+	"uninstall_mcp_server": "mcp",
+	"list_mcp_marketplace": "mcp",
+	"get_mcp_call":         "mcp",
+	"search_mcp_calls":     "mcp",
 	// document group
-	"create_document": "document",
-	"edit_document":   "document",
-	"delete_document": "document",
-	"move_document":   "document",
-	"read_document":   "document",
-	"list_documents":  "document",
+	"create_document":  "document",
+	"edit_document":    "document",
+	"delete_document":  "document",
+	"move_document":    "document",
+	"read_document":    "document",
+	"list_documents":   "document",
 	"search_documents": "document",
 	// skill group
 	"get_skill_execution":    "skill",
 	"search_skill_executions": "skill",
 }
 
-// buildToolset partitions all assembled tools into Resident + Lazy groups.
-// Tools whose Name() has no lazyGroups entry are resident.
-// Any unrecognised Name() is logged below — here we panic so misconfiguration is caught at startup.
+// residentToolNames is the closed whitelist of tools that are always-present (resident).
+// activate_tools is NOT listed here: it is appended to ts.Resident after buildToolset returns,
+// so it never passes through this function.
 //
-// buildToolset 把所有已装配工具分入 Resident + Lazy 组。
-// Name() 不在 lazyGroups 中的归 Resident；不认识的 Name() 在此捕获。
+// residentToolNames 是常驻工具的封闭白名单。
+// activate_tools 不在此列，因为它在 buildToolset 返回后才追加。
+var residentToolNames = map[string]bool{
+	"search_function":  true,
+	"search_handler":   true,
+	"search_workflow":  true,
+	"search_skills":    true,
+	"search_mcp_tools": true,
+	"run_function":     true,
+	"call_handler":     true,
+	"Read":             true,
+	"Write":            true,
+	"Edit":             true,
+	"Grep":             true,
+	"Glob":             true,
+	"Bash":             true,
+	"BashOutput":       true,
+	"KillShell":        true,
+	"WebSearch":        true,
+	"WebFetch":         true,
+	"AskUserQuestion":  true,
+	"TodoCreate":       true,
+	"TodoUpdate":       true,
+	"TodoList":         true,
+	"TodoGet":          true,
+	"read_memory":      true,
+	"write_memory":     true,
+	"forget_memory":    true,
+	"activate_skill":   true,
+	"Subagent":         true,
+}
+
+// buildToolset partitions all assembled tools into Resident + Lazy groups using two closed maps.
+// A tool whose Name() appears in lazyGroups is placed in that lazy category.
+// A tool whose Name() appears in residentToolNames is placed in Resident.
+// Any Name() absent from both maps causes a panic at startup — misconfiguration must not be silent.
+// Note: activate_tools is injected into ts.Resident by the caller after this function returns,
+// so it does not need to appear in either map.
+//
+// buildToolset 用两张封闭表把工具分入 Resident + Lazy 组。
+// 两张表都没有的 Name() 会在启动时 panic——错误配置不得静默。
 func buildToolset(all []toolapp.Tool) toolapp.Toolset {
 	ts := toolapp.Toolset{
 		Lazy: make(map[string][]toolapp.Tool),
 	}
 	for _, t := range all {
-		if cat, ok := lazyGroups[t.Name()]; ok {
+		name := t.Name()
+		if cat, ok := lazyGroups[name]; ok {
 			ts.Lazy[cat] = append(ts.Lazy[cat], t)
-		} else {
+		} else if residentToolNames[name] {
 			ts.Resident = append(ts.Resident, t)
+		} else {
+			panic(fmt.Sprintf("buildToolset: tool %q is not classified — add it to lazyGroups or residentToolNames", name))
 		}
 	}
 	return ts
