@@ -200,16 +200,25 @@ type Tool interface {
 }
 ```
 
-**3 个标准注入字段**（framework 自动注入 + 剥除；Parameters() 不得包含这三个名称）：
-- `summary` string 必填 — LLM 一句话描述本次调用
-- `destructive` bool — LLM 自报是否不可逆；UI 显示警示
-- `execution_group` int — 同 group 并行；不同 group 按升序串行；缺失 = 独自串行（排在显式 group 之后）
+**3 个标准注入字段**（`injectStandardFields` 注入 slim shells；framework 自动剥除；Parameters() 不得包含这三个名称）：
+- `summary` string 必填 — LLM 一句话描述本次调用；slim shell: `{"type":"string","description":"One sentence: what you're doing and why."}`
+- `destructive` bool — LLM 自报是否不可逆；UI 显示警示；slim shell 指向 `tool_conventions` 段
+- `execution_group` int — 同 group 并行；不同 group 按升序串行；缺失 = 独自串行（排在显式 group 之后）；slim shell 指向 `tool_conventions` 段
+
+**三字段 slim shells 保留在每把工具 schema**；长 guidance 移至 system prompt 的 `tool_conventions` 段（讲一次）—— 省 ~13k token。
 
 **钩子链**：`ValidateInput` → `CheckPermissions` → `Execute`（任一失败转 tool_result 错误）
 
 **推流**：Tool 内优先用 `eventlogpkg.From(ctx)` Emitter（自动继承 parentBlockId；fallback 到 no-op）。
 
-子包结构（§S12 例外）：`app/tool/{forge,filesystem,shell,web}/`，别名 `forgetool` / `fstool` / `shelltool` / `webtool`。
+**Resident / Lazy Toolset 模型**（能力披露重构后）：
+- `toolapp.Toolset{Resident []Tool, Lazy map[string][]Tool}` — main.go 装配，`chatService.SetToolset(ts)` 注入。
+- `Resident`（~28 把）：高频通用工具；每轮始终在 `req.Tools`。
+- `Lazy`（6 组：function/handler/workflow/mcp/document/skill）：按需；`activate_tools(category)` 激活后写 `AgentState.ActivatedGroups`。
+- `loop.Run` 每步调 `host.Tools(ctx)` 重算（Resident + 已激活 Lazy 组），步内 `byName` 与 offer 集严格一致。
+- `activate_tools` 是 RESIDENT meta-tool，始终可见；`app/tool/toolset/activate.go`。
+
+子包结构（§S12 例外）：`app/tool/{forge,filesystem,shell,web,toolset}/`，别名 `forgetool` / `fstool` / `shelltool` / `webtool`。
 
 ---
 

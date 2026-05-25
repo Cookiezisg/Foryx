@@ -66,7 +66,10 @@ GET /api/v1/catalog → handler → svc.Get(r.Context()) → build(ctx) → 200 
 ```go
 type CatalogSource interface {
     Name() string                 // 稳定标识，用于日志 + 清单分组
-    Granularity() Granularity     // PerItem（function/handler/skill）/ PerServer（mcp）
+    Granularity() Granularity     // PerItem（function/handler/skill/workflow/document）/ PerServer（mcp）
+    // InvokeTool is the tool-call name the LLM must emit to use items from this source.
+    // The menu renderer formats each entry as "- name [InvokeTool()]: desc".
+    InvokeTool() string           // e.g. "run_function", "trigger_workflow", "call_handler"
     // ListItems 返当前全量 items；出错则该 source 用空列表代替（不打断其他）。
     // 必须返"当前真实状态"——半成品（如正在 connect 的 MCP server）不应出现。
     ListItems(ctx context.Context) ([]Item, error)
@@ -74,7 +77,7 @@ type CatalogSource interface {
 
 type Granularity int
 const (
-    PerItem   Granularity = iota  // function/handler/skill — 每条独立
+    PerItem   Granularity = iota  // function/handler/skill/workflow/document — 每条独立
     PerServer                      // mcp — 每 server 一条
 )
 ```
@@ -142,7 +145,9 @@ func (s *Service) GetForSystemPrompt(ctx) string      // chat runner；err / 空
 
 ### assemble（`internal/app/catalog/mechanical.go`）
 
-按 source 分组（字母序）拼 `## Available capabilities` + 每源 `### <name> (N, <gran>)` + 每 item `- **name**: description`。空库跳整段（返空 Summary）。`GeneratedBy="mechanical"`。Coverage = source→[id] 机械分组。
+按 source 分组（字母序）拼能力菜单。每源 header 格式 `### <name> [invokeTool]`（`InvokeTool()` 提供工具名），每 item `- name: desc`，desc 截断 48 字符（`const descMaxRunes = 48`，rune-safe）。空库跳整段（返空 Summary）。`GeneratedBy="mechanical"`。Coverage = source→[id] 机械分组。
+
+**为什么 48 字符**：防历史数据/超长描述击穿 token 预算；源头 `create_*`/`edit_*` 描述字段已有"一句话"引导，48 chars 兜底。
 
 ---
 
@@ -150,16 +155,18 @@ func (s *Service) GetForSystemPrompt(ctx) string      // chat runner；err / 空
 
 ### 6.1 注入 chat runner（`internal/app/chat/runner.go`）
 
-`SystemPromptSections(ctx, conv)` 里：`if catalogText := s.catalog.GetForSystemPrompt(ctx); catalogText != "" { 拼 "catalog" 段 }`。
+`SystemPromptSections(ctx, conv)` 里，catalog 内容进 `capabilities` 段（capability-disclosure §4.1），不再是独立 `catalog` 段。
 
-### 6.2 main.go 装配
+### 6.2 main.go 装配（已含 workflow + document）
 
 ```go
 catalogService := catalogapp.New(log)
-catalogService.RegisterSource(functionService.AsCatalogSource())
-catalogService.RegisterSource(handlerService.AsCatalogSource())
-catalogService.RegisterSource(skillService.AsCatalogSource())
-catalogService.RegisterSource(mcpService.AsCatalogSource())   // document 不注册
+catalogService.RegisterSource(functionService.AsCatalogSource())   // InvokeTool="run_function"
+catalogService.RegisterSource(handlerService.AsCatalogSource())    // InvokeTool="call_handler"
+catalogService.RegisterSource(skillService.AsCatalogSource())      // InvokeTool="activate_skill"
+catalogService.RegisterSource(mcpService.AsCatalogSource())        // InvokeTool="call_mcp_tool"
+catalogService.RegisterSource(workflowService.AsCatalogSource())   // InvokeTool="trigger_workflow" ← 已注册
+catalogService.RegisterSource(documentService.AsCatalogSource())   // InvokeTool="read_document"   ← 已注册
 chatService.SetSystemPromptProvider(catalogService)
 ```
 
@@ -203,23 +210,25 @@ chatService.SetSystemPromptProvider(catalogService)
 
 ```
 ┌──────────────┐
-│   catalog    │ ← domain 定义 CatalogSource port
+│   catalog    │ ← domain 定义 CatalogSource port（含 InvokeTool()）
 └──────┬───────┘
        │ 被 implement（各 app 包内 catalogsource.go，svc.AsCatalogSource() 暴露）
-   ┌───┴────┬────────┬────────┐
-   ↓        ↓        ↓        ↓
-function  handler  skill    mcp
+   ┌───┴────┬────────┬────────┬──────────┬──────────┐
+   ↓        ↓        ↓        ↓          ↓          ↓
+function  handler  skill    mcp      workflow  document
 catalog 永远不 import 任何 source 的 app 包。
 ```
 
-| Source | description 来源 | Granularity |
-|---|---|---|
-| **function** | 创建/编辑时生成 | PerItem |
-| **handler** | 创建时写 | PerItem |
-| **skill** | author 写在 SKILL.md frontmatter | PerItem |
-| **mcp** | server 自报（tools/list）| PerServer |
+| Source | InvokeTool | description 来源 | Granularity |
+|---|---|---|---|
+| **function** | `run_function` | 创建/编辑时生成 | PerItem |
+| **handler** | `call_handler` | 创建时写 | PerItem |
+| **skill** | `activate_skill` | author 写在 SKILL.md frontmatter | PerItem |
+| **mcp** | `call_mcp_tool` | server 自报（tools/list）| PerServer |
+| **workflow** | `trigger_workflow` | 创建时写 description | PerItem |
+| **document** | `read_document` | 创建时写 description | PerItem |
 
-> `document.AsCatalogSource()` 实现保留在 document 包，但 main.go 不再注册——留作 @-mention 功能复用。
+所有 6 个 source 均已在 main.go 注册。
 
 ---
 

@@ -235,9 +235,32 @@ Function + Handler + Workflow System Tools 注入(9 function + 10 handler + 6 wo
 
 #### 系统工具家族（注入 chat agent，无新 HTTP 端点）
 
-| 家族 | 工具 | 说明 |
+**Resident 工具（28 把，每轮始终在 `tools` 参数中）**：
+
+| 家族 | 工具 |
+|---|---|
+| filesystem | `Read` / `Write` / `Edit` / `Grep` / `Glob` |
+| shell | `Bash` / `BashOutput` / `KillShell` |
+| web | `WebFetch` / `WebSearch` |
+| ask | `AskUserQuestion` |
+| todo | `TodoCreate` / `TodoList` / `TodoGet` / `TodoUpdate` |
+| memory | `read_memory` / `write_memory` / `forget_memory` |
+| discovery | `search_function` / `search_handler` / `search_workflow` / `search_skills` / `search_mcp_tools` |
+| execution | `run_function` / `call_handler` / `activate_skill` / `Subagent` |
+| meta | `activate_tools` |
+
+**`activate_tools` 工具契约**（RESIDENT，IsReadOnly=true）：
+- 参数：`{ category: enum["function","handler","workflow","mcp","document","skill"] }` （必填）
+- Execute：把 category 写入 `AgentState.ActivatedGroups`；返回该组工具名清单字符串，格式 `"Activated <category>: <name>, ..."`。
+- 效果：step N 调 `activate_tools("function")` → step N+1 起 `host.Tools(ctx)` 含 function 组（`create_function` / `edit_function` / `delete_function` / `revert_function` / `get_function` / `get_function_execution` / `search_function_executions`）。
+
+**Lazy 工具组（6 组，按需 `activate_tools(category)` 激活）**：function / handler / workflow / mcp / document / skill。详细成员见 [`capability-disclosure-design.md` §4.3](../capability-disclosure-design.md)。
+
+**实测常驻 context**：system ~2.9k bytes + 28 常驻 tools slim schemas ~17.5k bytes ≈ 20.4k bytes ≈ **5.1k token**（vs 重构前 ~28k token）。
+
+| 家族（Phase 5 基础）| 工具 | 说明 |
 |---|---|---|
-| filesystem | `Read` / `Write` / `Edit` | 文件读写编辑；PathGuard 守敏感路径；Edit 走 must-Read-first 守卫 + 原子写 |
+| filesystem | `Read` / `Write` / `Edit` | PathGuard 守敏感路径；Edit 走 must-Read-first 守卫 + 原子写 |
 | search | `Grep` / `Glob` | rg 优先 + stdlib 兜底；Glob 输出 JSON 含 type/size/mtime（决策 D3：替代 LS）|
 | web | `WebFetch` / `WebSearch` | Jina r.jina.ai 摘要 + 直 GET fallback；3 层搜索 fallback（SearXNG 池 → Bing → Bing CN）；SSRF 守卫拒私网 / loopback / link-local |
 | shell | `Bash` / `BashOutput` / `KillShell` | 前后台双模式；cwd 状态机（AgentState.Cwd）；后台子进程 ProcessManager 注册 256 KB 环形缓冲；KillShell SIGKILL 幂等 |

@@ -891,17 +891,24 @@ type convQueue struct {
 
 ### 10.4 System Prompt 组装
 
-每次调用 Agent 前，`buildSystemPrompt(ctx, conv)` 按以下优先级组装：
+每次调用 Agent 前，`SystemPromptSections(ctx, conv)`（`runner.go`）按 cache-friendly 顺序（静态前 / 动态后）返回以下命名段：
 
 ```
-[基础系统提示词（代码写死）]
-+
-[conversation.system_prompt（用户自定义，可为空）]
-+
-[Capability Catalog 段（可选；SetSystemPromptProvider 接入；无 provider / 返空时跳）]
-+
-[locale 指令（从 reqctx 读，仅 zh-CN 时追加）]
+base            — 身份（代码写死，静态可缓存）
+tool_conventions — 三个标准注入字段讲一次（static，可缓存）
+capabilities    — 工具组索引 + catalog 资产菜单（半动态；catalog.GetForSystemPrompt 拼）
+multi_agent_forging — Subagent 策略（static，可缓存）
+memory          — 长期记忆（动态）
+documents       — @-mention 文档注入（动态）
+user_systemPrompt — conversation.system_prompt（可选，动态）
+locale_hint     — 语言指令（动态，仅 zh-CN）
 ```
+
+`capabilities` 段由 `buildCapabilitiesSection` 拼装：
+1. **工具组索引**（仅 Lazy 非空时渲染）：列出各 category 名 + 工具数，提示 `call activate_tools(category)` 按需加载。
+2. **catalog 资产菜单**：调 `catalog.GetForSystemPrompt(ctx)` 取 function/handler/workflow/skill/mcp/document 实体列表（`- name [invokeTool]: desc`，desc 截 48 字符）。
+
+`activate_tools` 是 RESIDENT 工具，不需 activate 即可调用；调用后当轮及后续轮 `host.Tools(ctx)` 返回 Resident + 对应 Lazy 组。
 
 `conversation.system_prompt` 字段存在 `conversations` 表（由 conversation domain 管理），chat.Service 通过 `convRepo.Get(id)` 读取。
 

@@ -13,22 +13,14 @@ import (
 // CompactSystemPromptText 把 compaction LLM 系统提示词暴露给 §18 总览端点。
 func CompactSystemPromptText() string { return compactSystemPrompt }
 
-const compactSystemPrompt = `You are maintaining a running summary of an ongoing conversation between a user and an AI assistant.
-
-The summary preserves what the assistant must remember to keep helping the user, while we drop older raw blocks to free context window.
+const compactSystemPrompt = `Maintain a running summary of an ongoing conversation; older blocks are dropped to free context.
 
 RULES:
-1. PRESERVE all bullets from the PREVIOUS SUMMARY unchanged. Only mark a bullet as ~~struck~~ if a NEW CONTENT bullet directly contradicts it.
-2. APPEND new bullets describing what happened in the NEW CONTENT. Tag new ones with [later] for chronological clarity.
-3. Sections (use as needed, omit empty ones):
-   - User's original request
-   - Files touched
-   - Tools called (high-level: "ran X tests" not "ran pytest -k foo")
-   - Errors and fixes
-   - Decisions made
-   - Current state / what's next
-4. Keep the entire summary under 1500 tokens.
-5. Output the FULL updated summary (previous bullets + new bullets). No commentary, no preamble.`
+1. PRESERVE all previous summary bullets. Strike (~~text~~) only if directly contradicted by new content.
+2. APPEND new bullets from NEW CONTENT tagged [later] for chronology.
+3. Sections (omit if empty): User request · Files touched · Tools called (high-level) · Errors & fixes · Decisions · Current state / next steps.
+4. Keep summary under 1500 tokens.
+5. Output the FULL updated summary. No commentary, no preamble.`
 
 // buildCompactPrompt assembles previous summary + archiving blocks; per-block content is truncated.
 //
