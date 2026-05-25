@@ -25,21 +25,21 @@ describe("VersionRail", () => {
     expect(screen.getByText(/pending 待处理/)).toBeInTheDocument();
     // appears in banner AND in row → use getAllByText
     expect(screen.getAllByText("the pending one").length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText("Accept")).toBeInTheDocument();
-    expect(screen.getByText("Revert")).toBeInTheDocument();
+    expect(screen.getByText("接受")).toBeInTheDocument();
+    expect(screen.getByText("还原")).toBeInTheDocument();
   });
 
   it("acceptButton_clickFiresOnAccept", async () => {
     const onAccept = vi.fn();
     render(<VersionRail versions={VERSIONS} pendingId="fv_2" onAccept={onAccept} />);
-    await userEvent.click(screen.getByText("Accept"));
+    await userEvent.click(screen.getByText("接受"));
     expect(onAccept).toHaveBeenCalled();
   });
 
   it("revertButton_clickFiresOnRevert", async () => {
     const onRevert = vi.fn();
     render(<VersionRail versions={VERSIONS} pendingId="fv_2" onRevert={onRevert} />);
-    await userEvent.click(screen.getByText("Revert"));
+    await userEvent.click(screen.getByText("还原"));
     expect(onRevert).toHaveBeenCalled();
   });
 
@@ -64,12 +64,12 @@ describe("VersionRail", () => {
 
   it("currentBadge_visibleOnCurrentRow", () => {
     render(<VersionRail versions={VERSIONS} currentId="fv_1" />);
-    expect(screen.getByText("current")).toBeInTheDocument();
+    expect(screen.getByText("当前")).toBeInTheDocument();
   });
 
   it("deployedBadge_visibleOnDeployedRow", () => {
     render(<VersionRail versions={VERSIONS} deployedId="fv_3" />);
-    expect(screen.getByText("deployed")).toBeInTheDocument();
+    expect(screen.getByText("已发布")).toBeInTheDocument();
   });
 });
 

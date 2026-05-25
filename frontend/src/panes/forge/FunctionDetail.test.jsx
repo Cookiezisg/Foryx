@@ -72,15 +72,15 @@ describe("FunctionDetail", () => {
     render(<FunctionDetail forge={FN} onBack={() => {}} />);
     expect(screen.getByText("试跑")).toBeInTheDocument();
     expect(screen.getByTestId("ask-ai")).toBeInTheDocument();
-    expect(screen.queryByText("Accept")).toBeNull();
+    expect(screen.queryByText("接受")).toBeNull();
   });
 
   it("pendingVersion_showsAcceptAndRevert_hidesRun", () => {
     useFunctionVersions.mockReturnValue({ data: VERSIONS_WITH_PENDING });
     render(<FunctionDetail forge={FN} onBack={() => {}} />);
     // Accept and Revert appear in both header and VersionRail banner — use getAllByText
-    expect(screen.getAllByText("Accept").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Revert").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("接受").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("还原").length).toBeGreaterThan(0);
     expect(screen.queryByText("试跑")).toBeNull();
   });
 
@@ -96,7 +96,7 @@ describe("FunctionDetail", () => {
     const mutate = vi.fn((id, opts) => opts?.onSuccess && opts.onSuccess());
     useAcceptFunction.mockReturnValue({ mutate });
     render(<FunctionDetail forge={FN} onBack={() => {}} />);
-    const headerAccept = screen.getAllByText("Accept")[0];
+    const headerAccept = screen.getAllByText("接受")[0];
     await userEvent.click(headerAccept);
     expect(mutate).toHaveBeenCalledWith("fn_1", expect.any(Object));
     await waitFor(() => expect(useUIStore.getState().toasts[0]?.kind).toBe("success"));
@@ -107,7 +107,7 @@ describe("FunctionDetail", () => {
     const mutate = vi.fn((id, opts) => opts?.onSuccess && opts.onSuccess());
     useRevertFunction.mockReturnValue({ mutate });
     render(<FunctionDetail forge={FN} onBack={() => {}} />);
-    const headerRevert = screen.getAllByText("Revert")[0];
+    const headerRevert = screen.getAllByText("还原")[0];
     await userEvent.click(headerRevert);
     expect(mutate).toHaveBeenCalledWith("fn_1", expect.any(Object));
     await waitFor(() => expect(useUIStore.getState().toasts[0]?.kind).toBe("warn"));

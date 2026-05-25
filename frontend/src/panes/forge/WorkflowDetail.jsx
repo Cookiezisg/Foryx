@@ -67,13 +67,13 @@ export function WorkflowDetail({ forge, onBack }) {
                 onSuccess: () => pushToast({ kind: "warn", title: "Reverted pending" }),
                 onError: (e) => pushToast({ kind: "error", title: t("detail.revertFail"), desc: e.message }),
               })}>
-                <Icon.X /> Revert
+                <Icon.X /> {t("detail.revert")}
               </Button>
               <Button size="sm" variant="accent" onClick={() => accept.mutate(forge.id, {
                 onSuccess: () => pushToast({ kind: "success", title: "Accepted" }),
                 onError: (e) => pushToast({ kind: "error", title: t("detail.acceptFail"), desc: e.message }),
               })}>
-                <Icon.Check /> Accept
+                <Icon.Check /> {t("detail.accept")}
               </Button>
             </>
           )}

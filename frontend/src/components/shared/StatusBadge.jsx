@@ -7,14 +7,15 @@ import { Badge } from "../primitives/Badge.jsx";
 
 export function StatusBadge({ status }) {
   const { t } = useTranslation("misc");
-  if (status === "ready") return <Badge kind="success">ready</Badge>;
-  if (status === "failed") return <Badge kind="error">failed</Badge>;
+  if (status === "ready") return <Badge kind="success">{t("statusBadge.ready")}</Badge>;
+  if (status === "failed") return <Badge kind="error">{t("statusBadge.failed")}</Badge>;
 
   if (status === "pending" || status === "draft") {
     const kind = status === "pending" ? "warn" : "info";
+    const label = status === "pending" ? t("statusBadge.pending") : t("statusBadge.draft");
     return (
       <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-        <Badge kind={kind}>{status}</Badge>
+        <Badge kind={kind}>{label}</Badge>
         <span className="forge-ai-mark" title={t("statusBadge.aiGenerated")}>
           <Icon.Sparkles />
           <span>AI</span>

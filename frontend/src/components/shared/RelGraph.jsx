@@ -60,17 +60,18 @@ function useEntityDirectory() {
   const mcQ = useMcpServers();
   const cvQ = useConversations();
 
+  const { t } = useTranslation("misc");
   return useMemo(() => {
     const out = [];
     for (const x of fnQ.data || []) out.push({ id: x.id, kind: "function",  label: x.name || x.id, sub: x.description || x.desc || "" });
     for (const x of hdQ.data || []) out.push({ id: x.id, kind: "handler",   label: x.name || x.id, sub: x.description || x.desc || "" });
     for (const x of wfQ.data || []) out.push({ id: x.id, kind: "workflow",  label: x.name || x.id, sub: x.description || x.desc || "" });
-    for (const x of dcQ.data || []) out.push({ id: x.id, kind: "document",  label: x.name || x.title || x.id, sub: "document" });
+    for (const x of dcQ.data || []) out.push({ id: x.id, kind: "document",  label: x.name || x.title || x.id, sub: t("relGraph.subDocument") });
     for (const x of skQ.data || []) out.push({ id: x.id, kind: "skill",     label: x.name || x.id, sub: x.description || "" });
-    for (const x of mcQ.data || []) out.push({ id: x.id, kind: "mcp",       label: x.name || x.id, sub: (x.tools?.length || x.tools || 0) + " tools" });
+    for (const x of mcQ.data || []) out.push({ id: x.id, kind: "mcp",       label: x.name || x.id, sub: t("relGraph.subTools", { count: x.tools?.length || x.tools || 0 }) });
     for (const x of cvQ.data || []) out.push({ id: x.id, kind: "conversation", label: x.title || x.id, sub: x.model || "" });
     return out;
-  }, [fnQ.data, hdQ.data, wfQ.data, dcQ.data, skQ.data, mcQ.data, cvQ.data]);
+  }, [fnQ.data, hdQ.data, wfQ.data, dcQ.data, skQ.data, mcQ.data, cvQ.data, t]);
 }
 
 // ── Edge normalisation: backend returns {fromKind, fromId, toKind, toId, kind} ─
@@ -362,8 +363,7 @@ function AdjacencySection({ label, list, onSelect, t }) {
     <div className="rg-section">
       <div className="rg-section-label">{label}</div>
       {list.map((x, i) => {
-        const kindLabel = KIND_LABEL_BASE[x.node.kind]
-          || t("relGraph.kinds." + x.node.kind, { defaultValue: x.node.kind });
+        const kindLabel = t("relGraph.kinds." + x.node.kind, { defaultValue: x.node.kind });
         const relKey = REL_LABEL_KEYS[x.edge.kind];
         const relLabel = relKey
           ? t("relGraph.relLabels." + relKey, { defaultValue: x.edge.kind })
@@ -422,7 +422,7 @@ export function RelGraph() {
 
   const allKinds = [...Object.keys(KIND_LABEL_BASE), "conversation", "document"];
 
-  const kindLabel = (k) => KIND_LABEL_BASE[k] || t("relGraph.kinds." + k, { defaultValue: k });
+  const kindLabel = (k) => t("relGraph.kinds." + k, { defaultValue: k });
 
   return (
     <div className="rg-shell" ref={shellRef}>

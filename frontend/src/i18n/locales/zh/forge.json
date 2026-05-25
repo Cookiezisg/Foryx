@@ -45,10 +45,14 @@
   },
   "detail": {
     "forging": "工坊中",
-    "acceptFail": "Accept 失败",
-    "revertFail": "Revert 失败",
+    "accept": "接受",
+    "revert": "还原",
+    "acceptFail": "接受失败",
+    "revertFail": "还原失败",
     "saveFail": "保存失败",
-    "deployRequested": "Deploy 已请求"
+    "deployRequested": "Deploy 已请求",
+    "badgeCurrent": "当前",
+    "badgePending": "AI · 待发布"
   },
   "function": {
     "runBtn": "试跑",

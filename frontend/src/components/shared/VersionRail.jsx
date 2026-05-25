@@ -37,9 +37,9 @@ export function VersionRail({
           </div>
           <div className="vr-pending-summary">{pending.summary || pending.description || t("versionRail.noSummary")}</div>
           <div className="vr-pending-actions">
-            <button className="btn btn-xs btn-danger" onClick={onRevert}>Revert</button>
+            <button className="btn btn-xs btn-danger" onClick={onRevert}>{t("versionRail.revert")}</button>
             <button className="btn btn-xs" onClick={() => onSelect?.(pendingId)}>{t("versionRail.viewDiff")}</button>
-            <button className="btn btn-xs btn-accent" onClick={onAccept}>Accept</button>
+            <button className="btn btn-xs btn-accent" onClick={onAccept}>{t("versionRail.accept")}</button>
           </div>
         </div>
       )}
@@ -114,15 +114,15 @@ function VersionRow({ v, isCurrent, isPending, isDeployed, isSelected, onClick }
       <div className="vr-meta">
         <div className="vr-head">
           <span className="vr-num">{v.label || v.versionLabel || v.id?.slice(-8)}</span>
-          {isPending && <span className="vr-badge vr-pending"><Icon.Sparkles /> AI · pending</span>}
-          {isCurrent && <span className="vr-badge vr-current">current</span>}
-          {isDeployed && <span className="vr-badge vr-deployed">deployed</span>}
+          {isPending && <span className="vr-badge vr-pending"><Icon.Sparkles /> {t("versionRail.badgePending")}</span>}
+          {isCurrent && <span className="vr-badge vr-current">{t("versionRail.badgeCurrent")}</span>}
+          {isDeployed && <span className="vr-badge vr-deployed">{t("versionRail.badgeDeployed")}</span>}
         </div>
         <div className="vr-summary">
           {v.summary || v.description || <span style={{ color: "var(--fg-faint)" }}>{t("versionRail.noSummary")}</span>}
         </div>
         <div className="vr-foot">
-          <span className="vr-author">{v.author || "you"}</span>
+          <span className="vr-author">{v.author || t("versionRail.youFallback")}</span>
           {(v.at || v.createdAt) && (
             <>
               <span className="vr-sep">·</span>

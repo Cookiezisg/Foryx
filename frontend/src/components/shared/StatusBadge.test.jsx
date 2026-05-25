@@ -8,7 +8,7 @@ describe("StatusBadge", () => {
   it("statusReady_rendersSuccessBadge", () => {
     const { container } = render(<StatusBadge status="ready" />);
     expect(container.querySelector(".badge.success")).toBeTruthy();
-    expect(screen.getByText("ready")).toBeInTheDocument();
+    expect(screen.getByText("就绪")).toBeInTheDocument();
   });
 
   it("statusFailed_rendersErrorBadge", () => {

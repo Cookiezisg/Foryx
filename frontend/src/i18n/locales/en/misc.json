@@ -43,9 +43,18 @@
     "focusLabel": "Focus",
     "fullGraph": "Full graph →",
     "kinds": {
+      "function": "Function",
+      "handler": "Handler",
+      "workflow": "Workflow",
+      "skill": "Skill",
+      "mcp": "MCP",
+      "memory": "Memory",
+      "flowrun": "FlowRun",
       "conversation": "Conversation",
       "document": "Document"
     },
+    "subDocument": "Document",
+    "subTools": "{{count}} tool(s)",
     "relLabels": {
       "workflow_uses_function": "node",
       "workflow_uses_handler": "node",
@@ -70,14 +79,41 @@
     "viewDiff": "View diff",
     "noSummary": "(no description)",
     "deployBar": "Live: {{deployedId}} · Editing: {{currentId}}",
-    "deploy": "Deploy"
+    "deploy": "Deploy",
+    "badgePending": "AI · pending",
+    "badgeCurrent": "Current",
+    "badgeDeployed": "Deployed",
+    "youFallback": "you",
+    "accept": "Accept",
+    "revert": "Revert"
   },
   "statusBadge": {
-    "aiGenerated": "AI-generated"
+    "aiGenerated": "AI-generated",
+    "ready": "Ready",
+    "failed": "Failed",
+    "pending": "Pending",
+    "draft": "Draft"
   },
   "observePane": {
     "title": "Insights",
     "subtitle": "Relations between entities."
+  },
+  "entityKinds": {
+    "f": "Function",
+    "fn": "Function",
+    "h": "Handler",
+    "hd": "Handler",
+    "w": "Workflow",
+    "wf": "Workflow",
+    "s": "Skill",
+    "sk": "Skill",
+    "mcp": "MCP",
+    "m": "Memory",
+    "mem": "Memory",
+    "cv": "Conversation",
+    "fr": "FlowRun",
+    "d": "Document",
+    "doc": "Document"
   },
   "placeholderPane": {
     "implementing": "{{phase}} in progress",

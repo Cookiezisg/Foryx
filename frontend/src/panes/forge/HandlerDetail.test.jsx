@@ -82,8 +82,8 @@ describe("HandlerDetail", () => {
   it("pendingState_showsAcceptAndRevert", () => {
     useHandlerVersions.mockReturnValue({ data: VERSIONS_PENDING });
     render(<HandlerDetail forge={HD} onBack={() => {}} />);
-    expect(screen.getAllByText("Accept").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Revert").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("接受").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("还原").length).toBeGreaterThan(0);
   });
 
   it("backButton_callsOnBack", async () => {

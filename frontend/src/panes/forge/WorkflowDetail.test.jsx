@@ -101,8 +101,8 @@ describe("WorkflowDetail", () => {
   it("pendingState_showsAcceptAndRevert", () => {
     useWorkflowVersions.mockReturnValue({ data: VERSIONS_WITH_PENDING });
     render(<WorkflowDetail forge={WF} onBack={() => {}} />);
-    expect(screen.getAllByText("Accept").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("Revert").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("接受").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("还原").length).toBeGreaterThan(0);
   });
 
   it("currentSelected_rendersWorkflowEditor", () => {
@@ -137,7 +137,7 @@ describe("WorkflowDetail", () => {
     const mutate = vi.fn((id, opts) => opts?.onSuccess && opts.onSuccess());
     useAcceptWorkflow.mockReturnValue({ mutate });
     render(<WorkflowDetail forge={WF} onBack={() => {}} />);
-    const headerAccept = screen.getAllByText("Accept")[0];
+    const headerAccept = screen.getAllByText("接受")[0];
     await userEvent.click(headerAccept);
     expect(mutate).toHaveBeenCalledWith("wf_1", expect.any(Object));
     await waitFor(() => expect(useUIStore.getState().toasts[0]?.kind).toBe("success"));
@@ -148,7 +148,7 @@ describe("WorkflowDetail", () => {
     const mutate = vi.fn((id, opts) => opts?.onSuccess && opts.onSuccess());
     useRejectWorkflow.mockReturnValue({ mutate });
     render(<WorkflowDetail forge={WF} onBack={() => {}} />);
-    const headerRevert = screen.getAllByText("Revert")[0];
+    const headerRevert = screen.getAllByText("还原")[0];
     await userEvent.click(headerRevert);
     expect(mutate).toHaveBeenCalledWith("wf_1", expect.any(Object));
     await waitFor(() => expect(useUIStore.getState().toasts[0]?.kind).toBe("warn"));

@@ -77,10 +77,10 @@ export function FunctionDetail({ forge, onBack }) {
           {pendingV ? (
             <>
               <Button size="sm" variant="danger" onClick={onRevert}>
-                <Icon.X /> Revert
+                <Icon.X /> {t("detail.revert")}
               </Button>
               <Button size="sm" variant="accent" onClick={onAccept}>
-                <Icon.Check /> Accept
+                <Icon.Check /> {t("detail.accept")}
               </Button>
             </>
           ) : (
@@ -135,8 +135,8 @@ function FunctionFullView({ v, fn }) {
     <div className="fn-view">
       <h3 className="section-label" style={{ marginTop: 0, display: "flex", alignItems: "center", gap: 8 }}>
         {v.label || v.versionLabel || v.id}
-        {v.state === "current" && <span className="vr-badge vr-current">current</span>}
-        {v.state === "pending" && <span className="vr-badge vr-pending"><Icon.Sparkles /> pending</span>}
+        {v.state === "current" && <span className="vr-badge vr-current">{t("detail.badgeCurrent")}</span>}
+        {v.state === "pending" && <span className="vr-badge vr-pending"><Icon.Sparkles /> {t("detail.badgePending")}</span>}
       </h3>
       <FieldRow label={t("function.fieldLabel.description")} value={
         <div style={{ lineHeight: 1.6 }}>

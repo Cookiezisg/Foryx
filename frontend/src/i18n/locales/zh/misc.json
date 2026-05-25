@@ -43,9 +43,18 @@
     "focusLabel": "焦点",
     "fullGraph": "完整图谱 →",
     "kinds": {
+      "function": "函数",
+      "handler": "处理器",
+      "workflow": "工作流",
+      "skill": "技能",
+      "mcp": "MCP",
+      "memory": "记忆",
+      "flowrun": "运行",
       "conversation": "对话",
       "document": "文档"
     },
+    "subDocument": "文档",
+    "subTools": "{{count}} 个工具",
     "relLabels": {
       "workflow_uses_function": "节点",
       "workflow_uses_handler": "节点",
@@ -70,14 +79,41 @@
     "viewDiff": "查看 diff",
     "noSummary": "(无说明)",
     "deployBar": "生产中：{{deployedId}} · 当前编辑：{{currentId}}",
-    "deploy": "部署"
+    "deploy": "部署",
+    "badgePending": "AI · 待发布",
+    "badgeCurrent": "当前",
+    "badgeDeployed": "已发布",
+    "youFallback": "你",
+    "accept": "接受",
+    "revert": "还原"
   },
   "statusBadge": {
-    "aiGenerated": "由 AI 工坊产生"
+    "aiGenerated": "由 AI 工坊产生",
+    "ready": "就绪",
+    "failed": "失败",
+    "pending": "待处理",
+    "draft": "草稿"
   },
   "observePane": {
     "title": "洞察",
     "subtitle": "实体之间的引用关系。"
+  },
+  "entityKinds": {
+    "f": "函数",
+    "fn": "函数",
+    "h": "处理器",
+    "hd": "处理器",
+    "w": "工作流",
+    "wf": "工作流",
+    "s": "技能",
+    "sk": "技能",
+    "mcp": "MCP",
+    "m": "记忆",
+    "mem": "记忆",
+    "cv": "对话",
+    "fr": "运行",
+    "d": "文档",
+    "doc": "文档"
   },
   "placeholderPane": {
     "implementing": "{{phase}} 实现中",

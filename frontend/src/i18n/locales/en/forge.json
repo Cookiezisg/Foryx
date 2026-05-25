@@ -45,10 +45,14 @@
   },
   "detail": {
     "forging": "Forging",
+    "accept": "Accept",
+    "revert": "Revert",
     "acceptFail": "Accept failed",
     "revertFail": "Revert failed",
     "saveFail": "Save failed",
-    "deployRequested": "Deploy requested"
+    "deployRequested": "Deploy requested",
+    "badgeCurrent": "Current",
+    "badgePending": "AI · pending"
   },
   "function": {
     "runBtn": "Test run",
