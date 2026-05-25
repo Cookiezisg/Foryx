@@ -23,6 +23,9 @@ import { useUIStore } from "../../store/ui.js";
 import { useCreateUser } from "../../api/users.js";
 import { useProviders, useCreateApiKey, useTestApiKey, useUpsertModelConfig, useDeleteApiKey } from "../../api/config.js";
 import { STRINGS, ACCENTS, LLM_HINTS, SEARCH_HINTS, PROVIDER_DEFAULT_MODEL } from "./onboarding-strings.js";
+import { ProviderGrid } from "../config/ProviderGrid.jsx";
+import { KeyVerifyField } from "../config/KeyVerifyField.jsx";
+import { ModelSelect } from "../config/ModelSelect.jsx";
 
 const STEP_KEYS = ["welcome", "workspace", "appearance", "model", "search", "done"];
 const ANVIL = (
@@ -334,28 +337,6 @@ function Appearance({ t, settings }) {
   );
 }
 
-function ProviderGrid({ providers, hints, selected, onPick, tall }) {
-  return (
-    <div className="onb-gridwrap">
-      <div className={"onb-grid" + (tall ? " is-tall" : "")}>
-        {providers.map((p) => {
-          const h = hints[p.name] || { abbr: p.name.slice(0, 2).toUpperCase(), color: "#6b6459" };
-          return (
-            <button key={p.name} className={"onb-prov" + (selected === p.name ? " is-active" : "")} onClick={() => onPick(p.name)}>
-              <span className="onb-pchip" style={{ background: h.color }}>{h.abbr}</span>
-              <span style={{ minWidth: 0 }}>
-                <span className="onb-pname">{p.displayName || p.name}</span>
-                <span className="onb-pdesc" style={{ display: "block" }}>{p.defaultBaseUrl?.replace(/^https?:\/\//, "") || ""}</span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      {!tall && <div className="onb-grid-fade" />}
-    </div>
-  );
-}
-
 function Model({ t, providers, provider, pickProvider, apiKey, onKeyChange, verify, verifying, verified, verifyError, models, modelId, setModelId }) {
   const isOllama = provider === "ollama";
   const display = providers.find((p) => p.name === provider)?.displayName || provider;
@@ -371,31 +352,28 @@ function Model({ t, providers, provider, pickProvider, apiKey, onKeyChange, veri
         <>
           <div className="onb-twofield">
             <div className="onb-keyfield" style={{ flex: 1.3 }}>
-              <div className="onb-klabel">{isOllama ? display : t.model.keyLabel(display)}</div>
-              <div className={"onb-kinput" + (verifyError ? " is-error" : "")}>
-                <Icon.KeyRound />
-                {isOllama
-                  ? <input value="localhost:11434" readOnly style={{ color: "var(--fg-faint)" }} />
-                  : <input type="password" placeholder={t.model.keyPlaceholder} value={apiKey} onChange={(e) => onKeyChange(e.target.value)} autoFocus />}
-                {verified ? (
-                  <span className="onb-verified"><Icon.Check /> {t.model.verified}</span>
-                ) : (
-                  <button className="onb-verify-btn" onClick={verify} disabled={verifying || (!isOllama && !apiKey.trim())}>
-                    {verifying ? t.model.verifying : t.model.verify}
-                  </button>
-                )}
-              </div>
+              <KeyVerifyField
+                label={isOllama ? display : t.model.keyLabel(display)}
+                value={isOllama ? "localhost:11434" : apiKey}
+                onChange={onKeyChange}
+                onVerify={verify}
+                verifying={verifying}
+                verified={verified}
+                error={verifyError}
+                verifyLabel={t.model.verify}
+                verifyingLabel={t.model.verifying}
+                verifiedLabel={t.model.verified}
+                placeholder={t.model.keyPlaceholder}
+                readOnly={isOllama}
+              />
             </div>
             {verified && models.length > 0 && (
               <div className="onb-keyfield" style={{ flex: 1 }}>
                 <div className="onb-klabel">{t.model.modelLabel}</div>
-                <select className="onb-mselect" value={modelId} onChange={(e) => setModelId(e.target.value)}>
-                  {models.map((m) => <option key={m} value={m}>{m}</option>)}
-                </select>
+                <ModelSelect models={models} value={modelId} onChange={setModelId} />
               </div>
             )}
           </div>
-          {verifyError && <div className="onb-verify-err"><Icon.AlertCircle /> {verifyError}</div>}
           {verified && models.length > 0 && <div className="onb-khint">{t.model.availHint(models)}</div>}
         </>
       )}

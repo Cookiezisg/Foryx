@@ -4853,6 +4853,8 @@ tr.is-selected { background: var(--accent-soft) !important; }
 .onb-prov { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px solid var(--border); border-radius: var(--radius-md); cursor: pointer; background: var(--bg-paper); text-align: left; font-family: var(--font-sans); }
 .onb-prov:hover { border-color: var(--border-strong); }
 .onb-prov.is-active { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 1px var(--accent) inset; }
+.onb-prov-ck { margin-left: auto; flex: none; width: 14px; height: 14px; border-radius: 50%; background: var(--status-success); display: flex; align-items: center; justify-content: center; }
+.onb-prov-ck svg { width: 9px; height: 9px; stroke: #fff; fill: none; stroke-width: 2.5; }
 .onb-pchip { flex: none; width: 27px; height: 27px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; color: #fff; font-size: var(--fs-11); font-weight: 700; }
 .onb-pname { font-size: var(--fs-13); font-weight: 550; color: var(--fg-strong); }
 .onb-pdesc { font-size: var(--fs-11); color: var(--fg-faint); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
