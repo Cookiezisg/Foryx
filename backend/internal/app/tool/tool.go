@@ -101,20 +101,9 @@ func injectStandardFields(params json.RawMessage) json.RawMessage {
 		props = map[string]json.RawMessage{}
 	}
 
-	props["summary"] = json.RawMessage(`{
-		"type": "string",
-		"description": "One sentence describing what you are doing and why. Required."
-	}`)
-	props["destructive"] = json.RawMessage(`{
-		"type": "boolean",
-		"description": "Set to true if this call may cause irreversible damage (rm -rf, DELETE FROM, git push --force, deleting forges, running forges that modify external state, etc.). The user will see a warning when true. Default false.",
-		"default": false
-	}`)
-	props["execution_group"] = json.RawMessage(`{
-		"type": "integer",
-		"minimum": 1,
-		"description": "Optional execution batch identifier. Tool calls with the same execution_group run in parallel; different groups run sequentially in ascending order. Set the same number on calls that have NO interdependence and NO shared mutable state (typical example: parallel git status + git diff + git log). If omitted, this call gets a unique sequential group — runs alone, after any explicit groups. When unsure, omit the field (sequential is always safe)."
-	}`)
+	props["summary"] = json.RawMessage(`{"type":"string","description":"One sentence: what you're doing and why."}`)
+	props["destructive"] = json.RawMessage(`{"type":"boolean","default":false,"description":"true if this call may be irreversible; see tool_conventions."}`)
+	props["execution_group"] = json.RawMessage(`{"type":"integer","minimum":1,"description":"Parallel-batch id; see tool_conventions."}`)
 
 	propsRaw, err := json.Marshal(props)
 	if err != nil {

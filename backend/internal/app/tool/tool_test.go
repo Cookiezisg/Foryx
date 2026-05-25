@@ -327,5 +327,23 @@ func contains(ss []string, s string) bool {
 	return false
 }
 
+func TestInjectStandardFields_DescriptionsAreSlim(t *testing.T) {
+	params := json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}},"required":["path"]}`)
+	result := injectStandardFields(params)
+	var schema map[string]json.RawMessage
+	json.Unmarshal(result, &schema)
+	var props map[string]json.RawMessage
+	json.Unmarshal(schema["properties"], &props)
+	for _, f := range []string{"summary", "destructive", "execution_group"} {
+		var field struct {
+			Description string `json:"description"`
+		}
+		json.Unmarshal(props[f], &field)
+		if len(field.Description) > 120 {
+			t.Errorf("%s description too long (%d chars); long guidance must live in tool_conventions, not per-tool schema", f, len(field.Description))
+		}
+	}
+}
+
 var _ Tool = (*stubTool)(nil)
 var _ llminfra.ToolDef = llminfra.ToolDef{}
