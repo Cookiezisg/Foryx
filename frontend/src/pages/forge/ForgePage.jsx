@@ -8,12 +8,12 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFunction, useHandler, useWorkflow } from "../../api/forge.js";
 import { ForgeList } from "./ui/ForgeList.jsx";
-import { FunctionDetail } from "@/panes/forge/FunctionDetail.jsx";
-import { HandlerDetail } from "@/panes/forge/HandlerDetail.jsx";
-import { WorkflowDetail } from "@/panes/forge/WorkflowDetail.jsx";
+import { FunctionDetail } from "@entities/function";
+import { HandlerDetail } from "@entities/handler";
+import { WorkflowDetail } from "@entities/workflow";
 import { slideUp, fadeIn } from "../../motion/tokens.js";
 
-export function ForgePage({ focusEntity, onConsumeFocusEntity }) {
+export function ForgePage({ focusEntity, onConsumeFocusEntity, onOpenExecute }) {
   const [open, setOpen] = useState(null);
   const focusId = focusEntity?.forge;
 
@@ -44,11 +44,11 @@ export function ForgePage({ focusEntity, onConsumeFocusEntity }) {
         <motion.div key={`detail-${open.kind}-${open.id}`} {...slideUp} style={{ height: "100%" }}>
           {open.kind === "function" && <FunctionDetail forge={open} onBack={close} />}
           {open.kind === "handler"  && <HandlerDetail forge={open} onBack={close} />}
-          {open.kind === "workflow" && <WorkflowDetail forge={open} onBack={close} />}
+          {open.kind === "workflow" && <WorkflowDetail forge={open} onBack={close} onOpenExecute={onOpenExecute} />}
         </motion.div>
       ) : (
         <motion.div key="list" {...fadeIn} style={{ height: "100%" }}>
-          <ForgeList onOpen={setOpen} />
+          <ForgeList onOpen={setOpen} onOpenExecute={onOpenExecute} />
         </motion.div>
       )}
     </AnimatePresence>

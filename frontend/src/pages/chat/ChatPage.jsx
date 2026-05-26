@@ -15,7 +15,7 @@ import { qk } from "../../api/client.js";
 import { useSendMessageFlow } from "../../features/send-message/index.ts";
 import { ChatHeader } from "./ui/ChatHeader.jsx";
 import { MessageView } from "./ui/MessageView.jsx";
-import { Composer } from "@/panes/chat/Composer.jsx";
+import { Composer } from "@features/send-message";
 import { NoApiKeyGate } from "./ui/NoApiKeyGate.jsx";
 import { NoModelGate } from "./ui/NoModelGate.jsx";
 import { Icon } from "../../components/primitives/Icon.jsx";

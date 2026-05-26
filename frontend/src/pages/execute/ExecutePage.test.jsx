@@ -12,7 +12,7 @@ vi.mock("./ui/ExecuteOverview.jsx", () => ({
   ),
 }));
 
-vi.mock("@/panes/execute/FlowRunDetail.jsx", () => ({
+vi.mock("@entities/flowrun", () => ({
   FlowRunDetail: ({ runId, onBack }) => (
     <div data-testid="detail">
       <span>detail-{runId}</span>
@@ -21,12 +21,12 @@ vi.mock("@/panes/execute/FlowRunDetail.jsx", () => ({
   ),
 }));
 
-vi.mock("../../api/flowruns.js", () => ({
+vi.mock("@/api/flowruns.js", () => ({
   useFlowRun: vi.fn(),
 }));
 
 import userEvent from "@testing-library/user-event";
-import { useFlowRun } from "../../api/flowruns.js";
+import { useFlowRun } from "@/api/flowruns.js";
 import { ExecutePage } from "./ExecutePage.jsx";
 
 const mockConsumeFocusEntity = vi.fn();

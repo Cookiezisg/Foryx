@@ -21,7 +21,7 @@ vi.mock("./ui/ForgeList.jsx", () => ({
   ),
 }));
 
-vi.mock("@/panes/forge/FunctionDetail.jsx", () => ({
+vi.mock("@entities/function", () => ({
   FunctionDetail: ({ forge, onBack }) => (
     <div data-testid="fn-detail">
       fn-{forge.id}-{forge.name}
@@ -30,7 +30,7 @@ vi.mock("@/panes/forge/FunctionDetail.jsx", () => ({
   ),
 }));
 
-vi.mock("@/panes/forge/HandlerDetail.jsx", () => ({
+vi.mock("@entities/handler", () => ({
   HandlerDetail: ({ forge, onBack }) => (
     <div data-testid="hd-detail">
       hd-{forge.id}
@@ -39,7 +39,7 @@ vi.mock("@/panes/forge/HandlerDetail.jsx", () => ({
   ),
 }));
 
-vi.mock("@/panes/forge/WorkflowDetail.jsx", () => ({
+vi.mock("@entities/workflow", () => ({
   WorkflowDetail: ({ forge, onBack }) => (
     <div data-testid="wf-detail">
       wf-{forge.id}
@@ -48,13 +48,13 @@ vi.mock("@/panes/forge/WorkflowDetail.jsx", () => ({
   ),
 }));
 
-vi.mock("../../api/forge.js", () => ({
+vi.mock("@/api/forge.js", () => ({
   useFunction: vi.fn(),
   useHandler: vi.fn(),
   useWorkflow: vi.fn(),
 }));
 
-import { useFunction, useHandler, useWorkflow } from "../../api/forge.js";
+import { useFunction, useHandler, useWorkflow } from "@/api/forge.js";
 import { ForgePage } from "./ForgePage.jsx";
 
 const mockConsumeFocusEntity = vi.fn();

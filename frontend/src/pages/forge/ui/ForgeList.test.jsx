@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-vi.mock("../../../api/forge.js", () => ({
+vi.mock("@/api/forge.js", () => ({
   useFunctions: vi.fn(),
   useHandlers: vi.fn(),
   useWorkflows: vi.fn(),
@@ -23,13 +23,13 @@ vi.mock("@shared/model", () => ({
   useForgeProgress: (selector) => selector({ active: {} }),
 }));
 
-vi.mock("../../../components/overlays/RunDrawer.jsx", () => ({
+vi.mock("@entities/flowrun", () => ({
   RunDrawer: ({ open, kind, entity }) =>
     open ? <div data-testid="run-drawer">drawer-{kind}-{entity?.id}</div> : null,
 }));
 
-import { useFunctions, useHandlers, useWorkflows } from "../../../api/forge.js";
-import { useToastStore } from "../../../shared/ui/toastStore.ts";
+import { useFunctions, useHandlers, useWorkflows } from "@/api/forge.js";
+import { useToastStore } from "@shared/ui/toastStore";
 import { ForgeList } from "./ForgeList.jsx";
 
 beforeEach(() => {

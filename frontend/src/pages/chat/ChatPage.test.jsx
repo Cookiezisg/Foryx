@@ -9,16 +9,23 @@ import { createElement } from "react";
 const mockSend = vi.fn();
 const mockCancel = vi.fn();
 
-vi.mock("../../api/conversations.js", () => ({
+vi.mock("@/api/conversations.js", () => ({
   useConversation: () => ({ data: { id: "cv_x", title: "Test Conv" } }),
   useConversationMessages: () => ({ data: [], isLoading: false }),
 }));
 
-vi.mock("../../features/send-message/index.ts", () => ({
+vi.mock("@features/send-message", () => ({
   useSendMessageFlow: () => ({ submit: mockSend, cancelStream: mockCancel, isPending: false }),
+  Composer: ({ onSend, onCancel, isStreaming }) => (
+    createElement("div", { "data-testid": "composer" },
+      createElement("button", { onClick: () => onSend({ content: "hi" }) }, "send"),
+      createElement("button", { onClick: () => onCancel() }, "cancel"),
+      createElement("span", null, isStreaming ? "streaming" : "idle"),
+    )
+  ),
 }));
 
-vi.mock("../../api/config.js", () => ({
+vi.mock("@/api/config.js", () => ({
   useApiKeys: () => ({ data: [{ id: "aki_1" }], isLoading: false }),
   // Default: chat scenario configured so NoModelGate doesn't swallow the
   // existing ChatPage tests. Tests that exercise the gate can override.
@@ -36,18 +43,8 @@ vi.mock("./ui/MessageView.jsx", () => ({
   MessageView: ({ msgId }) => <div data-testid={`msg-${msgId}`}>{msgId}</div>,
 }));
 
-vi.mock("@/panes/chat/Composer.jsx", () => ({
-  Composer: ({ onSend, onCancel, isStreaming }) => (
-    <div data-testid="composer">
-      <button onClick={() => onSend({ content: "hi" })}>send</button>
-      <button onClick={() => onCancel()}>cancel</button>
-      <span>{isStreaming ? "streaming" : "idle"}</span>
-    </div>
-  ),
-}));
-
-import { useToastStore } from "../../shared/ui/toastStore.ts";
-import { useChatStore } from "../../store/chat.js";
+import { useToastStore } from "@shared/ui/toastStore";
+import { useChatStore } from "@/store/chat.js";
 import { ChatPage } from "./ChatPage.jsx";
 
 function wrap({ children }) {

@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
-vi.mock("../../api/library.js", () => ({
+vi.mock("@/api/library.js", () => ({
   useDocumentTree: vi.fn(),
   useDocument: vi.fn(),
   useCreateDocument: vi.fn(),
@@ -13,29 +13,29 @@ vi.mock("../../api/library.js", () => ({
   useDeleteDocument: vi.fn(),
 }));
 
-vi.mock("@/panes/library/DocEditor.jsx", () => ({
+vi.mock("@entities/document", () => ({
   DocEditor: ({ initialMarkdown }) => (
     <div data-testid="editor-stub">{initialMarkdown}</div>
   ),
 }));
 
-vi.mock("../../widgets/ask-ai-trigger/AskAiTrigger.jsx", () => ({
+vi.mock("@/widgets/ask-ai-trigger/AskAiTrigger.jsx", () => ({
   AskAiTrigger: () => <div data-testid="ask-ai-trigger" />,
 }));
 
-vi.mock("../../widgets/entity-rel-meta/EntityRelMeta.jsx", () => ({
+vi.mock("@/widgets/entity-rel-meta/EntityRelMeta.jsx", () => ({
   EntityRelMeta: () => null,
 }));
 
-vi.mock("../../shared/ui/RelTime.jsx", () => ({
+vi.mock("@shared/ui/RelTime.jsx", () => ({
   RelTime: ({ ts }) => <span>{ts}</span>,
 }));
 
 import {
   useDocumentTree, useDocument,
   useCreateDocument, useUpdateDocument, useDeleteDocument,
-} from "../../api/library.js";
-import { useToastStore } from "../../shared/ui/toastStore.ts";
+} from "@/api/library.js";
+import { useToastStore } from "@shared/ui/toastStore";
 import { DocumentsPage } from "./DocumentsPage.jsx";
 
 const TREE = [

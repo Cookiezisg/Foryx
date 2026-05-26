@@ -7,6 +7,7 @@ export {
   useDeleteDocument,
   useMoveDocument,
 } from "./api/document";
+export { DocEditor } from "./ui/DocEditor.jsx";
 export type {
   Document,
   DocTreeNode,

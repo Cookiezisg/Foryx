@@ -21,7 +21,7 @@ import { AskAiTrigger } from "../../widgets/ask-ai-trigger/AskAiTrigger.jsx";
 import { EntityRelMeta } from "../../widgets/entity-rel-meta/EntityRelMeta.jsx";
 import { RelTime } from "../../shared/ui/RelTime.jsx";
 import { PaneCollapseToggle } from "../../shared/ui/PaneCollapseToggle.jsx";
-import { DocEditor } from "@/panes/library/DocEditor.jsx";
+import { DocEditor } from "@entities/document";
 import {
   useDocumentTree, useDocument,
   useCreateDocument, useUpdateDocument, useDeleteDocument,

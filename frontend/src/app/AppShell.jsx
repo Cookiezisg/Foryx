@@ -26,8 +26,8 @@ import { McpPage } from "@/pages/library/McpPage.jsx";
 import { MemoryPage } from "@/pages/library/MemoryPage.jsx";
 import { DocumentsPage } from "@/pages/library/DocumentsPage.jsx";
 import { ObservePage } from "@/pages/observe/ui/ObservePage.jsx";
-import { AskUserModal } from "@/components/overlays/AskUserModal.jsx";
-import { SettingsModal } from "@/components/overlays/SettingsModal.jsx";
+import { AskUserModal } from "@features/ask-user";
+import { SettingsModal } from "@features/settings";
 import { usePaneStore, useSidebarStore, useOverlayStore } from "@app/model";
 import { useSSEHealth } from "@app/sse/SSEProvider.jsx";
 import { setNavigator } from "@shared/lib/navigation";
@@ -83,9 +83,12 @@ export function AppShell() {
   const cmdkOpen = useOverlayStore((s) => s.cmdkOpen);
   const notifsOpen = useOverlayStore((s) => s.notifsOpen);
   const pendingAsk = useOverlayStore((s) => s.pendingAsk);
+  const askOpen = useOverlayStore((s) => s.askOpen);
+  const settingsOpen = useOverlayStore((s) => s.settingsOpen);
   const setCmdkOpen = useOverlayStore((s) => s.setCmdkOpen);
   const setNotifsOpen = useOverlayStore((s) => s.setNotifsOpen);
   const setSettingsOpen = useOverlayStore((s) => s.setSettingsOpen);
+  const setAskOpen = useOverlayStore((s) => s.setAskOpen);
   const setPendingAsk = useOverlayStore((s) => s.setPendingAsk);
   const openEntity = usePaneStore((s) => s.openEntity);
 
@@ -146,10 +149,19 @@ export function AppShell() {
 
   const isTwoPane = openPanes.length === 2 && !narrow;
 
+  const onOpenChat = (convId) => {
+    setActiveConv(convId);
+    openPane("chat");
+  };
+  const onOpenExecuteRun = (runId) => {
+    usePaneStore.getState().setActiveFlowRun(runId);
+    openPane("execute");
+  };
+
   const pageProps = {
     chat: { activeConv, onSetActiveConv: setActiveConv, onOpenSettings: () => setSettingsOpen(true) },
-    forge: { focusEntity, onConsumeFocusEntity: consumeFocusEntity },
-    execute: { focusEntity, onConsumeFocusEntity: consumeFocusEntity },
+    forge: { focusEntity, onConsumeFocusEntity: consumeFocusEntity, onOpenExecute: onOpenExecuteRun },
+    execute: { focusEntity, onConsumeFocusEntity: consumeFocusEntity, onOpenChat },
     documents: { activeDoc: activeDocument, onSetActiveDocument: setActiveDocument },
   };
 
@@ -247,8 +259,15 @@ export function AppShell() {
         unread={sseHealth.unread}
         clearUnread={sseHealth.clearUnread}
       />
-      <AskUserModal />
-      <SettingsModal />
+      <AskUserModal
+        pending={pendingAsk}
+        askOpen={askOpen}
+        onClose={() => { setAskOpen(false); setPendingAsk(null); }}
+      />
+      <SettingsModal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+      />
       <ToastTray />
     </div>
   );

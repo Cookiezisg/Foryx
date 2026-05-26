@@ -8,10 +8,10 @@ import { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFlowRun } from "../../api/flowruns.js";
 import { ExecuteOverview } from "./ui/ExecuteOverview.jsx";
-import { FlowRunDetail } from "@/panes/execute/FlowRunDetail.jsx";
+import { FlowRunDetail } from "@entities/flowrun";
 import { slideUp, fadeIn } from "../../motion/tokens.js";
 
-export function ExecutePage({ focusEntity, onConsumeFocusEntity }) {
+export function ExecutePage({ focusEntity, onConsumeFocusEntity, onOpenChat }) {
   const [openRunId, setOpenRunId] = useState(null);
   const focusId = focusEntity?.execute;
 
@@ -28,7 +28,7 @@ export function ExecutePage({ focusEntity, onConsumeFocusEntity }) {
     <AnimatePresence mode="wait" initial={false}>
       {openRunId ? (
         <motion.div key={`run-${openRunId}`} {...slideUp} style={{ height: "100%" }}>
-          <FlowRunDetail runId={openRunId} onBack={() => setOpenRunId(null)} />
+          <FlowRunDetail runId={openRunId} onBack={() => setOpenRunId(null)} onOpenChat={onOpenChat} />
         </motion.div>
       ) : (
         <motion.div key="list" {...fadeIn} style={{ height: "100%" }}>

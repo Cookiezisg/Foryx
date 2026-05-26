@@ -7,6 +7,8 @@ export {
   useRejectNode,
   useTriageFlowRun,
 } from "./api/flowrun";
+export { FlowRunDetail } from "./ui/FlowRunDetail.jsx";
+export { RunDrawer } from "./ui/RunDrawer.jsx";
 export type {
   FlowRun,
   FlowRunNode,

@@ -18,10 +18,10 @@ import {
 } from "../../../api/forge.js";
 import { useForgeProgress } from "@shared/model";
 import { useToastStore } from "@shared/ui/toastStore";
-import { RunDrawer } from "../../../components/overlays/RunDrawer.jsx";
+import { RunDrawer } from "@entities/flowrun";
 import { useForgeBatchDelete } from "@features/forge-review";
 
-export function ForgeList({ onOpen }) {
+export function ForgeList({ onOpen, onOpenExecute }) {
   const { t } = useTranslation(["forge", "common"]);
   const [tab, setTab] = useState("all");
   const [q, setQ] = useState("");
@@ -242,6 +242,7 @@ export function ForgeList({ onOpen }) {
         onClose={() => setRunTarget(null)}
         kind={runTarget?.kind}
         entity={runTarget || {}}
+        onOpenExecute={onOpenExecute}
       />
     </div>
   );

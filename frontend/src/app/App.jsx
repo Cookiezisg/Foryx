@@ -6,7 +6,7 @@
 import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppShell } from "./AppShell.jsx";
-import { Onboarding } from "@/components/overlays/Onboarding.jsx";
+import { Onboarding } from "@features/onboarding";
 import { SSEProvider } from "@app/sse/SSEProvider.jsx";
 import { useSettingsStore, applyTheme } from "@entities/settings";
 import { useSessionStore } from "@entities/session";
