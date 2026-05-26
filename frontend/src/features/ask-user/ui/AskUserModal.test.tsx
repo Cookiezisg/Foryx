@@ -6,7 +6,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { setupFetchSpy } from "@shared/lib/testHarness";
 import { useToastStore } from "@shared/ui/toastStore";
-import { AskUserModal } from "./AskUserModal.jsx";
+import { AskUserModal } from "./AskUserModal.tsx";
 
 let calls;
 beforeEach(async () => {
@@ -50,7 +50,7 @@ describe("AskUserModal", () => {
 
   it("submitButton_disabled_untilOptionSelected", () => {
     render(<AskUserModal pending={PENDING("ask_3")} askOpen={false} onClose={() => {}} />);
-    const submit = screen.getByRole("button", { name: /提交/ });
+    const submit = screen.getByRole("button", { name: /提交/ }) as HTMLButtonElement;
     expect(submit.disabled).toBe(true);
   });
 

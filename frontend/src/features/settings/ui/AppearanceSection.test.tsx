@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useSettingsStore } from "@entities/settings/model/settingsStore";
-import { AppearanceSection } from "./AppearanceSection.jsx";
+import { AppearanceSection } from "./AppearanceSection.tsx";
 
 beforeEach(() => {
   useSettingsStore.setState({

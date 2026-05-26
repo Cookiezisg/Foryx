@@ -15,8 +15,8 @@ import { useApiKeys, useCreateApiKey, useTestApiKey, useDeleteApiKey, useUpdateA
 import { useProviders } from "@entities/model-config";
 import { apiFetch, qk } from "@shared/api";
 import { SEARCH_HINTS } from "@shared/lib/onboarding-strings";
-import { ProviderGrid } from "./ProviderGrid.jsx";
-import { KeyVerifyField } from "./KeyVerifyField.jsx";
+import { ProviderGrid } from "./ProviderGrid.tsx";
+import { KeyVerifyField } from "./KeyVerifyField.tsx";
 
 export function SearchSection({ open, onToggle }) {
   const { t } = useTranslation("settings");

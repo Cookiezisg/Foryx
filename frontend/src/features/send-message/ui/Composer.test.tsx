@@ -17,7 +17,7 @@ vi.mock("@entities/document", () => ({
   useDocuments: () => ({ data: [{ id: "doc_1", name: "Notes" }] }),
 }));
 
-import { Composer } from "./Composer.jsx";
+import { Composer } from "./Composer.tsx";
 
 describe("Composer", () => {
   it("typing_thenEnter_callsOnSend", async () => {
@@ -34,12 +34,12 @@ describe("Composer", () => {
     const ta = screen.getByPlaceholderText(/说说你想做什么/);
     await userEvent.type(ta, "line1{Shift>}{enter}{/Shift}line2");
     expect(onSend).not.toHaveBeenCalled();
-    expect(ta.value).toBe("line1\nline2");
+    expect((ta as HTMLTextAreaElement).value).toBe("line1\nline2");
   });
 
   it("emptyText_sendButtonDisabled", () => {
     render(<Composer onSend={() => {}} />);
-    const send = screen.getByTitle(/发送/);
+    const send = screen.getByTitle(/发送/) as HTMLButtonElement;
     expect(send.disabled).toBe(true);
   });
 
@@ -47,7 +47,7 @@ describe("Composer", () => {
     const onSend = vi.fn();
     render(<Composer disabled onSend={onSend} />);
     const ta = screen.getByPlaceholderText(/说说你想做什么/);
-    expect(ta.disabled).toBe(true);
+    expect((ta as HTMLTextAreaElement).disabled).toBe(true);
   });
 
   it("isStreaming_showsStopButton_clickingCallsOnCancel", async () => {
@@ -82,7 +82,7 @@ describe("Composer", () => {
     const ta = screen.getByPlaceholderText(/说说你想做什么/);
     await userEvent.type(ta, "@");
     await userEvent.click(screen.getByText(/addNumbers/));
-    expect(ta.value).toBe(""); // @-token erased
+    expect((ta as HTMLTextAreaElement).value).toBe(""); // @-token erased
     await userEvent.type(ta, "ok{enter}");
     expect(onSend).toHaveBeenCalledWith(expect.objectContaining({
       mentions: expect.arrayContaining([expect.objectContaining({ id: "fn_1" })]),
@@ -95,7 +95,7 @@ describe("Composer", () => {
     await userEvent.type(ta, "@");
     await userEvent.keyboard("{ArrowDown}{ArrowDown}{Enter}");
     // a mention should be attached → mentions section visible (3rd item)
-    expect(screen.queryByPlaceholderText(/说说你想做什么/).value).toBe("");
+    expect((screen.queryByPlaceholderText(/说说你想做什么/) as HTMLTextAreaElement).value).toBe("");
   });
 
   it("attachButton_opensFilePicker", async () => {

@@ -16,7 +16,7 @@ import { useHandlers } from "@entities/handler";
 import { useWorkflows } from "@entities/workflow";
 import { useDocuments } from "@entities/document";
 
-export function Composer({ disabled, isStreaming, onSend, onCancel }) {
+export function Composer({ disabled, isStreaming, onSend, onCancel }: { disabled?: any; isStreaming?: any; onSend?: any; onCancel?: any }) {
   const { t } = useTranslation("conv");
   const [text, setText] = useState("");
   const [attached, setAttached] = useState([]);
@@ -51,7 +51,7 @@ export function Composer({ disabled, isStreaming, onSend, onCancel }) {
     ...functions.map((f) => ({ type: "function", id: f.id, label: f.name + " · function", icon: "Code" })),
     ...handlers.map((h) => ({ type: "handler", id: h.id, label: h.name + " · handler", icon: "Server" })),
     ...workflows.map((w) => ({ type: "workflow", id: w.id, label: w.name + " · workflow", icon: "Workflow" })),
-    ...documents.map((d) => ({ type: "document", id: d.id, label: (d.name || d.title || d.id) + " · doc", icon: "FileText" })),
+    ...documents.map((d) => { const da = d as any; return { type: "document", id: da.id, label: (da.name || da.title || da.id) + " · doc", icon: "FileText" }; }),
   ];
 
   const onChange = (e) => {

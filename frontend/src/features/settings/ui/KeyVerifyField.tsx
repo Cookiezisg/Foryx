@@ -1,6 +1,6 @@
 import { Icon } from "@shared/ui/Icon";
 
-export function KeyVerifyField({ label, value, onChange, onVerify, verifying, verified, error, verifyLabel, verifyingLabel, verifiedLabel, placeholder, readOnly }) {
+export function KeyVerifyField({ label, value, onChange, onVerify, verifying, verified, error, verifyLabel, verifyingLabel, verifiedLabel, placeholder, readOnly }: { label?: any; value?: any; onChange?: any; onVerify?: any; verifying?: any; verified?: any; error?: any; verifyLabel?: any; verifyingLabel?: any; verifiedLabel?: any; placeholder?: any; readOnly?: any }) {
   return (
     <>
       <div className="onb-klabel">{label}</div>

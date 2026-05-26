@@ -62,7 +62,7 @@ export function Onboarding({ onFinish }) {
             </div>
             <div className="onb-journey">
               {STEP_KEYS.map((key, i) => {
-                const [jt, jd] = t(`journey.${key}`, { returnObjects: true });
+                const [jt, jd] = t(`journey.${key}`, { returnObjects: true }) as any[];
                 const cls = "onb-jstep" + (i === step ? " is-active" : "") + (i < step ? " is-done" : "");
                 return (
                   <div key={key} className={cls}>
@@ -293,7 +293,7 @@ function Done({ t, name, accent, provider, search }) {
   );
 }
 
-function Recap({ label, value, children, muted, fallback }) {
+function Recap({ label, value, children, muted, fallback }: { label?: any; value?: any; children?: any; muted?: any; fallback?: any }) {
   return (
     <div className="onb-recap-card">
       <div className="onb-recap-label">{label}</div>

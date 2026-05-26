@@ -35,7 +35,7 @@ vi.mock("@entities/model-config", () => ({
 }));
 
 import { useToastStore } from "@shared/ui/toastStore";
-import { ApiKeysSection } from "./ApiKeysSection.jsx";
+import { ApiKeysSection } from "./ApiKeysSection.tsx";
 
 function wrap({ children }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -93,9 +93,9 @@ describe("ApiKeysSection", () => {
 
   it("verifiedBadge_onKeyWithTestStatusOk", () => {
     renderOpen();
-    const dsItem = screen.getByText("DeepSeek").closest(".set-kitem");
+    const dsItem = screen.getByText("DeepSeek").closest(".set-kitem") as HTMLElement;
     expect(within(dsItem).queryByText("已验证")).toBeInTheDocument();
-    const anItem = screen.getByText("Anthropic").closest(".set-kitem");
+    const anItem = screen.getByText("Anthropic").closest(".set-kitem") as HTMLElement;
     expect(within(anItem).queryByText("已验证")).not.toBeInTheDocument();
   });
 
@@ -135,7 +135,7 @@ describe("ApiKeysSection", () => {
     renderOpen();
     await userEvent.click(screen.getByText("Anthropic"));
     const seg = screen.getByText("对话默认", { selector: ".set-seg-opt" });
-    expect(seg.disabled).toBe(true);
+    expect((seg as HTMLButtonElement).disabled).toBe(true);
     await userEvent.click(seg);
     expect(mockUpsertModel).not.toHaveBeenCalled();
   });
@@ -182,7 +182,7 @@ describe("ApiKeysSection", () => {
     await waitFor(() => expect(mockTestKey).toHaveBeenCalled());
     const select = await screen.findByLabelText("模型");
     expect(select).toHaveTextContent("deepseek-chat");
-    expect(screen.getByRole("button", { name: "保存" }).disabled).toBe(false);
+    expect((screen.getByRole("button", { name: "保存" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("addFirstKey_saveUpsertsChatConfigWhenNoDefaultExists", async () => {
@@ -226,7 +226,7 @@ describe("ApiKeysSection", () => {
     await waitFor(() => expect(mockCreateKey).toHaveBeenCalled());
     await waitFor(() => expect(screen.getByText(/验证未通过/)).toBeInTheDocument());
     expect(screen.queryByLabelText("模型")).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "保存" }).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "保存" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("cancelAfterCreate_deletesOrphanKey", async () => {

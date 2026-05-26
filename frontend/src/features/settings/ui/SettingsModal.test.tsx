@@ -13,9 +13,9 @@ vi.mock("framer-motion", async () => {
     ...actual,
     AnimatePresence: ({ children }) => children,
     motion: new Proxy({}, {
-      get: (_, tag) => (props) => {
+      get: (_, tag) => (props: any) => {
         const { initial, animate, exit, transition, layout, ...rest } = props;
-        return createElement(tag, rest);
+        return createElement(tag as any, rest);
       },
     }),
   };
@@ -62,7 +62,7 @@ vi.mock("@entities/model-config", () => ({
 
 import { useToastStore } from "@shared/ui/toastStore";
 import { useSessionStore } from "@entities/session";
-import { SettingsModal } from "./SettingsModal.jsx";
+import { SettingsModal } from "./SettingsModal.tsx";
 
 function wrap({ children }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });

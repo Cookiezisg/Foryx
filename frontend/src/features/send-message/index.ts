@@ -1,2 +1,2 @@
 export { useSendMessageFlow } from "./model/useSendMessageFlow";
-export { Composer } from "./ui/Composer.jsx";
+export { Composer } from "./ui/Composer.tsx";

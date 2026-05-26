@@ -14,9 +14,9 @@ vi.mock("framer-motion", async () => {
     ...actual,
     AnimatePresence: ({ children }) => children,
     motion: new Proxy({}, {
-      get: (_, tag) => (props) => {
+      get: (_, tag) => (props: any) => {
         const { initial, animate, exit, transition, layout, ...rest } = props;
-        return createElement(tag, rest);
+        return createElement(tag as any, rest);
       },
     }),
   };
@@ -52,7 +52,7 @@ vi.mock("@entities/model-config", () => ({
 import { useToastStore } from "@shared/ui/toastStore";
 import { useSettingsStore } from "@entities/settings/model/settingsStore";
 import { useSessionStore } from "@entities/session";
-import { Onboarding } from "./Onboarding.jsx";
+import { Onboarding } from "./Onboarding.tsx";
 
 function wrap({ children }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -71,11 +71,11 @@ beforeEach(() => {
 });
 
 const btn = (re) => screen.getByRole("button", { name: re });
-const pane = () => document.querySelector(".onb-pane");
-const inPane = (text) => within(pane()).getByText(text);
+const pane = () => document.querySelector(".onb-pane") as HTMLElement;
+const inPane = (text: string) => within(pane()).getByText(text);
 
 // Advance welcome → workspace → (fill name) → appearance, creating the user.
-async function toAppearance(user) {
+async function toAppearance(user?: any) {
   await userEvent.click(btn(/开始/));
   await userEvent.type(screen.getByPlaceholderText(/个人/), "alice");
   await userEvent.click(btn(/继续/));
@@ -94,9 +94,9 @@ describe("Onboarding", () => {
   it("workspace_emptyName_nextDisabled_filledEnabled", async () => {
     render(<Onboarding onFinish={() => {}} />, { wrapper: wrap });
     await userEvent.click(btn(/开始/));
-    expect(btn(/继续/).disabled).toBe(true);
+    expect((btn(/继续/) as HTMLButtonElement).disabled).toBe(true);
     await userEvent.type(screen.getByPlaceholderText(/个人/), "alice");
-    expect(btn(/继续/).disabled).toBe(false);
+    expect((btn(/继续/) as HTMLButtonElement).disabled).toBe(false);
   });
 
   it("workspace_continue_createsUserAndSetsCurrentUserId", async () => {

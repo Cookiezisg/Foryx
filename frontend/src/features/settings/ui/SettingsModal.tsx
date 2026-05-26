@@ -10,10 +10,10 @@ import { Icon } from "@shared/ui/Icon";
 import { useSessionStore } from "@entities/session";
 import { useUsers } from "@entities/user";
 import { scaleIn } from "@shared/lib/motion";
-import { ApiKeysSection } from "./ApiKeysSection.jsx";
-import { SearchSection } from "./SearchSection.jsx";
-import { AppearanceSection } from "./AppearanceSection.jsx";
-import { SystemSection } from "./SystemSection.jsx";
+import { ApiKeysSection } from "./ApiKeysSection.tsx";
+import { SearchSection } from "./SearchSection.tsx";
+import { AppearanceSection } from "./AppearanceSection.tsx";
+import { SystemSection } from "./SystemSection.tsx";
 import { useAccountManager } from "@features/settings";
 
 export function SettingsModal({ open, onClose }) {
@@ -42,7 +42,7 @@ export function SettingsModal({ open, onClose }) {
         >
           <motion.div
             className="set-modal"
-            {...scaleIn}
+            {...(scaleIn as any)}
             role="dialog"
             aria-modal="true"
             aria-label={t("modal.ariaLabel")}

@@ -43,8 +43,8 @@ export function AskUserModal({ pending, askOpen, onClose }) {
     return (
       <AnimatePresence>
         {askOpen && (
-          <motion.div className="overlay" {...fadeIn} onClick={onClose}>
-            <motion.div className="ask-card" {...scaleIn} onClick={(e) => e.stopPropagation()}>
+          <motion.div className="overlay" {...(fadeIn as any)} onClick={onClose}>
+            <motion.div className="ask-card" {...(scaleIn as any)} onClick={(e) => e.stopPropagation()}>
               <div className="ask-head">
                 <div className="icon-wrap"><Icon.HelpCircle /></div>
                 <div className="meta">
@@ -72,8 +72,8 @@ export function AskUserModal({ pending, askOpen, onClose }) {
   return (
     <AnimatePresence>
       {isOpen && (
-        <motion.div className="overlay" {...fadeIn} onClick={onClose}>
-          <motion.div className="ask-card" {...scaleIn} onClick={(e) => e.stopPropagation()}>
+        <motion.div className="overlay" {...(fadeIn as any)} onClick={onClose}>
+          <motion.div className="ask-card" {...(scaleIn as any)} onClick={(e) => e.stopPropagation()}>
             <div className="ask-head">
               <div className="icon-wrap"><Icon.HelpCircle /></div>
               <div className="meta">

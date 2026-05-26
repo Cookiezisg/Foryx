@@ -27,7 +27,7 @@ export function AppearanceSection({ open, onToggle }) {
                 <button
                   key={v}
                   className={"onb-seg-opt" + (settings.theme === v ? " is-active" : "")}
-                  onClick={() => settings.set({ theme: v })}
+                  onClick={() => (settings as any).set({ theme: v })}
                 >
                   {t(`appearance.themeOpts.${v}`)}
                 </button>
@@ -42,7 +42,7 @@ export function AppearanceSection({ open, onToggle }) {
                   key={k}
                   className={"onb-swatch" + (settings.accent === k ? " is-active" : "")}
                   style={{ background: c }}
-                  onClick={() => settings.set({ accent: k })}
+                  onClick={() => (settings as any).set({ accent: k })}
                 />
               ))}
             </div>
@@ -54,7 +54,7 @@ export function AppearanceSection({ open, onToggle }) {
                 <button
                   key={v}
                   className={"onb-seg-opt" + (settings.density === v ? " is-active" : "")}
-                  onClick={() => settings.set({ density: v })}
+                  onClick={() => (settings as any).set({ density: v })}
                 >
                   {t(`appearance.densityOpts.${v}`)}
                 </button>
@@ -68,7 +68,7 @@ export function AppearanceSection({ open, onToggle }) {
                 <button
                   key={v}
                   className={"onb-seg-opt" + (settings.lang === v ? " is-active" : "")}
-                  onClick={() => settings.set({ lang: v })}
+                  onClick={() => (settings as any).set({ lang: v })}
                 >
                   {label}
                 </button>
@@ -82,7 +82,7 @@ export function AppearanceSection({ open, onToggle }) {
                 <button
                   key={v}
                   className={"onb-seg-opt" + (settings.reasoningDefault === v ? " is-active" : "")}
-                  onClick={() => settings.set({ reasoningDefault: v })}
+                  onClick={() => (settings as any).set({ reasoningDefault: v })}
                 >
                   {t(`appearance.reasoningOpts.${v}`)}
                 </button>

@@ -16,8 +16,8 @@ import { useTranslation } from "react-i18next";
 import { Icon } from "@shared/ui/Icon";
 import { Button } from "@shared/ui/Button";
 import { Select } from "@shared/ui/Select";
-import { PaneCollapseToggle } from "@shared/ui/PaneCollapseToggle.jsx";
-import { FloatingInspector } from "@shared/ui/FloatingInspector.jsx";
+import { PaneCollapseToggle } from "@shared/ui/PaneCollapseToggle.tsx";
+import { FloatingInspector } from "@shared/ui/FloatingInspector.tsx";
 import { useWorkflowEdit } from "@features/workflow-edit";
 import { useCollapsible } from "@shared/lib/useCollapsible";
 
@@ -335,7 +335,7 @@ export function WorkflowEditor({ workflowId, version }) {
     };
     const onUp = (e) => {
       if (connecting) {
-        const t = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-handle][data-id]");
+        const t = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-handle][data-id]") as HTMLElement | null;
         if (t) {
           const toId = t.dataset.id;
           const toHandle = t.dataset.handle;
@@ -463,8 +463,8 @@ export function WorkflowEditor({ workflowId, version }) {
 
   return (
     <div className={editorClass}>
-      {paletteOpen && <Palette onAdd={onPaletteAdd} onCollapse={togglePalette} />}
-      {!paletteOpen && <PaneCollapseToggle onClick={togglePalette} title={t("editor.palette.expand")} />}
+      {paletteOpen && <Palette onAdd={onPaletteAdd} onCollapse={togglePalette as any} />}
+      {!paletteOpen && <PaneCollapseToggle onClick={togglePalette as any} title={t("editor.palette.expand")} />}
       <div
         ref={canvasRef}
         className={"wf-canvas" + (panning ? " is-panning" : "")}

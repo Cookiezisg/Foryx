@@ -16,7 +16,7 @@ const mockUpdateKey = vi.fn();
 
 // apiFetch is used directly in AddPanel's save for best-effort isDefault PATCH.
 vi.mock("@shared/api/httpClient", async (importOriginal) => {
-  const actual = await importOriginal();
+  const actual = await importOriginal() as Record<string, unknown>;
   return { ...actual, apiFetch: vi.fn().mockResolvedValue({}) };
 });
 
@@ -43,7 +43,7 @@ vi.mock("@entities/model-config", () => ({
 }));
 
 import { useToastStore } from "@shared/ui/toastStore";
-import { SearchSection } from "./SearchSection.jsx";
+import { SearchSection } from "./SearchSection.tsx";
 
 function wrap({ children }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
@@ -95,16 +95,16 @@ describe("SearchSection", () => {
 
   it("noDefaultBadge_onKeyWithIsDefaultFalse", () => {
     renderOpen();
-    const braveItem = screen.getByText("Brave Search").closest(".set-kitem");
+    const braveItem = screen.getByText("Brave Search").closest(".set-kitem") as HTMLElement;
     expect(within(braveItem).queryByText("搜索默认")).not.toBeInTheDocument();
     expect(braveItem.classList.contains("is-default")).toBe(false);
   });
 
   it("verifiedBadge_onKeyWithTestStatusOk", () => {
     renderOpen();
-    const bcItem = screen.getByText("博查 Bocha").closest(".set-kitem");
+    const bcItem = screen.getByText("博查 Bocha").closest(".set-kitem") as HTMLElement;
     expect(within(bcItem).queryByText("已验证")).toBeInTheDocument();
-    const brItem = screen.getByText("Brave Search").closest(".set-kitem");
+    const brItem = screen.getByText("Brave Search").closest(".set-kitem") as HTMLElement;
     expect(within(brItem).queryByText("已验证")).not.toBeInTheDocument();
   });
 
@@ -140,8 +140,8 @@ describe("SearchSection", () => {
   it("clickSearchDefault_onNonDefaultKey_firesUpdateWithIsDefaultTrue", async () => {
     renderOpen();
     await userEvent.click(screen.getByText("Brave Search"));
-    const seg = within(screen.getByText("Brave Search").closest(".set-kitem"))
-      .getByText("搜索默认", { selector: ".set-seg-opt" });
+    const seg = within(screen.getByText("Brave Search").closest(".set-kitem") as HTMLElement)
+      .getByText("搜索默认", { selector: ".set-seg-opt" }) as HTMLButtonElement;
     expect(seg.disabled).toBe(false);
     await userEvent.click(seg);
     expect(mockUpdateKey).toHaveBeenCalledWith(
@@ -153,8 +153,8 @@ describe("SearchSection", () => {
   it("clickJiyuBei_onDefaultKey_firesUpdateWithIsDefaultFalse", async () => {
     renderOpen();
     await userEvent.click(screen.getByText("博查 Bocha"));
-    const seg = within(screen.getByText("博查 Bocha").closest(".set-kitem"))
-      .getByText("仅备用", { selector: ".set-seg-opt" });
+    const seg = within(screen.getByText("博查 Bocha").closest(".set-kitem") as HTMLElement)
+      .getByText("仅备用", { selector: ".set-seg-opt" }) as HTMLButtonElement;
     expect(seg.disabled).toBe(false);
     await userEvent.click(seg);
     expect(mockUpdateKey).toHaveBeenCalledWith(
@@ -166,16 +166,16 @@ describe("SearchSection", () => {
   it("searchDefaultSegBtn_disabled_onCurrentDefaultKey", async () => {
     renderOpen();
     await userEvent.click(screen.getByText("博查 Bocha"));
-    const seg = within(screen.getByText("博查 Bocha").closest(".set-kitem"))
-      .getByText("搜索默认", { selector: ".set-seg-opt" });
+    const seg = within(screen.getByText("博查 Bocha").closest(".set-kitem") as HTMLElement)
+      .getByText("搜索默认", { selector: ".set-seg-opt" }) as HTMLButtonElement;
     expect(seg.disabled).toBe(true);
   });
 
   it("jiyuBeiSegBtn_disabled_onNonDefaultKey", async () => {
     renderOpen();
     await userEvent.click(screen.getByText("Brave Search"));
-    const seg = within(screen.getByText("Brave Search").closest(".set-kitem"))
-      .getByText("仅备用", { selector: ".set-seg-opt" });
+    const seg = within(screen.getByText("Brave Search").closest(".set-kitem") as HTMLElement)
+      .getByText("仅备用", { selector: ".set-seg-opt" }) as HTMLButtonElement;
     expect(seg.disabled).toBe(true);
   });
 
@@ -210,7 +210,7 @@ describe("SearchSection", () => {
     await waitFor(() => expect(mockTestKey).toHaveBeenCalled());
     expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
     const saveBtn = screen.getByRole("button", { name: "保存" });
-    await waitFor(() => expect(saveBtn.disabled).toBe(false));
+    await waitFor(() => expect((saveBtn as HTMLButtonElement).disabled).toBe(false));
   });
 
   it("verifyFails_showsInlineError_saveDisabled", async () => {
@@ -222,7 +222,7 @@ describe("SearchSection", () => {
     fireEvent.change(screen.getByPlaceholderText("填入 API Key…"), { target: { value: "bad-key" } });
     await userEvent.click(verifyBtn());
     await waitFor(() => expect(screen.getByText(/验证未通过/)).toBeInTheDocument());
-    expect(screen.getByRole("button", { name: "保存" }).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "保存" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("cancelAfterCreate_deletesOrphanKey", async () => {

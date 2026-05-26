@@ -14,9 +14,9 @@ import { useToastStore } from "@shared/ui/toastStore";
 import { useApiKeys, useCreateApiKey, useTestApiKey, useDeleteApiKey } from "@entities/apikey";
 import { useProviders, useModelConfigs, useUpsertModelConfig } from "@entities/model-config";
 import { LLM_HINTS, PROVIDER_DEFAULT_MODEL } from "@shared/lib/onboarding-strings";
-import { ProviderGrid } from "./ProviderGrid.jsx";
-import { KeyVerifyField } from "./KeyVerifyField.jsx";
-import { ModelSelect } from "./ModelSelect.jsx";
+import { ProviderGrid } from "./ProviderGrid.tsx";
+import { KeyVerifyField } from "./KeyVerifyField.tsx";
+import { ModelSelect } from "./ModelSelect.tsx";
 
 export function ApiKeysSection({ open, onToggle }) {
   const { t } = useTranslation("settings");
