@@ -12,8 +12,10 @@ const mockCancel = vi.fn();
 vi.mock("../../api/conversations.js", () => ({
   useConversation: () => ({ data: { id: "cv_x", title: "Test Conv" } }),
   useConversationMessages: () => ({ data: [], isLoading: false }),
-  useSendMessage: () => ({ mutate: mockSend, isPending: false }),
-  useCancelStream: () => ({ mutate: mockCancel }),
+}));
+
+vi.mock("../../features/send-message/index.ts", () => ({
+  useSendMessageFlow: () => ({ submit: mockSend, cancelStream: mockCancel, isPending: false }),
 }));
 
 vi.mock("../../api/config.js", () => ({
@@ -75,7 +77,7 @@ describe("ChatPane", () => {
   it("composer_sendButtonClick_callsSendMutation", async () => {
     render(<ChatPane />, { wrapper: wrap });
     await userEvent.click(screen.getByText("send"));
-    expect(mockSend).toHaveBeenCalledWith({ content: "hi" }, expect.any(Object));
+    expect(mockSend).toHaveBeenCalledWith({ content: "hi" });
   });
 
   it("composer_cancelButtonClick_callsCancelMutation", async () => {

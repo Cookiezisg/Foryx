@@ -30,4 +30,10 @@ export default [
     files: ["src/entities/**"],
     rules: { "fsd/insignificant-slice": "off" },
   },
+  {
+    // features 阶段3:slice 只含 model 段,steiger insignificant-slice 会触发;
+    // 调用点仍在 panes(feature-tmp),阶段4迁入 pages/widgets 后移除此豁免。
+    files: ["src/features/**"],
+    rules: { "fsd/insignificant-slice": "off" },
+  },
 ];

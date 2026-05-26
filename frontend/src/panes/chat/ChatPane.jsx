@@ -8,11 +8,12 @@
 import { useEffect, useRef } from "react";
 import { Trans, useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
-import { useConversation, useConversationMessages, useSendMessage, useCancelStream } from "../../api/conversations.js";
+import { useConversation, useConversationMessages } from "../../api/conversations.js";
 import { useApiKeys, useModelConfigs } from "../../api/config.js";
 import { useChatStore } from "../../store/chat.js";
 import { useUIStore } from "../../store/ui.js";
 import { qk } from "../../api/client.js";
+import { useSendMessageFlow } from "../../features/send-message/index.ts";
 import { ChatHeader } from "./ChatHeader.jsx";
 import { MessageView } from "./MessageView.jsx";
 import { Composer } from "./Composer.jsx";
@@ -65,9 +66,7 @@ export function ChatPane({ onClose }) {
     return false;
   });
 
-  const send = useSendMessage(activeConv);
-  const cancel = useCancelStream(activeConv);
-  const pushToast = useUIStore((s) => s.pushToast);
+  const { submit, cancelStream, isPending } = useSendMessageFlow(activeConv);
 
   // Hydrate chat store from REST history when conv id changes / history loads.
   useEffect(() => {
@@ -112,35 +111,8 @@ export function ChatPane({ onClose }) {
     return <EmptyConvPlaceholder />;
   }
 
-  const onSend = ({ content, attachments, mentions }) => {
-    const body = { content };
-    if (attachments?.length) body.attachments = attachments.map((a) => ({ fileName: a.name, sizeBytes: a.size }));
-    if (mentions?.length) body.mentions = mentions.map((m) => ({ type: m.type, id: m.id }));
-    send.mutate(body, {
-      onError: (err) => {
-        // Stale conv: backend says this conversation doesn't exist (deleted,
-        // or belongs to a different user after account switch). Self-heal:
-        // clear activeConv + refetch conversation list so the user sees the
-        // real state instead of a stuck "send fails" loop.
-        //
-        // activeConv 已失效(被删 / 切户后跨用户残留)。自愈:清掉 +
-        // 重拉对话列表。
-        if (err?.code === "CONVERSATION_NOT_FOUND") {
-          setActiveConv(null);
-          qc.invalidateQueries({ queryKey: qk.conversations() });
-          pushToast({ kind: "warn", title: t("toast.convGoneTitle"), desc: t("toast.convGoneDesc") });
-          return;
-        }
-        pushToast({ kind: "error", title: t("toast.sendFailTitle"), desc: err.message });
-      },
-    });
-  };
-
-  const onCancel = () => {
-    cancel.mutate(undefined, {
-      onError: (err) => pushToast({ kind: "warn", title: t("toast.cancelFailTitle"), desc: err.message }),
-    });
-  };
+  const onSend = (payload) => submit(payload);
+  const onCancel = () => cancelStream();
 
   return (
     <div className="chat">
@@ -157,7 +129,7 @@ export function ChatPane({ onClose }) {
         </div>
       </div>
       <Composer
-        disabled={send.isPending}
+        disabled={isPending}
         isStreaming={isStreaming}
         onSend={onSend}
         onCancel={onCancel}
