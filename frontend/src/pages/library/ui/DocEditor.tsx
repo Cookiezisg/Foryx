@@ -38,38 +38,29 @@ import { Icon } from "@shared/ui/Icon";
 
 // ── Slash command vocabulary ─────────────────────────────────────────
 function makeSlashItems(t: (key: string) => string) {
+  // Tiptap chain API has no exported type; `any` is unavoidable here.
   return [
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap chain API is untyped
-    { key: "h1",    title: t("editor.h1Title"),    desc: t("editor.h1Desc"),    icon: "Hash",       run: (chain: any) => chain.toggleHeading({ level: 1 }) },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap chain API is untyped
-    { key: "h2",    title: t("editor.h2Title"),    desc: t("editor.h2Desc"),    icon: "Hash",       run: (chain: any) => chain.toggleHeading({ level: 2 }) },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap chain API is untyped
-    { key: "h3",    title: t("editor.h3Title"),    desc: t("editor.h3Desc"),    icon: "Hash",       run: (chain: any) => chain.toggleHeading({ level: 3 }) },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap chain API is untyped
-    { key: "ul",    title: t("editor.ulTitle"),    desc: t("editor.ulDesc"),    icon: "List",       run: (chain: any) => chain.toggleBulletList() },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap chain API is untyped
-    { key: "ol",    title: t("editor.olTitle"),    desc: t("editor.olDesc"),    icon: "ListChecks", run: (chain: any) => chain.toggleOrderedList() },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap chain API is untyped
-    { key: "todo",  title: t("editor.todoTitle"),  desc: t("editor.todoDesc"),  icon: "Check",      run: (chain: any) => chain.toggleTaskList?.() },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap chain API is untyped
-    { key: "quote", title: t("editor.quoteTitle"), desc: t("editor.quoteDesc"), icon: "Quote",      run: (chain: any) => chain.toggleBlockquote() },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap chain API is untyped
-    { key: "code",  title: t("editor.codeTitle"),  desc: t("editor.codeDesc"),  icon: "Code",       run: (chain: any) => chain.toggleCodeBlock() },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap chain API is untyped
-    { key: "hr",    title: t("editor.hrTitle"),    desc: t("editor.hrDesc"),    icon: "Minus",      run: (chain: any) => chain.setHorizontalRule() },
+    { key: "h1",    title: t("editor.h1Title"),    desc: t("editor.h1Desc"),    icon: "Hash",       run: (chain: any) => chain.toggleHeading({ level: 1 }) }, // Tiptap chain
+    { key: "h2",    title: t("editor.h2Title"),    desc: t("editor.h2Desc"),    icon: "Hash",       run: (chain: any) => chain.toggleHeading({ level: 2 }) }, // Tiptap chain
+    { key: "h3",    title: t("editor.h3Title"),    desc: t("editor.h3Desc"),    icon: "Hash",       run: (chain: any) => chain.toggleHeading({ level: 3 }) }, // Tiptap chain
+    { key: "ul",    title: t("editor.ulTitle"),    desc: t("editor.ulDesc"),    icon: "List",       run: (chain: any) => chain.toggleBulletList() },           // Tiptap chain
+    { key: "ol",    title: t("editor.olTitle"),    desc: t("editor.olDesc"),    icon: "ListChecks", run: (chain: any) => chain.toggleOrderedList() },          // Tiptap chain
+    { key: "todo",  title: t("editor.todoTitle"),  desc: t("editor.todoDesc"),  icon: "Check",      run: (chain: any) => chain.toggleTaskList?.() },           // Tiptap chain
+    { key: "quote", title: t("editor.quoteTitle"), desc: t("editor.quoteDesc"), icon: "Quote",      run: (chain: any) => chain.toggleBlockquote() },           // Tiptap chain
+    { key: "code",  title: t("editor.codeTitle"),  desc: t("editor.codeDesc"),  icon: "Code",       run: (chain: any) => chain.toggleCodeBlock() },            // Tiptap chain
+    { key: "hr",    title: t("editor.hrTitle"),    desc: t("editor.hrDesc"),    icon: "Minus",      run: (chain: any) => chain.setHorizontalRule() },          // Tiptap chain
   ];
 }
 
 function iconOf(name: string) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Icon map is keyed by string; no index signature on the union type
-  return (Icon as any)[name] || Icon.Hammer;
+  return (Icon as any)[name] || Icon.Hammer; // Icon map has no string index signature
 }
 
 // ── React component that the suggestion popup renders ────────────────
 import { useState as useReactState, useEffect as useReactEffect, useImperativeHandle as useReactIH, forwardRef as fwd } from "react";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap suggestion API: items/command shapes are fully untyped by the library
-const SuggestionList = fwd(function SuggestionList({ items, command, kind }: { items: any[]; command: any; kind?: string }, ref) {
+// Tiptap suggestion API: items/command shapes have no exported types.
+const SuggestionList = fwd(function SuggestionList({ items, command, kind }: { items: any[]; command: any; kind?: string }, ref) { // Tiptap suggestion
   const [idx, setIdx] = useReactState(0);
   const { t } = useTranslation("library");
   useReactEffect(() => setIdx(0), [items]);
@@ -110,13 +101,10 @@ const SuggestionList = fwd(function SuggestionList({ items, command, kind }: { i
 
 // ── Suggestion render helper (shared by slash + mention) ─────────────
 function makeRender() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap ReactRenderer + tippy instances have no exported types
-  let component: any;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tippy instance array; no typed export from tippy.js for this usage
-  let popup: any;
+  let component: any; // Tiptap ReactRenderer — no exported type
+  let popup: any;     // tippy instance array — no typed return from tippy("body",...)
   return {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap suggestion props object is untyped
-    onStart(props: any) {
+    onStart(props: any) { // Tiptap SuggestionProps — untyped
       component = new ReactRenderer(SuggestionList, { props: { ...props, kind: props.kind }, editor: props.editor });
       if (!props.clientRect) return;
       popup = tippy("body", {
@@ -131,13 +119,11 @@ function makeRender() {
         theme: "forgify",
       });
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap suggestion props object is untyped
-    onUpdate(props: any) {
+    onUpdate(props: any) { // Tiptap SuggestionProps — untyped
       component?.updateProps({ ...props, kind: props.kind });
       if (props.clientRect && popup?.[0]) popup[0].setProps({ getReferenceClientRect: props.clientRect });
     },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap suggestion props object is untyped
-    onKeyDown(props: any) {
+    onKeyDown(props: any) { // Tiptap SuggestionKeyDownProps — untyped
       if (props.event.key === "Escape") { popup?.[0]?.hide(); return true; }
       return component?.ref?.onKeyDown?.(props) || false;
     },
@@ -148,8 +134,7 @@ function makeRender() {
 // Module-level ref updated by DocEditor with the current translated items.
 // Allows the Extension (instantiated once) to always filter against the
 // latest locale without being recreated.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any -- slash item shape is internal and dynamic; no benefit typing this module-level cache
-const slashItemsRef: { current: any[] } = { current: [] };
+const slashItemsRef: { current: any[] } = { current: [] }; // slash item shape is internal; no typed cache needed
 
 // ── Slash command extension (custom Extension wrapping Suggestion) ───
 const SlashCommand = Extension.create({
@@ -160,8 +145,7 @@ const SlashCommand = Extension.create({
         char: "/",
         startOfLine: false,
         kind: "slash",
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap slash command callback: editor/range/props are untyped by the Extension API
-        command: ({ editor, range, props }: { editor: any; range: any; props: any }) => {
+        command: ({ editor, range, props }: { editor: any; range: any; props: any }) => { // Tiptap Extension command callback — untyped
           const chain = editor.chain().focus().deleteRange(range);
           const result = props.run(chain);
           (result || chain).run();
@@ -238,26 +222,21 @@ export const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function Do
       Placeholder.configure({ placeholder: resolvedPlaceholder, emptyEditorClass: "is-empty" }),
       Markdown.configure({ html: false, tightLists: true, transformPastedText: true, breaks: true }),
       SlashCommand,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap Mention extension type definition does not expose configure(); cast required
-      (Mention as any).configure({
+      (Mention as any).configure({ // Tiptap Mention has no exported configure() type
         HTMLAttributes: { class: "doc-mention" },
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap node view callback: node shape is untyped
-        renderText: ({ node }: any) => `[[${node.attrs.label || node.attrs.id}]]`,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap node view callback: node/HTMLAttributes shapes are untyped
-        renderHTML: ({ node, HTMLAttributes }: any) => [
+        renderText: ({ node }: any) => `[[${node.attrs.label || node.attrs.id}]]`,         // Tiptap node view callback — untyped
+        renderHTML: ({ node, HTMLAttributes }: any) => [                                   // Tiptap node view callback — untyped
           "a", { ...HTMLAttributes, "data-id": node.attrs.id, class: "doc-mention" },
           `[[${node.attrs.label || node.attrs.id}]]`,
         ],
         suggestion: {
           char: "@",
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap suggestion items callback: query wrapper is untyped
-          items: ({ query }: any) => {
+          items: ({ query }: any) => {                                                     // Tiptap suggestion items — untyped
             const all = (docsRef.current?.() || []);
             const q = query.toLowerCase();
             return all.filter((d) => (d.name || d.id || "").toLowerCase().includes(q)).slice(0, 8);
           },
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap suggestion command callback: editor/range/props are untyped
-          command: ({ editor, range, props }: any) => {
+          command: ({ editor, range, props }: any) => {                                    // Tiptap suggestion command — untyped
             editor.chain().focus().deleteRange(range)
               .insertContent([
                 { type: "mention", attrs: { id: props.id, label: props.name || props.id } },
@@ -268,12 +247,9 @@ export const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function Do
           render: () => {
             const r = makeRender();
             return {
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap suggestion render props are untyped
-              onStart: (p: any) => r.onStart({ ...p, kind: "mention" }),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap suggestion render props are untyped
-              onUpdate: (p: any) => r.onUpdate({ ...p, kind: "mention" }),
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap suggestion render props are untyped
-              onKeyDown: (p: any) => r.onKeyDown(p),
+              onStart: (p: any) => r.onStart({ ...p, kind: "mention" }),   // Tiptap SuggestionProps — untyped
+              onUpdate: (p: any) => r.onUpdate({ ...p, kind: "mention" }),  // Tiptap SuggestionProps — untyped
+              onKeyDown: (p: any) => r.onKeyDown(p),                        // Tiptap SuggestionKeyDownProps — untyped
               onExit: () => r.onExit(),
             };
           },
@@ -282,8 +258,7 @@ export const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function Do
     ],
     content: "",
     onUpdate: ({ editor }) => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap storage for tiptap-markdown extension is not typed
-      const md = (editor.storage as any).markdown.getMarkdown();
+      const md = (editor.storage as any).markdown.getMarkdown(); // tiptap-markdown storage — not typed
       cbRef.current?.(md);
     },
   });
@@ -291,18 +266,15 @@ export const DocEditor = forwardRef<DocEditorHandle, DocEditorProps>(function Do
   // Hydrate from initialMarkdown on first load / doc switch.
   useEffect(() => {
     if (!editor) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap storage for tiptap-markdown extension is not typed
-    const current = (editor.storage as any).markdown.getMarkdown();
+    const current = (editor.storage as any).markdown.getMarkdown(); // tiptap-markdown storage — not typed
     if ((initialMarkdown || "") === current) return;
     // setContent triggers onUpdate; suppress by passing false.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap commands type omits second `emitUpdate` param
-    (editor.commands as any).setContent(initialMarkdown || "", false);
+    (editor.commands as any).setContent(initialMarkdown || "", false); // Tiptap commands omit second `emitUpdate` param in types
   }, [editor, initialMarkdown]);
 
   useImperativeHandle(ref, () => ({
     focus: () => editor?.commands.focus(),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap storage for tiptap-markdown extension is not typed
-    getMarkdown: () => (editor?.storage as any)?.markdown.getMarkdown() || "",
+    getMarkdown: () => (editor?.storage as any)?.markdown.getMarkdown() || "", // tiptap-markdown storage — not typed
   }), [editor]);
 
   return <EditorContent editor={editor} className="doc-editor-rich" />;

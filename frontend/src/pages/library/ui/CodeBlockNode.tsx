@@ -37,8 +37,7 @@ const LABEL = {
 function label(id: string) { return id === "" ? "Auto" : ((LABEL as Record<string, string>)[id] || id); }
 
 interface CodeBlockNodeProps {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap NodeViewProps.node has no exported type
-  node: any;
+  node: any; // Tiptap NodeViewProps.node has no exported type
   updateAttributes: (attrs: Record<string, unknown>) => void;
 }
 
@@ -54,8 +53,7 @@ export function CodeBlockNode({ node, updateAttributes }: CodeBlockNodeProps) {
           onChange={(id) => updateAttributes({ language: id === "" ? null : id })}
         />
       </div>
-      {/* eslint-disable-next-line @typescript-eslint/no-explicit-any -- Tiptap NodeViewContent 'as' prop not typed */}
-      <pre className="code-block hljs"><NodeViewContent as={"code" as any} /></pre>
+      <pre className="code-block hljs"><NodeViewContent as={"code" as any} /></pre>{/* Tiptap NodeViewContent 'as' prop not typed */}
     </NodeViewWrapper>
   );
 }

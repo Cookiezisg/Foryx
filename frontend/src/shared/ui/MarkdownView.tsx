@@ -8,13 +8,23 @@
 // MarkdownView —— 极简 markdown 渲染器；流式安全；专给 chat 流式回复 +
 // 文档预览用。第三方库太大 + 全部我们用不到的安全功能，不值得拉。
 
-import { useMemo } from "react";
+import React, { useMemo } from "react";
 import { HighlightedCode } from "./HighlightedCode.tsx";
 
 interface MarkdownViewProps {
   source?: string;
   streaming?: boolean;
 }
+
+type ListItem = { text: string; done?: boolean };
+type MdBlock =
+  | { type: "h"; lvl: number; text: string }
+  | { type: "hr" }
+  | { type: "code"; lang: string; text: string }
+  | { type: "quote"; text: string }
+  | { type: "ul" | "ol"; items: ListItem[] }
+  | { type: "table"; headers: string[]; data: string[][] }
+  | { type: "p"; text: string };
 
 export function MarkdownView({ source, streaming = false }: MarkdownViewProps) {
   const blocks = useMemo(() => parse(source || ""), [source]);
@@ -29,10 +39,10 @@ export function MarkdownView({ source, streaming = false }: MarkdownViewProps) {
 // Exported for direct unit testing — never call from production code,
 // use <MarkdownView /> instead. Tests need access to verify the
 // streaming-safe parser (partial table / unclosed fence / etc).
-export function parse(src: string | null | undefined) {
+export function parse(src: string | null | undefined): MdBlock[] {
   if (!src) return [];
   const lines = src.split("\n");
-  const out = [];
+  const out: MdBlock[] = [];
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
@@ -72,7 +82,7 @@ export function parse(src: string | null | undefined) {
     // Bullet / numbered / todo list
     if (/^\s*[-*]\s+/.test(line) || /^\s*\d+\.\s+/.test(line)) {
       const items = [];
-      let ordered = /^\s*\d+\./.test(line);
+      const ordered = /^\s*\d+\./.test(line);
       while (i < lines.length && (/^\s*[-*]\s+/.test(lines[i]) || /^\s*\d+\.\s+/.test(lines[i]))) {
         const l = lines[i];
         const todo = /^\s*[-*]\s+\[( |x|X)\]\s*/.exec(l);
@@ -83,7 +93,7 @@ export function parse(src: string | null | undefined) {
         }
         i++;
       }
-      out.push({ type: ordered ? "ol" : "ul", items });
+      out.push({ type: (ordered ? "ol" : "ul") as "ol" | "ul", items });
       continue;
     }
 
@@ -122,7 +132,7 @@ export function parse(src: string | null | undefined) {
   return out;
 }
 
-function renderBlock(b: any, key: number, streaming: boolean) {
+function renderBlock(b: MdBlock, key: number, streaming: boolean) {
   switch (b.type) {
     case "h":     return renderHeading(b.lvl, inline(b.text), key);
     case "hr":    return <hr key={key} />;
@@ -133,12 +143,12 @@ function renderBlock(b: any, key: number, streaming: boolean) {
       </pre>
     );
     case "quote": return <blockquote key={key}>{inline(b.text)}</blockquote>;
-    case "ul":    return <ul key={key}>{b.items.map((it: any, j: number) => renderListItem(it, j))}</ul>;
-    case "ol":    return <ol key={key}>{b.items.map((it: any, j: number) => renderListItem(it, j))}</ol>;
+    case "ul":    return <ul key={key}>{b.items.map((it, j) => renderListItem(it, j))}</ul>;
+    case "ol":    return <ol key={key}>{b.items.map((it, j) => renderListItem(it, j))}</ol>;
     case "table": return (
       <table key={key} className="md-table">
-        <thead><tr>{b.headers.map((h: string, j: number) => <th key={j}>{inline(h)}</th>)}</tr></thead>
-        <tbody>{b.data.map((row: string[], r: number) => <tr key={r}>{row.map((c: string, k: number) => <td key={k}>{inline(c)}</td>)}</tr>)}</tbody>
+        <thead><tr>{b.headers.map((h, j) => <th key={j}>{inline(h)}</th>)}</tr></thead>
+        <tbody>{b.data.map((row, r) => <tr key={r}>{row.map((c, k) => <td key={k}>{inline(c)}</td>)}</tr>)}</tbody>
       </table>
     );
     case "p":     return <p key={key}>{inline(b.text)}</p>;
@@ -147,11 +157,11 @@ function renderBlock(b: any, key: number, streaming: boolean) {
 }
 
 function renderHeading(lvl: number, children: unknown, key: number) {
-  const Tag = `h${Math.min(6, Math.max(1, lvl))}` as any;
+  const Tag = `h${Math.min(6, Math.max(1, lvl))}` as React.ElementType;
   return <Tag key={key}>{children}</Tag>;
 }
 
-function renderListItem(it: any, key: number) {
+function renderListItem(it: ListItem, key: number) {
   if ("done" in it) {
     return (
       <li key={key} className={"md-todo" + (it.done ? " is-done" : "")}>
@@ -166,9 +176,9 @@ function renderListItem(it: any, key: number) {
 // ── Inline-level: **bold**, *italic*, `code`, [link](url), [[wikilink]] ──
 const INLINE_RE = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`|\[[^\]]+\]\([^)\s]+\)|\[\[[^\]]+\]\]|https?:\/\/\S+)/g;
 
-export function inline(s: string | null): any[] | null {
+export function inline(s: string | null): React.ReactNode[] | null {
   if (!s) return null;
-  const out: any[] = [];
+  const out: React.ReactNode[] = [];
   let last = 0; let key = 0; let m;
   INLINE_RE.lastIndex = 0;
   while ((m = INLINE_RE.exec(s))) {

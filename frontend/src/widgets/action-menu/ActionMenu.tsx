@@ -27,8 +27,7 @@ interface ActionMenuItem {
 
 interface ActionMenuProps {
   items: (ActionMenuItem | "divider")[];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- floating-ui ref callback is untyped at the HTMLElement level
-  renderTrigger?: (props: React.HTMLAttributes<HTMLElement> & { ref?: any }) => React.ReactNode;
+  renderTrigger?: (props: React.HTMLAttributes<HTMLElement> & { ref?: any }) => React.ReactNode; // floating-ui ref callback is untyped
   placement?: Placement;
 }
 
