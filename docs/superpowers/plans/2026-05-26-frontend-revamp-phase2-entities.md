@@ -27,8 +27,17 @@
 2. **搬 api hooks**:原 `src/api/<file>.js` 里属于本 entity 的 hooks → `entities/<x>/api/<x>.ts`,**逻辑逐字搬**(包括 `enabled` gate、queryKey `qk.*`、`invalidateQueries` 调用——这些**本阶段一律不改**,留阶段 4)。给每个 hook 标注 req/resp 类型(用 step 1 的 types + `shared/api` 的 `Envelope<T>`/`ListResult<T>`)。`apiFetch`/`qk`/`pickList` 从 `@shared/api` import。
 3. **建 `entities/<x>/index.ts`** public API barrel:re-export 该 entity 对外用到的 hooks + 类型。**外部只许 import 这个 barrel**。
 4. **旧 `src/api/<file>.js` 转 re-export shim**:`export * from "@entities/<x>";`(或具名 re-export 保形),保证所有现有调用点(组件/pane/hook)**零修改**。grep 调用点确认不破。混装文件(config/forge/library/relations)在多个 task 间逐步掏空,最终整体变 shim 聚合。
-5. **边界债豁免**:若本 entity 的 api hook 为了 `enabled` gate 读了 `src/store/settings`(`activeUserId`)——这是**阶段 4 身份层**才解的债,**本阶段不解耦**。在 boundaries 配置或 inline `// eslint-disable-next-line boundaries/dependencies` 放行该 import,紧挨加 `// TODO(阶段4): identity store 接管 activeUserId 后移除`。报告里列出。
+5. **边界债当场豁免**:entities boundaries 规则是 **`error`**(样板 Task 2.1 已设,与阶段 1 shared 同款)。若本 entity 的 api hook 为 `enabled` gate 读了 `src/store/settings`(`activeUserId`/`lang`)——这是**阶段 4 身份层**才解的债,**本阶段不解耦**——**当场**在该 import 上方加 inline `// eslint-disable-next-line boundaries/dependencies` + 紧挨 `// TODO(阶段4): identity store 接管 activeUserId 后移除`(与阶段 1 shared 的 3 处豁免同模式)。不要拖到收口。报告里列出本 task 加了哪些豁免。
 6. **验证门**(全过):`npx tsc --noEmit`(exit 0)/ `npx vitest run`(**711 passed**,不减)/ `npm run build`(成功)/ `npx eslint src/entities/<x> src/api/<file>.js`(无 boundaries error)/ `npm run fsd`(steiger,本 entity slice 无 FSD 内部违规)。然后精确 commit + push。
+
+## 样板已确立的复用模式(Task 2.1 已产出 + 验证,后续 task 直接遵循,勿重复配置)
+
+- **从 `@shared/api` barrel import**(`apiFetch`/`pickList`/`qk`),**不要**深引 `@shared/api/httpClient`(steiger `no-public-api-sidestep` 会报)。
+- `@entities/*` alias 已在 `tsconfig.json` 配好,vite/vitest 经 `vite-tsconfig-paths` 自动继承——**无需每 task 改 alias**。
+- `steiger.config.js` 已对 `src/entities/**` 关 `fsd/insignificant-slice`(迁移期 shared-tmp 跨层引用 steiger 追不到)——**无需每 task 改 steiger**。
+- `eslint.config.js` 的 `entities` element(`{type:"entities", pattern:"src/entities/*", capture:["slice"]}`)+ 规则(entities 只许 import `shared`,禁上层/同层)已注册为 **`error`**——**无需每 task 改 boundaries 规则**,只需按 SOP step 5 当场 inline disable 自己的 entity→store 越界。
+- hook 形态:`useQuery<T>({queryKey: qk.x(), queryFn: () => apiFetch(path), select: pickList<T>})`(列表用 `select: pickList`,**严格对照原 api 文件实际写法**——是 `select` 还是 `.then`、有无 `staleTime`,逐字保留);mutation 标 `useMutation<Resp, Error, Vars>`。
+- 实体类型从后端 `service-design-documents/<domain>.md` 的 Go struct json tag 取字段(camelCase);`json:"-"` 字段不出现在响应、省略。
 
 ## entity 清单(12 个)+ source 映射
 
@@ -68,11 +77,11 @@
 - Modify: `frontend/src/api/config.js`(apikey 部分转 re-export)
 - Modify: `frontend/eslint.config.js`(注册 `entities` element + 规则)
 
-- [ ] **Step 1: 读 source + 后端 doc**
+- [x] **Step 1: 读 source + 后端 doc**
 
 读 `frontend/src/api/config.js`(看 apikey hooks 的实现:`useApiKeys` 等的 queryKey、apiFetch path、body 形状)、`documents/version-1.2/service-design-documents/apikey.md`(实体字段)、`frontend/src/shared/api/httpClient.ts`(`apiFetch`/`Envelope`/`ListResult`/`pickList` 签名)、`frontend/src/shared/api/queryKeys.ts`(`qk` 有哪些 key)。
 
-- [ ] **Step 2: 写 `model/types.ts`**
+- [x] **Step 2: 写 `model/types.ts`**
 
 对齐后端 `apikey.md` 写实体类型。结构示范(**字段以后端 apikey.md 为准**,下面是形态模板):
 
@@ -101,7 +110,7 @@ export interface TestApiKeyResult {
 }
 ```
 
-- [ ] **Step 3: 写 `api/apikey.ts`**
+- [x] **Step 3: 写 `api/apikey.ts`**
 
 从 `config.js` 把 apikey 的 5 个 hook 逐字搬来 + 标类型。模板(**保持原 hook 的 queryKey/path/invalidate 逻辑不变**):
 
@@ -131,7 +140,7 @@ export function useCreateApiKey() {
 
 > 注意:严格对照 `config.js` 现有实现搬——参数签名(是 `(id, patch)` 还是 `({id, patch})`)、invalidate 集合、path 一律不变。上面是形态示范,**以 config.js 实际为准**。
 
-- [ ] **Step 4: 写 `index.ts` barrel**
+- [x] **Step 4: 写 `index.ts` barrel**
 
 ```ts
 export {
@@ -142,15 +151,15 @@ export type {
 } from "./model/types";
 ```
 
-- [ ] **Step 5: `config.js` apikey 部分转 re-export**
+- [x] **Step 5: `config.js` apikey 部分转 re-export**
 
 在 `config.js` 顶部把 apikey 的 5 个 hook 改成 `export { useApiKeys, useCreateApiKey, useUpdateApiKey, useDeleteApiKey, useTestApiKey } from "@entities/apikey";`,**删掉它们的原实现**(model-config/providers/scenarios 的实现暂时原地保留,等 Task 2.2)。grep `from .*api/config` 确认调用点(如 `ApiKeysSection.jsx`)零改动。
 
-- [ ] **Step 6: 注册 `entities` boundaries element**
+- [x] **Step 6: 注册 `entities` boundaries element**
 
 读 `frontend/eslint.config.js`,在 `boundaries/elements` 加 `{ type: "entities", pattern: "src/entities/*", capture: ["slice"] }`(注意:`src/entities/<slice>/**`,capture slice 名以便 @x 规则)。加规则:`entities` 允许 import `shared`;**禁止** import `app`/`pages`/`widgets`/`features`(及 `shared-tmp`/`feature-tmp`/`app-tmp`);同层 `entities` 默认禁(cross-import 后续用 `@x` 再放行)。本阶段 entities 规则设 **`warn`**(因为多个 entity 会临时 import `store/settings` 做 gate,且 store 尚未分层;收口 Task 2.13 再升 error + 豁免)。同时在 `frontend/tsconfig.json` 确认/补 path alias `@entities/*` → `./src/entities/*`(若阶段 0 没配,补上;vite/vitest 用 `vite-tsconfig-paths` 自动继承)。
 
-- [ ] **Step 7: 验证 + commit**
+- [x] **Step 7: 验证 + commit**
 
 跑 SOP step 6 的 5 项验证门。精确 add:`git add frontend/src/entities/apikey frontend/src/api/config.js frontend/eslint.config.js frontend/tsconfig.json`。commit:`feat(frontend): entities/apikey 定型 + 注册 entities 边界(阶段2样板)`。push。
 
@@ -200,15 +209,15 @@ export type {
 
 > 这是阶段 2 最复杂的搬迁。`store/chat.js` 是 SSE 驱动的消息/块树 store,含 rAF delta 合并 + parentBlockId 树重建算法 + 稳定引用 selectors。**算法一行都不改,只换家 + 加类型。**
 
-- [ ] **Step 1: 读 `src/store/chat.js` 全文**,搞清 state shape(`convs[convId]={messages,blocks,topMsgIds,lastSeq}`、`hydratedConvs`)、actions(`ensureConv`/`resetConv`/`resetAll`/`hydrateConv`/`onMessageStart`/`onMessageStop`/`onBlockStart`/`onBlockDelta`/`onBlockStop`)、selectors(`selectTopMessageIds`/`selectBlock`/`selectChildIds`)、rAF 缓冲机制。
+- [x] **Step 1: 读 `src/store/chat.js` 全文**,搞清 state shape(`convs[convId]={messages,blocks,topMsgIds,lastSeq}`、`hydratedConvs`)、actions(`ensureConv`/`resetConv`/`resetAll`/`hydrateConv`/`onMessageStart`/`onMessageStop`/`onBlockStart`/`onBlockDelta`/`onBlockStop`)、selectors(`selectTopMessageIds`/`selectBlock`/`selectChildIds`)、rAF 缓冲机制。
 
-- [ ] **Step 2: 搬到 `entities/conversation/model/chatStore.ts`**,逐字保留逻辑。用 2.4 定义的 `Message`/`Block` 类型标注 state。zustand store 定义加 `interface ChatState { ... }`(state 字段 + action 签名)。rAF 缓冲、tree 重建、selector 的稳定引用语义**完全不变**。
+- [x] **Step 2: 搬到 `entities/conversation/model/chatStore.ts`**,逐字保留逻辑。用 2.4 定义的 `Message`/`Block` 类型标注 state。zustand store 定义加 `interface ChatState { ... }`(state 字段 + action 签名)。rAF 缓冲、tree 重建、selector 的稳定引用语义**完全不变**。
 
-- [ ] **Step 3: `src/store/chat.js` 转 shim**:`export * from "@entities/conversation/model/chatStore";`(`useChatStore` default/named + 3 个 selector 函数都要 re-export 保形)。
+- [x] **Step 3: `src/store/chat.js` 转 shim**:`export * from "@entities/conversation/model/chatStore";`(`useChatStore` default/named + 3 个 selector 函数都要 re-export 保形)。
 
-- [ ] **Step 4: 更新消费方 import**:grep `from .*store/chat`(`BlockRenderer.jsx`、`useEventLog.js`、`ChatPane`、各渲染组件)。它们走 shim 不用改;但若有深引内部的,确认 shim 覆盖。**`sse/useEventLog.js` 调用的 `onMessageStart` 等 action 名/签名必须不变**(本阶段 SSE 不迁,靠 shim 衔接)。
+- [x] **Step 4: 更新消费方 import**:grep `from .*store/chat`(`BlockRenderer.jsx`、`useEventLog.js`、`ChatPane`、各渲染组件)。它们走 shim 不用改;但若有深引内部的,确认 shim 覆盖。**`sse/useEventLog.js` 调用的 `onMessageStart` 等 action 名/签名必须不变**(本阶段 SSE 不迁,靠 shim 衔接)。
 
-- [ ] **Step 5: 验证 + commit**。特别确认 vitest 里 chat store 相关测试(树重建、rAF、selector)全绿——这是行为不变的关键证据。commit `refactor(frontend): chatStore 迁入 entities/conversation/model(阶段2)` + push。
+- [x] **Step 5: 验证 + commit**。特别确认 vitest 里 chat store 相关测试(树重建、rAF、selector)全绿——这是行为不变的关键证据。commit `refactor(frontend): chatStore 迁入 entities/conversation/model(阶段2)` + push。
 
 ---
 
@@ -295,19 +304,19 @@ export type {
 
 **Files:** Modify `frontend/eslint.config.js`(entities 规则 warn→error + 豁免)、`frontend/steiger.config.js`(移除已迁 api 文件的 ignore)、`docs/superpowers/plans/2026-05-26-frontend-revamp-phase2-entities.md`(勾选)。
 
-- [ ] **Step 1: entities boundaries 升 error**
+- [x] **Step 1: 验证 entities 边界无遗漏越界**
 
-把 Task 2.1 设的 `entities` 规则从 `warn` 升 `error`。预期会暴露 **entity→store/settings** 的越界(各 entity 的 `enabled: !!activeUserId` gate 读 settings)——对**每一处**用 inline `// eslint-disable-next-line boundaries/dependencies` + `// TODO(阶段4): identity store 接管 activeUserId/lang 后移除`(与阶段 1 shared 的 3 处豁免同模式)。跑 `npx eslint src/entities` 确认除已知豁免外 0 error。**逐条列出豁免**(哪个 entity 的哪个 hook 读了 settings)。
+entities 规则在样板 Task 2.1 已设 **`error`**,各 entity task 已**当场** inline disable 自己的 entity→store 越界。本步清点:`grep -rn "eslint-disable-next-line boundaries" src/entities` 列出所有豁免,确认**每一处都有 `// TODO(阶段4)` 标记**且确属 activeUserId/lang gate(非滥用掩盖可避免的越界)。跑 `npx eslint src/entities` 确认除这些已知豁免外 **0 error**。逐条列出豁免(哪个 entity 哪个 hook)。
 
-- [ ] **Step 2: steiger ignore 收缩**
+- [x] **Step 2: steiger ignore 收缩**
 
 `steiger.config.js` 的 ignore 列表移除已迁完的 `src/api/*`(config/conversations/forge/flowruns/library/relations/users —— 它们现在是 shim,但仍是旧扁平结构;判断:若它们纯 shim 且 steiger 不报错可移出 ignore,否则保留到阶段 5 全清时)。`src/store/chat.js`(已 shim)同理。`src/entities` **不加 ignore**(要让 steiger 检查 entities FSD 结构)。跑 `npm run fsd`,确认 `src/entities` 下所有 slice 的 public API/层级/cross-import 干净(`✔ No problems found` 对 entities 范围)。
 
-- [ ] **Step 3: 全量验证**
+- [x] **Step 3: 全量验证**
 
 `npx tsc --noEmit`(0)+ `npx vitest run`(**711**)+ `npm run build` + `make lint-frontend`(仓库根;typecheck+lint+fsd 三段全过,entities error 规则下无非豁免违规)+ **`make dev` 冒烟**(仓库根,起壳确认 12 entity 搬迁后 app 正常加载、数据正常拉取、SSE 正常——这是 entities 层全部搬完的端到端确认)。
 
-- [ ] **Step 4: 文档勾选 + commit**
+- [x] **Step 4: 文档勾选 + commit**
 
 本 plan 文件 Task 2.1–2.13 勾 `[x]`,末尾补阶段 2 完成说明(12 entity 定型 + 已知 entity→store 豁免留阶段4 + iterate 残壳留阶段3)。**不动 PRD/CLAUDE.md**(统一留阶段 5)。commit `chore(frontend): entities 边界升 error + steiger 纳入 entities(阶段2收口)` + push。
 
@@ -329,3 +338,40 @@ export type {
 **顺序依赖**:2.4(conversation types)→ 2.5(chatStore 用 Message/Block);2.6/2.7→2.8(forge.js 逐步掏空,2.8 收 iterate 残壳);2.10/2.11→2.12(library.js 逐步掏空,2.12 转纯 shim);2.13 收口依赖前 12 全完成。subagent-driven 按编号串行执行天然满足。
 
 **行为不变保障**:每 task 末 vitest 711;enabled/invalidate/qk 逐字保留;UI 不碰;SSE hooks 不迁(靠 chatStore 同签名衔接)。
+
+---
+
+## 阶段 2 完成说明(2026-05-26)
+
+**完成状态:DONE**
+
+**12 entity 定型清单:**
+apikey / model-config / user / conversation(api + chatStore) / function / handler / workflow / flowrun / document / skill / mcp / memory / relation — 全部已建 `model/types.ts` + `api/*.ts` + `index.ts`。
+
+**entity→store 豁免清单(留阶段4):**
+以下 6 个 entity 的 api hook 读 `store/settings.activeUserId` 作 `enabled` gate,均已当场 inline disable + `// TODO(阶段4): identity store 接管 activeUserId 后移除`:
+- `entities/conversation/api/conversation.ts`
+- `entities/function/api/function.ts`
+- `entities/handler/api/handler.ts`
+- `entities/workflow/api/workflow.ts`
+- `entities/flowrun/api/flowrun.ts`
+- `entities/document/api/document.ts`
+
+阶段4 身份层接管 `activeUserId` 后,这 6 处豁免统一移除,`eslint-disable-next-line` 一并删掉。
+
+**iterate 残壳留阶段3:**
+`src/api/forge.js` 仍保留 `useIterateForge` 实现(跨 function/handler/workflow 编排,属 `features/forge-iterate`);已注释 `// TODO(阶段3)`。
+
+**api/* + store/chat.js 现为 shim(阶段5 删):**
+- `src/api/config.js` — shim → `@entities/apikey` + `@entities/model-config`
+- `src/api/users.js` — shim → `@entities/user`
+- `src/api/conversations.js` — shim → `@entities/conversation`
+- `src/api/forge.js` — shim(function/handler/workflow)+ iterate 残壳
+- `src/api/flowruns.js` — shim → `@entities/flowrun`
+- `src/api/library.js` — shim → `@entities/document` + `skill` + `mcp` + `memory` + `relation`
+- `src/api/relations.js` — shim → `@entities/relation`
+- `src/store/chat.js` — shim → `@entities/conversation/model/chatStore`
+
+阶段5 调用点全量迁完后统一删除这些 shim。
+
+**验证基线(2026-05-26):** tsc exit 0 / vitest 711 passed / build 成功 / make lint-frontend 0 error / steiger ✔ No problems found / make dev 冒烟通过(backend :8742 + frontend :5173 正常加载)。
