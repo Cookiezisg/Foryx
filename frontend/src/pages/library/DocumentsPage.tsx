@@ -52,7 +52,7 @@ export function DocumentsPage({ activeDoc, onSetActiveDocument }: DocumentsPageP
       const res = await createDoc.mutateAsync({ name: t("documents.untitled"), parentId: null });
       setActiveDocument(res.id);
       setPendingFocusTitle(res.id);
-    } catch (e) { pushToast({ kind: "error", title: t("documents.createFail"), desc: e.message }); }
+    } catch (e) { pushToast({ kind: "error", title: t("documents.createFail"), desc: (e as any)?.message }); }
   };
 
   const [sidebarOpen, toggleSidebar] = useCollapsible("documents-sidebar", true);
@@ -190,7 +190,7 @@ function DocTreeNode({ node, depth, openSet, setOpenSet, selectedId, onSelect, o
       const res = await create.mutateAsync({ name: t("documents.untitled"), parentId: node.id });
       setOpenSet((s: any) => { const n = new Set(s); n.add(node.id); return n; });
       onChildCreated?.(res.id);
-    } catch (e) { pushToast({ kind: "error", title: t("documents.createChildFail"), desc: e.message }); }
+    } catch (e) { pushToast({ kind: "error", title: t("documents.createChildFail"), desc: (e as any)?.message }); }
   };
   const onDelete = () => {
     if (!confirm(t("documents.deleteConfirm", { name: node.name }))) return;

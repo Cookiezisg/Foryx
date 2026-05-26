@@ -20,7 +20,7 @@ function safeParse(text: string) {
   const t = text.trim();
   if (!t) return [{}, null];
   try { return [JSON.parse(t), null]; }
-  catch (e) { return [null, e.message]; }
+  catch (e) { return [null, (e as any)?.message]; }
 }
 
 interface RunDrawerProps {

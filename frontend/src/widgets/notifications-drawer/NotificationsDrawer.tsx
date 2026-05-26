@@ -69,7 +69,7 @@ function TodoTab({ pendingAsk, setPendingAsk, pushToast }: { pendingAsk: any; se
       pushToast({ kind: "success", title: t("toast:notifications.answerSubmitted") });
       setPendingAsk(null);
     } catch (err) {
-      pushToast({ kind: "error", title: t("toast:notifications.submitFailed"), desc: err.message });
+      pushToast({ kind: "error", title: t("toast:notifications.submitFailed"), desc: (err as any)?.message });
     } finally {
       setSubmitting(false);
     }

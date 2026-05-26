@@ -88,7 +88,7 @@ export function Dashboard({ onOpenPane, onSetActiveConv }: DashboardProps) {
         await apiFetch(`/conversations/${created.id}/messages`, { method: "POST", body: { content: text } });
       }
     } catch (err) {
-      pushToast({ kind: "error", title: t("sendFailed"), desc: err.message });
+      pushToast({ kind: "error", title: t("sendFailed"), desc: (err as any)?.message });
     } finally {
       setSubmitting(false);
     }

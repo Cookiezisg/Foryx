@@ -290,7 +290,7 @@ function AddPanel({ providers, configured, hasChatDefault, providerDisplay, onDo
       reset();
       onDone();
     } catch (e) {
-      pushToast({ kind: "error", title: t("apiKeys.addPanel.saveFail"), desc: e.message });
+      pushToast({ kind: "error", title: t("apiKeys.addPanel.saveFail"), desc: (e as any)?.message });
     } finally {
       setSaving(false);
     }

@@ -80,7 +80,7 @@ export function FlowRunDetail({ runId, onBack, onOpenChat }: FlowRunDetailProps)
         pushToast({ kind: "success", title: t("detail.toast.triageSuccess") });
       }
     } catch (e) {
-      pushToast({ kind: "error", title: t("detail.toast.triageFail"), desc: e.message });
+      pushToast({ kind: "error", title: t("detail.toast.triageFail"), desc: (e as any)?.message });
     }
   };
 

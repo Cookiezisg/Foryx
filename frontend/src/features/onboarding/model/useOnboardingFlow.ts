@@ -126,7 +126,7 @@ export function useOnboardingFlow(): OnboardingFlowState {
     const user = await createUser.mutateAsync({
       username: name.trim().toLowerCase().replace(/\s+/g, "-"),
       displayName: name.trim(),
-      avatarColor: ACCENTS.find(([k]: [string, string]) => k === prefs.accent)?.[1] || "#d97757",
+      avatarColor: ACCENTS.find(([k]) => k === prefs.accent)?.[1] || "#d97757",
     });
     setCreatedUserId(user.id);
     useSessionStore.getState().setCurrentUser(user.id);

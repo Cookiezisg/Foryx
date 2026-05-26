@@ -30,7 +30,7 @@ export function CapabilityCheckPanel({ workflowId }: CapabilityCheckPanelProps) 
       const r = await check.mutateAsync(workflowId);
       setResult(r);
     } catch (e) {
-      pushToast({ kind: "error", title: t("capability.checkFail"), desc: e.message });
+      pushToast({ kind: "error", title: t("capability.checkFail"), desc: (e as any)?.message });
     }
   };
 

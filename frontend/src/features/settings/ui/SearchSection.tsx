@@ -285,7 +285,7 @@ function AddPanel({ providers, configured, hasSearchDefault, providerDisplay, on
       reset();
       onDone();
     } catch (e) {
-      pushToast({ kind: "error", title: t("search.addPanel.saveFail"), desc: e.message });
+      pushToast({ kind: "error", title: t("search.addPanel.saveFail"), desc: (e as any)?.message });
     } finally {
       setSaving(false);
     }
