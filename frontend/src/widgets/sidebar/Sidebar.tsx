@@ -93,7 +93,7 @@ export function Sidebar({
   const recent   = conversations.filter((c) => !c.pinned  && !c.archived);
   const archived = conversations.filter((c) => c.archived);
 
-  const isOpen = (k) => openPanes.includes(k);
+  const isOpen = (k: string) => openPanes.includes(k);
 
   const onNewConv = async () => {
     try {

@@ -10,14 +10,14 @@ import { setupFetchSpy } from "@shared/lib/testHarness";
 import { useToastStore } from "../../../shared/ui/toastStore.ts";
 import { ApprovalBanner } from "./ApprovalBanner.tsx";
 
-function wrap({ children }) {
+function wrap({ children }: { children: any }) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return createElement(QueryClientProvider, { client }, children);
 }
 
-let calls;
+let calls: any;
 beforeEach(async () => {
   calls = setupFetchSpy();
   useToastStore.setState({ toasts: [] });

@@ -4,6 +4,7 @@
 // PaneFrame —— 非 chat pane 的统一外壳：薄顶栏 + 面包屑 + 关闭。
 // chat 有自己的 header，不走 pane-bar。
 
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "@shared/ui/Icon";
 
@@ -18,10 +19,10 @@ export const PANE_META = {
   observe:   { icon: "Activity",      labelKey: "pane.observe" },
 };
 
-export function PaneFrame({ kind, onClose, crumbs, children }: { kind: any; onClose: any; crumbs?: any; children?: any }) {
+export function PaneFrame({ kind, onClose, crumbs, children }: { kind: string; onClose: () => void; crumbs?: string[]; children?: React.ReactNode }) {
   const { t } = useTranslation("sidebar");
-  const meta = PANE_META[kind] || { icon: "Square", label: kind };
-  const I = Icon[meta.icon] || Icon.MoreHorizontal;
+  const meta = (PANE_META as Record<string, { icon: string; labelKey?: string; label?: string }>)[kind] || { icon: "Square", label: kind };
+  const I = (Icon as Record<string, React.ComponentType<{ className?: string }>>)[meta.icon] || Icon.MoreHorizontal;
 
   const metaLabel = meta.labelKey ? t(meta.labelKey) : (meta.label || kind);
 
@@ -41,7 +42,7 @@ export function PaneFrame({ kind, onClose, crumbs, children }: { kind: any; onCl
         <div className="pane-crumbs">
           <I className="icon" />
           <span className={cs.length === 1 ? "cur" : ""}>{cs[0]}</span>
-          {cs.slice(1).map((c, i) => (
+          {cs.slice(1).map((c: string, i: number) => (
             <span key={i} style={{ display: "contents" }}>
               <Icon.ChevronRight className="sep" />
               <span className={i === cs.length - 2 ? "cur" : ""}>{c}</span>

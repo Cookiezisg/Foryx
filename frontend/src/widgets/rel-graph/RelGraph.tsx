@@ -19,12 +19,12 @@ import { useNeighborhood } from "@entities/relation";
 import { navigate } from "@shared/lib/navigation";
 import { useEntityDirectory, normEdges, guessKind } from "@features/entity-link";
 
-const KIND_COLOR = {
+const KIND_COLOR: Record<string, string> = {
   function: "#2383E2", handler: "#0F7B6C", workflow: "#D97757",
   skill: "#B25E10",    mcp: "#6940A5",     memory: "#9A4A6F",
   conversation: "#3D5A80", document: "#5E6470", flowrun: "#888888",
 };
-const KIND_ICON = {
+const KIND_ICON: Record<string, string> = {
   function: "Code", handler: "Server", workflow: "Workflow", skill: "Sparkles",
   mcp: "Server", memory: "Brain", conversation: "MessageSquare", document: "FileText",
   flowrun: "Play",
@@ -37,7 +37,7 @@ const KIND_LABEL_BASE = {
 // 8 closed relation kinds (see backend domain/relation/relation.go). Short
 // human labels — direction implied by the → / ← section header.
 // These keys map to misc.relGraph.relLabels.* for i18n.
-const REL_LABEL_KEYS = {
+const REL_LABEL_KEYS: Record<string, string> = {
   workflow_uses_function:     "workflow_uses_function",
   workflow_uses_handler:      "workflow_uses_handler",
   workflow_uses_mcp:          "workflow_uses_mcp",
@@ -53,11 +53,11 @@ function GraphCanvas({ nodes, edges, focusId, selected, onSelect, width, height 
   nodes: any[]; edges: any[]; focusId?: string; selected: string | null;
   onSelect: (id: string) => void; width: number; height: number;
 }) {
-  const positions = useRef({});
-  const velocities = useRef({});
-  const dragRef = useRef(null);
-  const panRef = useRef(null);
-  const containerRef = useRef(null);
+  const positions = useRef<Record<string, { x: number; y: number }>>({});
+  const velocities = useRef<Record<string, { vx: number; vy: number }>>({});
+  const dragRef = useRef<any>(null);
+  const panRef = useRef<any>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
   const [hover, setHover] = useState(null);
   const [, rerender] = useState(0);
@@ -70,7 +70,7 @@ function GraphCanvas({ nodes, edges, focusId, selected, onSelect, width, height 
 
   // Init positions on node-set change.
   useEffect(() => {
-    const next = {}, vels = {};
+    const next: Record<string, { x: number; y: number }> = {}, vels: Record<string, { vx: number; vy: number }> = {};
     nodes.forEach((n, i) => {
       const prev = positions.current[n.id];
       const angle = (i / Math.max(1, nodes.length)) * Math.PI * 2;
@@ -84,7 +84,7 @@ function GraphCanvas({ nodes, edges, focusId, selected, onSelect, width, height 
 
   // Continuous tick.
   useEffect(() => {
-    let raf;
+    let raf: number;
     const tick = () => {
       const N = nodes.length;
       const center = { x: width / 2, y: height / 2 };
@@ -131,19 +131,19 @@ function GraphCanvas({ nodes, edges, focusId, selected, onSelect, width, height 
     return () => cancelAnimationFrame(raf);
   }, [nodes, edges, width, height]);
 
-  const clientToCanvas = (cx, cy) => {
+  const clientToCanvas = (cx: number, cy: number) => {
     const r = containerRef.current.getBoundingClientRect();
     return { x: (cx - r.left - transform.x) / transform.scale, y: (cy - r.top - transform.y) / transform.scale };
   };
 
-  const onSvgMouseDown = (e) => {
+  const onSvgMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
     if (e.button !== 0) return;
-    if (e.target === e.currentTarget || e.target.tagName === "rect" || e.target.tagName === "svg") {
+    if (e.target === e.currentTarget || (e.target as SVGElement).tagName === "rect" || (e.target as SVGElement).tagName === "svg") {
       panRef.current = { sx: e.clientX, sy: e.clientY, tx: transform.x, ty: transform.y };
     }
   };
   useEffect(() => {
-    const onMove = (e) => {
+    const onMove = (e: MouseEvent) => {
       if (dragRef.current) {
         const c = clientToCanvas(e.clientX, e.clientY);
         const p = positions.current[dragRef.current.id];
@@ -178,16 +178,16 @@ function GraphCanvas({ nodes, edges, focusId, selected, onSelect, width, height 
     };
   }, [transform]);
 
-  const onNodeMouseDown = (e, n) => {
+  const onNodeMouseDown = (e: React.MouseEvent, n: any) => {
     e.stopPropagation();
     const c = clientToCanvas(e.clientX, e.clientY);
     const p = positions.current[n.id];
     dragRef.current = { id: n.id, dx: c.x - p.x, dy: c.y - p.y };
     onSelect(n.id);
   };
-  const onWheel = (e) => {
+  const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
-    const r = containerRef.current.getBoundingClientRect();
+    const r = containerRef.current!.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     const delta = -e.deltaY * 0.0015;
     setTransform((t) => {
@@ -265,15 +265,15 @@ function GraphCanvas({ nodes, edges, focusId, selected, onSelect, width, height 
 }
 
 // ── Detail panel ─────────────────────────────────────────────────────────
-function adjacency(entityId, allEdges, allNodes) {
-  const incoming = [], outgoing = [];
-  allEdges.forEach((e) => {
+function adjacency(entityId: string, allEdges: any[], allNodes: any[]) {
+  const incoming: any[] = [], outgoing: any[] = [];
+  allEdges.forEach((e: any) => {
     if (e.from === entityId) {
-      const t = allNodes.find((n) => n.id === e.to);
+      const t = allNodes.find((n: any) => n.id === e.to);
       if (t) outgoing.push({ edge: e, node: t });
     }
     if (e.to === entityId) {
-      const s = allNodes.find((n) => n.id === e.from);
+      const s = allNodes.find((n: any) => n.id === e.from);
       if (s) incoming.push({ edge: e, node: s });
     }
   });
@@ -285,7 +285,7 @@ function NodeDetail({ node, allNodes, allEdges, onSelect }: { node: any; allNode
 
   // Rendered inside a FloatingInspector — drop our own outer container.
   // FloatingInspector head already shows kind label; we keep icon+name+id+open here.
-  const Ic = Icon[KIND_ICON[node.kind]] || Icon.Code;
+  const Ic = (Icon as Record<string, React.ComponentType<any>>)[KIND_ICON[node.kind]] || Icon.Code;
   const { incoming, outgoing } = adjacency(node.id, allEdges, allNodes);
 
   const openTarget = () => {
@@ -384,7 +384,7 @@ export function RelGraph() {
 
   const allKinds = [...Object.keys(KIND_LABEL_BASE), "conversation", "document"];
 
-  const kindLabel = (k) => t("relGraph.kinds." + k, { defaultValue: k });
+  const kindLabel = (k: string) => t("relGraph.kinds." + k, { defaultValue: k });
 
   return (
     <div className="rg-shell" ref={shellRef}>
@@ -455,7 +455,7 @@ export function RelGraphPopover({ entityId, kind, onClose, paneEl }: { entityId:
   const selectedNode = nodes.find((n) => n.id === selected);
 
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
@@ -496,9 +496,9 @@ export function RelMore({ entityId, kind, label }: { entityId: string; kind?: st
   const [paneEl, setPaneEl] = useState(null);
   const btnRef = useRef(null);
 
-  const onClick = (e) => {
+  const onClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    const pane = btnRef.current.closest(".pane");
+    const pane = (btnRef.current as HTMLElement).closest(".pane");
     setPaneEl(pane || null);
     setOpen(true);
   };

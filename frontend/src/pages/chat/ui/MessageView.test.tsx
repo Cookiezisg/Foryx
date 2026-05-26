@@ -5,18 +5,18 @@ import { render, screen } from "@testing-library/react";
 import { useChatStore } from "@entities/conversation";
 
 vi.mock("./BlockRenderer.tsx", () => ({
-  BlockList: ({ blockIds }) => <div data-testid="blocklist">{(blockIds || []).join(",")}</div>,
+  BlockList: ({ blockIds }: { blockIds: any }) => <div data-testid="blocklist">{(blockIds || []).join(",")}</div>,
 }));
 
 vi.mock("../../../shared/ui/RelTime.tsx", () => ({
-  RelTime: ({ ts }) => <span data-testid="reltime">{ts}</span>,
+  RelTime: ({ ts }: { ts: any }) => <span data-testid="reltime">{ts}</span>,
 }));
 
 import { MessageView } from "./MessageView.tsx";
 
 const CV = "cv_mv";
 
-function seedMessage(msg) {
+function seedMessage(msg: any) {
   useChatStore.setState({
     convs: {
       [CV]: {

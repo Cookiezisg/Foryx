@@ -14,7 +14,7 @@ vi.mock("@entities/document", () => ({
 }));
 
 vi.mock("./ui/DocEditor.tsx", () => ({
-  DocEditor: ({ initialMarkdown }) => (
+  DocEditor: ({ initialMarkdown }: { initialMarkdown: any }) => (
     <div data-testid="editor-stub">{initialMarkdown}</div>
   ),
 }));
@@ -24,11 +24,11 @@ vi.mock("@/widgets/ask-ai-trigger/AskAiTrigger.tsx", () => ({
 }));
 
 vi.mock("@/widgets/entity-rel-meta/EntityRelMeta.tsx", () => ({
-  EntityRelMeta: () => null,
+  EntityRelMeta: (): null => null,
 }));
 
 vi.mock("@shared/ui/RelTime.tsx", () => ({
-  RelTime: ({ ts }) => <span>{ts}</span>,
+  RelTime: ({ ts }: { ts: any }) => <span>{ts}</span>,
 }));
 
 import {
@@ -50,7 +50,7 @@ const TREE = [
   { id: "doc_child", name: "Q4 plan",  parentId: "doc_root1", position: 0 },
 ];
 
-let createMutateAsync, updateMutate, delMutate;
+let createMutateAsync: any, updateMutate: any, delMutate: any;
 
 beforeEach(() => {
   createMutateAsync = vi.fn(async ({ name }) => ({ id: "doc_new", name }));

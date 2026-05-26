@@ -60,7 +60,7 @@ export function McpPage() {
                           </div>
                         </div>
                       </div>
-                      <Badge kind={STATUS_KIND[s.status] || "muted"}>{s.status}</Badge>
+                      <Badge kind={(STATUS_KIND as Record<string, string>)[s.status] as any || "muted"}>{s.status}</Badge>
                     </div>
                     {s.connectedAt && (
                       <div style={{ fontSize: 11, color: "var(--fg-muted)", marginTop: 6 }}>

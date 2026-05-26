@@ -7,7 +7,7 @@ import { fetchUsers } from "../api/session";
 const mockFetchUsers = vi.mocked(fetchUsers);
 
 function makeUser(id: string) {
-  return { id, username: id, displayName: id, avatarColor: "blue", language: "en", lastUsedAt: null, createdAt: "", updatedAt: "" };
+  return { id, username: id, displayName: id, avatarColor: "blue", language: "en", lastUsedAt: null as any, createdAt: "", updatedAt: "" };
 }
 
 beforeEach(() => {

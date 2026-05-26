@@ -7,12 +7,12 @@
 
 import { useEffect, useState } from "react";
 
-export function PaneResize({ onDrag }) {
+export function PaneResize({ onDrag }: { onDrag: (clientX: number) => void }) {
   const [dragging, setDragging] = useState(false);
 
   useEffect(() => {
     if (!dragging) return;
-    const onMove = (e) => onDrag(e.clientX);
+    const onMove = (e: MouseEvent) => onDrag(e.clientX);
     const onUp = () => setDragging(false);
     document.body.style.userSelect = "none";
     document.body.style.cursor = "col-resize";

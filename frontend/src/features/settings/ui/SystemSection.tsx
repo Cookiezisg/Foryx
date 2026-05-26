@@ -1,7 +1,7 @@
 import { useTranslation } from "react-i18next";
 import { Icon } from "@shared/ui/Icon";
 
-export function SystemSection({ open, onToggle }) {
+export function SystemSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { t } = useTranslation("settings");
   return (
     <div className="set-sec">

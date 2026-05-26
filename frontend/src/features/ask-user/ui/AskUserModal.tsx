@@ -14,7 +14,7 @@ import { Button } from "@shared/ui/Button";
 import { useAskUserAnswer } from "@features/ask-user";
 import { scaleIn, fadeIn } from "@shared/lib/motion";
 
-export function AskUserModal({ pending, askOpen, onClose }) {
+export function AskUserModal({ pending, askOpen, onClose }: { pending: any; askOpen: boolean; onClose: () => void }) {
   const { t } = useTranslation(["conv", "common"]);
 
   const isOpen = askOpen || !!pending;
@@ -27,7 +27,7 @@ export function AskUserModal({ pending, askOpen, onClose }) {
 
   useEffect(() => {
     if (!isOpen) return;
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { onClose(); return; }
       const n = parseInt(e.key, 10);
       if (n >= 1 && n <= 9 && pending?.options?.[n - 1]) {
@@ -92,7 +92,7 @@ export function AskUserModal({ pending, askOpen, onClose }) {
                     {t("ask.noOptionsHint")}
                   </div>
                 )}
-                {options.map((o, i) => (
+                {options.map((o: any, i: number) => (
                   <div
                     key={o.id || i}
                     className={"ask-option" + (selected === (o.id || o.value) ? " is-selected" : "")}

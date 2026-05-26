@@ -16,7 +16,7 @@ import { WelcomeInput } from "./ui/WelcomeInput.tsx";
 import { useGreeting } from "./lib/useGreeting";
 import { useContextStrip } from "./lib/useContextStrip";
 
-function ContextStrip({ strip, onJump }) {
+function ContextStrip({ strip, onJump }: { strip: any; onJump: (pane: string, convId?: string) => void }) {
   const { t } = useTranslation("dashboard");
   if (!strip) return null;
   if (strip.kind === "waiting") {
@@ -78,7 +78,7 @@ export function Dashboard({ onOpenPane, onSetActiveConv }: DashboardProps) {
   const { t } = useTranslation("dashboard");
   const [submitting, setSubmitting] = useState(false);
 
-  const onSubmit = async (text) => {
+  const onSubmit = async (text: string) => {
     setSubmitting(true);
     try {
       const created = await create.mutateAsync({});
@@ -94,7 +94,7 @@ export function Dashboard({ onOpenPane, onSetActiveConv }: DashboardProps) {
     }
   };
 
-  const onJump = (pane, convId) => {
+  const onJump = (pane: string, convId?: string) => {
     if (convId) onSetActiveConv(convId);
     onOpenPane(pane);
   };

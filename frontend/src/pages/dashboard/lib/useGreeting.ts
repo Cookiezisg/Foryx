@@ -7,20 +7,22 @@
 import { useMemo } from "react";
 import { GREETINGS } from "./greetings";
 
-function pickFrom(arr) {
+type Greeting = { text: string; tags: string[] };
+
+function pickFrom(arr: Greeting[]) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function filterByName(pool, displayName) {
+function filterByName(pool: Greeting[], displayName: string) {
   if (displayName) return pool;
   return pool.filter((g) => !g.text.includes("{name}"));
 }
 
-function selectGreeting({ hasRecentConv, displayName }) {
+function selectGreeting({ hasRecentConv, displayName }: { hasRecentConv: boolean; displayName: string }) {
   const hour = new Date().getHours();
   const pool = filterByName(GREETINGS, displayName);
 
-  const tryBucket = (tag, prob) => {
+  const tryBucket = (tag: string, prob: number) => {
     if (Math.random() < prob) {
       const sub = pool.filter((g) => g.tags.includes(tag));
       if (sub.length) return pickFrom(sub);
@@ -37,7 +39,7 @@ function selectGreeting({ hasRecentConv, displayName }) {
   return pick.text.replaceAll("{name}", displayName || "");
 }
 
-export function useGreeting({ hasRecentConv, displayName }) {
+export function useGreeting({ hasRecentConv, displayName }: { hasRecentConv: boolean; displayName: string }) {
   return useMemo(
     () => selectGreeting({ hasRecentConv, displayName }),
     [hasRecentConv, displayName]

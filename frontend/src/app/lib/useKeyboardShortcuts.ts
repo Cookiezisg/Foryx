@@ -11,9 +11,9 @@ import { useOverlayStore, useSidebarStore } from "@app/model";
 
 export function useKeyboardShortcuts() {
   useEffect(() => {
-    const onKey = (e) => {
-      const tag = e.target?.tagName;
-      const inField = tag === "INPUT" || tag === "TEXTAREA" || e.target?.isContentEditable;
+    const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      const inField = tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable;
 
       const overlay = useOverlayStore.getState();
       const sidebar = useSidebarStore.getState();

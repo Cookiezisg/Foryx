@@ -28,7 +28,7 @@ export function BottomSheet({
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") onClose?.(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose?.(); };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
@@ -36,9 +36,9 @@ export function BottomSheet({
   useEffect(() => {
     if (!open || !anchorRef?.current) return;
     const container = anchorRef.current;
-    const onPointerDown = (e) => {
+    const onPointerDown = (e: Event) => {
       if (!sheetRef.current) return;
-      if (sheetRef.current.contains(e.target)) return;
+      if (sheetRef.current.contains(e.target as Node)) return;
       onClose?.();
     };
     container.addEventListener("pointerdown", onPointerDown);

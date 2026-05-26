@@ -113,7 +113,7 @@ export function WorkflowDetail({ forge, onBack, onOpenExecute }: WorkflowDetailP
 
 // DagCanvas — auto-layout nodes from a version's graph + render cubic
 // bezier edges. Pan via mouse drag, zoom via wheel. Read-only.
-function DagCanvas({ version }) {
+function DagCanvas({ version }: { version: any }) {
   const { t } = useTranslation("forge");
   const graph = useMemo(() => normaliseGraph(version), [version]);
   const [transform, setTransform] = useState({ x: 0, y: 0, scale: 1 });
@@ -125,22 +125,22 @@ function DagCanvas({ version }) {
   }
 
   const { nodes, edges } = graph;
-  const byId = Object.fromEntries(nodes.map((n) => [n.id, n]));
+  const byId: Record<string, any> = Object.fromEntries(nodes.map((n: any) => [n.id, n]));
 
-  const onMouseDown = (e) => {
+  const onMouseDown = (e: React.MouseEvent) => {
     if (e.button !== 0) return;
-    if (!e.target.classList.contains("wf-canvas-inner") && !e.target.classList.contains("wf-canvas")) return;
+    if (!(e.target as HTMLElement).classList.contains("wf-canvas-inner") && !(e.target as HTMLElement).classList.contains("wf-canvas")) return;
     panStart.current = { x: e.clientX, y: e.clientY, tx: transform.x, ty: transform.y };
     setPanning(true);
   };
-  const onMouseMove = (e) => {
+  const onMouseMove = (e: React.MouseEvent) => {
     if (!panning || !panStart.current) return;
     const dx = e.clientX - panStart.current.x;
     const dy = e.clientY - panStart.current.y;
-    setTransform((t) => ({ ...t, x: panStart.current.tx + dx, y: panStart.current.ty + dy }));
+    setTransform((t) => ({ ...t, x: (panStart.current as any).tx + dx, y: (panStart.current as any).ty + dy }));
   };
   const onMouseUp = () => { setPanning(false); panStart.current = null; };
-  const onWheel = (e) => {
+  const onWheel = (e: React.WheelEvent) => {
     e.preventDefault();
     setTransform((t) => {
       const scale = Math.max(0.25, Math.min(2.5, t.scale * (1 - e.deltaY * 0.0015)));
@@ -168,13 +168,13 @@ function DagCanvas({ version }) {
               <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
             </marker>
           </defs>
-          {edges.map((e, i) => {
+          {edges.map((e: any, i: number) => {
             const a = byId[e.from], b = byId[e.to];
             if (!a || !b) return null;
             return <path key={i} d={edgePath(a, b)} fill="none" stroke="var(--border-strong)" strokeWidth={1.4} markerEnd="url(#wf-arr-ro)" />;
           })}
         </svg>
-        {nodes.map((n) => (
+        {nodes.map((n: any) => (
           <div
             key={n.id}
             className="wf-node"
@@ -200,8 +200,8 @@ function DagCanvas({ version }) {
   );
 }
 
-function iconFor(kind) {
-  const I = {
+function iconFor(kind: string) {
+  const I = ({
     trigger:   Icon.Zap,
     function:  Icon.Code,
     handler:   Icon.Server,
@@ -216,11 +216,11 @@ function iconFor(kind) {
     approval:  Icon.Pause,
     wait:      Icon.Clock,
     variable:  Icon.Database,
-  }[kind] || Icon.Code;
+  } as Record<string, React.ComponentType<any>>)[kind] || Icon.Code;
   return <I />;
 }
 
-function edgePath(a, b) {
+function edgePath(a: any, b: any) {
   const sx = a.x + NODE_W / 2, sy = a.y + NODE_H;
   const ex = b.x + NODE_W / 2, ey = b.y;
   const dy = Math.max(30, (ey - sy) / 2);
@@ -229,42 +229,42 @@ function edgePath(a, b) {
 
 // normaliseGraph — pulls nodes/edges out of various server shapes and
 // runs a topological auto-layout if positions aren't present.
-function normaliseGraph(version) {
+function normaliseGraph(version: any) {
   if (!version) return null;
   const g = version.graph || version;
-  const nodes = (g.nodes || []).map((n) => ({ ...n, x: n.x, y: n.y }));
-  const edges = (g.edges || []).map((e) => ({ from: e.from || e.fromId, to: e.to || e.toId }));
+  const nodes = (g.nodes || []).map((n: any) => ({ ...n, x: n.x, y: n.y }));
+  const edges = (g.edges || []).map((e: any) => ({ from: e.from || e.fromId, to: e.to || e.toId }));
   if (!nodes.length) return null;
 
-  if (nodes.every((n) => typeof n.x === "number" && typeof n.y === "number")) {
+  if (nodes.every((n: any) => typeof n.x === "number" && typeof n.y === "number")) {
     return { nodes, edges };
   }
   // Kahn-style BFS topological layering for auto-layout.
-  const incoming = Object.fromEntries(nodes.map((n) => [n.id, 0]));
-  edges.forEach((e) => { if (incoming[e.to] != null) incoming[e.to]++; });
-  const layer = {};
-  const queue = nodes.filter((n) => incoming[n.id] === 0).map((n) => n.id);
-  queue.forEach((id) => { layer[id] = 0; });
+  const incoming: Record<string, number> = Object.fromEntries(nodes.map((n: any) => [n.id, 0]));
+  edges.forEach((e: any) => { if (incoming[e.to] != null) incoming[e.to]++; });
+  const layer: Record<string, number> = {};
+  const queue: string[] = nodes.filter((n: any) => incoming[n.id] === 0).map((n: any) => n.id);
+  queue.forEach((id: string) => { layer[id] = 0; });
   let head = 0;
   while (head < queue.length) {
     const id = queue[head++];
-    edges.filter((e) => e.from === id).forEach((e) => {
+    edges.filter((e: any) => e.from === id).forEach((e: any) => {
       const newL = (layer[id] || 0) + 1;
       if (layer[e.to] == null || layer[e.to] < newL) layer[e.to] = newL;
       if (!queue.includes(e.to)) queue.push(e.to);
     });
   }
-  const byLayer = {};
-  nodes.forEach((n) => {
+  const byLayer: Record<number, string[]> = {};
+  nodes.forEach((n: any) => {
     const L = layer[n.id] ?? 0;
     if (!byLayer[L]) byLayer[L] = [];
     byLayer[L].push(n.id);
   });
   const xGap = 240, yGap = 140;
-  Object.keys(byLayer).map(Number).sort((a, b) => a - b).forEach((L) => {
-    byLayer[L].forEach((id, i) => {
+  Object.keys(byLayer).map(Number).sort((a: number, b: number) => a - b).forEach((L) => {
+    byLayer[L].forEach((id: string, i: number) => {
       const offset = (i - (byLayer[L].length - 1) / 2) * yGap;
-      const node = nodes.find((n) => n.id === id);
+      const node = nodes.find((n: any) => n.id === id);
       node.x = 200 + offset;
       node.y = 60 + L * yGap;
     });

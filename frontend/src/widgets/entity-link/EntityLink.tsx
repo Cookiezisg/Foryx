@@ -4,6 +4,7 @@
 //
 // EntityLink —— 实体 ID 可点击 chip；按前缀路由到对应 pane。
 
+import React from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "@shared/ui/Icon";
 import { navigate } from "@shared/lib/navigation";
@@ -36,11 +37,11 @@ export function EntityLink({ id }: EntityLinkProps) {
   const name = useEntityName(id);
 
   const prefix = id.split("_")[0];
-  const meta = PREFIX_META[prefix] || { pane: "forge", icon: "Hammer" };
-  const Ic = Icon[meta.icon] || Icon.Hammer;
+  const meta = (PREFIX_META as Record<string, { pane: string; icon: string }>)[prefix] || { pane: "forge", icon: "Hammer" };
+  const Ic = (Icon as Record<string, React.ComponentType<any>>)[meta.icon] || Icon.Hammer;
   const kindLabel = t(`entityKinds.${prefix}`, { defaultValue: prefix });
 
-  const onClick = (e) => {
+  const onClick = (e: React.MouseEvent) => {
     e.stopPropagation();
     if (prefix === "cv") {
       navigate.openConv(id);

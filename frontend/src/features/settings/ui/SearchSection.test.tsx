@@ -20,14 +20,14 @@ vi.mock("@shared/api/httpClient", async (importOriginal) => {
   return { ...actual, apiFetch: vi.fn().mockResolvedValue({}) };
 });
 
-let apiKeys = [];
+let apiKeys: any[] = [];
 
 vi.mock("@entities/apikey", () => ({
   useApiKeys: () => ({ data: apiKeys }),
   useCreateApiKey: () => ({ mutateAsync: mockCreateKey }),
   useTestApiKey: () => ({ mutate: mockTestKey, mutateAsync: mockTestKey, isPending: false }),
   useDeleteApiKey: () => ({ mutate: mockDeleteKey, mutateAsync: mockDeleteKey, isPending: false }),
-  useUpdateApiKey: (_id) => ({ mutate: mockUpdateKey, isPending: false }),
+  useUpdateApiKey: (_id: any) => ({ mutate: mockUpdateKey, isPending: false }),
 }));
 
 vi.mock("@entities/model-config", () => ({
@@ -45,7 +45,7 @@ vi.mock("@entities/model-config", () => ({
 import { useToastStore } from "@shared/ui/toastStore";
 import { SearchSection } from "./SearchSection.tsx";
 
-function wrap({ children }) {
+function wrap({ children }: { children: any }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return createElement(QueryClientProvider, { client }, children);
 }

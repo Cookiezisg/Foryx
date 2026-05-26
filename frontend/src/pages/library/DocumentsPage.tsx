@@ -86,7 +86,7 @@ export function DocumentsPage({ activeDoc, onSetActiveDocument }: DocumentsPageP
   );
 }
 
-function DocEmpty({ onCreate }) {
+function DocEmpty({ onCreate }: { onCreate: () => void }) {
   const { t } = useTranslation("library");
   return (
     <div className="empty" style={{ flex: 1 }}>
@@ -108,8 +108,8 @@ function buildTree(flat: any[]) {
     if (d.parentId && byId.has(d.parentId)) byId.get(d.parentId)!.children.push(d);
     else roots.push(d);
   }
-  const sortRec = (n) => {
-    n.children.sort((a, b) => (a.position - b.position) || a.name.localeCompare(b.name));
+  const sortRec = (n: any) => {
+    n.children.sort((a: any, b: any) => (a.position - b.position) || a.name.localeCompare(b.name));
     n.children.forEach(sortRec);
   };
   roots.sort((a, b) => (a.position - b.position) || a.name.localeCompare(b.name));
@@ -117,15 +117,15 @@ function buildTree(flat: any[]) {
   return roots;
 }
 
-function DocSidebar({ tree, openSet, setOpenSet, selectedId, onSelect, onCreateRoot, onChildCreated, isLoading, onCollapse }) {
+function DocSidebar({ tree, openSet, setOpenSet, selectedId, onSelect, onCreateRoot, onChildCreated, isLoading, onCollapse }: { tree: any[]; openSet: any; setOpenSet: any; selectedId: any; onSelect: (id: string) => void; onCreateRoot: () => void; onChildCreated: (id: string) => void; isLoading: boolean; onCollapse: any }) {
   const { t } = useTranslation(["library", "common"]);
   const [q, setQ] = useState("");
   const filtered = useMemo(() => {
     if (!q.trim()) return tree;
     const ql = q.toLowerCase();
-    const walk = (nodes) => nodes
-      .map((n) => {
-        const kids = n.children?.length ? walk(n.children) : [];
+    const walk = (nodes: any[]): any[] => nodes
+      .map((n: any): any => {
+        const kids: any[] = n.children?.length ? walk(n.children) : [];
         if (n.name.toLowerCase().includes(ql) || kids.length) return { ...n, children: kids };
         return null;
       })
@@ -156,7 +156,7 @@ function DocSidebar({ tree, openSet, setOpenSet, selectedId, onSelect, onCreateR
             <Trans i18nKey="documents.noDocs" ns="library"><Icon.Plus style={{ display: "inline", width: 11, height: 11, verticalAlign: "-2px" }} /></Trans>
           </div>
         )}
-        {filtered.map((n) => (
+        {filtered.map((n: any) => (
           <DocTreeNode
             key={n.id} node={n} depth={0}
             openSet={openSet} setOpenSet={setOpenSet}
@@ -169,7 +169,7 @@ function DocSidebar({ tree, openSet, setOpenSet, selectedId, onSelect, onCreateR
   );
 }
 
-function DocTreeNode({ node, depth, openSet, setOpenSet, selectedId, onSelect, onChildCreated }) {
+function DocTreeNode({ node, depth, openSet, setOpenSet, selectedId, onSelect, onChildCreated }: { node: any; depth: number; openSet: any; setOpenSet: any; selectedId: any; onSelect: (id: string) => void; onChildCreated: (id: string) => void }) {
   const { t } = useTranslation(["library", "common"]);
   const hasChildren = node.children?.length > 0;
   const isOpen = openSet.has(node.id);
@@ -178,7 +178,7 @@ function DocTreeNode({ node, depth, openSet, setOpenSet, selectedId, onSelect, o
   const pushToast = useToastStore((s) => s.pushToast);
 
   const toggle = () => {
-    setOpenSet((s) => {
+    setOpenSet((s: any) => {
       const next = new Set(s);
       if (next.has(node.id)) next.delete(node.id); else next.add(node.id);
       return next;
@@ -188,7 +188,7 @@ function DocTreeNode({ node, depth, openSet, setOpenSet, selectedId, onSelect, o
   const onNewChild = async () => {
     try {
       const res = await create.mutateAsync({ name: t("documents.untitled"), parentId: node.id });
-      setOpenSet((s) => { const n = new Set(s); n.add(node.id); return n; });
+      setOpenSet((s: any) => { const n = new Set(s); n.add(node.id); return n; });
       onChildCreated?.(res.id);
     } catch (e) { pushToast({ kind: "error", title: t("documents.createChildFail"), desc: e.message }); }
   };
@@ -238,7 +238,7 @@ function DocTreeNode({ node, depth, openSet, setOpenSet, selectedId, onSelect, o
           </button>
         </div>
       </div>
-      {isOpen && node.children.map((c) => (
+      {isOpen && node.children.map((c: any) => (
         <DocTreeNode
           key={c.id} node={c} depth={depth + 1}
           openSet={openSet} setOpenSet={setOpenSet}
@@ -251,7 +251,7 @@ function DocTreeNode({ node, depth, openSet, setOpenSet, selectedId, onSelect, o
 }
 
 // ── DocPage — title input + Tiptap body ──────────────────────────────
-function DocPage({ docId, focusTitle, onTitleFocused }) {
+function DocPage({ docId, focusTitle, onTitleFocused }: { docId: string; focusTitle: boolean; onTitleFocused: () => void }) {
   const { t } = useTranslation(["library", "common"]);
   const { data: doc, isLoading } = useDocument(docId);
   const update = useUpdateDocument(docId);

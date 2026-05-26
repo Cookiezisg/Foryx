@@ -14,13 +14,13 @@ vi.mock("@entities/conversation", async (importOriginal) => {
   return {
     ...actual,
     useConversation: () => ({ data: { id: "cv_x", title: "Test Conv" } }),
-    useConversationMessages: () => ({ data: [], isLoading: false }),
+    useConversationMessages: () => ({ data: [] as any[], isLoading: false }),
   };
 });
 
 vi.mock("@features/send-message", () => ({
   useSendMessageFlow: () => ({ submit: mockSend, cancelStream: mockCancel, isPending: false }),
-  Composer: ({ onSend, onCancel, isStreaming }) => (
+  Composer: ({ onSend, onCancel, isStreaming }: { onSend: any; onCancel: any; isStreaming: any }) => (
     createElement("div", { "data-testid": "composer" },
       createElement("button", { onClick: () => onSend({ content: "hi" }) }, "send"),
       createElement("button", { onClick: () => onCancel() }, "cancel"),
@@ -42,18 +42,18 @@ vi.mock("@entities/model-config", () => ({
 }));
 
 vi.mock("./ui/ChatHeader.tsx", () => ({
-  ChatHeader: ({ conv }) => <div data-testid="header">{conv?.title}</div>,
+  ChatHeader: ({ conv }: { conv: any }) => <div data-testid="header">{conv?.title}</div>,
 }));
 
 vi.mock("./ui/MessageView.tsx", () => ({
-  MessageView: ({ msgId }) => <div data-testid={`msg-${msgId}`}>{msgId}</div>,
+  MessageView: ({ msgId }: { msgId: any }) => <div data-testid={`msg-${msgId}`}>{msgId}</div>,
 }));
 
 import { useToastStore } from "@shared/ui/toastStore";
 import { useChatStore } from "@entities/conversation";
 import { ChatPage } from "./ChatPage.tsx";
 
-function wrap({ children }) {
+function wrap({ children }: { children: any }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return createElement(QueryClientProvider, { client }, children);
 }

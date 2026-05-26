@@ -17,8 +17,8 @@ export function NarrowSwitch() {
 
   if (!narrow || openPanes.length < 2) return null;
 
-  const paneLabel = (k) => {
-    const meta = PANE_META[k];
+  const paneLabel = (k: string) => {
+    const meta = (PANE_META as Record<string, { icon: string; labelKey?: string; label?: string }>)[k];
     if (!meta) return k;
     return meta.labelKey ? t(meta.labelKey) : (meta.label || k);
   };

@@ -21,7 +21,7 @@ export function useDisplayName() {
 
   // Persist to the backend User; useUpdateUser invalidates /users so the
   // footer / greeting refresh. No-op when empty or unchanged.
-  const setValue = (next) => {
+  const setValue = (next: string) => {
     const trimmed = (next || "").trim();
     if (activeUserId && trimmed && trimmed !== value) {
       update.mutate({ id: activeUserId, patch: { displayName: trimmed } });

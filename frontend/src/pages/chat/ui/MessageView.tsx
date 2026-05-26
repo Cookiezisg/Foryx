@@ -89,14 +89,14 @@ export const MessageView = memo(function MessageView({ convId, msgId }: { convId
   );
 });
 
-function extractText(convId, message) {
+function extractText(convId: string, message: any) {
   const store = useChatStore.getState();
   const blocks = store.convs[convId]?.blocks;
   if (!blocks) return "";
   return message.blocks
-    .map((bid) => blocks.get(bid))
-    .filter((b) => b && b.type === "text")
-    .map((b) => b.content)
+    .map((bid: any) => blocks.get(bid))
+    .filter((b: any) => b && b.type === "text")
+    .map((b: any) => b.content)
     .join("\n\n");
 }
 
@@ -104,7 +104,7 @@ function extractText(convId, message) {
 // Returns { hintKey, kindKey } where keys map to conv.error.* translations.
 //
 // 常见 provider 报错 → 翻译 key。
-function friendlyError(code, message) {
+function friendlyError(code: any, message: any) {
   const m = (message || "").toLowerCase();
   if (m.includes("insufficient balance") || m.includes("insufficient_quota")) {
     return { hintKey: "error.insufficientBalance", kindKey: "error.kindBalance" };
@@ -130,7 +130,7 @@ function friendlyError(code, message) {
   return null;
 }
 
-function ErrorCard({ code, message, provider, model }) {
+function ErrorCard({ code, message, provider, model }: { code: any; message: any; provider: any; model: any }) {
   const { t } = useTranslation("conv");
   const friendly = friendlyError(code, message);
   return (

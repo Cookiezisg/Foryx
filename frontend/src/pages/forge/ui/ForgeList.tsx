@@ -78,7 +78,7 @@ export function ForgeList({ onOpen, onOpenExecute }: ForgeListProps) {
     workflow: rows.filter((r) => r.kind === "workflow").length,
   };
 
-  const toggle = (id) => {
+  const toggle = (id: string) => {
     const next = new Set(selected);
     if (next.has(id)) next.delete(id); else next.add(id);
     setSelected(next);
@@ -112,7 +112,7 @@ export function ForgeList({ onOpen, onOpenExecute }: ForgeListProps) {
             onClick={() => setTab(key)}
           >
             {label}
-            <span className="count">{counts[key] ?? 0}</span>
+            <span className="count">{(counts as Record<string, number>)[key] ?? 0}</span>
           </button>
         ))}
       </div>

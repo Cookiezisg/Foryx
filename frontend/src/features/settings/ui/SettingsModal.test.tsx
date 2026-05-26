@@ -11,7 +11,7 @@ vi.mock("framer-motion", async () => {
   const actual = await vi.importActual("framer-motion");
   return {
     ...actual,
-    AnimatePresence: ({ children }) => children,
+    AnimatePresence: ({ children }: { children: any }) => children,
     motion: new Proxy({}, {
       get: (_, tag) => (props: any) => {
         const { initial, animate, exit, transition, layout, ...rest } = props;
@@ -47,16 +47,16 @@ vi.mock("@features/settings", () => ({
 // ApiKeysSection and SearchSection are real components; stub their config hooks
 // so they render deterministically without network.
 vi.mock("@entities/apikey", () => ({
-  useApiKeys: () => ({ data: [] }),
+  useApiKeys: () => ({ data: [] as any[] }),
   useCreateApiKey: () => ({ mutateAsync: vi.fn() }),
   useTestApiKey: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
   useDeleteApiKey: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
-  useUpdateApiKey: (_id) => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateApiKey: (_id: any) => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 vi.mock("@entities/model-config", () => ({
-  useProviders: () => ({ data: [] }),
-  useModelConfigs: () => ({ data: [] }),
+  useProviders: () => ({ data: [] as any[] }),
+  useModelConfigs: () => ({ data: [] as any[] }),
   useUpsertModelConfig: () => ({ mutate: vi.fn(), mutateAsync: vi.fn(), isPending: false }),
 }));
 
@@ -64,7 +64,7 @@ import { useToastStore } from "@shared/ui/toastStore";
 import { useSessionStore } from "@entities/session";
 import { SettingsModal } from "./SettingsModal.tsx";
 
-function wrap({ children }) {
+function wrap({ children }: { children: any }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return createElement(QueryClientProvider, { client }, children);
 }

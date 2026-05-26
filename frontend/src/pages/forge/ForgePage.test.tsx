@@ -6,7 +6,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("./ui/ForgeList.tsx", () => ({
-  ForgeList: ({ onOpen }) => (
+  ForgeList: ({ onOpen }: { onOpen: (e: any) => void }) => (
     <div data-testid="list">
       <button onClick={() => onOpen({ id: "fn_x", kind: "function", name: "Pick" })}>
         open function
@@ -34,7 +34,7 @@ vi.mock("@entities/workflow", () => ({
 }));
 
 vi.mock("./ui/FunctionDetail.tsx", () => ({
-  FunctionDetail: ({ forge, onBack }) => (
+  FunctionDetail: ({ forge, onBack }: { forge: any; onBack: () => void }) => (
     <div data-testid="fn-detail">
       fn-{forge.id}-{forge.name}
       <button onClick={onBack}>back</button>
@@ -43,7 +43,7 @@ vi.mock("./ui/FunctionDetail.tsx", () => ({
 }));
 
 vi.mock("./ui/HandlerDetail.tsx", () => ({
-  HandlerDetail: ({ forge, onBack }) => (
+  HandlerDetail: ({ forge, onBack }: { forge: any; onBack: () => void }) => (
     <div data-testid="hd-detail">
       hd-{forge.id}
       <button onClick={onBack}>back</button>
@@ -52,7 +52,7 @@ vi.mock("./ui/HandlerDetail.tsx", () => ({
 }));
 
 vi.mock("./ui/WorkflowDetail.tsx", () => ({
-  WorkflowDetail: ({ forge, onBack }) => (
+  WorkflowDetail: ({ forge, onBack }: { forge: any; onBack: () => void }) => (
     <div data-testid="wf-detail">
       wf-{forge.id}
       <button onClick={onBack}>back</button>

@@ -13,8 +13,8 @@ const mockTestKey = vi.fn();
 const mockDeleteKey = vi.fn();
 const mockUpsertModel = vi.fn();
 
-let apiKeys = [];
-let modelConfigs = [];
+let apiKeys: any[] = [];
+let modelConfigs: any[] = [];
 
 vi.mock("@entities/apikey", () => ({
   useApiKeys: () => ({ data: apiKeys }),
@@ -37,7 +37,7 @@ vi.mock("@entities/model-config", () => ({
 import { useToastStore } from "@shared/ui/toastStore";
 import { ApiKeysSection } from "./ApiKeysSection.tsx";
 
-function wrap({ children }) {
+function wrap({ children }: { children: any }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return createElement(QueryClientProvider, { client }, children);
 }

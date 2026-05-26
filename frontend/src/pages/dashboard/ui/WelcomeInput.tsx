@@ -4,7 +4,7 @@
 // WelcomeInput —— 欢迎页输入框;Enter 直接发(Shift+Enter 换行);空内容
 // 不触发;parent 拿到 text 后串行新建对话 + 发首条消息。
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "@shared/ui/Icon";
 
@@ -24,7 +24,7 @@ export function WelcomeInput({ onSubmit, isSubmitting = false }: WelcomeInputPro
     setText("");
   };
 
-  const onKeyDown = (e) => {
+  const onKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submit();

@@ -15,11 +15,11 @@ vi.mock("@entities/flowrun", () => ({
 }));
 
 vi.mock("@/widgets/entity-rel-meta/EntityRelMeta.tsx", () => ({
-  EntityRelMeta: () => null,
+  EntityRelMeta: (): null => null,
 }));
 
 vi.mock("@entities/relation", () => ({
-  useNeighborhood: () => ({ data: [] }),
+  useNeighborhood: () => ({ data: [] as any[] }),
 }));
 
 import {

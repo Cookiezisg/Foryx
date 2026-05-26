@@ -16,7 +16,7 @@ import { useRunWorkflow } from "@entities/workflow";
 import { useToastStore } from "@shared/ui/toastStore";
 import { slideRight, scrim } from "@shared/lib/motion";
 
-function safeParse(text) {
+function safeParse(text: string) {
   const t = text.trim();
   if (!t) return [{}, null];
   try { return [JSON.parse(t), null]; }
@@ -57,7 +57,7 @@ export function RunDrawer({ open, onClose, kind, entity, onOpenExecute }: RunDra
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
@@ -75,7 +75,7 @@ export function RunDrawer({ open, onClose, kind, entity, onOpenExecute }: RunDra
         res = await call.mutateAsync({ id: entity.id, method, args: parsed });
       } else if (kind === "workflow") {
         res = await trig.mutateAsync({ id: entity.id, input: parsed });
-        const runId = res?.flowRunId || res?.id || res?.runId;
+        const runId = (res as any)?.flowRunId || (res as any)?.id || (res as any)?.runId;
         pushToast({ kind: "success", title: t("runDrawer.toast.triggerSuccess"), desc: runId || t("runDrawer.toast.triggerDefaultDesc") });
         if (runId) {
           onOpenExecute?.(runId);
@@ -130,7 +130,7 @@ export function RunDrawer({ open, onClose, kind, entity, onOpenExecute }: RunDra
                       ariaLabel={t("runDrawer.methodAriaLabel")}
                       value={method}
                       onChange={setMethod}
-                      options={methods.map((m) => ({
+                      options={methods.map((m: any) => ({
                         value: m.name,
                         label: m.name + (m.sig || m.signature ? " " + (m.sig || m.signature) : ""),
                       }))}

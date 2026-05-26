@@ -18,7 +18,7 @@ import { ProviderGrid } from "./ProviderGrid.tsx";
 import { KeyVerifyField } from "./KeyVerifyField.tsx";
 import { ModelSelect } from "./ModelSelect.tsx";
 
-export function ApiKeysSection({ open, onToggle }) {
+export function ApiKeysSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { t } = useTranslation("settings");
   const { data: providers = [] } = useProviders();
   const { data: allKeys = [] } = useApiKeys();
@@ -31,7 +31,7 @@ export function ApiKeysSection({ open, onToggle }) {
   const keys = allKeys.filter((k) => llmNames.has(k.provider));
   const chatConfig = modelConfigs.find((m) => m.scenario === "chat");
 
-  const providerDisplay = (n) => providers.find((p) => p.name === n)?.displayName || n;
+  const providerDisplay = (n: string) => providers.find((p: any) => p.name === n)?.displayName || n;
   const sub = keys.length
     ? t("apiKeys.subWithDefault", { count: keys.length, provider: chatConfig ? providerDisplay(chatConfig.provider) : t("apiKeys.subNotSet") })
     : t("apiKeys.subEmpty");
@@ -60,12 +60,12 @@ export function ApiKeysSection({ open, onToggle }) {
   );
 }
 
-function KeyList({ keys, providers, chatConfig, providerDisplay }) {
+function KeyList({ keys, providers, chatConfig, providerDisplay }: { keys: any[]; providers: any[]; chatConfig: any; providerDisplay: (n: string) => string }) {
   const { t } = useTranslation("settings");
   const [openKey, setOpenKey] = useState(null);
   const [adding, setAdding] = useState(false);
 
-  const toggleKey = (id) => setOpenKey((p) => (p === id ? null : id));
+  const toggleKey = (id: string) => setOpenKey((p: any) => (p === id ? null : id));
 
   return (
     <>
@@ -73,7 +73,7 @@ function KeyList({ keys, providers, chatConfig, providerDisplay }) {
         <div className="set-sec-empty">{t("apiKeys.emptyList")}</div>
       )}
       <div className="set-klist">
-        {keys.map((key) => (
+        {keys.map((key: any) => (
           <KeyItem
             key={key.id}
             apiKey={key}
@@ -103,7 +103,7 @@ function KeyList({ keys, providers, chatConfig, providerDisplay }) {
   );
 }
 
-function KeyItem({ apiKey, isDefault, chatConfig, displayName, open, onToggle }) {
+function KeyItem({ apiKey, isDefault, chatConfig, displayName, open, onToggle }: { apiKey: any; isDefault: boolean; chatConfig: any; displayName: string; open: boolean; onToggle: () => void }) {
   const { t } = useTranslation("settings");
   const pushToast = useToastStore((s) => s.pushToast);
   const testKey = useTestApiKey();
@@ -113,10 +113,10 @@ function KeyItem({ apiKey, isDefault, chatConfig, displayName, open, onToggle })
   const models = apiKey.modelsFound || [];
   const [localModel, setLocalModel] = useState(models[0] || "");
   const verified = apiKey.testStatus === "ok";
-  const hint = LLM_HINTS[apiKey.provider] || { abbr: apiKey.provider.slice(0, 2).toUpperCase(), color: "#6b6459" };
+  const hint = (LLM_HINTS as Record<string, { abbr: string; color: string }>)[apiKey.provider] || { abbr: apiKey.provider.slice(0, 2).toUpperCase(), color: "#6b6459" };
 
   const modelValue = isDefault ? chatConfig?.modelId || "" : localModel;
-  const onModelChange = (v) => {
+  const onModelChange = (v: string) => {
     if (isDefault) {
       upsertModel.mutate({ scenario: "chat", provider: apiKey.provider, modelId: v });
     } else {
@@ -204,7 +204,7 @@ function KeyItem({ apiKey, isDefault, chatConfig, displayName, open, onToggle })
 // Switching provider or cancelling best-effort deletes the orphan created key.
 //
 // AddPanel —— 内联引导页验证流;切换厂商/取消时尽力删除已创建的孤儿 key。
-function AddPanel({ providers, configured, hasChatDefault, providerDisplay, onDone }) {
+function AddPanel({ providers, configured, hasChatDefault, providerDisplay, onDone }: { providers: any[]; configured: string[]; hasChatDefault: boolean; providerDisplay: (n: string) => string; onDone: () => void }) {
   const { t } = useTranslation("settings");
   const pushToast = useToastStore((s) => s.pushToast);
   const createKey = useCreateApiKey();
@@ -226,14 +226,14 @@ function AddPanel({ providers, configured, hasChatDefault, providerDisplay, onDo
   const isOllama = provider === "ollama";
   const display = providerDisplay(provider);
 
-  const pickProvider = (n) => {
+  const pickProvider = (n: string) => {
     if (createdKeyId) deleteKey.mutate(createdKeyId);
     setProvider(n);
     setApiKey(""); setCreatedKeyId(null); setCreatedKeyText("");
     setVerified(false); setModels([]); setModelId(""); setVerifyError("");
   };
 
-  const onKeyChange = (v) => {
+  const onKeyChange = (v: string) => {
     setApiKey(v);
     setVerifyError("");
     if (verified) { setVerified(false); setModels([]); setModelId(""); }
@@ -256,7 +256,8 @@ function AddPanel({ providers, configured, hasChatDefault, providerDisplay, onDo
       }
       const res = await testKey.mutateAsync(keyId);
       const found = res?.modelsFound || [];
-      const opts = found.length ? found : (PROVIDER_DEFAULT_MODEL[provider] ? [PROVIDER_DEFAULT_MODEL[provider]] : []);
+      const pdm = PROVIDER_DEFAULT_MODEL as Record<string, string>;
+      const opts = found.length ? found : (pdm[provider] ? [pdm[provider]] : []);
       setModels(opts);
       setModelId(opts[0] || "");
       setVerified(true);

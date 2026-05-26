@@ -16,15 +16,15 @@ import { AppearanceSection } from "./AppearanceSection.tsx";
 import { SystemSection } from "./SystemSection.tsx";
 import { useAccountManager } from "@features/settings";
 
-export function SettingsModal({ open, onClose }) {
+export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t } = useTranslation("settings");
   const [openSection, setOpenSection] = useState("keys");
 
-  const toggle = (key) => setOpenSection((p) => (p === key ? null : key));
+  const toggle = (key: string) => setOpenSection((p) => (p === key ? null : key));
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
@@ -90,7 +90,7 @@ function AccountRegion() {
 
   const active = users.find((u) => u.id === currentUserId) || users[0];
 
-  const switchTo = (id) => {
+  const switchTo = (id: string) => {
     switchToAccount(id);
     setMode("view");
   };

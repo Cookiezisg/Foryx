@@ -95,7 +95,7 @@ export function MemoryPage() {
   );
 }
 
-function MemoryDrawer({ memory, onClose }) {
+function MemoryDrawer({ memory, onClose }: { memory: any; onClose: () => void }) {
   const { t } = useTranslation(["library", "common"]);
   const [body, setBody] = useState(memory.body || "");
   const [description, setDescription] = useState(memory.description || "");

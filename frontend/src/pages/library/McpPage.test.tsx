@@ -11,7 +11,7 @@ vi.mock("@entities/mcp", () => ({
 }));
 
 vi.mock("../../shared/ui/RelTime.tsx", () => ({
-  RelTime: ({ ts }) => <span data-testid="reltime">{ts}</span>,
+  RelTime: ({ ts }: { ts: any }) => <span data-testid="reltime">{ts}</span>,
 }));
 
 import { useMcpServers, useReconnectMcp, useRemoveMcp } from "@entities/mcp";
@@ -28,7 +28,7 @@ const SERVERS = [
   { name: "linear",  status: "failed",     tools: [],       totalCalls: 0,  totalFailures: 1, consecutiveFailures: 1 },
 ];
 
-let reconnectMutate, removeMutate;
+let reconnectMutate: any, removeMutate: any;
 
 beforeEach(() => {
   reconnectMutate = vi.fn((_id, opts) => opts?.onSuccess?.());

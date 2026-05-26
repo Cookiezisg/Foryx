@@ -28,7 +28,7 @@ beforeEach(() => {
   useToastStore.setState({ toasts: [] });
 });
 
-function renderItem(conv, extraProps = {}) {
+function renderItem(conv: any, extraProps = {}) {
   const pane = usePaneStore.getState();
   return render(<ChatListItem
     conv={conv}

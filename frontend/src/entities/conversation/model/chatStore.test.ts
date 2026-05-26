@@ -73,8 +73,8 @@ describe("hydrateConv — hydrate-once guard", () => {
   });
 
   it("hydrateConv_secondCallSameConv_isNoop", () => {
-    const seed1 = [{ id: "msg_1", role: "user" as const, createdAt: "2024-01-01T00:00:00Z", blocks: [] }];
-    const seed2 = [{ id: "msg_2", role: "user" as const, createdAt: "2024-01-01T00:00:00Z", blocks: [] }];
+    const seed1 = [{ id: "msg_1", role: "user" as const, createdAt: "2024-01-01T00:00:00Z", blocks: [] as any[] }];
+    const seed2 = [{ id: "msg_2", role: "user" as const, createdAt: "2024-01-01T00:00:00Z", blocks: [] as any[] }];
     useChatStore.getState().hydrateConv(CV, seed1);
     useChatStore.getState().hydrateConv(CV, seed2);
     const c = useChatStore.getState().convs[CV];

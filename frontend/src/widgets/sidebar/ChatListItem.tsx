@@ -50,7 +50,7 @@ export function ChatListItem({ conv, openPanes, activeConv, onSetActiveConv, onO
   );
 }
 
-function ConvMenu({ conv, activeConv, onSetActiveConv }) {
+function ConvMenu({ conv, activeConv, onSetActiveConv }: { conv: any; activeConv: any; onSetActiveConv: (id: string | null) => void }) {
   const { t } = useTranslation("sidebar");
   const update = useUpdateConversation(conv.id);
   const del = useDeleteConversation();

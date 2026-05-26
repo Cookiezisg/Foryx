@@ -14,7 +14,7 @@ import "@/styles/base.css";
 import "@/styles/components.css";
 import "@/styles/panes.css";
 
-function handleQueryError(error, mutation) {
+function handleQueryError(error: unknown, mutation?: { options?: { meta?: { suppressGlobal?: boolean } } }) {
   // suppressGlobal — mutation opted out (e.g. cancel stream uses warn via feature).
   //
   // 跳过已声明 suppressGlobal 的 mutation（如取消流用 feature 的 warn 处理）。

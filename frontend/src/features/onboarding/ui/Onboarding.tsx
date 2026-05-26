@@ -130,7 +130,7 @@ export function Onboarding({ onFinish }: { onFinish?: any }) {
   );
 }
 
-function Welcome({ t }) {
+function Welcome({ t }: { t: (key: string, opts?: any) => any }) {
   const icons = [Icon.MessageSquare, Icon.Wrench, Icon.Server];
   return (
     <>
@@ -138,7 +138,7 @@ function Welcome({ t }) {
       <div className="onb-title">{t("welcome.title")}</div>
       <div className="onb-sub">{t("welcome.sub")}</div>
       <div className="onb-features">
-        {t("welcome.features", { returnObjects: true }).map(([title, desc], i) => {
+        {(t("welcome.features", { returnObjects: true }) as [string, string][]).map(([title, desc], i: number) => {
           const I = icons[i];
           return (
             <div className="onb-feature" key={i}>
@@ -152,7 +152,7 @@ function Welcome({ t }) {
   );
 }
 
-function Workspace({ t, name, setName, accent }) {
+function Workspace({ t, name, setName, accent }: { t: any; name: string; setName: (v: string) => void; accent: string }) {
   const color = ACCENTS.find(([k]) => k === accent)?.[1] || "#d97757";
   return (
     <>
@@ -171,7 +171,7 @@ function Workspace({ t, name, setName, accent }) {
   );
 }
 
-function Appearance({ t, settings }) {
+function Appearance({ t, settings }: { t: any; settings: any }) {
   return (
     <>
       <div className="onb-kicker">{t("appearance.kicker")}</div>
@@ -208,7 +208,7 @@ function Appearance({ t, settings }) {
   );
 }
 
-function Model({ t, providers, provider, pickProvider, apiKey, onKeyChange, verify, verifying, verified, verifyError, models, modelId, setModelId }) {
+function Model({ t, providers, provider, pickProvider, apiKey, onKeyChange, verify, verifying, verified, verifyError, models, modelId, setModelId }: { t: any; providers: any[]; provider: string; pickProvider: (p: string) => void; apiKey: string; onKeyChange: (v: string) => void; verify: () => void; verifying: boolean; verified: boolean; verifyError: string; models: string[]; modelId: string; setModelId: (v: string) => void }) {
   const isOllama = provider === "ollama";
   const display = providers.find((p) => p.name === provider)?.displayName || provider;
   return (
@@ -252,7 +252,7 @@ function Model({ t, providers, provider, pickProvider, apiKey, onKeyChange, veri
   );
 }
 
-function Search({ t, providers, provider, setProvider, apiKey, setApiKey }) {
+function Search({ t, providers, provider, setProvider, apiKey, setApiKey }: { t: any; providers: any[]; provider: string; setProvider: (p: string) => void; apiKey: string; setApiKey: (v: string) => void }) {
   const display = providers.find((p) => p.name === provider)?.displayName || provider;
   return (
     <>
@@ -276,7 +276,7 @@ function Search({ t, providers, provider, setProvider, apiKey, setApiKey }) {
   );
 }
 
-function Done({ t, name, accent, provider, search }) {
+function Done({ t, name, accent, provider, search }: { t: any; name: string; accent: string; provider: string; search: any }) {
   const color = ACCENTS.find(([k]) => k === accent)?.[1] || "#d97757";
   return (
     <>

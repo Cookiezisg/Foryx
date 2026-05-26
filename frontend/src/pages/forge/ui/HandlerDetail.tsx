@@ -112,7 +112,7 @@ export function HandlerDetail({ forge, onBack }: HandlerDetailProps) {
   );
 }
 
-function HandlerFullView({ v, hd }) {
+function HandlerFullView({ v, hd }: { v: any; hd: any }) {
   const { t } = useTranslation("forge");
   const [tab, setTab] = useState("class");
   const { data: config } = useHandlerConfig(hd.id);
@@ -121,7 +121,7 @@ function HandlerFullView({ v, hd }) {
   if (!v) return null;
   const methods = v.methods || [];
   const [selectedMethod, setSelectedMethod] = useState(methods[0]);
-  const method = methods.find((m) => m.name === selectedMethod?.name) || methods[0];
+  const method = methods.find((m: any) => m.name === selectedMethod?.name) || methods[0];
 
   return (
     <>
@@ -147,7 +147,7 @@ function HandlerFullView({ v, hd }) {
               {methods.length === 0 && (
                 <div style={{ padding: 16, fontSize: 12, color: "var(--fg-faint)" }}>{t("handler.noMethods")}</div>
               )}
-              {methods.map((m) => (
+              {methods.map((m: any) => (
                 <button
                   key={m.name}
                   className={"hd-method" + (method?.name === m.name ? " is-active" : "")}
@@ -211,7 +211,7 @@ function HandlerFullView({ v, hd }) {
   );
 }
 
-function HandlerDiffView({ currentV, otherV, pendingV }) {
+function HandlerDiffView({ currentV, otherV, pendingV }: { currentV: any; otherV: any; pendingV: any }) {
   const { t } = useTranslation("forge");
   if (!currentV || !otherV) return <div className="empty"><div className="sub">{t("handler.noVersionForDiff")}</div></div>;
   const isPending = otherV.id === pendingV?.id;

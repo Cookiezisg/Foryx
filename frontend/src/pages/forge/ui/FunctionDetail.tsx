@@ -110,7 +110,7 @@ export function FunctionDetail({ forge, onBack }: FunctionDetailProps) {
   );
 }
 
-function FieldRow({ label, value }) {
+function FieldRow({ label, value }: { label: any; value: any }) {
   return (
     <div className="fn-field-row">
       <div className="fn-field-label">{label}</div>
@@ -119,7 +119,7 @@ function FieldRow({ label, value }) {
   );
 }
 
-function FunctionFullView({ v, fn }) {
+function FunctionFullView({ v, fn }: { v: any; fn: any }) {
   const { t } = useTranslation("forge");
   if (!v) return <div className="empty" style={{ padding: 32 }}><div className="sub">{t("function.noVersion")}</div></div>;
   return (
@@ -158,7 +158,7 @@ function FunctionFullView({ v, fn }) {
   );
 }
 
-function FunctionDiffView({ currentV, otherV, pendingV }) {
+function FunctionDiffView({ currentV, otherV, pendingV }: { currentV: any; otherV: any; pendingV: any }) {
   const { t } = useTranslation("forge");
   const isPending = otherV?.id === pendingV?.id;
   const descChanged = (currentV?.description || "") !== (otherV?.description || "");

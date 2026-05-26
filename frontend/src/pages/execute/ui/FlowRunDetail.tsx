@@ -29,13 +29,13 @@ const STATUS_KIND = {
   cancelled: "muted",
 };
 
-function StatusBadge({ status }) {
+function StatusBadge({ status }: { status: any }) {
   const { t } = useTranslation("execute");
   const label = t(`status.${status === "waiting_approval" ? "waitingApproval" : status}`, status);
-  return <Badge kind={STATUS_KIND[status] || "muted"}>{label as any}</Badge>;
+  return <Badge kind={(STATUS_KIND as Record<string, string>)[status] as any || "muted"}>{label as any}</Badge>;
 }
 
-function fmtDuration(ms) {
+function fmtDuration(ms: any) {
   if (ms == null) return "—";
   if (ms < 1000) return ms + "ms";
   if (ms < 60_000) return (ms / 1000).toFixed(1) + "s";
@@ -141,7 +141,7 @@ export function FlowRunDetail({ runId, onBack, onOpenChat }: FlowRunDetailProps)
   );
 }
 
-function nodeStatusIcon(status) {
+function nodeStatusIcon(status: any) {
   if (status === "ok" || status === "completed") return <Icon.Check style={{ width: 12, height: 12, color: "var(--status-success)" }} />;
   if (status === "fail" || status === "failed") return <Icon.X style={{ width: 12, height: 12, color: "var(--status-error)" }} />;
   if (status === "running") return <span className="spinner" style={{ width: 12, height: 12, borderColor: "color-mix(in srgb, var(--accent) 30%, transparent)", borderTopColor: "var(--accent)" }} />;
@@ -149,19 +149,19 @@ function nodeStatusIcon(status) {
   return <span style={{ width: 8, height: 8, borderRadius: "50%", border: "1.5px dashed var(--fg-faint)" }} />;
 }
 
-function FlowRunDag({ nodes, selected, onSelect }) {
+function FlowRunDag({ nodes, selected, onSelect }: { nodes: any[]; selected: any; onSelect: (id: string) => void }) {
   const { t } = useTranslation("execute");
   if (!nodes || nodes.length === 0) {
     return <div className="empty" style={{ padding: 32, flex: 1 }}><div className="sub">{t("detail.dag.empty")}</div></div>;
   }
   // Lay out nodes by their layer (if absent, simple stack).
-  const positioned = nodes.map((n, i) => ({
+  const positioned = nodes.map((n: any, i: number) => ({
     ...n,
     x: typeof n.x === "number" ? n.x : 220 * (i % 4),
     y: typeof n.y === "number" ? n.y : 100 * Math.floor(i / 4),
   }));
-  const byId = Object.fromEntries(positioned.map((n) => [n.id, n]));
-  const edges = nodes.flatMap((n) => (n.dependsOn || n.parents || []).map((from) => ({ from, to: n.id })));
+  const byId: Record<string, any> = Object.fromEntries(positioned.map((n: any) => [n.id, n]));
+  const edges = nodes.flatMap((n: any) => (n.dependsOn || n.parents || []).map((from: any) => ({ from, to: n.id })));
 
   return (
     <div className="fr-dag">
@@ -171,7 +171,7 @@ function FlowRunDag({ nodes, selected, onSelect }) {
             <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
           </marker>
         </defs>
-        {edges.map((e, i) => {
+        {edges.map((e: any, i: number) => {
           const a = byId[e.from], b = byId[e.to];
           if (!a || !b) return null;
           const sx = a.x + 92, sy = a.y + 60;
@@ -181,7 +181,7 @@ function FlowRunDag({ nodes, selected, onSelect }) {
           return <path key={i} d={d} fill="none" stroke="var(--border-strong)" strokeWidth="1.4" markerEnd="url(#fr-arr)" />;
         })}
       </svg>
-      {positioned.map((n) => (
+      {positioned.map((n: any) => (
         <div
           key={n.id}
           className={"fr-dag-node fr-status-" + (n.status || "pending") + (selected === n.id ? " is-selected" : "")}
@@ -203,7 +203,7 @@ function FlowRunDag({ nodes, selected, onSelect }) {
   );
 }
 
-function NodeInspectorBody({ node, fr }) {
+function NodeInspectorBody({ node, fr }: { node: any; fr: any }) {
   const { t } = useTranslation("execute");
   return (
     <div className="fr-inspector-content">
@@ -230,7 +230,7 @@ function NodeInspectorBody({ node, fr }) {
           <div className="fr-section">
             <div className="fr-section-label">Log</div>
             <div className="fr-log">
-              {node.log.map((l, i) => (
+              {node.log.map((l: any, i: number) => (
                 <div key={i} className={"fr-log-row level-" + (l.level || "info")}>
                   <span className="fr-log-time">{l.time}</span>
                   <span className="fr-log-level">{l.level || "info"}</span>
@@ -250,11 +250,11 @@ function NodeInspectorBody({ node, fr }) {
   );
 }
 
-function prettyJSON(v) {
+function prettyJSON(v: any) {
   try { return JSON.stringify(v, null, 2); } catch { return String(v); }
 }
 
-function GanttTimeline({ nodes }) {
+function GanttTimeline({ nodes }: { nodes: any[] }) {
   const { t } = useTranslation("execute");
   if (!nodes || nodes.length === 0) return null;
   const total = Math.max(...nodes.map((n) => (n.startedMs ?? 0) + (n.durationMs ?? 0)), 1);
@@ -267,7 +267,7 @@ function GanttTimeline({ nodes }) {
         </span>
       </div>
       <div className="fr-gantt-body">
-        {nodes.map((n) => {
+        {nodes.map((n: any) => {
           const start = n.startedMs ?? 0;
           const dur = n.durationMs ?? 0;
           const left = (start / total * 100).toFixed(1) + "%";

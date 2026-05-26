@@ -4,7 +4,7 @@
 //
 // NotificationsDrawer —— 右滑抽屉；待办（Help/Ask）+ 通知两 tab。
 
-import { useState } from "react";
+import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { AnimatePresence, motion } from "framer-motion";
 import { Icon } from "@shared/ui/Icon";
@@ -43,7 +43,7 @@ const TYPE_TO_ICON = {
   compaction: Icon.Archive,
 };
 
-function TodoTab({ pendingAsk, setPendingAsk, pushToast }) {
+function TodoTab({ pendingAsk, setPendingAsk, pushToast }: { pendingAsk: any; setPendingAsk: (v: any) => void; pushToast: (t: any) => void }) {
   const { t } = useTranslation("misc");
   const [selected, setSelected] = useState(null);
   const [submitting, setSubmitting] = useState(false);
@@ -92,7 +92,7 @@ function TodoTab({ pendingAsk, setPendingAsk, pushToast }) {
               {t("notificationsDrawer.askNoOptions")}
             </div>
           )}
-          {options.map((o, i) => (
+          {options.map((o: any, i: number) => (
             <div
               key={o.id || i}
               className={"ask-option" + (selected === (o.id || o.value) ? " is-selected" : "")}
@@ -117,7 +117,7 @@ function TodoTab({ pendingAsk, setPendingAsk, pushToast }) {
   );
 }
 
-function NotifsTab({ snapshot, onClick }) {
+function NotifsTab({ snapshot, onClick }: { snapshot: any[]; onClick: (n: any) => void }) {
   const { t } = useTranslation("misc");
   if (snapshot.length === 0) {
     return (
@@ -128,8 +128,8 @@ function NotifsTab({ snapshot, onClick }) {
   }
   return (
     <>
-      {snapshot.map((n) => {
-        const I = TYPE_TO_ICON[n.type] || Icon.Bell;
+      {snapshot.map((n: any) => {
+        const I = (TYPE_TO_ICON as Record<string, React.ComponentType<any>>)[n.type] || Icon.Bell;
         return (
           <div key={n.seq} className="notif" onClick={() => onClick(n)}>
             <div className="icon-wrap"><I /></div>
@@ -176,8 +176,8 @@ export function NotificationsDrawer({ open, onClose, onOpenPane, onOpenEntity, o
 
   const [tab, setTab] = useState(pendingAsk ? "todo" : "notifs");
 
-  const handleNotifClick = (n) => {
-    const pane = TYPE_TO_PANE[n.type];
+  const handleNotifClick = (n: any) => {
+    const pane = (TYPE_TO_PANE as Record<string, string>)[n.type];
     if (!pane) return;
     if (n.type === "conversation" && n.id) {
       onSetActiveConv(n.id);

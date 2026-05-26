@@ -6,9 +6,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MockEventSource } from "../../test-setup.js";
 import { useSessionStore } from "@entities/session";
 import { setUserIdProvider } from "@shared/api/authProvider";
+import React from "react";
 import { SSEProvider, useSSEHealth } from "./SSEProvider.tsx";
 
-function wrap(children) {
+function wrap(children: React.ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return (
     <QueryClientProvider client={client}>

@@ -12,7 +12,7 @@ vi.mock("../entity-link/EntityLink.tsx", () => ({
 }));
 
 vi.mock("../rel-graph/RelGraph.tsx", () => ({
-  RelMore: () => null,
+  RelMore: (): null => null,
 }));
 
 import { useEntityNeighborhood } from "@features/entity-link";

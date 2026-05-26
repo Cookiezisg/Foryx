@@ -42,7 +42,7 @@ export function ApprovalBanner({ runId, nodes }: ApprovalBannerProps) {
   );
 }
 
-function ApprovalRow({ runId, node }) {
+function ApprovalRow({ runId, node }: { runId: string; node: any }) {
   const { t } = useTranslation("execute");
   const approve = useApproveNode();
   const reject = useRejectNode();

@@ -34,7 +34,7 @@ const LABEL = {
   ini: "INI", makefile: "Makefile", plaintext: "Plain text",
   less: "Less", r: "R",
 };
-function label(id) { return id === "" ? "Auto" : (LABEL[id] || id); }
+function label(id: string) { return id === "" ? "Auto" : ((LABEL as Record<string, string>)[id] || id); }
 
 interface CodeBlockNodeProps {
   node: any;
@@ -58,7 +58,7 @@ export function CodeBlockNode({ node, updateAttributes }: CodeBlockNodeProps) {
   );
 }
 
-function LangPicker({ current, onChange }) {
+function LangPicker({ current, onChange }: { current: string; onChange: (id: string) => void }) {
   const { t } = useTranslation("library");
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -87,7 +87,7 @@ function LangPicker({ current, onChange }) {
   useEffect(() => setIdx(0), [query]);
   useEffect(() => { if (!open) setQuery(""); }, [open]);
 
-  const pick = (id) => { onChange(id); setOpen(false); };
+  const pick = (id: string) => { onChange(id); setOpen(false); };
 
   return (
     <>

@@ -9,14 +9,14 @@
 // 7 个 block type 的递归渲染；从 chat store 按 id 拿 block，单 block 改动
 // 不连累兄弟组件。
 
-import { memo, useState } from "react";
+import React, { memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useChatStore, selectBlock, selectChildIds } from "@entities/conversation";
 import { Icon } from "@shared/ui/Icon";
 import { EntityLink } from "../../../widgets/entity-link/EntityLink.tsx";
 import { MarkdownView } from "../../../shared/ui/MarkdownView.tsx";
 
-function fmtDuration(ms) {
+function fmtDuration(ms: any) {
   if (ms == null) return "";
   if (ms < 1000) return `${ms}ms`;
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
@@ -43,14 +43,14 @@ const TOOL_ICON = {
   Subagent: Icon.Bot,
   AskUserQuestion: Icon.HelpCircle,
 };
-function toolIcon(name) { return TOOL_ICON[name] || Icon.Wrench; }
+function toolIcon(name: string) { return (TOOL_ICON as Record<string, React.ComponentType<any>>)[name] || Icon.Wrench; }
 
 // ── inline renderer for text content ─────────────────────────────────
 const ENTITY_RE = /\b(?:fn|hd|wf|sk|mcp|mem|cv|fr|doc)_[a-z0-9]{2,32}\b/g;
 const INLINE_RE = /(\b(?:fn|hd|wf|sk|mcp|mem|cv|fr|doc)_[a-z0-9]{2,32}\b|\*\*[^*]+\*\*|`[^`]+`)/g;
 
-function renderInline(s) {
-  const out = [];
+function renderInline(s: string) {
+  const out: React.ReactNode[] = [];
   let last = 0;
   let m;
   while ((m = INLINE_RE.exec(s)) !== null) {
@@ -75,14 +75,14 @@ function renderInline(s) {
   return out;
 }
 
-function renderTextLines(text) {
+function renderTextLines(text: string) {
   const lines = text.split("\n");
-  const out = [];
-  let bullets = null;
+  const out: React.ReactNode[] = [];
+  let bullets: React.ReactNode[] | null = null;
   const flush = () => {
     if (bullets) { out.push(<ul key={`u${out.length}`}>{bullets}</ul>); bullets = null; }
   };
-  lines.forEach((line, i) => {
+  lines.forEach((line: string, i: number) => {
     const trimmed = line.replace(/^\s+/, "");
     if (trimmed.startsWith("- ")) {
       bullets = bullets || [];
@@ -167,7 +167,7 @@ const ToolCallBlock = memo(function ToolCallBlock({ convId, blockId, defaultOpen
     open && "is-open",
   ].filter(Boolean).join(" ");
 
-  const copyArgs = (e) => {
+  const copyArgs = (e: React.MouseEvent) => {
     e.stopPropagation();
     navigator.clipboard?.writeText(block.content || "").catch(() => {});
   };

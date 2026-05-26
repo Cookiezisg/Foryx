@@ -12,12 +12,12 @@ import { setNavigator } from "@shared/lib/navigation";
 import { useToastStore } from "../../shared/ui/toastStore.ts";
 import { AskAiTrigger } from "./AskAiTrigger.tsx";
 
-function wrap({ children }) {
+function wrap({ children }: { children: any }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return createElement(QueryClientProvider, { client }, children);
 }
 
-let calls;
+let calls: any;
 beforeEach(async () => {
   calls = setupFetchSpy();
   usePaneStore.setState({ openPanes: ["forge"], activeConv: null });

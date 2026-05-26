@@ -7,10 +7,10 @@ import { apiFetch } from "@shared/api/httpClient";
 const createMutateAsync = vi.fn().mockResolvedValue({ id: "cv_n" });
 
 vi.mock("@entities/flowrun", () => ({
-  useFlowRuns: () => ({ data: [] }),
+  useFlowRuns: () => ({ data: [] as any[] }),
 }));
 vi.mock("@entities/conversation", () => ({
-  useConversations:       () => ({ data: [] }),
+  useConversations:       () => ({ data: [] as any[] }),
   useCreateConversation:  () => ({ mutateAsync: createMutateAsync }),
 }));
 vi.mock("@shared/api/httpClient", () => ({

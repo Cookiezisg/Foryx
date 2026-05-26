@@ -39,7 +39,7 @@ function makeProps(overrides = {}) {
   };
 }
 
-function wrap({ children }) {
+function wrap({ children }: { children: any }) {
   const client = new QueryClient();
   return createElement(QueryClientProvider, { client }, children);
 }

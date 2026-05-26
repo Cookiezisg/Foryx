@@ -25,7 +25,7 @@ export function RelTime({ ts, prefix = "" }: RelTimeProps) {
 
   const locale = i18n.language === "zh" ? "zh-CN" : "en-US";
 
-  function format(date) {
+  function format(date: Date) {
     const diff = (Date.now() - date.getTime()) / 1000;
     if (diff < 5) return t("relTime.justNow");
     if (diff < 60) return t("relTime.secondsAgo", { n: Math.floor(diff) });
@@ -35,7 +35,7 @@ export function RelTime({ ts, prefix = "" }: RelTimeProps) {
     return date.toLocaleDateString(locale, { month: "short", day: "numeric" });
   }
 
-  function absolute(date) {
+  function absolute(date: Date) {
     return date.toLocaleString(locale, {
       year: "numeric", month: "2-digit", day: "2-digit",
       hour: "2-digit", minute: "2-digit", second: "2-digit",

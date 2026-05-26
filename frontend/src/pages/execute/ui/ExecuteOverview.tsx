@@ -21,13 +21,13 @@ const STATUS_KIND = {
   cancelled: "muted",
 };
 
-function FlowStatusBadge({ status }) {
+function FlowStatusBadge({ status }: { status: any }) {
   const { t } = useTranslation("execute");
-  const k = STATUS_KIND[status] || "muted";
+  const k = (STATUS_KIND as Record<string, string>)[status] || "muted";
   const label = t(`status.${
     status === "waiting_approval" ? "waitingApproval" : status
   }`, status);
-  return <Badge kind={k}>{label as any}</Badge>;
+  return <Badge kind={k as any}>{label as any}</Badge>;
 }
 
 interface ExecuteOverviewProps {
@@ -153,7 +153,7 @@ function Kpi({ label, value, sub, active, warn, error }: any) {
   );
 }
 
-function ProgressMini({ done, total, status }) {
+function ProgressMini({ done, total, status }: { done: any; total: any; status: any }) {
   const t = total || 1;
   const pct = Math.round((done / t) * 100);
   const color = status === "failed" ? "var(--status-error)"
@@ -170,14 +170,14 @@ function ProgressMini({ done, total, status }) {
   );
 }
 
-function fmtDuration(ms) {
+function fmtDuration(ms: any) {
   if (ms == null) return "—";
   if (ms < 1000) return ms + "ms";
   if (ms < 60_000) return (ms / 1000).toFixed(1) + "s";
   return Math.round(ms / 1000) + "s";
 }
 
-function FlowRunsTable({ runs, loading, onOpen }) {
+function FlowRunsTable({ runs, loading, onOpen }: { runs: any[]; loading: boolean; onOpen: (fr: any) => void }) {
   const { t } = useTranslation("execute");
   if (loading) return <div className="empty" style={{ padding: 32 }}><div className="sub">{t("overview.runs.loading")}</div></div>;
   if (runs.length === 0) {
@@ -203,7 +203,7 @@ function FlowRunsTable({ runs, loading, onOpen }) {
         </tr>
       </thead>
       <tbody>
-        {runs.map((fr) => (
+        {runs.map((fr: any) => (
           <tr key={fr.id} onClick={() => onOpen(fr)}>
             <td style={{ paddingLeft: 32 }}>
               <div>
@@ -226,7 +226,7 @@ function FlowRunsTable({ runs, loading, onOpen }) {
   );
 }
 
-function ApprovalsQueue({ runs }) {
+function ApprovalsQueue({ runs }: { runs: any[] }) {
   const { t } = useTranslation("execute");
   const pushToast = useToastStore((s) => s.pushToast);
   const approve = useApproveNode();
@@ -243,7 +243,7 @@ function ApprovalsQueue({ runs }) {
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: 8 }}>
-      {runs.map((fr) => (
+      {runs.map((fr: any) => (
         <div
           key={fr.id}
           className="card"

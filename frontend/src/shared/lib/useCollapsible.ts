@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState } from "react";
 
 const PREFIX = "forgify-collapse-";
 
-export function useCollapsible(key, defaultOpen = true) {
+export function useCollapsible(key: string, defaultOpen = true) {
   const storageKey = PREFIX + key;
   const [open, setOpen] = useState(() => {
     try {

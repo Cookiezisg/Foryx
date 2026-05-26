@@ -11,8 +11,8 @@ export interface SessionState {
 export const useSessionStore = create<SessionState>()(
   persist(
     (set) => ({
-      currentUserId: null,
-      status: "loading",
+      currentUserId: null as string | null,
+      status: "loading" as SessionState["status"],
       setCurrentUser: (id) => set({ currentUserId: id }),
       setStatus: (status) => set({ status }),
     }),

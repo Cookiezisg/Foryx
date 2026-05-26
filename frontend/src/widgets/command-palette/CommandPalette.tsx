@@ -129,7 +129,7 @@ export function CommandPalette({ open, onClose, onOpenPane, onOpenEntity, onSetA
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") { onClose(); return; }
       if (e.key === "ArrowDown") { e.preventDefault(); setActive((a) => Math.min(a + 1, filtered.length - 1)); }
       if (e.key === "ArrowUp")   { e.preventDefault(); setActive((a) => Math.max(a - 1, 0)); }
@@ -169,7 +169,7 @@ export function CommandPalette({ open, onClose, onOpenPane, onOpenEntity, onSetA
               {groups.map(([gname, gitems]) => (
                 <div key={gname}>
                   <div className="cmdk-group-label">{gname}</div>
-                  {gitems.map((it) => {
+                  {gitems.map((it: any) => {
                     const idx = cursor++;
                     const IconC = it.icon || Icon.ChevronRight;
                     return (

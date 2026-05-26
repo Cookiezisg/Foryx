@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 
 vi.mock("./ui/ExecuteOverview.tsx", () => ({
-  ExecuteOverview: ({ onOpen }) => (
+  ExecuteOverview: ({ onOpen }: { onOpen: any }) => (
     <div data-testid="overview">
       <button onClick={() => onOpen({ id: "fr_clicked" })}>open run</button>
     </div>
@@ -17,7 +17,7 @@ vi.mock("@entities/flowrun", () => ({
 }));
 
 vi.mock("./ui/FlowRunDetail.tsx", () => ({
-  FlowRunDetail: ({ runId, onBack }) => (
+  FlowRunDetail: ({ runId, onBack }: { runId: any; onBack: any }) => (
     <div data-testid="detail">
       <span>detail-{runId}</span>
       <button onClick={onBack}>back</button>

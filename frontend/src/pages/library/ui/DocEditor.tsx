@@ -37,21 +37,21 @@ import "tippy.js/dist/tippy.css";
 import { Icon } from "@shared/ui/Icon";
 
 // ── Slash command vocabulary ─────────────────────────────────────────
-function makeSlashItems(t) {
+function makeSlashItems(t: (key: string) => string) {
   return [
-    { key: "h1",    title: t("editor.h1Title"),    desc: t("editor.h1Desc"),    icon: "Hash",       run: (chain) => chain.toggleHeading({ level: 1 }) },
-    { key: "h2",    title: t("editor.h2Title"),    desc: t("editor.h2Desc"),    icon: "Hash",       run: (chain) => chain.toggleHeading({ level: 2 }) },
-    { key: "h3",    title: t("editor.h3Title"),    desc: t("editor.h3Desc"),    icon: "Hash",       run: (chain) => chain.toggleHeading({ level: 3 }) },
-    { key: "ul",    title: t("editor.ulTitle"),    desc: t("editor.ulDesc"),    icon: "List",       run: (chain) => chain.toggleBulletList() },
-    { key: "ol",    title: t("editor.olTitle"),    desc: t("editor.olDesc"),    icon: "ListChecks", run: (chain) => chain.toggleOrderedList() },
-    { key: "todo",  title: t("editor.todoTitle"),  desc: t("editor.todoDesc"),  icon: "Check",      run: (chain) => chain.toggleTaskList?.() },
-    { key: "quote", title: t("editor.quoteTitle"), desc: t("editor.quoteDesc"), icon: "Quote",      run: (chain) => chain.toggleBlockquote() },
-    { key: "code",  title: t("editor.codeTitle"),  desc: t("editor.codeDesc"),  icon: "Code",       run: (chain) => chain.toggleCodeBlock() },
-    { key: "hr",    title: t("editor.hrTitle"),    desc: t("editor.hrDesc"),    icon: "Minus",      run: (chain) => chain.setHorizontalRule() },
+    { key: "h1",    title: t("editor.h1Title"),    desc: t("editor.h1Desc"),    icon: "Hash",       run: (chain: any) => chain.toggleHeading({ level: 1 }) },
+    { key: "h2",    title: t("editor.h2Title"),    desc: t("editor.h2Desc"),    icon: "Hash",       run: (chain: any) => chain.toggleHeading({ level: 2 }) },
+    { key: "h3",    title: t("editor.h3Title"),    desc: t("editor.h3Desc"),    icon: "Hash",       run: (chain: any) => chain.toggleHeading({ level: 3 }) },
+    { key: "ul",    title: t("editor.ulTitle"),    desc: t("editor.ulDesc"),    icon: "List",       run: (chain: any) => chain.toggleBulletList() },
+    { key: "ol",    title: t("editor.olTitle"),    desc: t("editor.olDesc"),    icon: "ListChecks", run: (chain: any) => chain.toggleOrderedList() },
+    { key: "todo",  title: t("editor.todoTitle"),  desc: t("editor.todoDesc"),  icon: "Check",      run: (chain: any) => chain.toggleTaskList?.() },
+    { key: "quote", title: t("editor.quoteTitle"), desc: t("editor.quoteDesc"), icon: "Quote",      run: (chain: any) => chain.toggleBlockquote() },
+    { key: "code",  title: t("editor.codeTitle"),  desc: t("editor.codeDesc"),  icon: "Code",       run: (chain: any) => chain.toggleCodeBlock() },
+    { key: "hr",    title: t("editor.hrTitle"),    desc: t("editor.hrDesc"),    icon: "Minus",      run: (chain: any) => chain.setHorizontalRule() },
   ];
 }
 
-function iconOf(name) {
+function iconOf(name: string) {
   return (Icon as any)[name] || Icon.Hammer;
 }
 
@@ -63,7 +63,7 @@ const SuggestionList = fwd(function SuggestionList({ items, command, kind }: { i
   const { t } = useTranslation("library");
   useReactEffect(() => setIdx(0), [items]);
   useReactIH(ref, () => ({
-    onKeyDown({ event }) {
+    onKeyDown({ event }: { event: KeyboardEvent }) {
       if (event.key === "ArrowDown") { setIdx((n) => (n + 1) % items.length); return true; }
       if (event.key === "ArrowUp")   { setIdx((n) => (n - 1 + items.length) % items.length); return true; }
       if (event.key === "Enter")     { const it = items[idx]; if (it) command(it); return true; }
@@ -99,9 +99,9 @@ const SuggestionList = fwd(function SuggestionList({ items, command, kind }: { i
 
 // ── Suggestion render helper (shared by slash + mention) ─────────────
 function makeRender() {
-  let component; let popup;
+  let component: any; let popup: any;
   return {
-    onStart(props) {
+    onStart(props: any) {
       component = new ReactRenderer(SuggestionList, { props: { ...props, kind: props.kind }, editor: props.editor });
       if (!props.clientRect) return;
       popup = tippy("body", {
@@ -116,11 +116,11 @@ function makeRender() {
         theme: "forgify",
       });
     },
-    onUpdate(props) {
+    onUpdate(props: any) {
       component?.updateProps({ ...props, kind: props.kind });
       if (props.clientRect && popup?.[0]) popup[0].setProps({ getReferenceClientRect: props.clientRect });
     },
-    onKeyDown(props) {
+    onKeyDown(props: any) {
       if (props.event.key === "Escape") { popup?.[0]?.hide(); return true; }
       return component?.ref?.onKeyDown?.(props) || false;
     },
@@ -131,7 +131,7 @@ function makeRender() {
 // Module-level ref updated by DocEditor with the current translated items.
 // Allows the Extension (instantiated once) to always filter against the
 // latest locale without being recreated.
-const slashItemsRef = { current: [] };
+const slashItemsRef: { current: any[] } = { current: [] };
 
 // ── Slash command extension (custom Extension wrapping Suggestion) ───
 const SlashCommand = Extension.create({
@@ -142,12 +142,12 @@ const SlashCommand = Extension.create({
         char: "/",
         startOfLine: false,
         kind: "slash",
-        command: ({ editor, range, props }) => {
+        command: ({ editor, range, props }: { editor: any; range: any; props: any }) => {
           const chain = editor.chain().focus().deleteRange(range);
           const result = props.run(chain);
           (result || chain).run();
         },
-        items: ({ query }) => {
+        items: ({ query }: { query: string }) => {
           const q = query.toLowerCase();
           return slashItemsRef.current.filter((it) =>
             it.title.toLowerCase().includes(q) || it.desc.toLowerCase().includes(q)

@@ -8,7 +8,7 @@ import { setupFetchSpy } from "@shared/lib/testHarness";
 import { useToastStore } from "@shared/ui/toastStore";
 import { AskUserModal } from "./AskUserModal.tsx";
 
-let calls;
+let calls: any;
 beforeEach(async () => {
   calls = setupFetchSpy();
   useToastStore.setState({ toasts: [] });

@@ -34,7 +34,7 @@ import { setNavigator } from "@shared/lib/navigation";
 import { useKeyboardShortcuts } from "./lib/useKeyboardShortcuts";
 import { easeOut } from "@shared/lib/motion";
 
-function renderPaneBody(kind, onClose, pageProps) {
+function renderPaneBody(kind: string, onClose: () => void, pageProps: Record<string, any>) {
   switch (kind) {
     case "chat":      return <ChatPage onClose={onClose} {...pageProps.chat} />;
     case "forge":     return <ForgePage {...pageProps.forge} />;
@@ -140,7 +140,7 @@ export function AppShell() {
   //
   // 必须 memoise；否则每次 leftPct 变就给 PaneResize 一个新 onDrag，
   // useEffect 反复 attach/detach 监听 → mousemove 丢事件，拖动卡顿。
-  const onPaneDrag = useCallback((clientX) => {
+  const onPaneDrag = useCallback((clientX: number) => {
     if (!mainRef.current) return;
     const r = mainRef.current.getBoundingClientRect();
     const pct = ((clientX - r.left) / r.width) * 100;
@@ -149,11 +149,11 @@ export function AppShell() {
 
   const isTwoPane = openPanes.length === 2 && !narrow;
 
-  const onOpenChat = (convId) => {
+  const onOpenChat = (convId: string) => {
     setActiveConv(convId);
     openPane("chat");
   };
-  const onOpenExecuteRun = (runId) => {
+  const onOpenExecuteRun = (runId: string) => {
     usePaneStore.getState().setActiveFlowRun(runId);
     openPane("execute");
   };
@@ -224,7 +224,7 @@ export function AppShell() {
                   <PaneFrame
                     kind={kind}
                     onClose={() => closePane(kind)}
-                    crumbs={[(() => { const m = PANE_META[kind]; return m ? (m.labelKey ? t(m.labelKey) : (m.label || kind)) : kind; })()]}
+                    crumbs={[(() => { const m = PANE_META[kind as keyof typeof PANE_META] as any; return m ? (m.labelKey ? t(m.labelKey) : (m.label || kind)) : kind; })()]}
                   >
                     {renderPaneBody(kind, () => closePane(kind), pageProps)}
                   </PaneFrame>
@@ -278,7 +278,7 @@ export function AppShell() {
 // strip absolutely positioned at the right edge of the first pane.
 //
 // PaneResizeBetween —— 把 PaneResize 包成绝对定位条，贴在左 pane 右边。
-function PaneResizeBetween({ onDrag }) {
+function PaneResizeBetween({ onDrag }: { onDrag: (clientX: number) => void }) {
   return (
     <div
       style={{

@@ -70,7 +70,7 @@ export function SkillsPage() {
                   </div>
                   {sa.tags?.length > 0 && (
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 8 }}>
-                      {sa.tags.slice(0, 5).map((tag) => (
+                      {sa.tags.slice(0, 5).map((tag: string) => (
                         <span key={tag} className="badge muted">{tag}</span>
                       ))}
                     </div>
@@ -87,7 +87,7 @@ export function SkillsPage() {
   );
 }
 
-function SkillDrawer({ skill, onClose }) {
+function SkillDrawer({ skill, onClose }: { skill: any; onClose: () => void }) {
   return (
     <div className="drawer-wrap is-open">
       <div className="drawer-scrim" onClick={onClose} />

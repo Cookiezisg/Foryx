@@ -24,13 +24,13 @@ vi.mock("@features/forge-review", () => ({
 }));
 
 vi.mock("@shared/model", () => ({
-  useForgeProgress: (selector) => selector({ active: {} }),
+  useForgeProgress: (selector: (s: any) => any) => selector({ active: {} }),
 }));
 
 vi.mock("@entities/flowrun", () => ({}));
 
 vi.mock("./RunDrawer.tsx", () => ({
-  RunDrawer: ({ open, kind, entity }) =>
+  RunDrawer: ({ open, kind, entity }: { open: any; kind: any; entity: any }) =>
     open ? <div data-testid="run-drawer">drawer-{kind}-{entity?.id}</div> : null,
 }));
 

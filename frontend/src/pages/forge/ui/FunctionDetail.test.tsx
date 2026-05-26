@@ -16,20 +16,20 @@ vi.mock("@features/forge-review", () => ({
 }));
 
 vi.mock("@shared/model", () => ({
-  useForgeProgress: (selector) => selector({ active: {} }),
+  useForgeProgress: (selector: (s: any) => any) => selector({ active: {} }),
 }));
 
 vi.mock("@/widgets/entity-rel-meta/EntityRelMeta.tsx", () => ({
-  EntityRelMeta: () => null,
+  EntityRelMeta: (): null => null,
 }));
 
 vi.mock("./RunDrawer.tsx", () => ({
-  RunDrawer: ({ open, entity }) =>
+  RunDrawer: ({ open, entity }: { open: any; entity: any }) =>
     open ? <div data-testid="run-drawer">drawer-{entity?.id}</div> : null,
 }));
 
 vi.mock("@/widgets/ask-ai-trigger/AskAiTrigger.tsx", () => ({
-  AskAiTrigger: ({ entityId }) => <div data-testid="ask-ai">ask-{entityId}</div>,
+  AskAiTrigger: ({ entityId }: { entityId: any }) => <div data-testid="ask-ai">ask-{entityId}</div>,
 }));
 
 import {

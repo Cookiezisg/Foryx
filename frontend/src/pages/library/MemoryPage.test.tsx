@@ -26,7 +26,7 @@ const MEMORIES = [
   { name: "code-review-tier", description: "tier review style",  memType: "project",  pinned: false, source: "user" },
 ];
 
-let updateMutate, delMutate, pinMutate;
+let updateMutate: any, delMutate: any, pinMutate: any;
 
 beforeEach(() => {
   updateMutate = vi.fn((_args, opts) => opts?.onSuccess?.());

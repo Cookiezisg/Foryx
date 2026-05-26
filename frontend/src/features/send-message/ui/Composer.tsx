@@ -8,7 +8,7 @@
 // Enter 发送 / Shift+Enter 换行 / Esc 取消流式。
 // 不做 / slash 菜单（用户明确不要）。
 
-import { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "@shared/ui/Icon";
 import { useFunctions } from "@entities/function";
@@ -54,7 +54,7 @@ export function Composer({ disabled, isStreaming, onSend, onCancel }: { disabled
     ...documents.map((d) => { const da = d as any; return { type: "document", id: da.id, label: (da.name || da.title || da.id) + " · doc", icon: "FileText" }; }),
   ];
 
-  const onChange = (e) => {
+  const onChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const v = e.target.value;
     setText(v);
     const m = v.match(/(?:^|\s)@([^\s]*)$/);
@@ -67,17 +67,17 @@ export function Composer({ disabled, isStreaming, onSend, onCancel }: { disabled
     }
   };
 
-  const pickMention = (it) => {
+  const pickMention = (it: any) => {
     setMentions((ms) => (ms.find((x) => x.id === it.id) ? ms : [...ms, it]));
     setText((t) => t.replace(/(?:^|\s)@[^\s]*$/, (m) => (m.startsWith(" ") ? " " : "")));
     setAtMenu(null);
     ta.current?.focus();
   };
 
-  const onKey = (e) => {
+  const onKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (atMenu?.items.length) {
-      if (e.key === "ArrowDown") { e.preventDefault(); setAtMenu((s) => ({ ...s, idx: Math.min(s.idx + 1, s.items.length - 1) })); return; }
-      if (e.key === "ArrowUp")   { e.preventDefault(); setAtMenu((s) => ({ ...s, idx: Math.max(s.idx - 1, 0) })); return; }
+      if (e.key === "ArrowDown") { e.preventDefault(); setAtMenu((s: any) => ({ ...s, idx: Math.min(s.idx + 1, s.items.length - 1) })); return; }
+      if (e.key === "ArrowUp")   { e.preventDefault(); setAtMenu((s: any) => ({ ...s, idx: Math.max(s.idx - 1, 0) })); return; }
       if (e.key === "Enter" || e.key === "Tab") { e.preventDefault(); pickMention(atMenu.items[atMenu.idx]); return; }
       if (e.key === "Escape") { setAtMenu(null); return; }
     }
@@ -85,13 +85,13 @@ export function Composer({ disabled, isStreaming, onSend, onCancel }: { disabled
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
   };
 
-  const onDrop = (e) => {
+  const onDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setDragging(false);
     const files = Array.from(e.dataTransfer?.files || []);
     if (files.length) onPickFiles(files);
   };
-  const onPickFiles = (files) => {
+  const onPickFiles = (files: File[]) => {
     setAttached((a) => [...a, ...files.map((f) => ({ name: f.name, size: f.size, file: f }))]);
   };
 
@@ -100,8 +100,8 @@ export function Composer({ disabled, isStreaming, onSend, onCancel }: { disabled
       <div className="composer-inner">
         {(attached.length > 0 || mentions.length > 0) && (
           <div className="attached-strip">
-            {mentions.map((m) => {
-              const Mi = Icon[m.icon] || Icon.At;
+            {mentions.map((m: any) => {
+              const Mi = (Icon as Record<string, React.ComponentType<any>>)[m.icon] || Icon.At;
               return (
                 <div key={m.id} className="attached-pill is-mention">
                   <Mi className="file-icon" style={{ color: "var(--accent)" }} />
@@ -112,7 +112,7 @@ export function Composer({ disabled, isStreaming, onSend, onCancel }: { disabled
                 </div>
               );
             })}
-            {attached.map((a, i) => (
+            {attached.map((a: any, i: number) => (
               <div className="attached-pill" key={"a" + i}>
                 <Icon.File className="file-icon" />
                 <span>{a.name}</span>
@@ -187,12 +187,12 @@ export function Composer({ disabled, isStreaming, onSend, onCancel }: { disabled
   );
 }
 
-function MentionPopover({ items, idx, onPick, title }) {
+function MentionPopover({ items, idx, onPick, title }: { items: any[]; idx: number; onPick: (it: any) => void; title: string }) {
   return (
     <div className="slash-pop">
       <div className="slash-pop-title">{title}</div>
-      {items.map((it, i) => {
-        const I = Icon[it.icon] || Icon.Hammer;
+      {items.map((it: any, i: number) => {
+        const I = (Icon as Record<string, React.ComponentType<any>>)[it.icon] || Icon.Hammer;
         return (
           <div
             key={i}

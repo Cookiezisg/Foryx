@@ -69,7 +69,7 @@ export function CapabilityCheckPanel({ workflowId }: CapabilityCheckPanelProps) 
   );
 }
 
-function CapabilityResult({ result }) {
+function CapabilityResult({ result }: { result: any }) {
   const { t } = useTranslation("forge");
   const items = result.items || result.capabilities || [];
   if (items.length === 0) {
@@ -81,7 +81,7 @@ function CapabilityResult({ result }) {
   }
   return (
     <div className="cap-list">
-      {items.map((it, i) => {
+      {items.map((it: any, i: number) => {
         const ok = it.ready ?? it.satisfied ?? (!it.missing);
         return (
           <div key={i} className={"cap-row" + (ok ? " is-ok" : " is-missing")}>

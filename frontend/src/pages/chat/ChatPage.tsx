@@ -91,7 +91,7 @@ export function ChatPage({ activeConv, onSetActiveConv, onClose, onOpenSettings 
   // freshly mounted blocks have their layout done before measuring).
   const streamRef = useRef(null);
   useEffect(() => {
-    let r2 = null;
+    let r2: number | null = null;
     const r1 = requestAnimationFrame(() => {
       r2 = requestAnimationFrame(() => {
         if (streamRef.current) {
@@ -121,7 +121,7 @@ export function ChatPage({ activeConv, onSetActiveConv, onClose, onOpenSettings 
     return <EmptyConvPlaceholder />;
   }
 
-  const onSend = (payload) => submit(payload);
+  const onSend = (payload: any) => submit(payload);
   const onCancel = () => cancelStream();
 
   return (
@@ -169,7 +169,7 @@ function EmptyConvPlaceholder() {
   );
 }
 
-function EmptyConvHero({ conv }) {
+function EmptyConvHero({ conv }: { conv: any }) {
   const { t } = useTranslation("conv");
   return (
     <div style={{ padding: "48px 0", textAlign: "center", color: "var(--fg-muted)" }}>

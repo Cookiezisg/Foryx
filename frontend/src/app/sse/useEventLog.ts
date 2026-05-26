@@ -19,19 +19,19 @@ export function useEventLog() {
     const ch = useChatStore.getState();
 
     const handlers = {
-      message_start: (e) => {
+      message_start: (e: any) => {
         if (!e?.conversationId) return;
         ch.ensureConv(e.conversationId);
         ch.onMessageStart(e.conversationId, e);
       },
-      message_stop: (e) => e?.conversationId && ch.onMessageStop(e.conversationId, e),
-      block_start:  (e) => {
+      message_stop: (e: any) => e?.conversationId && ch.onMessageStop(e.conversationId, e),
+      block_start:  (e: any) => {
         if (!e?.conversationId) return;
         ch.ensureConv(e.conversationId);
         ch.onBlockStart(e.conversationId, e);
       },
-      block_delta:  (e) => e?.conversationId && ch.onBlockDelta(e.conversationId, e),
-      block_stop:   (e) => e?.conversationId && ch.onBlockStop(e.conversationId, e),
+      block_delta:  (e: any) => e?.conversationId && ch.onBlockDelta(e.conversationId, e),
+      block_stop:   (e: any) => e?.conversationId && ch.onBlockStop(e.conversationId, e),
     };
 
     const ctrl = createSSE({

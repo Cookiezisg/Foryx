@@ -112,7 +112,7 @@ export function VersionRail({
   );
 }
 
-function VersionRow({ v, isCurrent, isPending, isDeployed, isSelected, onClick }) {
+function VersionRow({ v, isCurrent, isPending, isDeployed, isSelected, onClick }: { v: any; isCurrent: boolean; isPending: boolean; isDeployed: boolean; isSelected: boolean; onClick: () => void }) {
   const { t, i18n } = useTranslation("misc");
   const locale = i18n.language === "zh" ? "zh-CN" : "en-US";
   const dotColor = isPending ? "var(--status-warn)"
@@ -180,7 +180,7 @@ export function SplitDiff({ leftLabel, rightLabel, leftSrc, rightSrc }: { leftLa
   );
 }
 
-function computeSplitDiff(a, b) {
+function computeSplitDiff(a: string, b: string) {
   const al = a.split("\n"), bl = b.split("\n");
   const m = al.length, n = bl.length;
   const dp = Array.from({ length: m + 1 }, () => new Array(n + 1).fill(0));
@@ -220,7 +220,7 @@ const BUILTINS = new Set([
   "sorted", "reversed", "isinstance", "type",
 ]);
 
-function tokenisePython(line) {
+function tokenisePython(line: string) {
   const out = [];
   let i = 0;
   const n = line.length;

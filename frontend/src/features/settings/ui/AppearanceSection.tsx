@@ -3,7 +3,7 @@ import { Icon } from "@shared/ui/Icon";
 import { useSettingsStore } from "@entities/settings";
 import { ACCENTS } from "@shared/lib/onboarding-strings";
 
-export function AppearanceSection({ open, onToggle }) {
+export function AppearanceSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { t } = useTranslation("settings");
   const settings = useSettingsStore();
   return (

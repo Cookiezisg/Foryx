@@ -18,7 +18,7 @@ import { SEARCH_HINTS } from "@shared/lib/onboarding-strings";
 import { ProviderGrid } from "./ProviderGrid.tsx";
 import { KeyVerifyField } from "./KeyVerifyField.tsx";
 
-export function SearchSection({ open, onToggle }) {
+export function SearchSection({ open, onToggle }: { open: boolean; onToggle: () => void }) {
   const { t } = useTranslation("settings");
   const { data: providers = [] } = useProviders();
   const { data: allKeys = [] } = useApiKeys();
@@ -28,7 +28,7 @@ export function SearchSection({ open, onToggle }) {
   const keys = allKeys.filter((k) => searchNames.has(k.provider));
   const defaultKey = keys.find((k) => k.isDefault);
 
-  const providerDisplay = (n) => providers.find((p) => p.name === n)?.displayName || n;
+  const providerDisplay = (n: string) => providers.find((p: any) => p.name === n)?.displayName || n;
 
   const sub = defaultKey
     ? t("search.subWithDefault", { provider: providerDisplay(defaultKey.provider) })
@@ -63,12 +63,12 @@ export function SearchSection({ open, onToggle }) {
   );
 }
 
-function KeyList({ keys, providers, defaultKey, providerDisplay }) {
+function KeyList({ keys, providers, defaultKey, providerDisplay }: { keys: any[]; providers: any[]; defaultKey: any; providerDisplay: (n: string) => string }) {
   const { t } = useTranslation("settings");
   const [openKey, setOpenKey] = useState(null);
   const [adding, setAdding] = useState(false);
 
-  const toggleKey = (id) => setOpenKey((p) => (p === id ? null : id));
+  const toggleKey = (id: string) => setOpenKey((p: any) => (p === id ? null : id));
 
   return (
     <>
@@ -76,7 +76,7 @@ function KeyList({ keys, providers, defaultKey, providerDisplay }) {
         <div className="set-sec-empty">{t("search.emptyList")}</div>
       )}
       <div className="set-klist">
-        {keys.map((key) => (
+        {keys.map((key: any) => (
           <KeyItem
             key={key.id}
             apiKey={key}
@@ -105,7 +105,7 @@ function KeyList({ keys, providers, defaultKey, providerDisplay }) {
   );
 }
 
-function KeyItem({ apiKey, isDefault, displayName, open, onToggle }) {
+function KeyItem({ apiKey, isDefault, displayName, open, onToggle }: { apiKey: any; isDefault: boolean; displayName: string; open: boolean; onToggle: () => void }) {
   const { t } = useTranslation("settings");
   const pushToast = useToastStore((s) => s.pushToast);
   const testKey = useTestApiKey();
@@ -113,7 +113,7 @@ function KeyItem({ apiKey, isDefault, displayName, open, onToggle }) {
   const updateKey = useUpdateApiKey(apiKey.id);
 
   const verified = apiKey.testStatus === "ok";
-  const hint = SEARCH_HINTS[apiKey.provider] || { abbr: apiKey.provider.slice(0, 2).toUpperCase(), color: "#6b6459" };
+  const hint = (SEARCH_HINTS as Record<string, { abbr: string; color: string }>)[apiKey.provider] || { abbr: apiKey.provider.slice(0, 2).toUpperCase(), color: "#6b6459" };
 
   const setDefault = () => {
     updateKey.mutate(
@@ -198,7 +198,7 @@ function KeyItem({ apiKey, isDefault, displayName, open, onToggle }) {
 // is auto-promoted to isDefault on save (best-effort via direct PATCH).
 //
 // 内联验证流;无模型选择。首个搜索 key 保存时尽力设为搜索默认。
-function AddPanel({ providers, configured, hasSearchDefault, providerDisplay, onDone }) {
+function AddPanel({ providers, configured, hasSearchDefault, providerDisplay, onDone }: { providers: any[]; configured: string[]; hasSearchDefault: boolean; providerDisplay: (n: string) => string; onDone: () => void }) {
   const { t } = useTranslation("settings");
   const pushToast = useToastStore((s) => s.pushToast);
   const qc = useQueryClient();
@@ -217,14 +217,14 @@ function AddPanel({ providers, configured, hasSearchDefault, providerDisplay, on
 
   const display = providerDisplay(provider);
 
-  const pickProvider = (n) => {
+  const pickProvider = (n: string) => {
     if (createdKeyId) deleteKey.mutate(createdKeyId);
     setProvider(n);
     setApiKey(""); setCreatedKeyId(null); setCreatedKeyText("");
     setVerified(false); setVerifyError("");
   };
 
-  const onKeyChange = (v) => {
+  const onKeyChange = (v: string) => {
     setApiKey(v);
     setVerifyError("");
     if (verified) setVerified(false);

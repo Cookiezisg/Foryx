@@ -1,10 +1,13 @@
 import { Icon } from "@shared/ui/Icon";
 
-export function ProviderGrid({ providers, hints, selected, onPick, configured = [], tall = false }) {
+export function ProviderGrid({ providers, hints, selected, onPick, configured = [], tall = false }: {
+  providers: any[]; hints: Record<string, { abbr: string; color: string }>;
+  selected: string; onPick: (name: string) => void; configured?: string[]; tall?: boolean;
+}) {
   return (
     <div className="onb-gridwrap">
       <div className={"onb-grid" + (tall ? " is-tall" : "")}>
-        {providers.map((p) => {
+        {providers.map((p: any) => {
           const h = hints[p.name] || { abbr: p.name.slice(0, 2).toUpperCase(), color: "#6b6459" };
           return (
             <button key={p.name} type="button"

@@ -14,7 +14,7 @@ import { useForgeProgress } from "@shared/model";
 
 export { useForgeProgress };
 
-const scopeKey = (scope) => `${scope?.kind}:${scope?.id}`;
+const scopeKey = (scope: any) => `${scope?.kind}:${scope?.id}`;
 
 export function useForge() {
   const qc = useQueryClient();

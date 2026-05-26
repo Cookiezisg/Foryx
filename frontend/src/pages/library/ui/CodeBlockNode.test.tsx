@@ -6,7 +6,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
 vi.mock("@tiptap/react", () => ({
-  NodeViewWrapper: ({ children, className }) => (
+  NodeViewWrapper: ({ children, className }: { children: any; className: any }) => (
     <div className={className} data-testid="nv-wrapper">{children}</div>
   ),
   NodeViewContent: ({ as: As = "code" }) => <As data-testid="nv-content" />,

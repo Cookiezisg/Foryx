@@ -14,7 +14,7 @@ import { useSessionStore } from "@entities/session";
 import { qk } from "@shared/api/queryKeys";
 
 // type -> list of query keys to invalidate when this entity changes.
-const TYPE_TO_INVALIDATIONS = {
+const TYPE_TO_INVALIDATIONS: Record<string, (id: string) => unknown[]> = {
   conversation: (id) => [qk.conversations(), qk.conversation(id)],
   function:     (id) => [qk.functions(), qk.function(id), qk.functionVersions(id)],
   handler:      (id) => [qk.handlers(), qk.handler(id), qk.handlerVersions(id), qk.handlerConfig(id)],
@@ -56,7 +56,7 @@ export function useNotifications() {
           const factory = TYPE_TO_INVALIDATIONS[type];
           if (factory) {
             const keys = factory(id);
-            for (const key of keys) qc.invalidateQueries({ queryKey: key });
+            for (const key of keys) qc.invalidateQueries({ queryKey: key as readonly unknown[] });
           }
           setUnread((n) => n + 1);
         },

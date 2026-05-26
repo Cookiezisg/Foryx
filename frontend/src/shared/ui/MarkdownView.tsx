@@ -29,7 +29,7 @@ export function MarkdownView({ source, streaming = false }: MarkdownViewProps) {
 // Exported for direct unit testing — never call from production code,
 // use <MarkdownView /> instead. Tests need access to verify the
 // streaming-safe parser (partial table / unclosed fence / etc).
-export function parse(src) {
+export function parse(src: string) {
   if (!src) return [];
   const lines = src.split("\n");
   const out = [];
@@ -92,7 +92,7 @@ export function parse(src) {
       const rows = [];
       while (i < lines.length && /^\s*\|/.test(lines[i])) { rows.push(lines[i]); i++; }
       if (rows.length >= 2) {
-        const cells = (r) => r.split("|").slice(1, -1).map((s) => s.trim());
+        const cells = (r: string) => r.split("|").slice(1, -1).map((s: string) => s.trim());
         out.push({ type: "table", headers: cells(rows[0]), data: rows.slice(2).map(cells) });
       }
       continue;
@@ -122,7 +122,7 @@ export function parse(src) {
   return out;
 }
 
-function renderBlock(b, key, streaming) {
+function renderBlock(b: any, key: number, streaming: boolean) {
   switch (b.type) {
     case "h":     return renderHeading(b.lvl, inline(b.text), key);
     case "hr":    return <hr key={key} />;
@@ -133,12 +133,12 @@ function renderBlock(b, key, streaming) {
       </pre>
     );
     case "quote": return <blockquote key={key}>{inline(b.text)}</blockquote>;
-    case "ul":    return <ul key={key}>{b.items.map((it, j) => renderListItem(it, j))}</ul>;
-    case "ol":    return <ol key={key}>{b.items.map((it, j) => renderListItem(it, j))}</ol>;
+    case "ul":    return <ul key={key}>{b.items.map((it: any, j: number) => renderListItem(it, j))}</ul>;
+    case "ol":    return <ol key={key}>{b.items.map((it: any, j: number) => renderListItem(it, j))}</ol>;
     case "table": return (
       <table key={key} className="md-table">
-        <thead><tr>{b.headers.map((h, j) => <th key={j}>{inline(h)}</th>)}</tr></thead>
-        <tbody>{b.data.map((row, r) => <tr key={r}>{row.map((c, k) => <td key={k}>{inline(c)}</td>)}</tr>)}</tbody>
+        <thead><tr>{b.headers.map((h: string, j: number) => <th key={j}>{inline(h)}</th>)}</tr></thead>
+        <tbody>{b.data.map((row: string[], r: number) => <tr key={r}>{row.map((c: string, k: number) => <td key={k}>{inline(c)}</td>)}</tr>)}</tbody>
       </table>
     );
     case "p":     return <p key={key}>{inline(b.text)}</p>;
@@ -151,7 +151,7 @@ function renderHeading(lvl: number, children: unknown, key: number) {
   return <Tag key={key}>{children}</Tag>;
 }
 
-function renderListItem(it, key) {
+function renderListItem(it: any, key: number) {
   if ("done" in it) {
     return (
       <li key={key} className={"md-todo" + (it.done ? " is-done" : "")}>
@@ -166,9 +166,9 @@ function renderListItem(it, key) {
 // ── Inline-level: **bold**, *italic*, `code`, [link](url), [[wikilink]] ──
 const INLINE_RE = /(\*\*[^*\n]+\*\*|\*[^*\n]+\*|`[^`\n]+`|\[[^\]]+\]\([^)\s]+\)|\[\[[^\]]+\]\]|https?:\/\/\S+)/g;
 
-export function inline(s) {
+export function inline(s: string): any[] | null {
   if (!s) return null;
-  const out = [];
+  const out: any[] = [];
   let last = 0; let key = 0; let m;
   INLINE_RE.lastIndex = 0;
   while ((m = INLINE_RE.exec(s))) {
@@ -180,7 +180,7 @@ export function inline(s) {
   return out;
 }
 
-function renderInlineMatch(t, key) {
+function renderInlineMatch(t: string, key: number) {
   if (t.startsWith("**")) return <strong key={key}>{t.slice(2, -2)}</strong>;
   if (t.startsWith("*"))  return <em key={key}>{t.slice(1, -1)}</em>;
   if (t.startsWith("`"))  return <code key={key}>{t.slice(1, -1)}</code>;

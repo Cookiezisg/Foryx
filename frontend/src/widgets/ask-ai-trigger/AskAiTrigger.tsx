@@ -38,12 +38,12 @@ export function AskAiTrigger({ kind, entityId, context, suggestions = [] }: AskA
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => { if (e.key === "Escape") setOpen(false); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open]);
 
-  const submit = async (prompt) => {
+  const submit = async (prompt: string) => {
     setOpen(false);
     setText("");
     const cid = await iterateSubmit(kind, entityId, prompt);

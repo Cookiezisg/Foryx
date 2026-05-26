@@ -19,30 +19,30 @@ vi.mock("@features/forge-review", () => ({
 }));
 
 vi.mock("@shared/model", () => ({
-  useForgeProgress: (selector) => selector({ active: {} }),
+  useForgeProgress: (selector: (s: any) => any) => selector({ active: {} }),
 }));
 
 vi.mock("@/widgets/entity-rel-meta/EntityRelMeta.tsx", () => ({
-  EntityRelMeta: () => null,
+  EntityRelMeta: (): null => null,
 }));
 
 vi.mock("./RunDrawer.tsx", () => ({
-  RunDrawer: ({ open, entity }) =>
+  RunDrawer: ({ open, entity }: { open: any; entity: any }) =>
     open ? <div data-testid="run-drawer">drawer-{entity?.id}</div> : null,
 }));
 
 vi.mock("@/widgets/ask-ai-trigger/AskAiTrigger.tsx", () => ({
-  AskAiTrigger: ({ entityId }) => <div data-testid="ask-ai">ask-{entityId}</div>,
+  AskAiTrigger: ({ entityId }: { entityId: any }) => <div data-testid="ask-ai">ask-{entityId}</div>,
 }));
 
 vi.mock("./CapabilityCheckPanel.tsx", () => ({
-  CapabilityCheckPanel: ({ workflowId }) => (
+  CapabilityCheckPanel: ({ workflowId }: { workflowId: any }) => (
     <div data-testid="cap-panel">cap-{workflowId}</div>
   ),
 }));
 
 vi.mock("@features/workflow-edit/ui/WorkflowEditor.jsx", () => ({
-  WorkflowEditor: ({ workflowId, version }) => (
+  WorkflowEditor: ({ workflowId, version }: { workflowId: any; version: any }) => (
     <div data-testid="wf-editor">editor-{workflowId}-{version?.id}</div>
   ),
 }));
@@ -65,13 +65,13 @@ const WF = { id: "wf_1", name: "Backup", desc: "nightly backup", status: "ready"
 
 const VERSIONS_READY = [
   { id: "wfv_1", label: "v1", state: "current",
-    graph: { nodes: [{ id: "n1", kind: "trigger", x: 0, y: 0, label: "Start" }], edges: [] },
+    graph: { nodes: [{ id: "n1", kind: "trigger", x: 0, y: 0, label: "Start" }], edges: [] as any[] },
   },
 ];
 
 const VERSIONS_WITH_PENDING = [
   { id: "wfv_1", label: "v1", state: "current",
-    graph: { nodes: [{ id: "n1", kind: "trigger", x: 0, y: 0, label: "Start" }], edges: [] },
+    graph: { nodes: [{ id: "n1", kind: "trigger", x: 0, y: 0, label: "Start" }], edges: [] as any[] },
   },
   { id: "wfv_2", label: "v2", state: "pending",
     graph: {

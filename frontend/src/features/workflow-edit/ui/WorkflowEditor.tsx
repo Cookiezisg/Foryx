@@ -11,7 +11,7 @@
 // 连接 handle；自动布局；2s 防抖 autosave 经 :edit 产 pending 版本，等用户
 // Accept 才落到 active。
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Icon } from "@shared/ui/Icon";
 import { Button } from "@shared/ui/Button";
@@ -20,6 +20,10 @@ import { PaneCollapseToggle } from "@shared/ui/PaneCollapseToggle.tsx";
 import { FloatingInspector } from "@shared/ui/FloatingInspector.tsx";
 import { useWorkflowEdit } from "@features/workflow-edit";
 import { useCollapsible } from "@shared/lib/useCollapsible";
+
+type WFNode = { id: string; kind: string; label: string; x: number; y: number; config: any; notes: string; onError?: string; timeout?: number; retry?: any; sub?: string };
+type WFEdge = { id: string; from: string; to: string; fromHandle?: string; toHandle?: string; fromPort?: string; toPort?: string };
+type HandleKey = "top" | "right" | "bottom" | "left";
 
 const NODE_W = 184;
 const NODE_H = 76;
@@ -49,22 +53,24 @@ const HANDLE_OFFSET = {
   left:   { x: 0,           y: NODE_H / 2, dx: -1, dy: 0  },
 };
 
-function edgePathBetween(a, b, fromH = "bottom", toH = "top") {
-  const f = HANDLE_OFFSET[fromH] || HANDLE_OFFSET.bottom;
-  const t = HANDLE_OFFSET[toH]   || HANDLE_OFFSET.top;
+function edgePathBetween(a: WFNode, b: WFNode, fromH: string = "bottom", toH: string = "top") {
+  const ho = HANDLE_OFFSET as Record<string, { x: number; y: number; dx: number; dy: number }>;
+  const f = ho[fromH] || HANDLE_OFFSET.bottom;
+  const t = ho[toH]   || HANDLE_OFFSET.top;
   const sx = a.x + f.x, sy = a.y + f.y;
   const ex = b.x + t.x, ey = b.y + t.y;
   const dist = Math.max(40, Math.hypot(ex - sx, ey - sy) * 0.4);
   return `M ${sx} ${sy} C ${sx + f.dx * dist} ${sy + f.dy * dist}, ${ex + t.dx * dist} ${ey + t.dy * dist}, ${ex} ${ey}`;
 }
 
-function iconFor(kind) {
-  const I = {
+function iconFor(kind: string) {
+  const MAP: Record<string, React.ComponentType<any>> = {
     trigger: Icon.Zap, function: Icon.Code, handler: Icon.Server, mcp: Icon.Server,
     skill: Icon.Sparkles, llm: Icon.Brain, agent: Icon.Bot, http: Icon.Globe,
     condition: Icon.GitBranch, loop: Icon.Refresh, parallel: Icon.Layers,
     approval: Icon.Pause, wait: Icon.Clock, variable: Icon.Database,
-  }[kind] || Icon.Code;
+  };
+  const I = MAP[kind] || Icon.Code;
   return <I />;
 }
 
@@ -72,10 +78,10 @@ function newNodeId() { return "n_" + Math.random().toString(36).slice(2, 8); }
 function newEdgeId() { return "e_" + Math.random().toString(36).slice(2, 8); }
 
 // ── Auto-layout: topological BFS, layer placement ────────────────────────
-function autoLayout(nodes, edges, direction = "vertical") {
-  const incoming = Object.fromEntries(nodes.map((n) => [n.id, 0]));
+function autoLayout(nodes: WFNode[], edges: WFEdge[], direction = "vertical") {
+  const incoming: Record<string, number> = Object.fromEntries(nodes.map((n) => [n.id, 0]));
   edges.forEach((e) => { if (incoming[e.to] != null) incoming[e.to]++; });
-  const layer = {};
+  const layer: Record<string, number> = {};
   const queue = nodes.filter((n) => incoming[n.id] === 0).map((n) => n.id);
   queue.forEach((id) => { layer[id] = 0; });
   let head = 0;
@@ -88,14 +94,14 @@ function autoLayout(nodes, edges, direction = "vertical") {
     });
   }
   nodes.forEach((n) => { if (layer[n.id] == null) layer[n.id] = 0; });
-  const byLayer = {};
+  const byLayer: Record<number, string[]> = {};
   nodes.forEach((n) => {
     const L = layer[n.id];
     if (!byLayer[L]) byLayer[L] = [];
     byLayer[L].push(n.id);
   });
   const xGap = 240, yGap = 140;
-  const result = {};
+  const result: Record<string, { x: number; y: number }> = {};
   Object.keys(byLayer).map(Number).sort((a, b) => a - b).forEach((L) => {
     const ids = byLayer[L];
     ids.forEach((id, i) => {
@@ -111,7 +117,7 @@ function autoLayout(nodes, edges, direction = "vertical") {
 }
 
 // ── Palette ──────────────────────────────────────────────────────────────
-function Palette({ onAdd, onCollapse }) {
+function Palette({ onAdd, onCollapse }: { onAdd: (kind: string) => void; onCollapse?: () => void }) {
   const { t } = useTranslation("forge");
   const [q, setQ] = useState("");
   const list = NODE_KINDS.filter((k) => {
@@ -134,7 +140,7 @@ function Palette({ onAdd, onCollapse }) {
       <div className="wf-palette-label">{t("editor.palette.label", { count: list.length })}</div>
       <div className="wf-palette-list">
         {list.map((k) => {
-          const Ic = Icon[k.icon] || Icon.Code;
+          const Ic = (Icon as Record<string, React.ComponentType<any>>)[k.icon] || Icon.Code;
           const desc = t("editor.nodeKinds." + k.kind, { defaultValue: k.desc });
           return (
             <button
@@ -159,7 +165,11 @@ function Palette({ onAdd, onCollapse }) {
 }
 
 // ── CanvasNode ───────────────────────────────────────────────────────────
-function CanvasNode({ node, selected, onMouseDown, onHandleMouseDown, connectingFrom }) {
+function CanvasNode({ node, selected, onMouseDown, onHandleMouseDown, connectingFrom }: {
+  node: WFNode; selected: boolean; onMouseDown: (e: React.MouseEvent) => void;
+  onHandleMouseDown: (e: React.MouseEvent, id: string, handle: string) => void;
+  connectingFrom: { id: string; handle: string } | null;
+}) {
   return (
     <div
       className={"wf-node" + (selected ? " is-selected" : "")}
@@ -188,7 +198,7 @@ function CanvasNode({ node, selected, onMouseDown, onHandleMouseDown, connecting
 
 // ── Inspector body ───────────────────────────────────────────────────────
 // Rendered inside a FloatingInspector — no own container/header.
-function InspectorBody({ node, onChange, onDelete }) {
+function InspectorBody({ node, onChange, onDelete }: { node: WFNode; onChange: (patch: Partial<WFNode>) => void; onDelete: () => void }) {
   const { t } = useTranslation(["forge", "common"]);
   const [text, setText] = useState(JSON.stringify(node.config || {}, null, 2));
   useEffect(() => setText(JSON.stringify(node.config || {}, null, 2)), [node.id]);
@@ -269,7 +279,7 @@ function InspectorBody({ node, onChange, onDelete }) {
 }
 
 // ── Main editor ──────────────────────────────────────────────────────────
-export function WorkflowEditor({ workflowId, version }) {
+export function WorkflowEditor({ workflowId, version }: { workflowId: string; version: any }) {
   const { t } = useTranslation("forge");
   const original = useMemo(() => parseGraph(version), [version?.id]);
   const [nodes, setNodes] = useState(original.nodes);
@@ -292,9 +302,9 @@ export function WorkflowEditor({ workflowId, version }) {
     setSelected(null);
   }, [version?.id]);
 
-  const byId = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])), [nodes]);
+  const byId = useMemo(() => Object.fromEntries(nodes.map((n) => [n.id, n])) as Record<string, WFNode>, [nodes]);
 
-  const clientToCanvas = useCallback((cx, cy) => {
+  const clientToCanvas = useCallback((cx: number, cy: number) => {
     const r = canvasRef.current.getBoundingClientRect();
     return { x: (cx - r.left - transform.x) / transform.scale, y: (cy - r.top - transform.y) / transform.scale };
   }, [transform]);
@@ -305,8 +315,8 @@ export function WorkflowEditor({ workflowId, version }) {
   }, [nodes, edges, markDirtyBase]);
 
   // ── Node mouse interactions ────────────────────────────────────────
-  const onNodeMouseDown = (e, id) => {
-    if (e.target.dataset.handle) return;
+  const onNodeMouseDown = (e: React.MouseEvent, id: string) => {
+    if ((e.target as HTMLElement).dataset.handle) return;
     e.stopPropagation();
     const c = clientToCanvas(e.clientX, e.clientY);
     const node = byId[id];
@@ -314,33 +324,33 @@ export function WorkflowEditor({ workflowId, version }) {
     setDragOffset({ x: c.x - node.x, y: c.y - node.y });
     setSelected(id);
   };
-  const onHandleMouseDown = (e, id, handle) => {
+  const onHandleMouseDown = (e: React.MouseEvent, id: string, handle: string) => {
     e.stopPropagation();
     setConnecting({ id, handle, x: e.clientX, y: e.clientY });
   };
   useEffect(() => {
     if (!dragNodeId && !connecting && !panning) return;
-    const onMove = (e) => {
+    const onMove = (e: MouseEvent) => {
       if (dragNodeId) {
         const c = clientToCanvas(e.clientX, e.clientY);
         setNodes((ns) => ns.map((n) =>
           n.id === dragNodeId ? { ...n, x: c.x - dragOffset.x, y: c.y - dragOffset.y } : n));
       } else if (connecting) {
-        setConnecting((c) => c && { ...c, x: e.clientX, y: e.clientY });
+        setConnecting((c: any) => c && { ...c, x: e.clientX, y: e.clientY });
       } else if (panning) {
         const dx = e.clientX - panStart.current.x;
         const dy = e.clientY - panStart.current.y;
         setTransform((t) => ({ ...t, x: panStart.current.tx + dx, y: panStart.current.ty + dy }));
       }
     };
-    const onUp = (e) => {
+    const onUp = (e: MouseEvent) => {
       if (connecting) {
         const t = document.elementFromPoint(e.clientX, e.clientY)?.closest("[data-handle][data-id]") as HTMLElement | null;
         if (t) {
           const toId = t.dataset.id;
           const toHandle = t.dataset.handle;
           if (toId !== connecting.id) {
-            setEdges((es) => es.find((x) => x.from === connecting.id && x.to === toId)
+            setEdges((es) => es.find((x: WFEdge) => x.from === connecting.id && x.to === toId)
               ? es
               : [...es, { id: newEdgeId(), from: connecting.id, to: toId, fromHandle: connecting.handle, toHandle }]);
             markDirty();
@@ -359,16 +369,16 @@ export function WorkflowEditor({ workflowId, version }) {
   }, [dragNodeId, dragOffset, connecting, panning, transform.scale, clientToCanvas, markDirty]);
 
   // ── Canvas-level pan + zoom ────────────────────────────────────────
-  const onCanvasMouseDown = (e) => {
-    if (e.target.classList.contains("wf-canvas-inner") || e.target.classList.contains("wf-canvas")) {
+  const onCanvasMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    if ((e.target as HTMLElement).classList.contains("wf-canvas-inner") || (e.target as HTMLElement).classList.contains("wf-canvas")) {
       panStart.current = { x: e.clientX, y: e.clientY, tx: transform.x, ty: transform.y };
       setPanning(true);
       setSelected(null);
     }
   };
-  const onWheel = (e) => {
+  const onWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     e.preventDefault();
-    const r = canvasRef.current.getBoundingClientRect();
+    const r = canvasRef.current!.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
     setTransform((t) => {
       const scale = Math.max(0.25, Math.min(2.5, t.scale * (1 - e.deltaY * 0.0015)));
@@ -376,19 +386,19 @@ export function WorkflowEditor({ workflowId, version }) {
       return { x: mx - (mx - t.x) * ratio, y: my - (my - t.y) * ratio, scale };
     });
   };
-  const onPaletteAdd = (kind) => {
+  const onPaletteAdd = (kind: string) => {
     const id = newNodeId();
-    setNodes((ns) => [...ns, { id, kind, label: kind, x: 320, y: 220, config: {}, notes: "" }]);
+    setNodes((ns: WFNode[]) => [...ns, { id, kind, label: kind, x: 320, y: 220, config: {}, notes: "" }]);
     setSelected(id);
     markDirty();
   };
-  const onCanvasDrop = (e) => {
+  const onCanvasDrop = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     const kind = e.dataTransfer.getData("kind");
     if (!kind) return;
     const c = clientToCanvas(e.clientX, e.clientY);
     const id = newNodeId();
-    setNodes((ns) => [...ns, {
+    setNodes((ns: WFNode[]) => [...ns, {
       id, kind, label: kind,
       x: c.x - NODE_W / 2, y: c.y - NODE_H / 2,
       config: {}, notes: "",
@@ -398,7 +408,7 @@ export function WorkflowEditor({ workflowId, version }) {
   };
 
   const resetView = () => setTransform({ x: 0, y: 0, scale: 1 });
-  const zoomBy = (factor) => {
+  const zoomBy = (factor: number) => {
     const r = canvasRef.current.getBoundingClientRect();
     const mx = r.width / 2, my = r.height / 2;
     setTransform((t) => {
@@ -409,10 +419,10 @@ export function WorkflowEditor({ workflowId, version }) {
   };
   const fitToContent = useCallback(() => {
     if (!canvasRef.current || nodes.length === 0) return resetView();
-    const minX = Math.min(...nodes.map((n) => n.x));
-    const minY = Math.min(...nodes.map((n) => n.y));
-    const maxX = Math.max(...nodes.map((n) => n.x + NODE_W));
-    const maxY = Math.max(...nodes.map((n) => n.y + NODE_H));
+    const minX = Math.min(...nodes.map((n: WFNode) => n.x));
+    const minY = Math.min(...nodes.map((n: WFNode) => n.y));
+    const maxX = Math.max(...nodes.map((n: WFNode) => n.x + NODE_W));
+    const maxY = Math.max(...nodes.map((n: WFNode) => n.y + NODE_H));
     const r = canvasRef.current.getBoundingClientRect();
     const pad = 60;
     const sx = (r.width - pad * 2) / Math.max(1, maxX - minX);
@@ -422,10 +432,10 @@ export function WorkflowEditor({ workflowId, version }) {
     const y = -minY * scale + (r.height - (maxY - minY) * scale) / 2;
     setTransform({ x, y, scale });
   }, [nodes]);
-  const doAutoLayout = (direction) => {
+  const doAutoLayout = (direction: string) => {
     const { positions, defaultHandles } = autoLayout(nodes, edges, direction);
-    setNodes((ns) => ns.map((n) => positions[n.id] ? { ...n, ...positions[n.id] } : n));
-    setEdges((es) => es.map((e) => ({ ...e, fromHandle: defaultHandles.from, toHandle: defaultHandles.to })));
+    setNodes((ns: WFNode[]) => ns.map((n) => positions[n.id] ? { ...n, ...positions[n.id] } : n));
+    setEdges((es: WFEdge[]) => es.map((e) => ({ ...e, fromHandle: defaultHandles.from, toHandle: defaultHandles.to })));
     markDirty();
     setTimeout(fitToContent, 50);
   };
@@ -439,18 +449,18 @@ export function WorkflowEditor({ workflowId, version }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const onNodePatch = (patch) => {
-    setNodes((ns) => ns.map((n) => n.id === selected ? { ...n, ...patch } : n));
+  const onNodePatch = (patch: Partial<WFNode>) => {
+    setNodes((ns: WFNode[]) => ns.map((n) => n.id === selected ? { ...n, ...patch } : n));
     markDirty();
   };
   const onNodeDelete = () => {
-    setNodes((ns) => ns.filter((n) => n.id !== selected));
-    setEdges((es) => es.filter((e) => e.from !== selected && e.to !== selected));
+    setNodes((ns: WFNode[]) => ns.filter((n) => n.id !== selected));
+    setEdges((es: WFEdge[]) => es.filter((e) => e.from !== selected && e.to !== selected));
     setSelected(null);
     markDirty();
   };
 
-  const selectedNode = nodes.find((n) => n.id === selected);
+  const selectedNode = nodes.find((n: WFNode) => n.id === selected);
   const status =
     isSaving ? "saving"
     : dirty   ? "dirty"
@@ -481,7 +491,7 @@ export function WorkflowEditor({ workflowId, version }) {
                 <path d="M0 0 L10 5 L0 10 z" fill="var(--border-strong)" />
               </marker>
             </defs>
-            {edges.map((e, i) => {
+            {edges.map((e: WFEdge, i: number) => {
               const a = byId[e.from], b = byId[e.to];
               if (!a || !b) return null;
               return <path key={e.id || i} d={edgePathBetween(a, b, e.fromHandle, e.toHandle)}
@@ -492,13 +502,13 @@ export function WorkflowEditor({ workflowId, version }) {
             {connecting && (() => {
               const a = byId[connecting.id];
               if (!a) return null;
-              const h = HANDLE_OFFSET[connecting.handle];
+              const h = (HANDLE_OFFSET as Record<string, { x: number; y: number; dx: number; dy: number }>)[connecting.handle];
               const sx = a.x + h.x, sy = a.y + h.y;
               const c = clientToCanvas(connecting.x, connecting.y);
               return <path d={`M ${sx} ${sy} L ${c.x} ${c.y}`} stroke="var(--accent)" strokeWidth="1.6" strokeDasharray="5 4" fill="none" />;
             })()}
           </svg>
-          {nodes.map((n) => (
+          {nodes.map((n: WFNode) => (
             <CanvasNode key={n.id} node={n} selected={selected === n.id}
                         onMouseDown={(e) => onNodeMouseDown(e, n.id)}
                         onHandleMouseDown={onHandleMouseDown}
@@ -544,13 +554,13 @@ export function WorkflowEditor({ workflowId, version }) {
 }
 
 // ── normaliseGraph — pull {nodes, edges} from version.graph in canvas shape ─
-function parseGraph(version) {
+function parseGraph(version: any): { nodes: WFNode[]; edges: WFEdge[] } {
   if (!version) return { nodes: [], edges: [] };
   const g = version.graph || version;
   const inNodes = g.nodes || [];
   const inEdges = g.edges || [];
 
-  let nodes = inNodes.map((n) => ({
+  let nodes: WFNode[] = inNodes.map((n: any) => ({
     id: n.id,
     kind: n.type || n.kind || "function",
     label: n.label || n.id,
@@ -567,14 +577,14 @@ function parseGraph(version) {
   if (nodes.length && nodes.every((n) => !n.x && !n.y)) {
     const { positions, defaultHandles } = autoLayout(nodes, inEdges, "vertical");
     nodes = nodes.map((n) => positions[n.id] ? { ...n, ...positions[n.id] } : n);
-    const edges = inEdges.map((e) => ({
+    const edges: WFEdge[] = inEdges.map((e: any) => ({
       id: e.id, from: e.from || e.fromId, to: e.to || e.toId,
       fromPort: e.fromPort, toPort: e.toPort,
       fromHandle: defaultHandles.from, toHandle: defaultHandles.to,
     }));
     return { nodes, edges };
   }
-  const edges = inEdges.map((e) => ({
+  const edges: WFEdge[] = inEdges.map((e: any) => ({
     id: e.id, from: e.from || e.fromId, to: e.to || e.toId,
     fromPort: e.fromPort, toPort: e.toPort,
     fromHandle: "bottom", toHandle: "top",

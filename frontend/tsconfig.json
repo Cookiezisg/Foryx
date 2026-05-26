@@ -9,6 +9,7 @@
     "allowJs": true,
     "checkJs": false,
     "strict": false,
+    "noImplicitAny": true,
     "noUnusedLocals": false,
     "noEmit": true,
     "allowImportingTsExtensions": true,

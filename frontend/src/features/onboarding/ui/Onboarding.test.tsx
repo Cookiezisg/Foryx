@@ -12,7 +12,7 @@ vi.mock("framer-motion", async () => {
   const actual = await vi.importActual("framer-motion");
   return {
     ...actual,
-    AnimatePresence: ({ children }) => children,
+    AnimatePresence: ({ children }: { children: any }) => children,
     motion: new Proxy({}, {
       get: (_, tag) => (props: any) => {
         const { initial, animate, exit, transition, layout, ...rest } = props;
@@ -54,7 +54,7 @@ import { useSettingsStore } from "@entities/settings/model/settingsStore";
 import { useSessionStore } from "@entities/session";
 import { Onboarding } from "./Onboarding.tsx";
 
-function wrap({ children }) {
+function wrap({ children }: { children: any }) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
   return createElement(QueryClientProvider, { client }, children);
 }
@@ -70,7 +70,7 @@ beforeEach(() => {
   mockDeleteKey.mockReset().mockResolvedValue({});
 });
 
-const btn = (re) => screen.getByRole("button", { name: re });
+const btn = (re: any) => screen.getByRole("button", { name: re });
 const pane = () => document.querySelector(".onb-pane") as HTMLElement;
 const inPane = (text: string) => within(pane()).getByText(text);
 

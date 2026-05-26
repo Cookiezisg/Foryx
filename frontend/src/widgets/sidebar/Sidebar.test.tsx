@@ -5,7 +5,7 @@ import { Sidebar } from "./Sidebar.tsx";
 import { usePaneStore, useSidebarStore, useOverlayStore } from "@app/model";
 
 vi.mock("@entities/conversation", () => ({
-  useConversations:        () => ({ data: [] }),
+  useConversations:        () => ({ data: [] as any[] }),
   useCreateConversation:   () => ({ mutateAsync: vi.fn().mockResolvedValue({ id: "cv_new" }) }),
   useUpdateConversation:   () => ({ mutate: vi.fn() }),
   useDeleteConversation:   () => ({ mutate: vi.fn() }),
