@@ -13,7 +13,7 @@ import { Badge } from "../../components/primitives/Badge.jsx";
 import { RelTime } from "../../shared/ui/RelTime.jsx";
 import { EntityRelMeta } from "../../widgets/entity-rel-meta/EntityRelMeta.jsx";
 import { BottomSheet } from "../../shared/ui/BottomSheet.jsx";
-import { ApprovalBanner } from "./ApprovalBanner.jsx";
+import { ApprovalBanner } from "../../pages/execute/ui/ApprovalBanner.jsx";
 import {
   useFlowRun, useFlowRunNodes, useCancelFlowRun, useApproveNode,
   useRejectNode, useTriageFlowRun,

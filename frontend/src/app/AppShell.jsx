@@ -17,15 +17,15 @@ import { ToastTray } from "@/widgets/toaster/ToastTray.jsx";
 import { PaneFrame, PANE_META } from "./shell/PaneFrame.jsx";
 import { PaneResize } from "./shell/PaneResize.jsx";
 import { NarrowSwitch } from "./shell/NarrowSwitch.jsx";
-import { Dashboard } from "@/panes/dashboard/Dashboard.jsx";
-import { ChatPane } from "@/panes/chat/ChatPane.jsx";
-import { ForgePane } from "@/panes/forge/ForgePane.jsx";
-import { ExecutePane } from "@/panes/execute/ExecutePane.jsx";
-import { SkillsPane } from "@/panes/library/SkillsPane.jsx";
-import { McpPane } from "@/panes/library/McpPane.jsx";
-import { MemoryPane } from "@/panes/library/MemoryPane.jsx";
-import { DocumentsPane } from "@/panes/library/DocumentsPane.jsx";
-import { ObservePane } from "@/panes/observe/ObservePane.jsx";
+import { Dashboard } from "@/pages/dashboard/Dashboard.jsx";
+import { ChatPage } from "@/pages/chat/ChatPage.jsx";
+import { ForgePage } from "@/pages/forge/ForgePage.jsx";
+import { ExecutePage } from "@/pages/execute/ExecutePage.jsx";
+import { SkillsPage } from "@/pages/library/SkillsPage.jsx";
+import { McpPage } from "@/pages/library/McpPage.jsx";
+import { MemoryPage } from "@/pages/library/MemoryPage.jsx";
+import { DocumentsPage } from "@/pages/library/DocumentsPage.jsx";
+import { ObservePage } from "@/pages/observe/ui/ObservePage.jsx";
 import { AskUserModal } from "@/components/overlays/AskUserModal.jsx";
 import { SettingsModal } from "@/components/overlays/SettingsModal.jsx";
 import { usePaneStore, useSidebarStore, useOverlayStore } from "@app/model";
@@ -33,16 +33,16 @@ import { setNavigator } from "@shared/lib/navigation";
 import { useKeyboardShortcuts } from "./lib/useKeyboardShortcuts.js";
 import { easeOut } from "@/motion/tokens.js";
 
-function renderPaneBody(kind, onClose) {
+function renderPaneBody(kind, onClose, pageProps) {
   switch (kind) {
-    case "chat":      return <ChatPane onClose={onClose} />;
-    case "forge":     return <ForgePane />;
-    case "execute":   return <ExecutePane />;
-    case "documents": return <DocumentsPane />;
-    case "skills":    return <SkillsPane />;
-    case "mcp":       return <McpPane />;
-    case "memory":    return <MemoryPane />;
-    case "observe":   return <ObservePane />;
+    case "chat":      return <ChatPage onClose={onClose} {...pageProps.chat} />;
+    case "forge":     return <ForgePage {...pageProps.forge} />;
+    case "execute":   return <ExecutePage {...pageProps.execute} />;
+    case "documents": return <DocumentsPage {...pageProps.documents} />;
+    case "skills":    return <SkillsPage />;
+    case "mcp":       return <McpPage />;
+    case "memory":    return <MemoryPage />;
+    case "observe":   return <ObservePage />;
     default:          return null;
   }
 }
@@ -71,6 +71,12 @@ export function AppShell() {
   const setToolsExpanded = useSidebarStore((s) => s.setToolsExpanded);
   const setRecentExpanded = useSidebarStore((s) => s.setRecentExpanded);
   const setArchivedExpanded = useSidebarStore((s) => s.setArchivedExpanded);
+
+  // Page-level entity state
+  const focusEntity = usePaneStore((s) => s.focusEntity);
+  const consumeFocusEntity = usePaneStore((s) => s.consumeFocusEntity);
+  const activeDocument = usePaneStore((s) => s.activeDocument);
+  const setActiveDocument = usePaneStore((s) => s.setActiveDocument);
 
   // Overlay state
   const cmdkOpen = useOverlayStore((s) => s.cmdkOpen);
@@ -137,6 +143,13 @@ export function AppShell() {
 
   const isTwoPane = openPanes.length === 2 && !narrow;
 
+  const pageProps = {
+    chat: { activeConv, onSetActiveConv: setActiveConv, onOpenSettings: () => setSettingsOpen(true) },
+    forge: { focusEntity, onConsumeFocusEntity: consumeFocusEntity },
+    execute: { focusEntity, onConsumeFocusEntity: consumeFocusEntity },
+    documents: { activeDoc: activeDocument, onSetActiveDocument: setActiveDocument },
+  };
+
   return (
     <div className={"app" + (collapsed ? " is-collapsed" : "") + (narrow ? " is-narrow" : "")}>
       <Sidebar
@@ -160,7 +173,7 @@ export function AppShell() {
 
       <main className="main" ref={mainRef}>
         {openPanes.length === 0 ? (
-          <Dashboard />
+          <Dashboard onOpenPane={openPane} onSetActiveConv={setActiveConv} />
         ) : (
           <AnimatePresence mode="popLayout" initial={false}>
             {openPanes.map((kind, idx) => {
@@ -197,7 +210,7 @@ export function AppShell() {
                     onClose={() => closePane(kind)}
                     crumbs={[(() => { const m = PANE_META[kind]; return m ? (m.labelKey ? t(m.labelKey) : (m.label || kind)) : kind; })()]}
                   >
-                    {renderPaneBody(kind, () => closePane(kind))}
+                    {renderPaneBody(kind, () => closePane(kind), pageProps)}
                   </PaneFrame>
                   {isTwoPane && idx === 0 && (
                     <PaneResizeBetween key="resize-between" onDrag={onPaneDrag} />

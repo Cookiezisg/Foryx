@@ -35,7 +35,7 @@ vi.mock("../../widgets/ask-ai-trigger/AskAiTrigger.jsx", () => ({
   AskAiTrigger: ({ entityId }) => <div data-testid="ask-ai">ask-{entityId}</div>,
 }));
 
-vi.mock("./CapabilityCheckPanel.jsx", () => ({
+vi.mock("../../pages/forge/ui/CapabilityCheckPanel.jsx", () => ({
   CapabilityCheckPanel: ({ workflowId }) => (
     <div data-testid="cap-panel">cap-{workflowId}</div>
   ),

@@ -27,6 +27,8 @@ export default tseslint.config(
         { type: "shared-tmp", pattern: "src/{api,sse,store,hooks,motion,i18n,components/primitives}/**" },
         // widgets 层:阶段4b 已正式迁入,暂不加 boundaries 规则(阶段5收口)
         { type: "widgets", pattern: "src/widgets/**" },
+        // pages 层:阶段4b.3 迁入;不得依赖 app 层(状态由 AppShell 经 props 传入)
+        { type: "pages", pattern: "src/pages/*", capture: ["slice"] },
         { type: "feature-tmp", pattern: "src/{panes,components/{overlays,config}}/**" }
       ]
     },
@@ -54,7 +56,9 @@ export default tseslint.config(
           // feature→store(shared-tmp)债务通过 inline disable 豁免。
           { from: { type: "features" }, disallow: { to: { type: ["feature-tmp", "shared-tmp"] } }, message: "features 不能依赖上层或迁移期临时层" },
           // widgets 层(阶段4b):不得依赖 app 层(导航走 shared/lib/navigation DIP)
-          { from: { type: "widgets" }, disallow: { to: { type: ["app"] } }, message: "widgets 不能依赖 app(导航改用 navigate from shared/lib/navigation)" }
+          { from: { type: "widgets" }, disallow: { to: { type: ["app"] } }, message: "widgets 不能依赖 app(导航改用 navigate from shared/lib/navigation)" },
+          // pages 层(阶段4b.3):不得依赖 app 层(状态由 AppShell props 传入)
+          { from: { type: "pages" }, disallow: { to: { type: ["app"] } }, message: "pages 不能依赖 app(状态由 AppShell 经 props 传入)" }
         ]
       }],
       "no-unused-vars": "off",

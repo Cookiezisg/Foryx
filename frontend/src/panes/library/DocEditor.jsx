@@ -20,7 +20,7 @@ import Mention from "@tiptap/extension-mention";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import { Markdown } from "tiptap-markdown";
 import { lowlight } from "../../shared/lib/highlight/index.js";
-import { CodeBlockNode } from "./CodeBlockNode.jsx";
+import { CodeBlockNode } from "../../pages/library/ui/CodeBlockNode.jsx";
 
 // Extend CodeBlockLowlight to render its node via our React component
 // (language <select> in the corner). Must extend BEFORE configure().

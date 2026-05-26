@@ -13,7 +13,7 @@ import { EntityRelMeta } from "../../widgets/entity-rel-meta/EntityRelMeta.jsx";
 import { VersionRail } from "../../widgets/version-rail/VersionRail.jsx";
 import { AskAiTrigger } from "../../widgets/ask-ai-trigger/AskAiTrigger.jsx";
 import { RunDrawer } from "../../components/overlays/RunDrawer.jsx";
-import { CapabilityCheckPanel } from "./CapabilityCheckPanel.jsx";
+import { CapabilityCheckPanel } from "../../pages/forge/ui/CapabilityCheckPanel.jsx";
 import { WorkflowEditor } from "./WorkflowEditor.jsx";
 import { useWorkflow, useWorkflowVersions } from "../../api/forge.js";
 import { useForgeProgress } from "@app/sse/useForge.js";
