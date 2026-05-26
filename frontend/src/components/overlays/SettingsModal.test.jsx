@@ -57,7 +57,7 @@ vi.mock("../../api/config.js", () => ({
 
 import { useOverlayStore } from "@app/model";
 import { useToastStore } from "../../shared/ui/toastStore.ts";
-import { useSettings } from "../../store/settings.js";
+import { useSessionStore } from "../../entities/session/index.ts";
 import { SettingsModal } from "./SettingsModal.jsx";
 
 function wrap({ children }) {
@@ -68,7 +68,7 @@ function wrap({ children }) {
 beforeEach(() => {
   useOverlayStore.setState({ settingsOpen: true });
   useToastStore.setState({ toasts: [] });
-  useSettings.setState({ activeUserId: "u_a" });
+  useSessionStore.setState({ currentUserId: "u_a" });
 });
 
 describe("SettingsModal", () => {

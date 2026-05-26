@@ -41,14 +41,28 @@ vi.mock("@shared/ui/toastStore", () => ({
 
 // eslint-disable-next-line boundaries/dependencies
 vi.mock("../../../store/settings.js", () => {
-  let state = { accent: "claude", lang: "zh", activeUserId: null as string | null, onboarded: false };
+  let state = { onboarded: false };
   return {
     useSettings: () => ({
       ...state,
       set: (patch: Partial<typeof state>) => { state = { ...state, ...patch }; },
     }),
-    getSettingsState: () => state,
-    __resetState: () => { state = { accent: "claude", lang: "zh", activeUserId: null, onboarded: false }; },
+    __resetState: () => { state = { onboarded: false }; },
+  };
+});
+
+vi.mock("@entities/session", () => {
+  const store = {
+    currentUserId: null as string | null,
+    status: "loading" as "loading" | "onboarding" | "ready",
+    setCurrentUser: (id: string | null) => { store.currentUserId = id; },
+    setStatus: (s: "loading" | "onboarding" | "ready") => { store.status = s; },
+  };
+  return {
+    useSessionStore: Object.assign(
+      (sel: (s: typeof store) => unknown) => sel(store),
+      { getState: () => store, setState: (patch: Partial<typeof store>) => Object.assign(store, patch) }
+    ),
   };
 });
 

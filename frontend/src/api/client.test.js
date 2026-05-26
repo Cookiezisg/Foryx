@@ -159,19 +159,23 @@ describe("apiFetch", () => {
   });
 
   it("apiFetch_activeUserId_sentAsHeader", async () => {
-    const { useSettings } = await import("../store/settings.js");
-    useSettings.setState({ activeUserId: "u_abc" });
+    const { useSessionStore } = await import("@entities/session");
+    const { setUserIdProvider } = await import("@shared/api/authProvider");
+    setUserIdProvider(() => useSessionStore.getState().currentUserId);
+    useSessionStore.setState({ currentUserId: "u_abc" });
     const { apiFetch } = await import("./client.js");
     const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ data: {} }) });
     globalThis.fetch = spy;
     await apiFetch("/x");
     expect(spy.mock.calls[0][1].headers["X-Forgify-User-ID"]).toBe("u_abc");
-    useSettings.setState({ activeUserId: null });
+    useSessionStore.setState({ currentUserId: null });
   });
 
   it("apiFetch_noActiveUser_omitsHeader", async () => {
-    const { useSettings } = await import("../store/settings.js");
-    useSettings.setState({ activeUserId: null });
+    const { useSessionStore } = await import("@entities/session");
+    const { setUserIdProvider } = await import("@shared/api/authProvider");
+    setUserIdProvider(() => useSessionStore.getState().currentUserId);
+    useSessionStore.setState({ currentUserId: null });
     const { apiFetch } = await import("./client.js");
     const spy = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => ({ data: {} }) });
     globalThis.fetch = spy;

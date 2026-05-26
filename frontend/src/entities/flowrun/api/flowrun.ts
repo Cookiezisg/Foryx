@@ -1,7 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, pickList, qk } from "@shared/api";
-// eslint-disable-next-line boundaries/dependencies
-import { useSettings } from "../../../store/settings.js"; // TODO(阶段4): identity store 接管 activeUserId 后移除
+import { useSessionStore } from "../../session/@x/flowrun";
 import type {
   FlowRun,
   FlowRunNode,
@@ -11,7 +10,7 @@ import type {
 } from "../model/types";
 
 export function useFlowRuns(params: FlowRunsParams = {}) {
-  const uid = useSettings((s) => s.activeUserId);
+  const uid = useSessionStore((s) => s.currentUserId);
   const merged = { limit: "100", ...params } as Record<string, string>;
   const qs = new URLSearchParams(merged).toString();
   return useQuery<FlowRun[]>({

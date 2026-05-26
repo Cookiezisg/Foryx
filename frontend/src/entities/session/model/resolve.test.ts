@@ -53,4 +53,80 @@ describe("resolveSession", () => {
     expect(useSessionStore.getState().currentUserId).toBe("u_x");
     expect(useSessionStore.getState().status).toBe("ready");
   });
+
+  // Covers the old computeBootState invariants now inside resolveSession:
+
+  it("resolveSession_setsLoadingFirst_thenSettles", async () => {
+    useSessionStore.setState({ currentUserId: "u_a", status: "ready" });
+    let resolvePromise!: (v: ReturnType<typeof makeUser>[]) => void;
+    mockFetchUsers.mockReturnValue(new Promise((r) => { resolvePromise = r; }));
+
+    const p = resolveSession();
+    // Must immediately go to loading before the fetch resolves.
+    expect(useSessionStore.getState().status).toBe("loading");
+
+    resolvePromise([makeUser("u_a")]);
+    await p;
+    expect(useSessionStore.getState().status).toBe("ready");
+  });
+
+  it("resolveSession_multipleUsers_staleId_selectsFirst", async () => {
+    useSessionStore.setState({ currentUserId: "u_dead" });
+    mockFetchUsers.mockResolvedValue([makeUser("u_first"), makeUser("u_second")]);
+
+    await resolveSession();
+
+    expect(useSessionStore.getState().currentUserId).toBe("u_first");
+    expect(useSessionStore.getState().status).toBe("ready");
+  });
+
+  it("resolveSession_idempotent_secondCallKeepsValidId", async () => {
+    useSessionStore.setState({ currentUserId: "u_keep" });
+    const users = [makeUser("u_keep"), makeUser("u_other")];
+    mockFetchUsers.mockResolvedValue(users);
+
+    await resolveSession();
+    await resolveSession();
+
+    expect(useSessionStore.getState().currentUserId).toBe("u_keep");
+    expect(useSessionStore.getState().status).toBe("ready");
+  });
+
+  it("resolveSession_noCurrentId_singleUser_selectsThat", async () => {
+    useSessionStore.setState({ currentUserId: null });
+    mockFetchUsers.mockResolvedValue([makeUser("u_only")]);
+
+    await resolveSession();
+
+    expect(useSessionStore.getState().currentUserId).toBe("u_only");
+    expect(useSessionStore.getState().status).toBe("ready");
+  });
+
+  it("resolveSession_currentIdValidSecondOfTwo_keeps", async () => {
+    useSessionStore.setState({ currentUserId: "u_b" });
+    mockFetchUsers.mockResolvedValue([makeUser("u_a"), makeUser("u_b")]);
+
+    await resolveSession();
+
+    expect(useSessionStore.getState().currentUserId).toBe("u_b");
+    expect(useSessionStore.getState().status).toBe("ready");
+  });
+
+  it("resolveSession_fetchError_propagates", async () => {
+    mockFetchUsers.mockRejectedValue(new Error("network"));
+
+    await expect(resolveSession()).rejects.toThrow("network");
+    expect(useSessionStore.getState().status).toBe("loading");
+  });
+
+  it("resolveSession_currentIdMissingFromLargeList_selectsFirst", async () => {
+    useSessionStore.setState({ currentUserId: "u_phantom" });
+    const users = [makeUser("u_a"), makeUser("u_b"), makeUser("u_c")];
+    mockFetchUsers.mockResolvedValue(users);
+
+    await resolveSession();
+
+    expect(useSessionStore.getState().currentUserId).toBe("u_a");
+    expect(useSessionStore.getState().status).toBe("ready");
+  });
 });

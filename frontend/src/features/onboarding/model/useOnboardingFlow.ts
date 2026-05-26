@@ -14,9 +14,7 @@ import { useProviders, useUpsertModelConfig } from "@entities/model-config";
 // TODO(阶段4): onboarding-strings 迁入 shared/config 后修正 import
 // eslint-disable-next-line boundaries/dependencies
 import { ACCENTS, PROVIDER_DEFAULT_MODEL } from "../../../components/overlays/onboarding-strings.js";
-// TODO(阶段4): session store 迁 entities/session 后移除豁免
-// eslint-disable-next-line boundaries/dependencies
-import { useSettings } from "../../../store/settings.js";
+import { useSessionStore } from "@entities/session";
 import { useSettingsStore } from "@entities/settings";
 import { useToastStore } from "@shared/ui/toastStore";
 
@@ -73,7 +71,6 @@ export interface OnboardingFlowState {
 
 export function useOnboardingFlow(): OnboardingFlowState {
   const { t } = useTranslation("onboarding");
-  const session = useSettings();
   const prefs = useSettingsStore();
   const qc = useQueryClient();
   const pushToast = useToastStore((s) => s.pushToast);
@@ -130,7 +127,7 @@ export function useOnboardingFlow(): OnboardingFlowState {
       avatarColor: ACCENTS.find(([k]: [string, string]) => k === prefs.accent)?.[1] || "#d97757",
     });
     setCreatedUserId(user.id);
-    session.set({ activeUserId: user.id });
+    useSessionStore.getState().setCurrentUser(user.id);
   };
 
   // Switching provider drops key/model state; best-effort delete the orphaned
@@ -179,7 +176,7 @@ export function useOnboardingFlow(): OnboardingFlowState {
   });
 
   const finish = (onFinish?: () => void) => {
-    session.set({ onboarded: true });
+    useSessionStore.getState().setStatus("ready");
     qc.invalidateQueries();
     pushToast({ kind: "success", title: t("toast.welcome"), desc: name.trim() });
     onFinish?.();

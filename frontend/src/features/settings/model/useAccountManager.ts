@@ -8,9 +8,7 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQueryClient } from "@tanstack/react-query";
 import { useCreateUser } from "@entities/user";
-// TODO(阶段4): settings store 拆进 app/model 后修正 import
-// eslint-disable-next-line boundaries/dependencies
-import { useSettings } from "../../../store/settings.js";
+import { useSessionStore } from "@entities/session";
 import { useToastStore } from "@shared/ui/toastStore";
 
 export interface AccountManagerState {
@@ -24,14 +22,13 @@ export interface AccountManagerState {
 export function useAccountManager(): AccountManagerState {
   const { t } = useTranslation("settings");
   const qc = useQueryClient();
-  const settings = useSettings();
   const pushToast = useToastStore((s) => s.pushToast);
   const createUser = useCreateUser();
 
   const [name, setName] = useState("");
 
   const switchTo = (id: string) => {
-    settings.set({ activeUserId: id });
+    useSessionStore.getState().setCurrentUser(id);
     qc.invalidateQueries();
     pushToast({ kind: "success", title: t("account.switchedTo", { id }) });
   };

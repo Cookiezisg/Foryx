@@ -10,7 +10,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { createSSE } from "./shared.js";
 import { useOverlayStore } from "@app/model";
-import { useSettings } from "../store/settings.js";
+import { useSessionStore } from "@entities/session";
 import { qk } from "../api/client.js";
 
 // type -> list of query keys to invalidate when this entity changes.
@@ -34,7 +34,7 @@ export function useNotifications() {
   const [unread, setUnread] = useState(0);
   // TODO(4b): pages props 化后移除 shared-tmp→app 过渡引用
   const setPendingAsk = useOverlayStore((s) => s.setPendingAsk);
-  const activeUserId = useSettings((s) => s.activeUserId);
+  const activeUserId = useSessionStore((s) => s.currentUserId);
 
   useEffect(() => {
     const ctrl = createSSE({

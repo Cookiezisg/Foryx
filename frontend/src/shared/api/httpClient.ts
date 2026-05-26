@@ -6,17 +6,7 @@
 // 剥 §N1 envelope，统一报错带 code/status。
 
 import { apiUrl } from "../../bridge/wails.js";
-// TODO(阶段4a.5): app 注入 session provider 后删此豁免
-// eslint-disable-next-line boundaries/dependencies
-import { useSettings } from "../../store/settings.js";
-import { getUserId, notifyAuthFailure, setUserIdProvider } from "./authProvider.js";
-
-// Default provider: reads legacy settings.activeUserId until app/session
-// takes over at stage 4a.5. Injected once at module load so behaviour is
-// identical to the old inline read.
-//
-// 默认 provider：阶段4a.5 之前读旧 settings.activeUserId，保持现状行为不变。
-setUserIdProvider(() => useSettings.getState().activeUserId);
+import { getUserId, notifyAuthFailure } from "./authProvider.js";
 
 export { setUserIdProvider, setOnAuthFailure } from "./authProvider.js";
 
@@ -94,15 +84,12 @@ export async function apiFetch<T = unknown>(path: string, opts: ApiFetchOpts = {
     try { payload = await res.json(); } catch { /* swallow; we surface via message */ }
     const code = payload?.error?.code || `HTTP_${res.status}`;
     const message = payload?.error?.message || `request failed: ${res.status} ${res.statusText}`;
-    // Self-heal: stale or missing activeUserId. Clear it so App.jsx's effect
-    // re-renders into onboarding or auto-selects the only remaining user.
+    // Self-heal: stale or missing userId — notify session to re-resolve.
+    // resolveSession picks a fresh /users list and updates currentUserId.
     // Still throw so the caller can surface the failure.
     //
-    // 自愈：activeUserId 失效；清掉后 App.jsx 的 effect 会切回 onboarding
-    // 或 auto-select。仍 throw 让调用方知道这次请求失败。
+    // 自愈：userId 失效 → 通知 session 重新 resolve；仍 throw 让调用方感知失败。
     if (res.status === 401 && code === "UNAUTH_NO_USER") {
-      // 阶段4a.6 删旧 settings 自愈，届时只保留 notifyAuthFailure()。
-      try { useSettings.getState().set({ activeUserId: null }); } catch { /* store unavailable in tests */ }
       notifyAuthFailure();
     }
     throw new ApiError(message, { code, status: res.status, details: payload?.error?.details });

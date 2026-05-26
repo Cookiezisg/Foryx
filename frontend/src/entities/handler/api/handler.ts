@@ -1,11 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiFetch, pickList, qk } from "@shared/api";
-// eslint-disable-next-line boundaries/dependencies
-import { useSettings } from "../../../store/settings.js"; // TODO(阶段4): identity store 接管 activeUserId 后移除
+import { useSessionStore } from "../../session/@x/handler";
 import type { Handler, HandlerVersion, HandlerConfig, CallHandlerVars, CallHandlerResult } from "../model/types";
 
 export function useHandlers() {
-  const uid = useSettings((s) => s.activeUserId);
+  const uid = useSessionStore((s) => s.currentUserId);
   return useQuery<Handler[]>({
     queryKey: qk.handlers(),
     queryFn: () => apiFetch("/handlers?limit=200"),

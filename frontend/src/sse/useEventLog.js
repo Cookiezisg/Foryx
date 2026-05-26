@@ -9,11 +9,11 @@
 import { useEffect, useState } from "react";
 import { createSSE } from "./shared.js";
 import { useChatStore } from "../store/chat.js";
-import { useSettings } from "../store/settings.js";
+import { useSessionStore } from "@entities/session";
 
 export function useEventLog() {
   const [status, setStatus] = useState("connecting");
-  const activeUserId = useSettings((s) => s.activeUserId);
+  const activeUserId = useSessionStore((s) => s.currentUserId);
 
   useEffect(() => {
     const ch = useChatStore.getState();

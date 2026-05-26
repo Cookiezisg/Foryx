@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 
-vi.mock("../store/settings.js", () => ({ useSettings: vi.fn() }));
+vi.mock("@entities/session", () => ({ useSessionStore: vi.fn() }));
 vi.mock("../api/users.js", () => ({ useUsers: vi.fn(), useUpdateUser: vi.fn() }));
 
-import { useSettings } from "../store/settings.js";
+import { useSessionStore } from "@entities/session";
 import { useUsers, useUpdateUser } from "../api/users.js";
 import { useDisplayName } from "./useDisplayName.js";
 
@@ -12,7 +12,7 @@ let mutate;
 beforeEach(() => {
   mutate = vi.fn();
   useUpdateUser.mockReturnValue({ mutate });
-  useSettings.mockImplementation((sel) => sel({ activeUserId: "u_1" }));
+  useSessionStore.mockImplementation((sel) => sel({ currentUserId: "u_1" }));
   useUsers.mockReturnValue({ data: [{ id: "u_1", username: "weilin", displayName: "Weilin" }] });
 });
 
@@ -29,7 +29,7 @@ describe("useDisplayName", () => {
   });
 
   it("returns empty string when no active user matches", () => {
-    useSettings.mockImplementation((sel) => sel({ activeUserId: null }));
+    useSessionStore.mockImplementation((sel) => sel({ currentUserId: null }));
     const { result } = renderHook(() => useDisplayName());
     expect(result.current[0]).toBe("");
   });

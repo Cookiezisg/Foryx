@@ -2,34 +2,21 @@
 // and replays the last `id:` value via Last-Event-ID — matches backend
 // /eventlog, /notifications, /forge handlers.
 //
-// State machine (mirrors spec §4.5):
-//   - activeUserId null → no connection (would 401 instantly; pointless)
-//   - activeUserId set  → connect with ?userID=<id> (EventSource can't
+// State machine:
+//   - currentUserId null → no connection (would 401 instantly; pointless)
+//   - currentUserId set  → connect with ?userID=<id> (EventSource can't
 //     send custom headers, so the SSE auth path reads the query)
 //   - connection drops permanently while the captured uid still matches
-//     the current activeUserId → self-heal: clear activeUserId so App.jsx
-//     re-renders into onboarding / picker
-//   - activeUserId changes mid-stream → the calling hook (useEventLog
-//     etc.) keys its useEffect on activeUserId and rebuilds via close
+//     the current userId → self-heal: notifyAuthFailure → resolveSession
+//   - userId changes mid-stream → the calling hook (useEventLog
+//     etc.) keys its useEffect on currentUserId and rebuilds via close
 //     + new createSSE
 //
-// 共享 SSE 工厂；activeUserId 为空时不建连接；连接被永久关闭且 captured
-// uid 还等于当前 activeUserId 时清掉它触发 self-heal。账号切换由 hook 的
-// useEffect 重建。
+// 共享 SSE 工厂；currentUserId 为空时不建连接；连接被永久关闭且 captured
+// uid 还等于当前 provider 值时触发 notifyAuthFailure → resolveSession。
 
 import { apiUrl } from "../../bridge/wails.js";
-// TODO(阶段4a.5): app 注入 session provider 后删此豁免
-// eslint-disable-next-line boundaries/dependencies
-import { useSettings } from "../../store/settings.js";
-import { getUserId, notifyAuthFailure, setUserIdProvider } from "./authProvider.js";
-
-// Default provider: reads legacy settings.activeUserId. Mirrors the same
-// call in httpClient.ts — whichever module loads first installs the default;
-// the second call is a no-op in effect (same fn reference would differ, but
-// both read the same source so either wins).
-//
-// 默认 provider 镜像 httpClient.ts，sse 可独立加载时仍有正确默认值。
-setUserIdProvider(() => useSettings.getState().activeUserId);
+import { getUserId, notifyAuthFailure } from "./authProvider.js";
 
 export type SSEEventMeta = { seq: number; raw: string };
 
@@ -71,16 +58,15 @@ export function createSSE({ path, eventHandlers, onStatus }: CreateSSEOpts): SSE
     }
     onStatus?.("disconnected");
     // Self-heal: connection closed permanently. If our captured uid still
-    // equals the current store value, the backend rejected (likely 401 on
-    // a stale id) → clear so App.jsx flips into onboarding. If the store
-    // already moved on (account switch / REST 401 cleared first), do
-    // nothing — the hook's useEffect will rebuild.
+    // equals the current provider value, the backend rejected (likely 401
+    // on a stale id) → trigger resolveSession via notifyAuthFailure. If
+    // the provider already moved on (account switch / REST 401 cleared
+    // first), do nothing — the hook's useEffect will rebuild.
     //
-    // 自愈：连接被永久关闭。captured uid 仍 = store 当前值时清掉。
-    // 阶段4a.6 删旧 settings 自愈，届时只保留 notifyAuthFailure()。
-    const current = useSettings.getState().activeUserId;
+    // 自愈：连接被永久关闭。captured uid 仍 = 当前 provider 值时触发
+    // notifyAuthFailure → resolveSession；否则已切账号，不操作。
+    const current = getUserId();
     if (current === uid) {
-      try { useSettings.getState().set({ activeUserId: null }); } catch { /* store unavailable in tests */ }
       notifyAuthFailure();
     }
   });

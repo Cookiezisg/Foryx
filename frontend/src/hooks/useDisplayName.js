@@ -8,11 +8,11 @@
 // createUser 写入,设置里可改),不再用孤立的 localStorage 字段(那会让
 // 走完引导的用户也显示 "?")。取不到 displayName 退到 username,再退到 ""。
 
-import { useSettings } from "../store/settings.js";
+import { useSessionStore } from "@entities/session";
 import { useUsers, useUpdateUser } from "../api/users.js";
 
 export function useDisplayName() {
-  const activeUserId = useSettings((s) => s.activeUserId);
+  const activeUserId = useSessionStore((s) => s.currentUserId);
   const { data: users = [] } = useUsers();
   const update = useUpdateUser();
 

@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render, renderHook } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MockEventSource } from "../test-setup.js";
-import { useSettings } from "../store/settings.js";
+import { useSessionStore } from "@entities/session";
+import { setUserIdProvider } from "@shared/api/authProvider";
 import { SSEProvider, useSSEHealth } from "./SSEProvider.jsx";
 
 function wrap(children) {
@@ -19,7 +20,8 @@ function wrap(children) {
 beforeEach(async () => {
   MockEventSource.reset();
   globalThis.EventSource = MockEventSource;
-  useSettings.setState({ activeUserId: "u_test" });
+  setUserIdProvider(() => useSessionStore.getState().currentUserId);
+  useSessionStore.setState({ currentUserId: "u_test" });
   const bridge = await import("../bridge/wails.js");
   await bridge.initBaseUrl();
 });

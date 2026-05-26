@@ -9,7 +9,7 @@ import { useEffect, useState } from "react";
 import { create } from "zustand";
 import { useQueryClient } from "@tanstack/react-query";
 import { createSSE } from "./shared.js";
-import { useSettings } from "../store/settings.js";
+import { useSessionStore } from "@entities/session";
 import { qk } from "../api/client.js";
 
 export const useForgeProgress = create((set, get) => ({
@@ -33,7 +33,7 @@ const scopeKey = (scope) => `${scope?.kind}:${scope?.id}`;
 export function useForge() {
   const qc = useQueryClient();
   const [status, setStatus] = useState("connecting");
-  const activeUserId = useSettings((s) => s.activeUserId);
+  const activeUserId = useSessionStore((s) => s.currentUserId);
 
   useEffect(() => {
     const store = useForgeProgress.getState();

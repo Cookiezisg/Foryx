@@ -69,6 +69,7 @@ vi.mock("@entities/model-config", () => ({
 import { useToastStore } from "../../shared/ui/toastStore.ts";
 import { useSettings } from "../../store/settings.js";
 import { useSettingsStore } from "../../entities/settings/model/settingsStore.ts";
+import { useSessionStore } from "../../entities/session/index.ts";
 import { Onboarding } from "./Onboarding.jsx";
 
 function wrap({ children }) {
@@ -79,7 +80,8 @@ function wrap({ children }) {
 beforeEach(() => {
   useToastStore.setState({ toasts: [] });
   useSettingsStore.setState({ theme: "system", accent: "claude", density: "cozy", lang: "zh", reasoningDefault: "collapsed" });
-  useSettings.setState({ activeUserId: null, onboarded: false });
+  useSettings.setState({ onboarded: false });
+  useSessionStore.setState({ currentUserId: null, status: "loading" });
   mockCreateUser.mockReset().mockResolvedValue({ id: "u_new", username: "alice" });
   mockCreateKey.mockReset().mockResolvedValue({ id: "aki_1" });
   mockTestKey.mockReset().mockResolvedValue({ ok: true, modelsFound: ["deepseek-chat", "deepseek-reasoner"] });
@@ -116,11 +118,11 @@ describe("Onboarding", () => {
     expect(btn(/继续/).disabled).toBe(false);
   });
 
-  it("workspace_continue_createsUserAndSetsActiveUserId", async () => {
+  it("workspace_continue_createsUserAndSetsCurrentUserId", async () => {
     render(<Onboarding onFinish={() => {}} />, { wrapper: wrap });
     await toAppearance();
     expect(mockCreateUser.mock.calls[0][0].displayName).toBe("alice");
-    expect(useSettings.getState().activeUserId).toBe("u_new");
+    expect(useSessionStore.getState().currentUserId).toBe("u_new");
   });
 
   it("appearance_languageSwitch_isLive", async () => {
@@ -195,7 +197,7 @@ describe("Onboarding", () => {
     expect(mockCreateKey.mock.calls.at(-1)[0]).toMatchObject({ provider: "bocha", key: "bocha-key" });
   });
 
-  it("done_enter_marksOnboardedAndCallsOnFinish", async () => {
+  it("done_enter_setsStatusReadyAndCallsOnFinish", async () => {
     const onFinish = vi.fn();
     render(<Onboarding onFinish={onFinish} />, { wrapper: wrap });
     await toAppearance();
@@ -203,7 +205,7 @@ describe("Onboarding", () => {
     await userEvent.click(btn(/继续/)); // → search
     await userEvent.click(btn(/跳过/)); // → done
     await userEvent.click(btn(/进入/));
-    await waitFor(() => expect(useSettings.getState().onboarded).toBe(true));
+    await waitFor(() => expect(useSessionStore.getState().status).toBe("ready"));
     expect(onFinish).toHaveBeenCalled();
   });
 

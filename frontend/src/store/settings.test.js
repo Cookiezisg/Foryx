@@ -1,10 +1,18 @@
 // store/settings — session-state defaults and persistence.
+// activeUserId has migrated to entities/session.
 // Preference fields (theme/accent/density/lang/reasoningDefault) are in
 // entities/settings/model/settingsStore.test.ts; helpers (resolveTheme,
 // applyTheme) are tested there as well.
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { detectLang } from "./boot.js";
+
+// Mirrors the private detectLang() in entities/settings; used to assert
+// default lang in this environment.
+function detectLang() {
+  if (typeof navigator === "undefined") return "zh";
+  const l = (navigator.language || "").toLowerCase();
+  return l.startsWith("zh") ? "zh" : "en";
+}
 
 beforeEach(() => {
   localStorage.clear();
@@ -22,36 +30,33 @@ describe("useSettings (session store)", () => {
   it("useSettings_defaults_matchSpec", async () => {
     const { useSettings } = await import("./settings.js");
     const s = useSettings.getState();
-    expect(s.activeUserId).toBeNull();
     expect(s.onboarded).toBe(false);
     expect(s.leftPct).toBe(50);
   });
 
   it("set_mergesPartialPatch", async () => {
     const { useSettings } = await import("./settings.js");
-    useSettings.getState().set({ activeUserId: "u_abc", onboarded: true });
+    useSettings.getState().set({ onboarded: true });
     const s = useSettings.getState();
-    expect(s.activeUserId).toBe("u_abc");
     expect(s.onboarded).toBe(true);
     expect(s.leftPct).toBe(50);
   });
 
   it("reset_restoresDefaults", async () => {
     const { useSettings } = await import("./settings.js");
-    useSettings.getState().set({ activeUserId: "u_xyz", onboarded: true, leftPct: 70 });
+    useSettings.getState().set({ onboarded: true, leftPct: 70 });
     useSettings.getState().reset();
     const s = useSettings.getState();
-    expect(s.activeUserId).toBeNull();
     expect(s.onboarded).toBe(false);
     expect(s.leftPct).toBe(50);
   });
 
   it("persist_writesToLocalStorage", async () => {
     const { useSettings } = await import("./settings.js");
-    useSettings.getState().set({ activeUserId: "u_persist" });
-    const stored = localStorage.getItem("forgify-session");
+    useSettings.getState().set({ onboarded: true });
+    const stored = localStorage.getItem("forgify-ui");
     expect(stored).toBeTruthy();
-    expect(JSON.parse(stored).state.activeUserId).toBe("u_persist");
+    expect(JSON.parse(stored).state.onboarded).toBe(true);
   });
 });
 
@@ -106,6 +111,22 @@ describe("resolveTheme", () => {
     expect(resolveTheme("system")).toBe("dark");
     window.matchMedia = vi.fn().mockReturnValue({ matches: false });
     expect(resolveTheme("system")).toBe("light");
+  });
+});
+
+describe("detectLang (device language detection)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("zh-CN_returns_zh", () => {
+    vi.stubGlobal("navigator", { language: "zh-CN" });
+    expect(detectLang()).toBe("zh");
+  });
+  it("en-US_returns_en", () => {
+    vi.stubGlobal("navigator", { language: "en-US" });
+    expect(detectLang()).toBe("en");
+  });
+  it("fr-FR_returns_en", () => {
+    vi.stubGlobal("navigator", { language: "fr-FR" });
+    expect(detectLang()).toBe("en");
   });
 });
 

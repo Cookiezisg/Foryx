@@ -6,7 +6,8 @@ import { renderHook, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { MockEventSource } from "../test-setup.js";
-import { useSettings } from "../store/settings.js";
+import { useSessionStore } from "@entities/session";
+import { setUserIdProvider } from "@shared/api/authProvider";
 import { useOverlayStore } from "@app/model";
 import { useNotifications } from "./useNotifications.js";
 
@@ -19,7 +20,8 @@ function makeWrapper() {
 beforeEach(async () => {
   MockEventSource.reset();
   globalThis.EventSource = MockEventSource;
-  useSettings.setState({ activeUserId: "u_test" });
+  setUserIdProvider(() => useSessionStore.getState().currentUserId);
+  useSessionStore.setState({ currentUserId: "u_test" });
   useOverlayStore.setState({ pendingAsk: null });
   const bridge = await import("../bridge/wails.js");
   await bridge.initBaseUrl();

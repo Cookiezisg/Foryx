@@ -1,5 +1,5 @@
 // useEventLog — single global subscription to /eventlog. Tests verify
-// event dispatch to chat store + activeUserId reconnect.
+// event dispatch to chat store + currentUserId reconnect.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { renderHook } from "@testing-library/react";
@@ -7,7 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 import { MockEventSource } from "../test-setup.js";
 import { useChatStore } from "../store/chat.js";
-import { useSettings } from "../store/settings.js";
+import { useSessionStore } from "@entities/session";
+import { setUserIdProvider } from "@shared/api/authProvider";
 import { useEventLog } from "./useEventLog.js";
 
 const wrap = ({ children }) => {
@@ -19,7 +20,8 @@ beforeEach(async () => {
   MockEventSource.reset();
   globalThis.EventSource = MockEventSource;
   useChatStore.setState({ convs: {}, hydratedConvs: new Set() });
-  useSettings.setState({ activeUserId: "u_test" });
+  setUserIdProvider(() => useSessionStore.getState().currentUserId);
+  useSessionStore.setState({ currentUserId: "u_test" });
   const bridge = await import("../bridge/wails.js");
   await bridge.initBaseUrl();
 });
@@ -55,7 +57,7 @@ describe("useEventLog", () => {
     const { rerender } = renderHook(() => useEventLog(), { wrapper: wrap });
     await vi.waitFor(() => expect(MockEventSource.instances.length).toBe(1));
 
-    useSettings.setState({ activeUserId: "u_new" });
+    useSessionStore.setState({ currentUserId: "u_new" });
     rerender();
 
     await vi.waitFor(() => expect(MockEventSource.instances.length).toBe(2));

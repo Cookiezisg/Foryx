@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useTranslation } from "react-i18next";
 import { Icon } from "../primitives/Icon.jsx";
 import { useOverlayStore } from "@app/model";
-import { useSettings } from "../../store/settings.js";
+import { useSessionStore } from "@entities/session";
 import { useUsers } from "../../api/users.js";
 import { scaleIn } from "../../motion/tokens.js";
 import { ApiKeysSection } from "../config/ApiKeysSection.jsx";
@@ -87,12 +87,12 @@ export function SettingsModal() {
 function AccountRegion() {
   const { t } = useTranslation("settings");
   const { data: users = [] } = useUsers();
-  const settings = useSettings();
+  const currentUserId = useSessionStore((s) => s.currentUserId);
   const [mode, setMode] = useState("view");
 
   const { name, setName, switchTo: switchToAccount, addAccount } = useAccountManager();
 
-  const active = users.find((u) => u.id === settings.activeUserId) || users[0];
+  const active = users.find((u) => u.id === currentUserId) || users[0];
 
   const switchTo = (id) => {
     switchToAccount(id);

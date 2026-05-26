@@ -5,10 +5,10 @@
 
 import { useQuery } from "@tanstack/react-query";
 import { apiFetch, qk, pickList } from "./client.js";
-import { useSettings } from "../store/settings.js";
+import { useSessionStore } from "@entities/session";
 
 export function useNotificationsSnapshot(limit = 50) {
-  const uid = useSettings((s) => s.activeUserId);
+  const uid = useSessionStore((s) => s.currentUserId);
   return useQuery({
     queryKey: qk.notificationsSnap(),
     queryFn: () => apiFetch(`/notifications?limit=${limit}`, { headers: { Accept: "application/json" } }),
