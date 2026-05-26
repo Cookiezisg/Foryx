@@ -4,7 +4,9 @@
 import i18n from "i18next";
 import { initReactI18next } from "react-i18next";
 import { resources } from "./resources.js";
-import { useSettings } from "../store/settings.js";
+// TODO(阶段4): settings 下沉 shared 或由 app 注入 lang 后移除此豁免
+// eslint-disable-next-line boundaries/dependencies
+import { useSettings } from "../../../store/settings.js";
 
 i18n.use(initReactI18next).init({
   resources,

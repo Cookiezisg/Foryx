@@ -18,6 +18,8 @@
 // useEffect 重建。
 
 import { apiUrl } from "../../bridge/wails.js";
+// TODO(阶段4): settings 下沉 shared 或由 app 注入 lang 后移除此豁免
+// eslint-disable-next-line boundaries/dependencies
 import { useSettings } from "../../store/settings.js";
 
 export type SSEEventMeta = { seq: number; raw: string };

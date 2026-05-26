@@ -6,6 +6,8 @@
 // 剥 §N1 envelope，统一报错带 code/status。
 
 import { apiUrl } from "../../bridge/wails.js";
+// TODO(阶段4): settings 下沉 shared 或由 app 注入 lang 后移除此豁免
+// eslint-disable-next-line boundaries/dependencies
 import { useSettings } from "../../store/settings.js";
 
 export class ApiError extends Error {
