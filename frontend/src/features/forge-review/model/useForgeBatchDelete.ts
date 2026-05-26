@@ -7,9 +7,6 @@ import { useTranslation } from "react-i18next";
 import { useDeleteFunction } from "@entities/function";
 import { useDeleteHandler } from "@entities/handler";
 import { useDeleteWorkflow } from "@entities/workflow";
-// TODO(阶段4): ui store 拆进 app/model 后,将此 import 替换为正式 FSD 路径。
-// eslint-disable-next-line boundaries/dependencies
-import { useUIStore } from "../../../store/ui.js";
 
 type ForgeKind = "function" | "handler" | "workflow";
 
@@ -25,7 +22,6 @@ interface ForgeItem {
 // batchDelete 逐项按 kind 路由删除；confirm 与原 ForgeList 一致。
 export function useForgeBatchDelete() {
   const { t } = useTranslation(["forge", "common"]);
-  const pushToast = useUIStore((s) => s.pushToast);
 
   const deleteFn = useDeleteFunction();
   const deleteHd = useDeleteHandler();
