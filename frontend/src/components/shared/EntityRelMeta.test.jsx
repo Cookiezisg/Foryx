@@ -3,8 +3,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "@testing-library/react";
 
-vi.mock("../../api/relations.js", () => ({
-  useNeighborhood: vi.fn(),
+vi.mock("@features/entity-link", () => ({
+  useEntityNeighborhood: vi.fn(),
 }));
 
 vi.mock("./EntityLink.jsx", () => ({
@@ -15,64 +15,46 @@ vi.mock("./RelGraph.jsx", () => ({
   RelMore: () => null,
 }));
 
-import { useNeighborhood } from "../../api/relations.js";
+import { useEntityNeighborhood } from "@features/entity-link";
 import { EntityRelMeta } from "./EntityRelMeta.jsx";
 
-beforeEach(() => useNeighborhood.mockReset());
+beforeEach(() => useEntityNeighborhood.mockReset());
 
 describe("EntityRelMeta", () => {
   it("missingEntityId_rendersNothing", () => {
-    useNeighborhood.mockReturnValue({ data: [] });
+    useEntityNeighborhood.mockReturnValue({ neighbours: [], guessedKind: "function" });
     const { container } = render(<EntityRelMeta />);
     expect(container.firstChild).toBeNull();
   });
 
   it("zeroRelations_rendersNothing", () => {
-    useNeighborhood.mockReturnValue({ data: [] });
+    useEntityNeighborhood.mockReturnValue({ neighbours: [], guessedKind: "function" });
     const { container } = render(<EntityRelMeta entityId="fn_a" kind="function" />);
     expect(container.firstChild).toBeNull();
   });
 
   it("pickOtherSideOfEdge_byEntityIdComparison", () => {
-    useNeighborhood.mockReturnValue({
-      data: [
-        { fromId: "fn_a", toId: "fn_b", fromKind: "function", toKind: "function" },
-        { fromId: "fn_c", toId: "fn_a" },
-      ],
-    });
+    useEntityNeighborhood.mockReturnValue({ neighbours: ["fn_b", "fn_c"], guessedKind: "function" });
     const { getAllByTestId } = render(<EntityRelMeta entityId="fn_a" kind="function" />);
     const ids = getAllByTestId("entity-link").map((e) => e.textContent);
     expect(ids).toEqual(["fn_b", "fn_c"]);
   });
 
   it("dedupes_multiEdgePairs_listEachNeighbourOnce", () => {
-    useNeighborhood.mockReturnValue({
-      data: [
-        { fromId: "fn_a", toId: "fn_b" },
-        { fromId: "fn_a", toId: "fn_b" },
-      ],
-    });
+    useEntityNeighborhood.mockReturnValue({ neighbours: ["fn_b"], guessedKind: "function" });
     const { getAllByTestId } = render(<EntityRelMeta entityId="fn_a" kind="function" />);
     expect(getAllByTestId("entity-link")).toHaveLength(1);
   });
 
   it("capsToLimit", () => {
-    useNeighborhood.mockReturnValue({
-      data: [
-        { fromId: "fn_a", toId: "fn_b" },
-        { fromId: "fn_a", toId: "fn_c" },
-        { fromId: "fn_a", toId: "fn_d" },
-        { fromId: "fn_a", toId: "fn_e" },
-        { fromId: "fn_a", toId: "fn_f" },
-      ],
-    });
+    useEntityNeighborhood.mockReturnValue({ neighbours: ["fn_b", "fn_c"], guessedKind: "function" });
     const { getAllByTestId } = render(<EntityRelMeta entityId="fn_a" kind="function" limit={2} />);
     expect(getAllByTestId("entity-link")).toHaveLength(2);
   });
 
   it("noKind_guessedFromPrefix", () => {
-    useNeighborhood.mockReturnValue({ data: [{ fromId: "fn_a", toId: "fn_b" }] });
+    useEntityNeighborhood.mockReturnValue({ neighbours: ["fn_b"], guessedKind: "function" });
     render(<EntityRelMeta entityId="fn_a" />);
-    expect(useNeighborhood).toHaveBeenCalledWith({ kind: "function", id: "fn_a", depth: 1 });
+    expect(useEntityNeighborhood).toHaveBeenCalledWith("fn_a", undefined, 3);
   });
 });

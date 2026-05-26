@@ -15,11 +15,9 @@ import { useTranslation } from "react-i18next";
 import { Icon } from "../primitives/Icon.jsx";
 import { Button } from "../primitives/Button.jsx";
 import { FloatingInspector } from "./FloatingInspector.jsx";
-import { useFunctions, useHandlers, useWorkflows } from "../../api/forge.js";
-import { useDocuments, useSkills, useMcpServers } from "../../api/library.js";
-import { useConversations } from "../../api/conversations.js";
-import { useAllRelations, useNeighborhood } from "../../api/relations.js";
+import { useNeighborhood } from "../../api/relations.js";
 import { useUIStore } from "../../store/ui.js";
+import { useEntityDirectory, normEdges, guessKind } from "@features/entity-link";
 
 const KIND_COLOR = {
   function: "#2383E2", handler: "#0F7B6C", workflow: "#D97757",
@@ -49,39 +47,6 @@ const REL_LABEL_KEYS = {
   conversation_edited_entity: "conversation_edited_entity",
   document_links_entity:      "document_links_entity",
 };
-
-// ── Build node list from query results ───────────────────────────────────
-function useEntityDirectory() {
-  const fnQ = useFunctions();
-  const hdQ = useHandlers();
-  const wfQ = useWorkflows();
-  const dcQ = useDocuments();
-  const skQ = useSkills();
-  const mcQ = useMcpServers();
-  const cvQ = useConversations();
-
-  const { t } = useTranslation("misc");
-  return useMemo(() => {
-    const out = [];
-    for (const x of fnQ.data || []) out.push({ id: x.id, kind: "function",  label: x.name || x.id, sub: x.description || x.desc || "" });
-    for (const x of hdQ.data || []) out.push({ id: x.id, kind: "handler",   label: x.name || x.id, sub: x.description || x.desc || "" });
-    for (const x of wfQ.data || []) out.push({ id: x.id, kind: "workflow",  label: x.name || x.id, sub: x.description || x.desc || "" });
-    for (const x of dcQ.data || []) out.push({ id: x.id, kind: "document",  label: x.name || x.title || x.id, sub: t("relGraph.subDocument") });
-    for (const x of skQ.data || []) out.push({ id: x.id, kind: "skill",     label: x.name || x.id, sub: x.description || "" });
-    for (const x of mcQ.data || []) out.push({ id: x.id, kind: "mcp",       label: x.name || x.id, sub: t("relGraph.subTools", { count: x.tools?.length || x.tools || 0 }) });
-    for (const x of cvQ.data || []) out.push({ id: x.id, kind: "conversation", label: x.title || x.id, sub: x.model || "" });
-    return out;
-  }, [fnQ.data, hdQ.data, wfQ.data, dcQ.data, skQ.data, mcQ.data, cvQ.data, t]);
-}
-
-// ── Edge normalisation: backend returns {fromKind, fromId, toKind, toId, kind} ─
-function normEdges(relations) {
-  return (relations || []).map((r) => ({
-    from: r.fromId || r.from,
-    to: r.toId || r.to,
-    kind: r.kind || r.type,
-  })).filter((e) => e.from && e.to);
-}
 
 // ── Force-directed canvas ────────────────────────────────────────────────
 function GraphCanvas({ nodes, edges, focusId, selected, onSelect, width, height }) {
@@ -402,9 +367,7 @@ function RGAutoSize({ children }) {
 // ── Full graph view ──────────────────────────────────────────────────────
 export function RelGraph() {
   const { t } = useTranslation("misc");
-  const allNodes = useEntityDirectory();
-  const { data: rawRel = [] } = useAllRelations();
-  const allEdges = useMemo(() => normEdges(rawRel), [rawRel]);
+  const { nodes: allNodes, edges: allEdges } = useEntityDirectory();
 
   const [selected, setSelected] = useState(null);
   const [kindFilter, setKindFilter] = useState(new Set());
@@ -481,7 +444,7 @@ export function RelGraph() {
 // ── Mini popover focused on a single entity ──────────────────────────────
 export function RelGraphPopover({ entityId, kind, onClose, paneEl }) {
   const { t } = useTranslation("misc");
-  const allNodes = useEntityDirectory();
+  const { nodes: allNodes } = useEntityDirectory();
   const { data: nb } = useNeighborhood({ kind: kind || guessKind(entityId), id: entityId, depth: 2 });
   const nodes = useMemo(() => {
     const ids = new Set([entityId, ...(nb?.nodes || []).map((n) => n.id || n.entityId)]);
@@ -550,19 +513,3 @@ export function RelMore({ entityId, kind, label }) {
   );
 }
 
-// best-effort: prefix → kind
-function guessKind(id) {
-  if (!id) return "function";
-  const p = id.split("_")[0];
-  return {
-    f: "function", fv: "function",
-    hd: "handler", h: "handler",
-    wf: "workflow", wv: "workflow",
-    cv: "conversation",
-    doc: "document", d: "document",
-    sk: "skill", s: "skill",
-    mcp: "mcp",
-    mem: "memory", m: "memory",
-    fr: "flowrun",
-  }[p] || "function";
-}

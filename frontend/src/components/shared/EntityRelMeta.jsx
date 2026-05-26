@@ -9,47 +9,15 @@
 // 时整条不渲染。
 
 import { useTranslation } from "react-i18next";
-import { useNeighborhood } from "../../api/relations.js";
 import { EntityLink } from "./EntityLink.jsx";
 import { RelMore } from "./RelGraph.jsx";
-
-// Prefix → entity kind (closed enum the backend uses for relation rows).
-function guessKind(id) {
-  if (!id) return "function";
-  const p = id.split("_")[0];
-  return {
-    f: "function", fn: "function",
-    h: "handler",  hd: "handler",
-    w: "workflow", wf: "workflow",
-    cv: "conversation",
-    d: "document", doc: "document",
-    s: "skill", sk: "skill",
-    mcp: "mcp",
-    m: "memory", mem: "memory",
-    fr: "flowrun",
-  }[p] || "function";
-}
+import { useEntityNeighborhood } from "@features/entity-link";
 
 export function EntityRelMeta({ entityId, kind, limit = 3 }) {
   const { t } = useTranslation("misc");
-  const guessedKind = kind || guessKind(entityId);
-  const { data: rels = [] } = useNeighborhood({ kind: guessedKind, id: entityId, depth: 1 });
+  const { neighbours, guessedKind } = useEntityNeighborhood(entityId, kind, limit);
 
   if (!entityId) return null;
-
-  // Pick the other side of each edge as the neighbour. Dedupe (multi-edge
-  // pairs like both forged_from + uses would otherwise list the same id
-  // twice).
-  const neighbours = [];
-  const seen = new Set([entityId]);
-  for (const r of rels || []) {
-    const otherId = r.fromId === entityId ? r.toId : r.fromId;
-    if (!otherId || seen.has(otherId)) continue;
-    seen.add(otherId);
-    neighbours.push(otherId);
-    if (neighbours.length >= limit) break;
-  }
-
   if (neighbours.length === 0) return null;
 
   return (
