@@ -110,7 +110,6 @@ type Deps struct {
 
 	DB               *gorm.DB
 	LogBroadcaster   *loggerinfra.LogBroadcaster
-	CollectionsDir   string
 	IntegrationDir   string
 	ForgifyHome      string
 	Port             int

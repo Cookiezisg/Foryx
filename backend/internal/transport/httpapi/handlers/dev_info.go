@@ -24,7 +24,6 @@ func (h *DevHandler) Info(w http.ResponseWriter, r *http.Request) {
 		"uptimeSeconds":    int(time.Since(startTime).Seconds()),
 		"port":             h.port,
 		"integrationDir":   h.integrationDir,
-		"collectionsDir":   h.collectionsDir,
 		"toolCount":        len(h.tools),
 		"home":             home,
 		"forgifyHome":      h.forgifyHome,

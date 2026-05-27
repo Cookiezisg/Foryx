@@ -419,6 +419,6 @@ testend:
 	@sleep 0.3
 	@( while ! curl -sf http://localhost:$(BACKEND_PORT)/api/v1/health >/dev/null 2>&1; do sleep 0.5; done; \
 	   open http://localhost:$(BACKEND_PORT)/dev/ 2>/dev/null || true ) &
-	@$(LOAD_ENV) cd backend && go run ./cmd/server --dev --port $(BACKEND_PORT) --data-dir $(BACKEND_DATA_DIR) --collections-dir ../testend/collections --integration-dir ../testend/dist
+	@$(LOAD_ENV) cd backend && go run ./cmd/server --dev --port $(BACKEND_PORT) --data-dir $(BACKEND_DATA_DIR) --integration-dir ../testend/dist
 
 .PHONY: help setup mise dev stop unit web test lint mock sandbox live e2e cover matrix audit build verify clean reset smoke testend

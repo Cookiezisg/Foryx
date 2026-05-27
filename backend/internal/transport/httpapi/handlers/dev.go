@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"go.uber.org/zap"
-	"gopkg.in/yaml.v3"
 	"gorm.io/gorm"
 
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
@@ -49,7 +48,6 @@ type RouteSource interface {
 type DevHandler struct {
 	db             *gorm.DB
 	broadcaster    *loggerinfra.LogBroadcaster
-	collectionsDir string
 	integrationDir string
 	forgifyHome    string
 	port           int
@@ -65,7 +63,7 @@ type DevHandler struct {
 func NewDevHandler(
 	db *gorm.DB,
 	broadcaster *loggerinfra.LogBroadcaster,
-	collectionsDir, integrationDir, forgifyHome string,
+	integrationDir, forgifyHome string,
 	port int,
 	tools []toolapp.Tool,
 	llmFactory *llminfra.Factory,
@@ -79,7 +77,6 @@ func NewDevHandler(
 	return &DevHandler{
 		db:             db,
 		broadcaster:    broadcaster,
-		collectionsDir: collectionsDir,
 		integrationDir: integrationDir,
 		forgifyHome:    forgifyHome,
 		port:           port,
@@ -97,7 +94,6 @@ func (h *DevHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /dev/logs", h.StreamLogs)
 	mux.HandleFunc("POST /dev/sql", h.QuerySQL)
 	mux.HandleFunc("GET /dev/schema", h.Schema)
-	mux.HandleFunc("GET /dev/collections", h.ListCollections)
 	mux.HandleFunc("GET /dev/tools", h.ListTools)
 	mux.HandleFunc("POST /dev/invoke", h.InvokeTool)
 	mux.HandleFunc("GET /dev/info", h.Info)
@@ -324,68 +320,6 @@ func (h *DevHandler) Schema(w http.ResponseWriter, r *http.Request) {
 		out = append(out, t)
 	}
 	writeDevJSON(w, http.StatusOK, out)
-}
-
-// Collection mirrors the YAML structure of integration/collections/*.yaml.
-//
-// Collection 镜像 integration/collections/*.yaml 的 YAML 结构。
-type Collection struct {
-	Name        string       `yaml:"name"        json:"name"`
-	Description string       `yaml:"description" json:"description"`
-	Steps       []StepConfig `yaml:"steps"       json:"steps"`
-}
-
-// StepConfig is one HTTP step in a collection.
-//
-// StepConfig 是集合中的一个 HTTP 步骤。
-type StepConfig struct {
-	Name    string            `yaml:"name"    json:"name"`
-	Method  string            `yaml:"method"  json:"method"`
-	Path    string            `yaml:"path"    json:"path"`
-	Body    map[string]any    `yaml:"body"    json:"body,omitempty"`
-	Expect  *ExpectConfig     `yaml:"expect"  json:"expect,omitempty"`
-	Capture map[string]string `yaml:"capture" json:"capture,omitempty"`
-}
-
-// ExpectConfig defines assertions on an HTTP response.
-//
-// ExpectConfig 定义对 HTTP 响应的断言。
-type ExpectConfig struct {
-	Status int `yaml:"status" json:"status"`
-}
-
-// ListCollections returns parsed *.yaml collection definitions.
-//
-// ListCollections 返回解析好的集合 YAML 定义。
-func (h *DevHandler) ListCollections(w http.ResponseWriter, r *http.Request) {
-	entries, err := os.ReadDir(h.collectionsDir)
-	if err != nil {
-		h.log.Warn("dev: read collections dir", zap.String("dir", h.collectionsDir), zap.Error(err))
-		writeDevJSON(w, http.StatusOK, []Collection{})
-		return
-	}
-
-	var cols []Collection
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".yaml") {
-			continue
-		}
-		data, err := os.ReadFile(filepath.Join(h.collectionsDir, e.Name()))
-		if err != nil {
-			h.log.Warn("dev: read collection file", zap.String("file", e.Name()), zap.Error(err))
-			continue
-		}
-		var col Collection
-		if err := yaml.Unmarshal(data, &col); err != nil {
-			h.log.Warn("dev: parse collection yaml", zap.String("file", e.Name()), zap.Error(err))
-			continue
-		}
-		cols = append(cols, col)
-	}
-	if cols == nil {
-		cols = []Collection{}
-	}
-	writeDevJSON(w, http.StatusOK, cols)
 }
 
 type devToolSummary struct {
