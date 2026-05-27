@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { useSessionStore } from "./sessionStore";
 import { resolveSession } from "./resolve";
 
@@ -12,6 +12,11 @@ function makeUser(id: string) {
 
 beforeEach(() => {
   useSessionStore.setState({ currentUserId: null, status: "loading" });
+  vi.resetAllMocks();
+});
+
+afterEach(() => {
+  // Flush the in-flight guard so each test starts clean.
   vi.resetAllMocks();
 });
 
@@ -128,5 +133,27 @@ describe("resolveSession", () => {
 
     expect(useSessionStore.getState().currentUserId).toBe("u_a");
     expect(useSessionStore.getState().status).toBe("ready");
+  });
+
+  it("resolveSession_concurrentCalls_deduplicateToOneNetworkRequest", async () => {
+    mockFetchUsers.mockResolvedValue([makeUser("u_x")]);
+
+    // Fire two concurrent calls without awaiting each other.
+    await Promise.all([resolveSession(), resolveSession(), resolveSession()]);
+
+    // Only one network request should have been made.
+    expect(mockFetchUsers).toHaveBeenCalledTimes(1);
+    expect(useSessionStore.getState().currentUserId).toBe("u_x");
+    expect(useSessionStore.getState().status).toBe("ready");
+  });
+
+  it("resolveSession_emptyUsers_clearsCurrentUserIdBeforeOnboarding", async () => {
+    useSessionStore.setState({ currentUserId: "u_stale" });
+    mockFetchUsers.mockResolvedValue([]);
+
+    await resolveSession();
+
+    expect(useSessionStore.getState().currentUserId).toBeNull();
+    expect(useSessionStore.getState().status).toBe("onboarding");
   });
 });
