@@ -24,7 +24,7 @@ func NewCatalogHandler(svc *catalogapp.Service, log *zap.Logger) *CatalogHandler
 	return &CatalogHandler{svc: svc, log: log.Named("handlers.catalog")}
 }
 
-func (h *CatalogHandler) Register(mux *http.ServeMux) {
+func (h *CatalogHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/catalog", h.Get)
 }
 

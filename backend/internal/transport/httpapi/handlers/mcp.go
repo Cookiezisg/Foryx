@@ -30,7 +30,7 @@ func NewMCPHandler(svc *mcpapp.Service, log *zap.Logger) *MCPHandler {
 	return &MCPHandler{svc: svc, log: log}
 }
 
-func (h *MCPHandler) Register(mux *http.ServeMux) {
+func (h *MCPHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/mcp-servers", h.ListServers)
 	mux.HandleFunc("GET /api/v1/mcp-servers/{name}", h.GetServer)
 	mux.HandleFunc("GET /api/v1/mcp-servers/{name}/stderr", h.GetServerStderr)

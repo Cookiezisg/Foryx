@@ -19,7 +19,7 @@ func NewScenariosHandler() *ScenariosHandler {
 	return &ScenariosHandler{}
 }
 
-func (h *ScenariosHandler) Register(mux *http.ServeMux) {
+func (h *ScenariosHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/scenarios", h.List)
 }
 

@@ -48,7 +48,7 @@ func NewContextStatsHandler(
 	}
 }
 
-func (h *ContextStatsHandler) Register(mux *http.ServeMux) {
+func (h *ContextStatsHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/conversations/{id}/context-stats", h.Get)
 }
 

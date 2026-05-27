@@ -32,7 +32,7 @@ func NewFunctionHandler(svc *functionapp.Service, log *zap.Logger) *FunctionHand
 // SetSpawner 装配后注入 askai Spawner；nil 关闭 :iterate。
 func (h *FunctionHandler) SetSpawner(s *askai.Spawner) { h.spawner = s }
 
-func (h *FunctionHandler) Register(mux *http.ServeMux) {
+func (h *FunctionHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/functions", h.Create)
 	mux.HandleFunc("GET /api/v1/functions", h.List)
 	mux.HandleFunc("GET /api/v1/functions/{id}", h.Get)

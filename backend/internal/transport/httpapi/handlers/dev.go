@@ -68,7 +68,7 @@ func NewDevHandler(
 	}
 }
 
-func (h *DevHandler) Register(mux *http.ServeMux) {
+func (h *DevHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /dev/logs", h.StreamLogs)
 	mux.HandleFunc("POST /dev/sql", h.QuerySQL)
 	mux.HandleFunc("GET /dev/schema", h.Schema)

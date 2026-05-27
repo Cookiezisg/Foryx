@@ -17,14 +17,17 @@ func New(deps Deps) http.Handler {
 		mux = http.NewServeMux()
 	}
 
-	handlershttpapi.NewHealthHandler().Register(mux)
-	handlershttpapi.NewProvidersHandler().Register(mux)
-	handlershttpapi.NewScenariosHandler().Register(mux)
+	rec := NewRecorder(mux)
+	deps.Recorder = rec
+
+	handlershttpapi.NewHealthHandler().Register(rec)
+	handlershttpapi.NewProvidersHandler().Register(rec)
+	handlershttpapi.NewScenariosHandler().Register(rec)
 	if deps.APIKeyService != nil {
-		handlershttpapi.NewAPIKeyHandler(deps.APIKeyService, deps.Log).Register(mux)
+		handlershttpapi.NewAPIKeyHandler(deps.APIKeyService, deps.Log).Register(rec)
 	}
 	if deps.ModelService != nil {
-		handlershttpapi.NewModelConfigHandler(deps.ModelService, deps.Log).Register(mux)
+		handlershttpapi.NewModelConfigHandler(deps.ModelService, deps.Log).Register(rec)
 	}
 	if deps.ConversationService != nil {
 		// ChatService is the TokenSummer (V1.2 §4.1); nil-tolerant.
@@ -38,83 +41,83 @@ func New(deps Deps) http.Handler {
 		if deps.ChatService != nil {
 			convH.SetSystemPromptPreviewer(deps.ChatService)
 		}
-		convH.Register(mux)
+		convH.Register(rec)
 	}
 	if deps.FunctionService != nil {
 		fh := handlershttpapi.NewFunctionHandler(deps.FunctionService, deps.Log)
 		fh.SetSpawner(deps.AskAISpawner)
-		fh.Register(mux)
+		fh.Register(rec)
 	}
 	if deps.HandlerService != nil {
 		hh := handlershttpapi.NewHandlerHandler(deps.HandlerService, deps.Log)
 		hh.SetSpawner(deps.AskAISpawner)
-		hh.Register(mux)
+		hh.Register(rec)
 	}
 	var wfH *handlershttpapi.WorkflowHandler
 	if deps.WorkflowService != nil {
 		wfH = handlershttpapi.NewWorkflowHandler(deps.WorkflowService, deps.Log)
 		wfH.SetSpawner(deps.AskAISpawner)
-		wfH.Register(mux)
+		wfH.Register(rec)
 	}
 	if deps.FlowRunRepo != nil {
 		frH := handlershttpapi.NewFlowRunHandler(deps.FlowRunRepo, deps.SchedulerService, deps.TriggerService, deps.Log)
 		frH.SetAskAI(deps.AskAISpawner, deps.WorkflowService)
-		frH.Register(mux)
+		frH.Register(rec)
 		if wfH != nil {
 			wfH.AttachFlowRunHandler(frH)
 		}
 	}
 	if deps.ChatService != nil {
-		handlershttpapi.NewChatHandler(deps.ChatService, deps.Log).Register(mux)
+		handlershttpapi.NewChatHandler(deps.ChatService, deps.Log).Register(rec)
 		// /api/v1/usage piggy-backs on chat's SumTokens methods (V1.2 §4.2).
 		// /api/v1/usage 复用 chat 的 SumTokens 方法（§4.2）。
-		handlershttpapi.NewUsageHandler(deps.ChatService, deps.Log).Register(mux)
+		handlershttpapi.NewUsageHandler(deps.ChatService, deps.Log).Register(rec)
 	}
 	// V1.2 §3 final-sweep — permissions + settings 5 endpoints.
 	// 全 nil 时 group 整组跳。
 	if deps.SettingsService != nil && deps.PermGate != nil {
 		handlershttpapi.NewPermissionsHandler(
 			deps.SettingsService, deps.PermGate, deps.SettingsPath, deps.Tools, deps.Log,
-		).Register(mux)
+		).Register(rec)
 	}
 	if deps.EventLogBridge != nil {
-		handlershttpapi.NewEventLogHandler(deps.EventLogBridge, deps.BlockV2Repo, deps.Log).Register(mux)
+		handlershttpapi.NewEventLogHandler(deps.EventLogBridge, deps.BlockV2Repo, deps.Log).Register(rec)
 	}
 	if deps.NotificationsBridge != nil {
-		handlershttpapi.NewNotificationsHandler(deps.NotificationsBridge, deps.Log).Register(mux)
+		handlershttpapi.NewNotificationsHandler(deps.NotificationsBridge, deps.Log).Register(rec)
 	}
 	if deps.ForgeBridge != nil {
-		handlershttpapi.NewForgeHandler(deps.ForgeBridge, deps.Log).Register(mux)
+		handlershttpapi.NewForgeHandler(deps.ForgeBridge, deps.Log).Register(rec)
 	}
 	if deps.AskService != nil {
-		handlershttpapi.NewAnswerHandler(deps.AskService, deps.Log).Register(mux)
+		handlershttpapi.NewAnswerHandler(deps.AskService, deps.Log).Register(rec)
 	}
 	if deps.SandboxService != nil {
-		handlershttpapi.NewSandboxHandler(deps.SandboxService, deps.Log).Register(mux)
+		handlershttpapi.NewSandboxHandler(deps.SandboxService, deps.Log).Register(rec)
 	}
 	_ = deps.SubagentService
 	if deps.MCPService != nil {
-		handlershttpapi.NewMCPHandler(deps.MCPService, deps.Log).Register(mux)
+		handlershttpapi.NewMCPHandler(deps.MCPService, deps.Log).Register(rec)
 	}
 	if deps.SkillService != nil {
-		handlershttpapi.NewSkillsHandler(deps.SkillService, deps.Log).Register(mux)
+		handlershttpapi.NewSkillsHandler(deps.SkillService, deps.Log).Register(rec)
 	}
 	if deps.CatalogService != nil {
-		handlershttpapi.NewCatalogHandler(deps.CatalogService, deps.Log).Register(mux)
+		handlershttpapi.NewCatalogHandler(deps.CatalogService, deps.Log).Register(rec)
 	}
 	if deps.MemoryService != nil {
-		handlershttpapi.NewMemoryHandler(deps.MemoryService, deps.Log).Register(mux)
+		handlershttpapi.NewMemoryHandler(deps.MemoryService, deps.Log).Register(rec)
 	}
 	if deps.DocumentService != nil {
 		dh := handlershttpapi.NewDocumentHandler(deps.DocumentService, deps.Log)
 		dh.SetSpawner(deps.AskAISpawner)
-		dh.Register(mux)
+		dh.Register(rec)
 	}
 	if deps.RelationService != nil {
-		handlershttpapi.NewRelationHandler(deps.RelationService, deps.Log).Register(mux)
+		handlershttpapi.NewRelationHandler(deps.RelationService, deps.Log).Register(rec)
 	}
 	if deps.UserService != nil {
-		handlershttpapi.NewUsersHandler(deps.UserService, deps.Log).Register(mux)
+		handlershttpapi.NewUsersHandler(deps.UserService, deps.Log).Register(rec)
 	}
 	// §4.8 context-stats — needs conv + tokensummer; nil-safe degradation.
 	if deps.ConversationService != nil {
@@ -125,19 +128,19 @@ func New(deps Deps) http.Handler {
 			deps.DocumentService,
 			deps.ChatService,
 			deps.Log,
-		).Register(mux)
+		).Register(rec)
 	}
 	// §4.5 metrics: register when at least one execution-log repo is wired.
 	if deps.FunctionExecRepo != nil || deps.HandlerCallRepo != nil || deps.MCPCallRepo != nil || deps.SkillExecRepo != nil {
 		handlershttpapi.NewMetricsHandler(
 			deps.FunctionExecRepo, deps.HandlerCallRepo, deps.MCPCallRepo, deps.SkillExecRepo,
 			deps.Log,
-		).Register(mux)
+		).Register(rec)
 	}
 	if deps.Dev {
-		handlershttpapi.NewDevHandler(deps.DB, deps.LogBroadcaster, deps.CollectionsDir, deps.IntegrationDir, deps.ForgifyHome, deps.Port, deps.Tools, deps.LLMFactory, deps.ShellManager, deps.Log).Register(mux)
+		handlershttpapi.NewDevHandler(deps.DB, deps.LogBroadcaster, deps.CollectionsDir, deps.IntegrationDir, deps.ForgifyHome, deps.Port, deps.Tools, deps.LLMFactory, deps.ShellManager, deps.Log).Register(rec)
 		// §18.1 prompt inventory — dev-only audit endpoint.
-		handlershttpapi.NewPromptsHandler(deps.Tools, deps.SubagentRegistry, deps.Log).Register(mux)
+		handlershttpapi.NewPromptsHandler(deps.Tools, deps.SubagentRegistry, deps.Log).Register(rec)
 	}
 
 	mux.HandleFunc("/", middlewarehttpapi.NotFound)

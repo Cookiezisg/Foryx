@@ -24,7 +24,7 @@ func NewUsersHandler(svc *userapp.Service, log *zap.Logger) *UsersHandler {
 	return &UsersHandler{svc: svc, log: log.Named("handlers.users")}
 }
 
-func (h *UsersHandler) Register(mux *http.ServeMux) {
+func (h *UsersHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/users", h.List)
 	mux.HandleFunc("POST /api/v1/users", h.Create)
 	mux.HandleFunc("GET /api/v1/users/{id}", h.Get)

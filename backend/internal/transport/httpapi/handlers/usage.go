@@ -41,7 +41,7 @@ func NewUsageHandler(provider UsageProvider, log *zap.Logger) *UsageHandler {
 	return &UsageHandler{provider: provider, log: log}
 }
 
-func (h *UsageHandler) Register(mux *http.ServeMux) {
+func (h *UsageHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/usage", h.Get)
 }
 

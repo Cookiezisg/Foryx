@@ -29,7 +29,7 @@ func NewForgeHandler(bridge forgedomain.Bridge, log *zap.Logger) *ForgeHandler {
 	return &ForgeHandler{bridge: bridge, log: log.Named("forge.handler")}
 }
 
-func (h *ForgeHandler) Register(mux *http.ServeMux) {
+func (h *ForgeHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/forge", h.Stream)
 }
 

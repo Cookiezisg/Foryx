@@ -25,7 +25,7 @@ func NewSandboxHandler(svc *sandboxapp.Service, log *zap.Logger) *SandboxHandler
 	return &SandboxHandler{svc: svc, log: log}
 }
 
-func (h *SandboxHandler) Register(mux *http.ServeMux) {
+func (h *SandboxHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/sandbox/runtimes", h.ListRuntimes)
 	mux.HandleFunc("GET /api/v1/sandbox/envs", h.ListEnvs)
 	mux.HandleFunc("GET /api/v1/sandbox/envs/{id}", h.GetEnv)

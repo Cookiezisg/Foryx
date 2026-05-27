@@ -73,6 +73,12 @@ type Deps struct {
 
 	Mux *http.ServeMux
 
+	// Recorder is wired by router.New; surfaced so dev handler can read
+	// the registered route list for /dev/routes.
+	//
+	// Recorder 由 router.New 装配,暴露给 dev handler 让 /dev/routes 读注册路由。
+	Recorder *Recorder
+
 	ChatService         *chatapp.Service
 	EventLogBridge      eventlogdomain.Bridge
 	BlockV2Repo         chatdomain.Repository

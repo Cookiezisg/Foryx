@@ -24,7 +24,7 @@ func NewAnswerHandler(svc *askapp.Service, log *zap.Logger) *AnswerHandler {
 	return &AnswerHandler{svc: svc, log: log}
 }
 
-func (h *AnswerHandler) Register(mux *http.ServeMux) {
+func (h *AnswerHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/conversations/{id}/answers", h.Submit)
 }
 

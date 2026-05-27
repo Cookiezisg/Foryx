@@ -75,3 +75,13 @@ func parsePattern(p string) (method, path string) {
 	}
 	return "ANY", p
 }
+
+// Compile-time guard: *Recorder satisfies the handlers.Registrar shape.
+// Anonymous interface avoids importing handlers/ from router/ (cycle prevention).
+//
+// 编译期断言:*Recorder 满足 handlers.Registrar 的结构形状。
+// 用匿名接口避免 router 引 handlers 产生循环依赖。
+var _ interface {
+	HandleFunc(string, func(http.ResponseWriter, *http.Request))
+	Handle(string, http.Handler)
+} = (*Recorder)(nil)

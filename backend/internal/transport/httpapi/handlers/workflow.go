@@ -37,7 +37,7 @@ func (h *WorkflowHandler) AttachFlowRunHandler(f *FlowRunHandler) {
 	h.flowrun = f
 }
 
-func (h *WorkflowHandler) Register(mux *http.ServeMux) {
+func (h *WorkflowHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/workflows", h.Create)
 	mux.HandleFunc("GET /api/v1/workflows", h.List)
 	mux.HandleFunc("GET /api/v1/workflows/{id}", h.Get)

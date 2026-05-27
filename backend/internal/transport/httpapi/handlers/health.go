@@ -18,7 +18,7 @@ func NewHealthHandler() *HealthHandler {
 	return &HealthHandler{}
 }
 
-func (h *HealthHandler) Register(mux *http.ServeMux) {
+func (h *HealthHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/health", h.Get)
 }
 

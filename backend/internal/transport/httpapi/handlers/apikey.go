@@ -30,7 +30,7 @@ func NewAPIKeyHandler(svc *apikeyapp.Service, log *zap.Logger) *APIKeyHandler {
 // Register uses POST /{idAction} so `/{id}:test` is captured for action dispatch.
 //
 // Register 用 POST /{idAction} 把 `/{id}:test` 收上来在 postOnID 内分派。
-func (h *APIKeyHandler) Register(mux *http.ServeMux) {
+func (h *APIKeyHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/api-keys", h.Create)
 	mux.HandleFunc("GET /api/v1/api-keys", h.List)
 	mux.HandleFunc("PATCH /api/v1/api-keys/{id}", h.Update)

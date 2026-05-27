@@ -34,7 +34,7 @@ func NewPromptsHandler(tools []toolapp.Tool, subagentRegistry *subagentapp.Regis
 	return &PromptsHandler{tools: tools, subagentRegistry: subagentRegistry, log: log.Named("handlers.prompts")}
 }
 
-func (h *PromptsHandler) Register(mux *http.ServeMux) {
+func (h *PromptsHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/dev/prompts", h.List)
 }
 

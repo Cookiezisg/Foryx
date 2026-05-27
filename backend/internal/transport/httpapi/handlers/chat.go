@@ -30,7 +30,7 @@ func NewChatHandler(svc *chatapp.Service, log *zap.Logger) *ChatHandler {
 	return &ChatHandler{svc: svc, log: log}
 }
 
-func (h *ChatHandler) Register(mux *http.ServeMux) {
+func (h *ChatHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/attachments", h.UploadAttachment)
 	mux.HandleFunc("POST /api/v1/conversations/{id}/messages", h.SendMessage)
 	mux.HandleFunc("DELETE /api/v1/conversations/{id}/stream", h.CancelStream)

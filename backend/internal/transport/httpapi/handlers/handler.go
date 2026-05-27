@@ -26,7 +26,7 @@ func NewHandlerHandler(svc *handlerapp.Service, log *zap.Logger) *HandlerHandler
 
 func (h *HandlerHandler) SetSpawner(s *askai.Spawner) { h.spawner = s }
 
-func (h *HandlerHandler) Register(mux *http.ServeMux) {
+func (h *HandlerHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/handlers", h.Create)
 	mux.HandleFunc("GET /api/v1/handlers", h.List)
 	mux.HandleFunc("GET /api/v1/handlers/{id}", h.Get)

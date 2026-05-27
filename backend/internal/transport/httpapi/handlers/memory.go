@@ -22,7 +22,7 @@ func NewMemoryHandler(svc *memoryapp.Service, log *zap.Logger) *MemoryHandler {
 	return &MemoryHandler{svc: svc, log: log}
 }
 
-func (h *MemoryHandler) Register(mux *http.ServeMux) {
+func (h *MemoryHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/memories", h.List)
 	mux.HandleFunc("POST /api/v1/memories", h.Create)
 	mux.HandleFunc("GET /api/v1/memories/{name}", h.Get)

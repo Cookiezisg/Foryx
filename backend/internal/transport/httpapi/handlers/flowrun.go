@@ -38,7 +38,7 @@ func (h *FlowRunHandler) SetAskAI(s *askai.Spawner, wf *workflowapp.Service) {
 	h.workflowSvc = wf
 }
 
-func (h *FlowRunHandler) Register(mux *http.ServeMux) {
+func (h *FlowRunHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/flowruns", h.List)
 	mux.HandleFunc("GET /api/v1/flowruns/{id}", h.Get)
 	mux.HandleFunc("GET /api/v1/flowruns/{id}/nodes", h.ListNodes)

@@ -26,7 +26,7 @@ func NewDocumentHandler(svc *documentapp.Service, log *zap.Logger) *DocumentHand
 
 func (h *DocumentHandler) SetSpawner(s *askai.Spawner) { h.spawner = s }
 
-func (h *DocumentHandler) Register(mux *http.ServeMux) {
+func (h *DocumentHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/documents", h.List)
 	mux.HandleFunc("GET /api/v1/documents/tree", h.Tree)
 	mux.HandleFunc("POST /api/v1/documents", h.Create)

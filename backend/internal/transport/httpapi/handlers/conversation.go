@@ -56,7 +56,7 @@ func (h *ConversationHandler) SetSystemPromptPreviewer(p SystemPromptPreviewer) 
 	h.promptPreviewer = p
 }
 
-func (h *ConversationHandler) Register(mux *http.ServeMux) {
+func (h *ConversationHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/conversations", h.Create)
 	mux.HandleFunc("GET /api/v1/conversations", h.List)
 	mux.HandleFunc("GET /api/v1/conversations/{id}", h.Get)

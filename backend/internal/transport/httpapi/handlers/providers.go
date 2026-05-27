@@ -16,7 +16,7 @@ func NewProvidersHandler() *ProvidersHandler {
 	return &ProvidersHandler{}
 }
 
-func (h *ProvidersHandler) Register(mux *http.ServeMux) {
+func (h *ProvidersHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/providers", h.List)
 }
 

@@ -21,7 +21,7 @@ func NewModelConfigHandler(svc *modelapp.Service, log *zap.Logger) *ModelConfigH
 	return &ModelConfigHandler{svc: svc, log: log}
 }
 
-func (h *ModelConfigHandler) Register(mux *http.ServeMux) {
+func (h *ModelConfigHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/model-configs", h.List)
 	mux.HandleFunc("GET /api/v1/model-configs/{scenario}", h.Get)
 	mux.HandleFunc("PUT /api/v1/model-configs/{scenario}", h.Upsert)

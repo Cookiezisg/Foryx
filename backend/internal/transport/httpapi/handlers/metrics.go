@@ -44,7 +44,7 @@ func NewMetricsHandler(
 	}
 }
 
-func (h *MetricsHandler) Register(mux *http.ServeMux) {
+func (h *MetricsHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/metrics/tools", h.Tools)
 }
 

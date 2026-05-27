@@ -31,7 +31,7 @@ func NewEventLogHandler(bridge eventlogdomain.Bridge, repo chatdomain.Repository
 	return &EventLogHandler{bridge: bridge, repo: repo, log: log.Named("eventlog.handler")}
 }
 
-func (h *EventLogHandler) Register(mux *http.ServeMux) {
+func (h *EventLogHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/eventlog", h.Stream)
 	if h.repo != nil {
 		mux.HandleFunc("GET /api/v1/conversations/{id}/eventlog", h.History)

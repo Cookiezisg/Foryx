@@ -32,7 +32,7 @@ func NewSkillsHandler(svc *skillapp.Service, log *zap.Logger) *SkillsHandler {
 	return &SkillsHandler{svc: svc, log: log.Named("handlers.skills")}
 }
 
-func (h *SkillsHandler) Register(mux *http.ServeMux) {
+func (h *SkillsHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/skills:import", h.Import)
 	mux.HandleFunc("POST /api/v1/skills:refresh", h.Refresh)
 	mux.HandleFunc("GET /api/v1/skills", h.List)

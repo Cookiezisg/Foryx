@@ -30,7 +30,7 @@ func NewRelationHandler(svc *relationapp.Service, log *zap.Logger) *RelationHand
 }
 
 // Register wires the 3 endpoints onto mux.
-func (h *RelationHandler) Register(mux *http.ServeMux) {
+func (h *RelationHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/relations", h.List)
 	mux.HandleFunc("GET /api/v1/relations/neighborhood", h.Neighborhood)
 	mux.HandleFunc("GET /api/v1/relgraph", h.Relgraph)

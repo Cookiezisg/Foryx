@@ -63,7 +63,7 @@ func NewPermissionsHandler(s SettingsService, gate *permgate.Gate, settingsPath 
 // Register mounts the 5 endpoints. Idempotent.
 //
 // Register 挂 5 个端点。幂等。
-func (h *PermissionsHandler) Register(mux *http.ServeMux) {
+func (h *PermissionsHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/settings", h.Get)
 	mux.HandleFunc("PUT /api/v1/settings", h.Put)
 	mux.HandleFunc("POST /api/v1/settings:reload", h.Reload)

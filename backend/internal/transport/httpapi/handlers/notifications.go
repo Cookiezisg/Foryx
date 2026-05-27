@@ -30,7 +30,7 @@ func NewNotificationsHandler(bridge notificationsdomain.Bridge, log *zap.Logger)
 	return &NotificationsHandler{bridge: bridge, log: log.Named("notifications.handler")}
 }
 
-func (h *NotificationsHandler) Register(mux *http.ServeMux) {
+func (h *NotificationsHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/notifications", h.Handle)
 }
 
