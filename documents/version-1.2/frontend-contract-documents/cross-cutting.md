@@ -155,6 +155,7 @@ feature hook 只需 `throw` 或让 mutation 自然失败，不手写 `pushToast`
 
 **hook**：`app/sse/useNotifications.ts`
 **分发目标**：TanStack Query invalidation + `overlayStore.setPendingAsk`
+**`PendingAsk` 类型**：`shared/api/types.ts`（features/widgets 直接从 `@shared/api` 导入，不走 `@app/model`）
 
 SSE 事件名固定为 `notification`；dispatch 由 `payload.type` 字段驱动。
 

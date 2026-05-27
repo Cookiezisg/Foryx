@@ -5,7 +5,7 @@
 - [`./cross-cutting.md`](./cross-cutting.md) — DIP / SSE / queryKeys
 - [`../service-contract-documents/api-design.md`](../service-contract-documents/api-design.md) — 后端 REST API 权威（§N3：响应字段 camelCase）
 
-**定位**：**12 个 REST entity 的 TS 接口 ↔ 后端端点一眼对齐**。字段细节 / mutation 参数类型看各 `entities/<name>/model/types.ts`。非 REST 实体（session / settings）单独列在末节。
+**定位**：**13 个 REST entity 的 TS 接口 ↔ 后端端点一眼对齐**（apikey / conversation / document / flowrun / function / handler / mcp / memory / model-config / relation / skill / user / workflow）；另有 **2 个非 REST entity**（session / settings，本地持久化，无后端端点）单独列在末节。字段细节 / mutation 参数类型看各 `entities/<name>/model/types.ts`。
 
 **§N3 遵守**：前端所有字段名 = 后端 API json tag（camelCase）。DB snake_case 由后端 repo 层转换，前端不感知。
 

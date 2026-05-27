@@ -68,7 +68,7 @@ entities/<X>/@x/<Y>.ts   →  给相邻 entities/<Y> 使用的专用 public 片
 | `pages/dashboard` | 仪表盘（概览）|
 | `pages/observe` | 观察视图（flowrun 节点级监控）|
 
-### widgets（9 个 slice）
+### widgets（10 个 slice）
 
 | slice | 功能 |
 |---|---|

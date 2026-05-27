@@ -1242,6 +1242,8 @@ ToastTray（position: fixed bottom right）
 
 每个 Phase 完成后打勾。不要跳 Phase，不要并行多 Phase。
 
+> **编号说明**：本 §15 的 Phase 0–N 是 UI/功能交付阶段（按屏幕/功能拆分），与 `frontend-design.md` 中的 FSD revamp 阶段 0–5（TS+FSD 架构重构）是**独立编号体系**，互不干扰。
+
 ### Phase 0：脚手架 ⬜
 - [ ] `wails init` 创建 Wails v2 项目骨架
 - [ ] 配置 Vite 作为前端构建工具（Wails 内置支持）
