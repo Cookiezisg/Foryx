@@ -20,6 +20,8 @@
 | 各 domain 详设计 | `documents/version-1.2/service-design-documents/<domain>.md` |
 | 契约索引（API / DB / Error / Events） | `documents/version-1.2/service-contract-documents/` |
 | 桌面端 / 调试控制台 | `documents/version-1.2/desktop-packaging-notes.md` / `testend-design.md` |
+| testend 子项目工程纪律 | `testend/CLAUDE.md` |
+| testend V3 设计 | `documents/version-1.2/adhoc-topic-documents/testend/testend-design.md` |
 | 前端 PRD（产品需求 / UI 细节） | `documents/version-1.2/frontend-prd.md` |
 | 前端 FSD 层契约索引 | `documents/version-1.2/frontend-contract-documents/fsd-layers.md` |
 | 前端 entity TS 类型 ↔ 端点映射 | `documents/version-1.2/frontend-contract-documents/entity-types.md` |
@@ -434,6 +436,10 @@ wails dev                    # 冒烟：窗口起得来 + 能连后端
 - **import 顺序**：React → 第三方库 → `@/shared` → `@/entities` → `@/features` → `@/widgets` → `@/pages` → 同级文件
 - **TS strict**：`tsconfig.json` `strict: true`；新文件 `.tsx/.ts`；entity 类型集中在 `entities/<x>/model/types.ts`
 - **i18n（全量中英双语）**：面向用户文案走 react-i18next —— `useTranslation("<ns>")` + `t("key")`，字典 `frontend/src/i18n/locales/{zh,en}/<ns>.json`（结构化 key、按模块拆 ns）；通用动词用 `t("common:xxx")`；**不硬编码中文/英文 UI 串**（含 badge/label/tooltip/placeholder）；`toLocaleString` 等按 `i18n.language` 取 locale；文案夹 JSX 元素用 `<Trans>`；`settings.lang` 驱动切换。详见 `docs/superpowers/specs/2026-05-26-frontend-i18n-design.md`
+
+---
+
+**testend 子项目**：扁平 view-driven，**不进 FSD**；共享 frontend entity types via vite path alias（type-only deep import）；详见 [`testend/CLAUDE.md`](testend/CLAUDE.md)。
 
 ---
 

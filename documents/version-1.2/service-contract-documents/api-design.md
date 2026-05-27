@@ -360,6 +360,26 @@ settings.json 顶层 schema：`{permissions:{defaultMode:ask\|allow\|deny\|bypas
 | GET | `/api/v1/dev/prompts` | 41 条 prompt 总览：33 tool descriptions + 2 chat-system 静态段 + 3 internal-llm + 3 subagent；每条 `{name, category, content, length, tokensEst, source}` → 200 |
 | GET | `/api/v1/conversations/{id}/system-prompt-preview` | 当前 conv 实际拼装的 system prompt + section 拆解 → 200 |
 
+#### dev infra 端点（`--dev` 模式，`/dev/` 前缀）
+
+仅 `--dev` 模式注册，不走 errmap，直接返回 JSON / SSE。**注意**：`/dev/*` 与 `/api/v1/dev/*` 是两个不同前缀。
+
+| Method | Path | 用途 |
+|---|---|---|
+| GET | `/dev/logs` | 后端日志 SSE 流（ring buffer 回放 + 持续推送） |
+| POST | `/dev/sql` | 只读 SQL 查询（`SELECT` 前缀强制） |
+| GET | `/dev/info` | 实例信息（build / port / git / uptime） |
+| GET | `/dev/runtime` | Go 运行时指标（goroutines / heap / GC） |
+| GET | `/dev/forgify-home` | `~/.forgify/` 目录快照 |
+| GET | `/dev/bash-processes` | 活跃 bash shell 进程列表 |
+| GET | `/dev/mock-llm` | mock LLM 状态 + 请求历史 |
+| GET | `/dev/llm/trace` | LLM 调用 trace（请求/响应 payload） |
+| GET | `/dev/routes` | **reflection-based** via `router.Recorder`；自动收录 HandleFunc/Handle；drift-proof（2026-05-27 根治） |
+
+**V3 清理记录（2026-05-27）**：删除 `/dev/collections`（YAML 集合列举）、`/dev/tools`（system tool 列表）、`/dev/invoke`（直接调 tool），同步删除 `--collections-dir` flag 和 `Deps.Tools` 字段；`--integration-dir` 重命名为 `--testend-dir`。
+
+详见 [`../adhoc-topic-documents/testend/testend-design.md`](../adhoc-topic-documents/testend/testend-design.md)。
+
 ---
 
 ### Phase 4 准备件（2026-05-05 提前交付）
