@@ -477,3 +477,7 @@ AskUserQuestion 的答案投递端点 `POST /api/v1/conversations/{id}/answers` 
 | `INCOMPLETE_FILTER` | 400 | `relation.ErrIncompleteFilter` | List 给了 fromKind 没给 fromId（或反之） | ✅ |
 
 无 NotFound 端点——过滤无结果返空 data + hasMore=false，不是 404。
+
+---
+
+**覆盖矩阵自动生成**：每个 errmap-registered sentinel 在 `backend/test/README.md` 矩阵段列出覆盖测试；矩阵由 `make matrix` 维护（扫 `response/errmap.go::errTable`）。新增 sentinel 需在 `errcodes/sweep_pipeline_test.go` 加 sweep case + `// covers: errcode:CODE` 注释（§S14 触发表已强制）。

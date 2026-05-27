@@ -338,20 +338,34 @@ backend/
 
 ## Verification
 
-### 单元测试
-- `cd backend && go test -count=1 -race ./...` 零失败（CGO 已不需要——modernc.org/sqlite 纯 Go）
-- domain/ 层覆盖率 > 80%（纯逻辑好测）
-- app/ 层核心 service 必测
+### 测试分级（按外部依赖成本，2026-05-27 overhaul 后）
 
-### 契约测试
-每个端点一个 curl 脚本，验证：
-- 状态码正确
-- envelope 格式正确
-- 错误码符合约定
-- 分页参数生效
+| 命令 | 依赖 | 用途 | 耗时 |
+|---|---|---|---|
+| `make unit` | 无 | Go 单测（in-memory SQLite） | ~30s |
+| `make web` | 无 | vitest 前端单测 | ~10s |
+| `make mock` | 无 | Pipeline fake LLM 测试（16 包） | ~60s |
+| `make sandbox` | `FORGIFY_DEV_RESOURCES` | mock + 真 sandbox lifecycle | +60s |
+| `make live` | `DEEPSEEK_API_KEY`，**烧 token** | only 真 LLM 测试 | ~3min |
+| `make e2e` | 上述全部 | full pipeline release gate | ~5min |
+| `make cover` | 无 | HTML coverage 报告（`coverage/pipeline.html`） | ~60s |
 
-### 端到端场景（Phase 3 起，集成测试 13 组覆盖）
-A. Conversation CRUD / B. API Key & Model Config / C. 分页 cursor / D-E. 系统工具组 / F. 并行 tool call / G. 多步 ReAct（write→read→python）/ H. Attachment 内联 / I. 错误处理 / J. Auto-title / K. 含 tool_call blocks 的多轮历史重建 / L. SSE messageId 一致性 / M. Function 工具创建。详见 [`progress-record.md`](./progress-record.md) 的 chat 重构段。
+### Pipeline 测试结构（详 `backend/test/README.md`）
+
+7 个 axis：
+- `smoke/`：启动冒烟
+- `api/`：单 domain × HTTP 端点（happy + 主错）
+- `cross/`：跨 domain 锈川（catalog / scheduler / mention / subagent / isolation / compaction / askai / eventlog / relation / tool framework）
+- `sse/`：3 流协议 round-trip（eventlog / notifications / forge）
+- `lifecycle/`：长链路 / 真 sandbox（function env / handler config / workflow DAG）
+- `errcodes/`：每 sentinel 一行 sweep
+- `live/`：真 LLM 测试（`Live_` 前缀 + `RequireDeepSeekKey` gate）
+
+### 覆盖矩阵（自动反查）
+
+- `make matrix` 扫 handlers + errmap + SSE truth + seams.yaml + 测试 `// covers:` annotation，生成 `backend/test/README.md` 覆盖矩阵段
+- `make audit` 严格检查（warn-only；annotation 完整后切 `--strict` 自动 fail `verify`）
+- 工具源码：`backend/cmd/coverage-matrix/`
 
 ### 性能基准
 - 流式对话 token latency < 旧版 110%

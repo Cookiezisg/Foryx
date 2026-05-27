@@ -135,6 +135,7 @@
 - **主文件用包名**（`apikey.go`，不叫 `service.go` / `store.go`），三层（domain/app/store）统一
 - **平铺到包根，禁子目录**；拆子包需同时满足：(a) 有独立词汇体系 + (b) 10+ 文件
 - **例外**：`app/tool/` 允许按家族嵌套（forge / filesystem / shell / web）
+- **例外**：`backend/test/` 按测试 axis 嵌套子目录（api / cross / sse / lifecycle / errcodes / live / smoke）；每子目录独立词汇体系 + ≥ 文件阈值，满足拆子包标准
 - 跨 domain 纯函数放 `internal/pkg/<name>/`
 - `providers.go` 等辅助注册表放**消费它的层**（domain 自用放 domain；仅 app 消费放 app）
 
@@ -167,9 +168,10 @@
 | 代码变动 | 必改文档 |
 |---|---|
 | 新 entity / 表 / struct 字段 / 约束 | `<domain>.md` + `database-design.md` + `progress-record.md` |
-| 新 sentinel / errmap 行 | `<domain>.md` + `error-codes.md` + `progress-record.md` |
-| 新 endpoint / path 变 | `<domain>.md` + `api-design.md` + `progress-record.md` |
-| 新事件 / struct 改 | `<domain>.md` + `events-design.md` + `progress-record.md` |
+| 新 sentinel / errmap 行 | `<domain>.md` + `error-codes.md` + `progress-record.md` + `errcodes/sweep_pipeline_test.go` 加 sweep case + `// covers: errcode:CODE` annotation + `make matrix` |
+| 新 endpoint / path 变 | `<domain>.md` + `api-design.md` + `progress-record.md` + 对应 `api/<domain>/<domain>_pipeline_test.go` 加测试 + `// covers: METHOD /path` annotation + `make matrix` |
+| 新事件 / struct 改 | `<domain>.md` + `events-design.md` + `progress-record.md` + `sse_truth.go` 加枚举（如属 SSE 协议）+ `// covers: sse:<stream>:<event>` annotation + `make matrix` |
+| 新跨 domain 锈川 | `<domain>.md` + `seams.yaml` 加 id + `cross/<file>_pipeline_test.go` 加测试 + `// covers: cross:<id>` annotation + `make matrix` |
 | 方法签名 / 接口变 | `<domain>.md`（影响对外入口才动 contract 文档）|
 | 新跨 domain 依赖 | `<domain>.md` + 受影响的 `<other>.md` |
 
@@ -233,14 +235,22 @@ type Tool interface {
 - **`deadcode` 默认不扫测试**：跑时加 `-test=true`；曾误删 `ListProviders` / `ListScenarios`
 - **staticcheck 用 `//lint:ignore <code> <reason>`**（不认 `//nolint`）
 - **禁用 sed 批量改 import/函数名**：BSD sed `\b` 不识别，会清空文件；用 Edit 工具
+- **`make audit` 提交前必跑**（已在 `make verify` 内）：矩阵新鲜 + warn-only 报漂移（未来切 strict）
+- **`make mock` 日常 driver**（`make verify` 已含）：~60s pipeline 测试，零外部依赖、零 token
 
 ## 测试命令（不要直接 `go test ./...`）
 
 | 命令 | 用途 |
 |---|---|
-| `make test-backend` | **默认跑这个**：后端单测，in-memory SQLite，skip `TestIntegration_*`（= `cd backend && go test ./... -skip TestIntegration_`）|
-| `make test` | 后端 + 前端单测（test-backend + test-frontend）|
-| `make e2e` | 端到端 pipeline：source `.env`，`-tags=pipeline -p 1 ./test/...`（缺 key 优雅 skip）|
+| `make unit` | **默认 Go 单测**：in-memory SQLite，skip `TestIntegration_*`（= `cd backend && go test ./... -skip TestIntegration_`）|
+| `make web` | 前端 vitest 单测 |
+| `make test` | unit + web 聚合 |
+| `make mock` | Pipeline fake LLM 测试（~60s，离线，零 token）|
+| `make sandbox` | mock + 真 sandbox lifecycle（要 `FORGIFY_DEV_RESOURCES`）|
+| `make live` | only 真 LLM 测试（要 `DEEPSEEK_API_KEY`，烧 token）|
+| `make e2e` | full pipeline：mock + sandbox + live（release gate）|
+| `make matrix` | 生成 README 覆盖矩阵段 |
+| `make audit` | 矩阵严格检查（verify 内部调用）|
 | `make verify` | 发布门禁：vet × 5 平台 + build × 5 + lintprompts |
 | `make testend` | 起 testend 调试控制台（pre-frontend 时代遗留）|
 
@@ -257,7 +267,9 @@ type Tool interface {
 - **三条 SSE**：eventlog（5×7）+ notifications（全局 entity 变更）+ forge（4×3）；`domain/events` 已删
 - **subagent 数据**：统一 `messages` 行（attrs.kind=subagent_run），无独立表
 - **sandbox v2**：捆绑 mise binary（`go:embed`）；`make resources` 拉到 `mise/<goos>-<goarch>/`；v1 已废弃
-- **测试基线**：`make test-backend`（单测，in-memory SQLite）全绿；⚠️ `make e2e`（pipeline tag）当前因 harness 签名漂移（`LocalCtxAs` 签名变 / `reqctxpkg.DefaultLocalUserID` 已删）编译失败、待修；LLM 集成测试缺 key 时优雅 skip
+- **测试基线**：`make verify` 绿（vet×5 + build×5 + lintprompts + matrix audit + pipeline mock 全 16 包绿）；`make e2e` = mock + sandbox + live 全套（release 前跑，烧 token）；详 `backend/test/README.md`
+- **测试 axis**：api / cross / sse / lifecycle / errcodes / live / smoke 七维度；axis 定义 + 内容 inventory 见 `backend/test/README.md`
+- **覆盖矩阵**：`make matrix` 自动生成 README 矩阵段（消费 `// covers:` annotation）；`make audit` 严格检查（Phase 5 起 warn-only，覆盖率达高位后切 strict）；工具 `backend/cmd/coverage-matrix/`
 
 ---
 

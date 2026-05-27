@@ -438,3 +438,7 @@ s.forge.PublishCompleted(ctx, scope, "ok", versionID, "ready", attemptsUsed, nil
 - `transport/httpapi/handlers/forge_test.go` — 同上
 
 集成端到端测试(多 producer + 真 stream)走 `backend/test/` pipeline test(§T5)。
+
+---
+
+**覆盖矩阵自动生成**：3 流（eventlog / notifications / forge）每个事件在 `backend/test/README.md` 矩阵段列出覆盖测试；SSE truth 列表 hardcode 在 `backend/cmd/coverage-matrix/sse_truth.go`（封闭枚举）。新增 SSE event type 需改 `sse_truth.go` + `sse/<stream>_pipeline_test.go` 加测试 + `// covers: sse:<stream>:<event>` 注释（§S14 触发表已强制）。

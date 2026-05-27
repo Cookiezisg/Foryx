@@ -501,3 +501,7 @@ V1.2 §17 — 前端洞察 / 编辑器 / mcp 屏需要的最后一批端点。
 | `POST /api/v1/mcp-servers/{name}/tools/{toolName}:invoke` | 直接调 MCP 工具（绕 chat/LLM）；mcp 详情页"试调用"按钮用 |
 
 详 `service-design-documents/{workflow,function,handler,document,flowrun,mcp}.md`。askai 共享编排见 `app/askai/`。
+
+---
+
+**覆盖矩阵自动生成**：每个 endpoint 在 `backend/test/README.md` 的覆盖矩阵段中按 axis 列出哪些 pipeline 测试覆盖；矩阵由 `make matrix`（消费测试 `// covers:` annotation）维护。新增 endpoint 需补 `api/<domain>/<domain>_pipeline_test.go` 测试 + `// covers: METHOD /path` 注释（§S14 触发表已强制）。
