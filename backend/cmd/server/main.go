@@ -116,7 +116,7 @@ func main() {
 	port := flag.Int("port", 0, "HTTP port (0 = pick a free port, print it)")
 	dataDir := flag.String("data-dir", "", "Data directory (empty = os.TempDir)")
 	dev := flag.Bool("dev", false, "Development mode (colored console logs + /dev/* routes)")
-	integrationDir := flag.String("integration-dir", "../testend", "Path to testend/ directory served at /dev/static/ (dev mode)")
+	testendDir := flag.String("testend-dir", "../testend", "Path to testend/ directory served at /dev/static/ (dev mode)")
 	forgifyHome := flag.String("forgify-home", "",
 		"User-level config root holding mcp.json / skills/ / .catalog.json. "+
 			"Default: <data-dir>/.forgify in --dev mode, ~/.forgify otherwise.")
@@ -609,7 +609,7 @@ func main() {
 		ShellManager:        shells.Manager,
 		DB:                  gdb,
 		LogBroadcaster:      broadcaster,
-		IntegrationDir:      *integrationDir,
+		TestendDir:          *testendDir,
 		ForgifyHome:         homeRoot,
 		Port:                actualPort,
 	})

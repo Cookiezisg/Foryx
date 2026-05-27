@@ -23,7 +23,7 @@ func (h *DevHandler) Info(w http.ResponseWriter, r *http.Request) {
 		"startedAt":        startTime.UTC(),
 		"uptimeSeconds":    int(time.Since(startTime).Seconds()),
 		"port":             h.port,
-		"integrationDir":   h.integrationDir,
+		"testendDir":       h.testendDir,
 		"home":             home,
 		"forgifyHome":      h.forgifyHome,
 		"mcpConfigPath":    filepath.Join(h.forgifyHome, "mcp.json"),

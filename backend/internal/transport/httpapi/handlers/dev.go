@@ -47,7 +47,7 @@ type RouteSource interface {
 type DevHandler struct {
 	db             *gorm.DB
 	broadcaster    *loggerinfra.LogBroadcaster
-	integrationDir string
+	testendDir string
 	forgifyHome    string
 	port           int
 	llmFactory     *llminfra.Factory
@@ -61,7 +61,7 @@ type DevHandler struct {
 func NewDevHandler(
 	db *gorm.DB,
 	broadcaster *loggerinfra.LogBroadcaster,
-	integrationDir, forgifyHome string,
+	testendDir, forgifyHome string,
 	port int,
 	llmFactory *llminfra.Factory,
 	shellManager *shelltool.ProcessManager,
@@ -74,7 +74,7 @@ func NewDevHandler(
 	return &DevHandler{
 		db:             db,
 		broadcaster:    broadcaster,
-		integrationDir: integrationDir,
+		testendDir: testendDir,
 		forgifyHome:    forgifyHome,
 		port:           port,
 		buildID:        fmt.Sprintf("%d", time.Now().Unix()),
@@ -110,7 +110,7 @@ func (h *DevHandler) Register(mux Registrar) {
 			next.ServeHTTP(w, r)
 		})
 	}
-	mux.Handle("/dev/static/", noCache(http.StripPrefix("/dev/static/", http.FileServer(http.Dir(h.integrationDir)))))
+	mux.Handle("/dev/static/", noCache(http.StripPrefix("/dev/static/", http.FileServer(http.Dir(h.testendDir)))))
 	mux.HandleFunc("/dev/", h.ServeIndex)
 }
 
@@ -132,7 +132,7 @@ func (h *DevHandler) Routes(w http.ResponseWriter, r *http.Request) {
 //
 // ServeIndex 提供 testend 入口 HTML。
 func (h *DevHandler) ServeIndex(w http.ResponseWriter, r *http.Request) {
-	data, err := os.ReadFile(filepath.Join(h.integrationDir, "index.html"))
+	data, err := os.ReadFile(filepath.Join(h.testendDir, "index.html"))
 	if err != nil {
 		http.Error(w, "testend/dist/index.html not found; run `make build-testend`", http.StatusNotFound)
 		return

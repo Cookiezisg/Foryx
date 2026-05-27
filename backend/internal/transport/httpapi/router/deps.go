@@ -110,7 +110,11 @@ type Deps struct {
 
 	DB               *gorm.DB
 	LogBroadcaster   *loggerinfra.LogBroadcaster
-	IntegrationDir   string
+	// TestendDir is where testend SPA dist (index.html + assets) lives;
+	// served at /dev/. Was --integration-dir before V3.
+	//
+	// TestendDir 是 testend Vite 产物目录；/dev/ 路径下提供。原 --integration-dir。
+	TestendDir string
 	ForgifyHome      string
 	Port             int
 	Tools            []toolapp.Tool

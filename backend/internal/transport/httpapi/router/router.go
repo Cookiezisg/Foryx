@@ -137,7 +137,7 @@ func New(deps Deps) http.Handler {
 		).Register(rec)
 	}
 	if deps.Dev {
-		handlershttpapi.NewDevHandler(deps.DB, deps.LogBroadcaster, deps.IntegrationDir, deps.ForgifyHome, deps.Port, deps.LLMFactory, deps.ShellManager, deps.Log, NewRecorderAdapter(rec)).Register(rec)
+		handlershttpapi.NewDevHandler(deps.DB, deps.LogBroadcaster, deps.TestendDir, deps.ForgifyHome, deps.Port, deps.LLMFactory, deps.ShellManager, deps.Log, NewRecorderAdapter(rec)).Register(rec)
 		// §18.1 prompt inventory — dev-only audit endpoint.
 		handlershttpapi.NewPromptsHandler(deps.Tools, deps.SubagentRegistry, deps.Log).Register(rec)
 	}
