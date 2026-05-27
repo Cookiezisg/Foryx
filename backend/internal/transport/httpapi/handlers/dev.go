@@ -25,9 +25,11 @@ import (
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
-// RouteEntry is one registered route (method + path), returned by /dev/routes.
+// RouteEntry mirrors router.Route at the handler-package boundary because
+// handlers/ cannot import router/ (would create an import cycle).
 //
-// RouteEntry 是一条注册路由记录,由 /dev/routes 返回。
+// RouteEntry 在 handler 包侧镜像 router.Route;handlers 不能反向 import router,
+// 此类型让 RouteSource 接口可以独立于 router 包定义。
 type RouteEntry struct {
 	Method string `json:"method"`
 	Path   string `json:"path"`
@@ -71,6 +73,9 @@ func NewDevHandler(
 	log *zap.Logger,
 	recorder RouteSource,
 ) *DevHandler {
+	if recorder == nil {
+		panic("handlers.NewDevHandler: RouteSource is nil")
+	}
 	return &DevHandler{
 		db:             db,
 		broadcaster:    broadcaster,
@@ -119,15 +124,10 @@ func (h *DevHandler) Register(mux Registrar) {
 	mux.HandleFunc("/dev/", h.ServeIndex)
 }
 
-// Routes returns the live list of registered routes from the RouteSource.
-// Replaces the legacy hand-maintained slice (dev_routes.go), which drifted twice.
+// Replaces the hand-maintained dev_routes.go list, which drifted twice.
 //
-// Routes 从 RouteSource 取实时注册路由,根治手维护清单 drift。
+// 替代手维护的 dev_routes.go 清单(曾两次 drift);从 RouteSource 取实时注册。
 func (h *DevHandler) Routes(w http.ResponseWriter, r *http.Request) {
-	if h.recorder == nil {
-		writeDevJSON(w, http.StatusInternalServerError, map[string]string{"error": "recorder not wired"})
-		return
-	}
 	routes := h.recorder.Routes()
 	sort.Slice(routes, func(i, j int) bool {
 		if routes[i].Method != routes[j].Method {

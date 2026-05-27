@@ -87,16 +87,10 @@ type RecorderAdapter struct {
 	rec *Recorder
 }
 
-// NewRecorderAdapter wraps rec as a handlershttpapi.RouteSource.
-//
-// NewRecorderAdapter 包装 rec 为 RouteSource。
 func NewRecorderAdapter(rec *Recorder) *RecorderAdapter {
 	return &RecorderAdapter{rec: rec}
 }
 
-// Routes converts []Route to []handlershttpapi.RouteEntry and returns them.
-//
-// Routes 将 []Route 转为 []RouteEntry 返回。
 func (a *RecorderAdapter) Routes() []handlershttpapi.RouteEntry {
 	raw := a.rec.List()
 	out := make([]handlershttpapi.RouteEntry, len(raw))
@@ -109,9 +103,11 @@ func (a *RecorderAdapter) Routes() []handlershttpapi.RouteEntry {
 // Compile-time guard: *RecorderAdapter satisfies handlershttpapi.RouteSource.
 var _ handlershttpapi.RouteSource = (*RecorderAdapter)(nil)
 
-// Compile-time guard: *Recorder satisfies the handlers.Registrar shape.
+// Compile-time guard via anonymous interface — *Recorder satisfies the same
+// shape as handlers.Registrar without router/ importing handlers/, which
+// would create a cycle.
 //
-// 编译期断言:*Recorder 满足 handlers.Registrar 的结构形状。
+// 用匿名接口替代直接引 handlers.Registrar 做编译期校验,避免 router→handlers 反向 import。
 var _ interface {
 	HandleFunc(string, func(http.ResponseWriter, *http.Request))
 	Handle(string, http.Handler)
