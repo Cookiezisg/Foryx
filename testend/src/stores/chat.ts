@@ -8,7 +8,11 @@ import type { Block, Message, MessageRole } from "@frontend/entities/conversatio
 // 本地扩展:frontend Block.children 是 string[](ID);这里在内存里存渲染树。
 export type BlockNode = Omit<Block, "children"> & { children: BlockNode[] };
 
-type ChatMessage = Omit<Message, "blocks"> & { blocks: BlockNode[] };
+// Message augmented with materialised BlockNode tree — used by ChatPanel.
+// Exported so layout components can annotate their local variables correctly.
+export type MessageNode = Omit<Message, "blocks"> & { blocks: BlockNode[] };
+
+type ChatMessage = MessageNode;
 
 interface ConvState {
   messages: ChatMessage[];
