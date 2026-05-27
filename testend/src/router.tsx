@@ -21,6 +21,16 @@ import { Todos } from "@/views/current/Todos";
 import { AsksPending } from "@/views/current/AsksPending";
 import { Attachments } from "@/views/current/Attachments";
 import { Compaction } from "@/views/current/Compaction";
+import { ApiKeys } from "@/views/config/ApiKeys";
+import { ModelConfigs } from "@/views/config/ModelConfigs";
+import { Skills } from "@/views/config/Skills";
+import { MCPServers } from "@/views/config/MCPServers";
+import { Sandbox } from "@/views/config/Sandbox";
+import { Memory } from "@/views/config/Memory";
+import { Documents } from "@/views/config/Documents";
+import { Permissions } from "@/views/config/Permissions";
+import { LLMHealth } from "@/views/config/LLMHealth";
+import { Profile } from "@/views/config/Profile";
 
 function Placeholder({ name }: { name: string }) {
   return <div className="empty">TODO: {name}</div>;
@@ -68,16 +78,16 @@ export const router = createHashRouter([
       { path: "observe/mock-llm",      element: <Placeholder name="observe/MockLLM" /> },
 
       // config/ (10)
-      { path: "config/apikeys",        element: <Placeholder name="config/ApiKeys" /> },
-      { path: "config/models",         element: <Placeholder name="config/ModelConfigs" /> },
-      { path: "config/skills",         element: <Placeholder name="config/Skills" /> },
-      { path: "config/mcp",            element: <Placeholder name="config/MCPServers" /> },
-      { path: "config/sandbox",        element: <Placeholder name="config/Sandbox" /> },
-      { path: "config/memory",         element: <Placeholder name="config/Memory" /> },
-      { path: "config/documents",      element: <Placeholder name="config/Documents" /> },
-      { path: "config/permissions",    element: <Placeholder name="config/Permissions" /> },
-      { path: "config/llm-health",     element: <Placeholder name="config/LLMHealth" /> },
-      { path: "config/profile",        element: <Placeholder name="config/Profile" /> },
+      { path: "config/apikeys",        element: <ApiKeys /> },
+      { path: "config/models",         element: <ModelConfigs /> },
+      { path: "config/skills",         element: <Skills /> },
+      { path: "config/mcp",            element: <MCPServers /> },
+      { path: "config/sandbox",        element: <Sandbox /> },
+      { path: "config/memory",         element: <Memory /> },
+      { path: "config/documents",      element: <Documents /> },
+      { path: "config/permissions",    element: <Permissions /> },
+      { path: "config/llm-health",     element: <LLMHealth /> },
+      { path: "config/profile",        element: <Profile /> },
 
       // dev/ (8)
       { path: "dev/sql",               element: <SQL /> },
