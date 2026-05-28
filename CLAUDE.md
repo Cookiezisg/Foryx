@@ -233,6 +233,7 @@ type Tool interface {
 
 # 开发期工具纪律
 
+- **禁开 git worktree**：所有 session 一律在 main 直接干（含 Claude Code 的自动 worktree 隔离）。理由：曾出现 worktree 改动跑不到主仓库的 vite dev server、定位半天才发现是 file path 不同。需要隔离就用 `git stash` / 精细 `git add`；写代码前先 `git status` 看清状态。
 - **`staticcheck ./...` 提交前必跑**（比 `go vet` 严，能捞 SA1029/S1016/U1000）
 - **`deadcode` 默认不扫测试**：跑时加 `-test=true`；曾误删 `ListProviders` / `ListScenarios`
 - **staticcheck 用 `//lint:ignore <code> <reason>`**（不认 `//nolint`）
