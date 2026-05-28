@@ -112,6 +112,29 @@ func (s *Store) List(ctx context.Context, filter convdomain.ListFilter) ([]*conv
 	return rows, next, nil
 }
 
+// AnyReferencesApiKey reports whether any conversation.model_override JSON refers
+// to this api_key.
+//
+// AnyReferencesApiKey 报告是否有 conversation.model_override JSON 引用此 api_key。
+func (s *Store) AnyReferencesApiKey(ctx context.Context, apiKeyID string) (bool, error) {
+	uid, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return false, fmt.Errorf("convstore.AnyReferencesApiKey: %w", err)
+	}
+	var count int64
+	// SQLite json_extract pulls apiKeyId field from the model_override JSON column.
+	//
+	// SQLite json_extract 拿出 apiKeyId 字段做匹配。
+	if err := s.db.WithContext(ctx).
+		Model(&convdomain.Conversation{}).
+		Where("user_id = ? AND json_extract(model_override, '$.apiKeyId') = ?", uid, apiKeyID).
+		Limit(1).
+		Count(&count).Error; err != nil {
+		return false, fmt.Errorf("convstore.AnyReferencesApiKey: %w", err)
+	}
+	return count > 0, nil
+}
+
 // Delete soft-deletes by id, scoped to the current user.
 //
 // Delete 按 id 软删除，按当前用户过滤。

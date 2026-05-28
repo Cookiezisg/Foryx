@@ -264,3 +264,65 @@ func TestUpdateVersionStatus_MissingReturnsErrVersionNotFound(t *testing.T) {
 		t.Errorf("expected ErrVersionNotFound, got %v", err)
 	}
 }
+
+// graphWithApiKey returns a workflow_version.graph JSON literal containing
+// node.modelOverride.apiKeyId; Task 8 will formalise the NodeSpec field, but
+// for the LIKE-based reference scan only the substring matters.
+//
+// graphWithApiKey 拼出包含 node.modelOverride.apiKeyId 的 graph JSON 字面量；
+// Task 8 会规范化 NodeSpec 字段,这里只关心 LIKE 子串匹配。
+func graphWithApiKey(apiKeyID string) string {
+	return `{"nodes":[{"nodeId":"n1","modelOverride":{"apiKeyId":"` + apiKeyID + `","modelId":"gpt-4o"}}],"edges":[]}`
+}
+
+func TestStore_AnyReferencesApiKey_True(t *testing.T) {
+	s := newStore(t)
+	ctx := ctxFor(userAlice)
+
+	if err := s.SaveWorkflow(ctx, mkWorkflow("wf1", userAlice, "wf-with-override")); err != nil {
+		t.Fatalf("SaveWorkflow: %v", err)
+	}
+	v := mkVersion("v1", "wf1", workflowdomain.StatusPending)
+	v.Graph = graphWithApiKey("aki_x")
+	if err := s.SaveVersion(ctx, v); err != nil {
+		t.Fatalf("SaveVersion: %v", err)
+	}
+	got, err := s.AnyReferencesApiKey(ctx, "aki_x")
+	if err != nil {
+		t.Fatalf("AnyReferencesApiKey: %v", err)
+	}
+	if !got {
+		t.Error("got false, want true (node override references aki_x)")
+	}
+}
+
+func TestStore_AnyReferencesApiKey_False(t *testing.T) {
+	s := newStore(t)
+	got, err := s.AnyReferencesApiKey(ctxFor(userAlice), "aki_x")
+	if err != nil {
+		t.Fatalf("AnyReferencesApiKey: %v", err)
+	}
+	if got {
+		t.Error("got true on empty store, want false")
+	}
+}
+
+func TestStore_AnyReferencesApiKey_CrossUserIsolated(t *testing.T) {
+	s := newStore(t)
+
+	if err := s.SaveWorkflow(ctxFor(userAlice), mkWorkflow("wf-a", userAlice, "alice-wf")); err != nil {
+		t.Fatalf("SaveWorkflow Alice: %v", err)
+	}
+	v := mkVersion("v-a", "wf-a", workflowdomain.StatusPending)
+	v.Graph = graphWithApiKey("aki_x")
+	if err := s.SaveVersion(ctxFor(userAlice), v); err != nil {
+		t.Fatalf("SaveVersion Alice: %v", err)
+	}
+	got, err := s.AnyReferencesApiKey(ctxFor(userBob), "aki_x")
+	if err != nil {
+		t.Fatalf("AnyReferencesApiKey: %v", err)
+	}
+	if got {
+		t.Error("got true: Bob sees Alice's reference, want false (cross-user isolated via workflow join)")
+	}
+}

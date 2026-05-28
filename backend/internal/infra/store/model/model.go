@@ -76,3 +76,22 @@ func (s *Store) Upsert(ctx context.Context, m *modeldomain.ModelConfig) error {
 	}
 	return nil
 }
+
+// AnyReferencesApiKey reports whether any model_config row references this api_key.
+//
+// AnyReferencesApiKey 报告是否有 model_config 行引用该 api_key。
+func (s *Store) AnyReferencesApiKey(ctx context.Context, apiKeyID string) (bool, error) {
+	uid, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return false, fmt.Errorf("modelstore.AnyReferencesApiKey: %w", err)
+	}
+	var count int64
+	if err := s.db.WithContext(ctx).
+		Model(&modeldomain.ModelConfig{}).
+		Where("user_id = ? AND api_key_id = ?", uid, apiKeyID).
+		Limit(1).
+		Count(&count).Error; err != nil {
+		return false, fmt.Errorf("modelstore.AnyReferencesApiKey: %w", err)
+	}
+	return count > 0, nil
+}

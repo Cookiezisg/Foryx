@@ -250,6 +250,31 @@ func (s *Store) SetNeedsAttention(ctx context.Context, workflowID string, needs 
 	return nil
 }
 
+// AnyReferencesApiKey reports whether any workflow_version.graph JSON contains
+// a node.modelOverride.apiKeyId equal to apiKeyID. Scope is current user via
+// workflows.user_id join (workflow_versions has no user_id column of its own).
+//
+// AnyReferencesApiKey 报告是否有 workflow_version.graph 里的
+// node.modelOverride.apiKeyId 等于 apiKeyID；通过 workflows.user_id JOIN 限定当前用户
+// （workflow_versions 表本身没有 user_id 列）。
+func (s *Store) AnyReferencesApiKey(ctx context.Context, apiKeyID string) (bool, error) {
+	uid, err := reqctxpkg.RequireUserID(ctx)
+	if err != nil {
+		return false, fmt.Errorf("workflowstore.AnyReferencesApiKey: %w", err)
+	}
+	pattern := `%"apiKeyId":"` + apiKeyID + `"%`
+	var count int64
+	if err := s.db.WithContext(ctx).
+		Table("workflow_versions").
+		Joins("JOIN workflows ON workflows.id = workflow_versions.workflow_id").
+		Where("workflows.user_id = ? AND workflows.deleted_at IS NULL AND workflow_versions.graph LIKE ?", uid, pattern).
+		Limit(1).
+		Count(&count).Error; err != nil {
+		return false, fmt.Errorf("workflowstore.AnyReferencesApiKey: %w", err)
+	}
+	return count > 0, nil
+}
+
 // SaveVersion upserts a Version by primary key.
 //
 // SaveVersion 按主键 upsert Version。

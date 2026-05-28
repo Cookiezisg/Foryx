@@ -192,3 +192,45 @@ func TestList_CrossUserIsolation(t *testing.T) {
 		t.Errorf("Alice sees wrong rows: %+v", rows)
 	}
 }
+
+func TestStore_AnyReferencesApiKey_True(t *testing.T) {
+	s := newStore(t)
+	ctx := ctxFor(userAlice)
+
+	if err := s.Upsert(ctx, mkConfig("mc1", userAlice, modeldomain.ScenarioDialogue, "aki_x", "gpt-4o")); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+	got, err := s.AnyReferencesApiKey(ctx, "aki_x")
+	if err != nil {
+		t.Fatalf("AnyReferencesApiKey: %v", err)
+	}
+	if !got {
+		t.Error("got false, want true (model_config references aki_x)")
+	}
+}
+
+func TestStore_AnyReferencesApiKey_False(t *testing.T) {
+	s := newStore(t)
+	got, err := s.AnyReferencesApiKey(ctxFor(userAlice), "aki_x")
+	if err != nil {
+		t.Fatalf("AnyReferencesApiKey: %v", err)
+	}
+	if got {
+		t.Error("got true on empty store, want false")
+	}
+}
+
+func TestStore_AnyReferencesApiKey_CrossUserIsolated(t *testing.T) {
+	s := newStore(t)
+
+	if err := s.Upsert(ctxFor(userAlice), mkConfig("mc-a", userAlice, modeldomain.ScenarioDialogue, "aki_x", "gpt-4o")); err != nil {
+		t.Fatalf("Upsert Alice: %v", err)
+	}
+	got, err := s.AnyReferencesApiKey(ctxFor(userBob), "aki_x")
+	if err != nil {
+		t.Fatalf("AnyReferencesApiKey: %v", err)
+	}
+	if got {
+		t.Error("got true: Bob sees Alice's reference, want false (cross-user isolated)")
+	}
+}

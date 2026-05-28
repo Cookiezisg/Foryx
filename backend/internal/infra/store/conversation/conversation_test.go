@@ -9,6 +9,7 @@ import (
 	gormlogger "gorm.io/gorm/logger"
 
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	dbinfra "github.com/sunweilin/forgify/backend/internal/infra/db"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -262,4 +263,58 @@ func convIDs(rows []*convdomain.Conversation) []string {
 		out[i] = r.ID
 	}
 	return out
+}
+
+func mkConvWithOverride(id, uid, apiKeyID string) *convdomain.Conversation {
+	return &convdomain.Conversation{
+		ID:     id,
+		UserID: uid,
+		Title:  "override-" + id,
+		ModelOverride: &modeldomain.ModelRef{
+			APIKeyID: apiKeyID,
+			ModelID:  "gpt-4o",
+		},
+	}
+}
+
+func TestStore_AnyReferencesApiKey_True(t *testing.T) {
+	s := newStore(t)
+	ctx := ctxFor(userAlice)
+
+	if err := s.Save(ctx, mkConvWithOverride("cv1", userAlice, "aki_x")); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+	got, err := s.AnyReferencesApiKey(ctx, "aki_x")
+	if err != nil {
+		t.Fatalf("AnyReferencesApiKey: %v", err)
+	}
+	if !got {
+		t.Error("got false, want true (conv override references aki_x)")
+	}
+}
+
+func TestStore_AnyReferencesApiKey_False(t *testing.T) {
+	s := newStore(t)
+	got, err := s.AnyReferencesApiKey(ctxFor(userAlice), "aki_x")
+	if err != nil {
+		t.Fatalf("AnyReferencesApiKey: %v", err)
+	}
+	if got {
+		t.Error("got true on empty store, want false")
+	}
+}
+
+func TestStore_AnyReferencesApiKey_CrossUserIsolated(t *testing.T) {
+	s := newStore(t)
+
+	if err := s.Save(ctxFor(userAlice), mkConvWithOverride("cv-a", userAlice, "aki_x")); err != nil {
+		t.Fatalf("Save Alice: %v", err)
+	}
+	got, err := s.AnyReferencesApiKey(ctxFor(userBob), "aki_x")
+	if err != nil {
+		t.Fatalf("AnyReferencesApiKey: %v", err)
+	}
+	if got {
+		t.Error("got true: Bob sees Alice's reference, want false (cross-user isolated)")
+	}
 }

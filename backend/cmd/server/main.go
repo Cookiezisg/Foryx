@@ -229,7 +229,27 @@ func main() {
 		log,
 	)
 
-	modelService := modelapp.NewService(modelstore.New(gdb), apikeyService, log)
+	// Hoist 3 store handles so apikey.Service can later get its RefScanner setters
+	// wired (model_config / conv override / node override RESTRICT). Inline
+	// constructions below are switched to these vars for single ownership.
+	//
+	// 抽出 3 个 store 句柄,供后面 apikeyService 的 RefScanner setter 装配
+	// （model_config / conv override / node override RESTRICT）；下方 inline 构造
+	// 改用这几个变量,统一所有权。
+	modelStore := modelstore.New(gdb)
+	convStore := convstore.New(gdb)
+	workflowStore := workflowstore.New(gdb)
+
+	// Wire ref scanners so apikey.Service.Delete enforces RESTRICT against
+	// model_configs / conv overrides / workflow node overrides.
+	//
+	// 装配 ref scanner，让 apikey.Service.Delete 对 model_configs / conv override /
+	// node override 三处引用强制 RESTRICT。
+	apikeyService.SetModelConfigRefScanner(modelStore)
+	apikeyService.SetConvOverrideRefScanner(convStore)
+	apikeyService.SetNodeOverrideRefScanner(workflowStore)
+
+	modelService := modelapp.NewService(modelStore, apikeyService, log)
 
 	llmFactory := llminfra.NewFactory()
 
@@ -244,7 +264,7 @@ func main() {
 	notificationsPub := notificationspkg.New(notificationsBridge, log)
 	forgeBridge := forgeinfra.NewBridge(log)
 	forgePub := forgepkg.New(forgeBridge, log)
-	convService := convapp.NewService(convstore.New(gdb), notificationsPub, log)
+	convService := convapp.NewService(convStore, notificationsPub, log)
 	convService.SetKeyProvider(apikeyService) // §12.3 enable ModelOverride 422 validation
 
 	// PluginSandbox v2 bootstrap: extract embedded mise binary; failure flips degraded mode (non-fatal).
@@ -278,7 +298,7 @@ func main() {
 		Handler:  handlerService,
 	}
 	workflowService := workflowapp.NewService(
-		workflowstore.New(gdb),
+		workflowStore,
 		workflowChecker,
 		notificationsPub,
 		log,
@@ -288,7 +308,7 @@ func main() {
 	chatEmitter := eventlogpkg.New(eventLogBridge, chatRepo, log)
 	chatService := chatapp.NewService(
 		chatRepo,
-		convstore.New(gdb),
+		convStore,
 		modelService,
 		apikeyService,
 		llmFactory,
@@ -443,7 +463,7 @@ func main() {
 		return bundle.Client, bundle.ModelID, bundle.Key, bundle.BaseURL, nil
 	}
 	contextManager := contextmgrapp.New(
-		chatRepo, convstore.New(gdb), chatEmitter, notificationsPub, cheapLLMResolver, log)
+		chatRepo, convStore, chatEmitter, notificationsPub, cheapLLMResolver, log)
 	chatService.SetContextCompactor(contextManager)
 
 	workflowChecker.Skill = skillService
