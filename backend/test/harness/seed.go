@@ -86,20 +86,27 @@ func (h *Harness) SeedDeepSeek(t *testing.T, apiKey string) {
 	}
 	ctx := h.LocalCtx()
 
-	if _, err := h.APIKey.Create(ctx, apikeyapp.CreateInput{
+	key, err := h.APIKey.Create(ctx, apikeyapp.CreateInput{
 		Provider:    ProviderDeepSeek,
 		DisplayName: "pipeline-deepseek",
 		Key:         apiKey,
 		BaseURL:     h.fakeLLMBaseURL,
-	}); err != nil {
+	})
+	if err != nil {
 		t.Fatalf("seed apikey: %v", err)
 	}
 
-	if _, err := h.Model.Upsert(ctx, modeldomain.ScenarioChat, modelapp.UpsertInput{
-		Provider: ProviderDeepSeek,
-		ModelID:  "deepseek-chat",
-	}); err != nil {
-		t.Fatalf("seed model config: %v", err)
+	// Seed all 3 scenarios (dialogue/utility/agent) pointing to this key so
+	// any LLM callsite resolves cleanly in pipeline tests.
+	//
+	// 给 3 个 scenario 都种入这把 key,任何 LLM 调用点解析都能通。
+	for _, scenario := range modeldomain.ListScenarios() {
+		if _, err := h.Model.Upsert(ctx, scenario, modelapp.UpsertInput{
+			APIKeyID: key.ID,
+			ModelID:  "deepseek-chat",
+		}); err != nil {
+			t.Fatalf("seed model config %s: %v", scenario, err)
+		}
 	}
 }
 
