@@ -12,6 +12,7 @@ import (
 
 	skilldomain "github.com/sunweilin/forgify/backend/internal/domain/skill"
 	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	agentstatepkg "github.com/sunweilin/forgify/backend/internal/pkg/agentstate"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -34,17 +35,19 @@ func newServiceWithDir(t *testing.T) *Service {
 }
 
 type fakeSubagent struct {
-	gotType   string
-	gotPrompt string
-	gotOpts   subagentapp.SpawnOpts
-	returns   string
-	returnErr error
+	gotType     string
+	gotPrompt   string
+	gotOpts     subagentapp.SpawnOpts
+	gotOverride *modeldomain.ModelRef
+	returns     string
+	returnErr   error
 }
 
-func (f *fakeSubagent) Spawn(_ context.Context, typeName, prompt string, opts subagentapp.SpawnOpts) (*subagentapp.SpawnResult, error) {
+func (f *fakeSubagent) Spawn(_ context.Context, typeName, prompt string, opts subagentapp.SpawnOpts, parentModelOverride *modeldomain.ModelRef) (*subagentapp.SpawnResult, error) {
 	f.gotType = typeName
 	f.gotPrompt = prompt
 	f.gotOpts = opts
+	f.gotOverride = parentModelOverride
 	if f.returnErr != nil {
 		return nil, f.returnErr
 	}
@@ -338,6 +341,52 @@ arguments:
 	}
 	if !strings.Contains(fake.gotPrompt, "Review #1234") {
 		t.Errorf("Spawn prompt missing $1 substitution: %q", fake.gotPrompt)
+	}
+}
+
+// TestActivate_Fork_PropagatesParentModelOverride covers the chain-root override
+// hand-off: chat.runner stashes conv.ModelOverride on ctx, fork-skill must read it
+// and pass to Spawn so the subagent uses the same effective model as the parent.
+//
+// TestActivate_Fork_PropagatesParentModelOverride 守 override 链根透传:
+// chat.runner 把 conv.ModelOverride 塞进 ctx, fork-skill 必须读出来传给 Spawn,
+// 让 subagent 用与父对话同一 effective model。
+func TestActivate_Fork_PropagatesParentModelOverride(t *testing.T) {
+	fake := &fakeSubagent{returns: "ok"}
+	tmp := t.TempDir()
+	s := New(tmp, fake, nil, nil, nil, nil, zaptest.NewLogger(t))
+	writeSkill(t, s.skillsDir, "review",
+		"name: review\ndescription: r\ncontext: fork\nagent: Explore", "body")
+	if err := s.Scan(context.Background()); err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	override := &modeldomain.ModelRef{APIKeyID: "aki_test", ModelID: "gpt-4o"}
+	ctx := reqctxpkg.WithModelOverride(context.Background(), override)
+	if _, err := s.Activate(ctx, "review", nil); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+	if fake.gotOverride == nil {
+		t.Fatal("Spawn received nil override; expected the one stashed on ctx")
+	}
+	if fake.gotOverride.APIKeyID != "aki_test" || fake.gotOverride.ModelID != "gpt-4o" {
+		t.Errorf("override = %+v, want {aki_test, gpt-4o}", fake.gotOverride)
+	}
+}
+
+func TestActivate_Fork_NilOverride_WhenCtxHasNone(t *testing.T) {
+	fake := &fakeSubagent{returns: "ok"}
+	tmp := t.TempDir()
+	s := New(tmp, fake, nil, nil, nil, nil, zaptest.NewLogger(t))
+	writeSkill(t, s.skillsDir, "review",
+		"name: review\ndescription: r\ncontext: fork\nagent: Explore", "body")
+	if err := s.Scan(context.Background()); err != nil {
+		t.Fatalf("Scan: %v", err)
+	}
+	if _, err := s.Activate(context.Background(), "review", nil); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+	if fake.gotOverride != nil {
+		t.Errorf("Spawn override = %+v, want nil when ctx unset", fake.gotOverride)
 	}
 }
 

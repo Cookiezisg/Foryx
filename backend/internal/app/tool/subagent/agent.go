@@ -120,9 +120,15 @@ func (t *SubagentTool) Execute(ctx context.Context, argsJSON string) (string, er
 		return "", fmt.Errorf("SubagentTool.Execute: parse args: %w", err)
 	}
 
+	// Inherit effective ModelRef from ctx (set by chat.runner / parent Spawn).
+	// Chain propagates without re-lookup at each level.
+	//
+	// 从 ctx 拿 effective ModelRef(由 chat.runner / 父 Spawn 写入);
+	// 整条 spawn 链自动承袭,不在每层重查。
+	parentOverride := reqctxpkg.GetModelOverride(ctx)
 	res, err := t.svc.Spawn(ctx, args.SubagentType, args.Prompt, subagentapp.SpawnOpts{
 		MaxTurns: args.MaxTurns,
-	})
+	}, parentOverride)
 	if err != nil {
 		return "", err
 	}

@@ -69,7 +69,13 @@ func (s *Service) activateInternal(ctx context.Context, name string, arguments [
 			return "", fmt.Errorf("skillapp.Activate %s: fork requested but SubagentService is nil", name)
 		}
 		agentType := skill.Frontmatter.Agent
-		result, err := s.subagent.Spawn(ctx, agentType, substituted, subagentapp.SpawnOpts{})
+		// Inherit effective ModelRef from ctx (chat.runner / parent Spawn stash);
+		// fork-skill subagent uses the same effective model as the parent dialogue.
+		//
+		// 从 ctx 拿 effective ModelRef(chat.runner / 父 Spawn 注入);
+		// fork-skill 派发的 subagent 与父对话用同一 effective model。
+		parentOverride := reqctxpkg.GetModelOverride(ctx)
+		result, err := s.subagent.Spawn(ctx, agentType, substituted, subagentapp.SpawnOpts{}, parentOverride)
 		if err != nil {
 			return "", fmt.Errorf("skillapp.Activate %s: subagent spawn: %w", name, err)
 		}

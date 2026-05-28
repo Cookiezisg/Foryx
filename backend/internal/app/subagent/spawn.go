@@ -10,6 +10,7 @@ import (
 	loopapp "github.com/sunweilin/forgify/backend/internal/app/loop"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	eventlogdomain "github.com/sunweilin/forgify/backend/internal/domain/eventlog"
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	subagentdomain "github.com/sunweilin/forgify/backend/internal/domain/subagent"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	eventlogpkg "github.com/sunweilin/forgify/backend/internal/pkg/eventlog"
@@ -52,9 +53,13 @@ type SpawnResult struct {
 }
 
 // Spawn boots one sub-run end-to-end; on any error returns a Status=StatusFailed SpawnResult plus the error.
+// parentModelOverride is the effective ModelRef from the parent dialogue
+// (conv.ModelOverride or nil); subagent uses the same effective model.
 //
 // Spawn 一站式启动 sub-run；任何错误都返回 Status=StatusFailed 的 SpawnResult 并带 error。
-func (s *Service) Spawn(parentCtx context.Context, typeName, prompt string, opts SpawnOpts) (*SpawnResult, error) {
+// parentModelOverride 是父对话的 effective ModelRef(conv.ModelOverride 或 nil);
+// subagent 与父对话用同一 effective model。
+func (s *Service) Spawn(parentCtx context.Context, typeName, prompt string, opts SpawnOpts, parentModelOverride *modeldomain.ModelRef) (*SpawnResult, error) {
 	typ, ok := s.registry.Get(typeName)
 	if !ok {
 		return nil, fmt.Errorf("subagentapp.Spawn: %w: %q", subagentdomain.ErrTypeNotFound, typeName)
@@ -65,7 +70,7 @@ func (s *Service) Spawn(parentCtx context.Context, typeName, prompt string, opts
 	parentConvID, _ := reqctxpkg.GetConversationID(parentCtx)
 	uid, _ := reqctxpkg.GetUserID(parentCtx)
 
-	bundle, err := llmclientpkg.Resolve(parentCtx, s.modelPicker, s.keyProvider, s.llmFactory)
+	bundle, err := llmclientpkg.ResolveDialogueWithOverride(parentCtx, parentModelOverride, s.modelPicker, s.keyProvider, s.llmFactory)
 	if err != nil {
 		return nil, fmt.Errorf("subagentapp.Spawn resolve LLM: %w", err)
 	}
@@ -100,6 +105,14 @@ func (s *Service) Spawn(parentCtx context.Context, typeName, prompt string, opts
 	subCtx = eventlogpkg.With(subCtx, em)
 	subCtx, cancel := context.WithTimeout(subCtx, defaultRunTimeout)
 	defer cancel()
+
+	// Propagate effective override into subCtx so any subagent → subagent
+	// nesting inherits the chain-root override.
+	//
+	// 把 effective override 注入 subCtx,嵌套 spawn 自动承袭。
+	if parentModelOverride != nil {
+		subCtx = reqctxpkg.WithModelOverride(subCtx, parentModelOverride)
+	}
 
 	host := &subagentHost{
 		svc:           s,

@@ -23,7 +23,7 @@ import (
 //
 // SubagentService 是 skill 派发 fork 模式时用的端口。
 type SubagentService interface {
-	Spawn(ctx context.Context, typeName, prompt string, opts subagentapp.SpawnOpts) (*subagentapp.SpawnResult, error)
+	Spawn(ctx context.Context, typeName, prompt string, opts subagentapp.SpawnOpts, parentModelOverride *modeldomain.ModelRef) (*subagentapp.SpawnResult, error)
 }
 
 // Service ties scan, cache, search/activate, and fork-mode dispatch together.
