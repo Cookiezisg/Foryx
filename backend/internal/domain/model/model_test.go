@@ -1,42 +1,46 @@
-package model
+package model_test
 
 import (
-	"slices"
 	"testing"
+
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 )
 
-func TestIsValidScenario(t *testing.T) {
-	valid := []string{"chat"}
-	for _, s := range valid {
-		if !IsValidScenario(s) {
-			t.Errorf("IsValidScenario(%q) = false, want true", s)
-		}
+func TestIsValidScenario_NewSet(t *testing.T) {
+	cases := []struct {
+		name  string
+		valid bool
+	}{
+		{modeldomain.ScenarioDialogue, true},
+		{modeldomain.ScenarioUtility, true},
+		{modeldomain.ScenarioAgent, true},
+		{"chat", false},        // legacy: removed
+		{"web_summary", false}, // legacy: removed
+		{"", false},
+		{"garbage", false},
 	}
-
-	invalid := []string{"", "Chat", "CHAT", "workflow_llm", "embedding", " chat"}
-	for _, s := range invalid {
-		if IsValidScenario(s) {
-			t.Errorf("IsValidScenario(%q) = true, want false", s)
-		}
-	}
-}
-
-func TestListScenarios_ContainsChat(t *testing.T) {
-	got := ListScenarios()
-	if len(got) == 0 {
-		t.Fatal("ListScenarios() returned empty slice")
-	}
-	if !slices.Contains(got, ScenarioChat) {
-		t.Errorf("ListScenarios() missing %q", ScenarioChat)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := modeldomain.IsValidScenario(c.name); got != c.valid {
+				t.Fatalf("IsValidScenario(%q)=%v, want %v", c.name, got, c.valid)
+			}
+		})
 	}
 }
 
-func TestListScenarios_MatchIsValid(t *testing.T) {
-	// Every scenario returned by ListScenarios must pass IsValidScenario.
-	// 确保 ListScenarios 返回的每一项都能通过 IsValidScenario 校验。
-	for _, s := range ListScenarios() {
-		if !IsValidScenario(s) {
-			t.Errorf("IsValidScenario(%q) = false, but it is in ListScenarios()", s)
+func TestListScenarios_NewSet(t *testing.T) {
+	got := modeldomain.ListScenarios()
+	want := []string{
+		modeldomain.ScenarioDialogue,
+		modeldomain.ScenarioUtility,
+		modeldomain.ScenarioAgent,
+	}
+	if len(got) != len(want) {
+		t.Fatalf("ListScenarios: got %d, want %d", len(got), len(want))
+	}
+	for i, s := range want {
+		if got[i] != s {
+			t.Fatalf("ListScenarios[%d]=%q, want %q", i, got[i], s)
 		}
 	}
 }
