@@ -8,6 +8,7 @@ import (
 
 	documentdomain "github.com/sunweilin/forgify/backend/internal/domain/document"
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
 )
 
@@ -111,15 +112,15 @@ func TestSkillDispatcher_MissingSkillName(t *testing.T) {
 }
 
 type fakeLLMCaller struct {
-	gotScenario string
+	gotOverride *modeldomain.ModelRef
 	gotPrompt   string
 	gotVars     map[string]any
 	resp        string
 	err         error
 }
 
-func (f *fakeLLMCaller) Generate(_ context.Context, scenario, prompt string, vars map[string]any) (string, error) {
-	f.gotScenario, f.gotPrompt, f.gotVars = scenario, prompt, vars
+func (f *fakeLLMCaller) Generate(_ context.Context, override *modeldomain.ModelRef, prompt string, vars map[string]any) (string, error) {
+	f.gotOverride, f.gotPrompt, f.gotVars = override, prompt, vars
 	return f.resp, f.err
 }
 
@@ -145,7 +146,7 @@ func TestLLMDispatcher_MissingPrompt(t *testing.T) {
 	}
 }
 
-func TestLLMDispatcher_DefaultScenarioIsChat(t *testing.T) {
+func TestLLMDispatcher_NilOverrideByDefault(t *testing.T) {
 	caller := &fakeLLMCaller{resp: "hello world"}
 	d := NewLLMDispatcher(caller, nil)
 	in := mkInput(workflowdomain.NodeSpec{ID: "l", Type: workflowdomain.NodeTypeLLM,
@@ -155,8 +156,9 @@ func TestLLMDispatcher_DefaultScenarioIsChat(t *testing.T) {
 	if out.Error != nil {
 		t.Fatalf("unexpected error: %v", out.Error)
 	}
-	if caller.gotScenario != "chat" {
-		t.Errorf("default scenario = %q, want chat", caller.gotScenario)
+	// Task 11 will wire NodeSpec.ModelOverride; until then dispatcher always stubs nil.
+	if caller.gotOverride != nil {
+		t.Errorf("default override = %+v, want nil", caller.gotOverride)
 	}
 	if out.Outputs["out"] != "hello world" {
 		t.Errorf("output = %v, want hello world", out.Outputs)

@@ -11,14 +11,12 @@ import (
 )
 
 // DefaultLLMCaller implements LLMCaller by routing every Generate call
-// through llmclient.Resolve(picker, keys, factory) + llminfra.Generate.
-// V1 ignores `scenario` (always uses chat scenario) — workflow `llm`
-// nodes just need a single-shot text completion; bespoke scenarios are
-// out of scope until model_picker grows per-scenario methods.
+// through llmclient.ResolveAgentWithOverride + llminfra.Generate. The optional
+// per-call override comes from NodeSpec.ModelOverride at the dispatch layer.
 //
-// DefaultLLMCaller 实现 LLMCaller:每次 Generate 走 llmclient.Resolve
-// + llminfra.Generate。V1 忽略 scenario(始终用 chat 场景)——workflow `llm`
-// 节点只要单次补全,自定义 scenario 等 model_picker 扩字段。
+// DefaultLLMCaller 实现 LLMCaller:每次 Generate 走
+// llmclient.ResolveAgentWithOverride + llminfra.Generate。可选 override 来自
+// dispatch 层的 NodeSpec.ModelOverride。
 type DefaultLLMCaller struct {
 	picker  modeldomain.ModelPicker
 	keys    apikeydomain.KeyProvider
@@ -36,11 +34,16 @@ func NewDefaultLLMCaller(
 	return &DefaultLLMCaller{picker: picker, keys: keys, factory: factory}
 }
 
-func (a *DefaultLLMCaller) Generate(ctx context.Context, scenario, prompt string, _ map[string]any) (string, error) {
+// Generate runs one single-shot completion for a workflow `llm` node.
+// override is the node-level ModelOverride (may be nil → uses agent scenario default).
+//
+// Generate 跑一次单步补全(workflow llm 节点)。override 是节点级 ModelOverride
+// (可能 nil → 走 agent scenario 默认)。
+func (a *DefaultLLMCaller) Generate(ctx context.Context, override *modeldomain.ModelRef, prompt string, _ map[string]any) (string, error) {
 	if a.picker == nil || a.keys == nil || a.factory == nil {
 		return "", fmt.Errorf("DefaultLLMCaller: missing picker/keys/factory")
 	}
-	bundle, err := llmclientpkg.Resolve(ctx, a.picker, a.keys, a.factory)
+	bundle, err := llmclientpkg.ResolveAgentWithOverride(ctx, override, a.picker, a.keys, a.factory)
 	if err != nil {
 		return "", fmt.Errorf("DefaultLLMCaller.Generate: %w", err)
 	}

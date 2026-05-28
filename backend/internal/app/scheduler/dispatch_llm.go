@@ -7,16 +7,17 @@ import (
 
 	documentapp "github.com/sunweilin/forgify/backend/internal/app/document"
 	documentdomain "github.com/sunweilin/forgify/backend/internal/domain/document"
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 )
 
 // LLMCaller is the port LLMDispatcher consumes; main.go wires the concrete impl.
 //
 // LLMCaller 是 LLMDispatcher 消费的端口；main.go 装配具体实现。
 type LLMCaller interface {
-	// Generate calls the LLM for a scenario with prompt + vars and returns the text.
+	// Generate calls the LLM with optional per-node ModelOverride + prompt + vars and returns the text.
 	//
-	// Generate 按 scenario 调 LLM，返生成文本。
-	Generate(ctx context.Context, scenario, prompt string, vars map[string]any) (string, error)
+	// Generate 按节点级 ModelOverride 调 LLM(override 为 nil 时走 agent 默认),返生成文本。
+	Generate(ctx context.Context, override *modeldomain.ModelRef, prompt string, vars map[string]any) (string, error)
 }
 
 // DocumentResolver is the port LLMDispatcher + AgentDispatcher consume to
@@ -49,18 +50,14 @@ func NewLLMDispatcher(caller LLMCaller, documents DocumentResolver) *LLMDispatch
 	return &LLMDispatcher{caller: caller, documents: documents}
 }
 
-// Dispatch reads scenario + prompt + attachedDocuments from node.Config and invokes the LLM.
+// Dispatch reads prompt + attachedDocuments from node.Config and invokes the LLM.
 //
-// Dispatch 读 scenario + prompt + attachedDocuments,调 LLM。
+// Dispatch 读 prompt + attachedDocuments,调 LLM。
 func (d *LLMDispatcher) Dispatch(ctx context.Context, in DispatchInput) DispatchOutput {
 	if d.caller == nil {
 		return DispatchOutput{Error: fmt.Errorf("llm node %q: no LLMCaller wired", in.Node.ID)}
 	}
-	scenario, _ := in.Node.Config["scenario"].(string)
 	prompt, _ := in.Node.Config["prompt"].(string)
-	if scenario == "" {
-		scenario = "chat"
-	}
 	if prompt == "" {
 		return DispatchOutput{Error: fmt.Errorf("llm node %q: prompt required", in.Node.ID)}
 	}
@@ -79,7 +76,11 @@ func (d *LLMDispatcher) Dispatch(ctx context.Context, in DispatchInput) Dispatch
 		}
 	}
 
-	out, err := d.caller.Generate(ctx, scenario, prompt, in.ExecCtx.Variables)
+	// node.ModelOverride wired in Task 11; stub nil for now.
+	//
+	// node.ModelOverride 由 Task 11 接入,本任务先 nil 占位。
+	var nodeModelOverride *modeldomain.ModelRef
+	out, err := d.caller.Generate(ctx, nodeModelOverride, prompt, in.ExecCtx.Variables)
 	if err != nil {
 		return DispatchOutput{Error: err}
 	}
