@@ -6,10 +6,12 @@ import (
 	"strings"
 	"testing"
 
+	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	documentdomain "github.com/sunweilin/forgify/backend/internal/domain/document"
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
+	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 )
 
 func contains(s, sub string) bool { return strings.Contains(s, sub) }
@@ -156,12 +158,34 @@ func TestLLMDispatcher_NilOverrideByDefault(t *testing.T) {
 	if out.Error != nil {
 		t.Fatalf("unexpected error: %v", out.Error)
 	}
-	// Task 11 will wire NodeSpec.ModelOverride; until then dispatcher always stubs nil.
 	if caller.gotOverride != nil {
 		t.Errorf("default override = %+v, want nil", caller.gotOverride)
 	}
 	if out.Outputs["out"] != "hello world" {
 		t.Errorf("output = %v, want hello world", out.Outputs)
+	}
+}
+
+func TestLLMDispatcher_PassesNodeOverrideToCaller(t *testing.T) {
+	caller := &fakeLLMCaller{resp: "ok"}
+	d := NewLLMDispatcher(caller, nil)
+	override := &modeldomain.ModelRef{APIKeyID: "aki_custom", ModelID: "claude-opus-4"}
+	in := mkInput(workflowdomain.NodeSpec{
+		ID:            "l",
+		Type:          workflowdomain.NodeTypeLLM,
+		ModelOverride: override,
+		Config:        map[string]any{"prompt": "say hi"},
+	}, &flowrundomain.FlowRun{ID: "fr1"})
+
+	out := d.Dispatch(context.Background(), in)
+	if out.Error != nil {
+		t.Fatalf("unexpected error: %v", out.Error)
+	}
+	if caller.gotOverride == nil {
+		t.Fatalf("override not threaded: got nil")
+	}
+	if caller.gotOverride.APIKeyID != "aki_custom" || caller.gotOverride.ModelID != "claude-opus-4" {
+		t.Errorf("override mismatch: got %+v", caller.gotOverride)
 	}
 }
 
@@ -245,5 +269,78 @@ func TestLLMDispatcher_NoResolver_NoPrefix(t *testing.T) {
 	}
 	if caller.gotPrompt != "say hi" {
 		t.Errorf("prompt should equal original input; got %q", caller.gotPrompt)
+	}
+}
+
+// fakeAgentPicker records whether PickForAgent was invoked; AgentDispatcher
+// override-wiring test asserts picker is NOT consulted when node carries a
+// valid ModelOverride.
+//
+// fakeAgentPicker 记录 PickForAgent 是否被调;AgentDispatcher override 联调测试
+// 用它断言 node 携带有效 ModelOverride 时 picker 不应被调用。
+type fakeAgentPicker struct {
+	pickedForAgent bool
+}
+
+func (f *fakeAgentPicker) PickForDialogue(_ context.Context) (string, string, error) {
+	return "", "", modeldomain.ErrNotConfigured
+}
+func (f *fakeAgentPicker) PickForUtility(_ context.Context) (string, string, error) {
+	return "", "", modeldomain.ErrNotConfigured
+}
+func (f *fakeAgentPicker) PickForAgent(_ context.Context) (string, string, error) {
+	f.pickedForAgent = true
+	return "", "", modeldomain.ErrNotConfigured
+}
+
+type fakeKeyProvider struct{}
+
+func (fakeKeyProvider) ResolveCredentialsByID(_ context.Context, _ string) (apikeydomain.Credentials, error) {
+	return apikeydomain.Credentials{}, apikeydomain.ErrNotFound
+}
+func (fakeKeyProvider) ResolveCredentials(_ context.Context, _ string) (apikeydomain.Credentials, error) {
+	return apikeydomain.Credentials{}, apikeydomain.ErrNotFoundForProvider
+}
+func (fakeKeyProvider) HasKeyForProvider(_ context.Context, _ string) (bool, error) { return false, nil }
+func (fakeKeyProvider) MarkInvalid(_ context.Context, _ string, _ string) error     { return nil }
+func (fakeKeyProvider) DefaultSearchProvider(_ context.Context) string              { return "" }
+
+func TestAgentDispatcher_PassesNodeOverrideToResolver(t *testing.T) {
+	picker := &fakeAgentPicker{}
+	d := NewAgentDispatcher(picker, fakeKeyProvider{}, llminfra.NewFactory(), nil, nil, nil)
+	override := &modeldomain.ModelRef{APIKeyID: "aki_custom", ModelID: "claude-opus-4"}
+	in := mkInput(workflowdomain.NodeSpec{
+		ID:            "a",
+		Type:          workflowdomain.NodeTypeAgent,
+		ModelOverride: override,
+		Config:        map[string]any{"prompt": "do it"},
+	}, &flowrundomain.FlowRun{ID: "fr1"})
+
+	out := d.Dispatch(context.Background(), in)
+	// Error expected (fakeKeyProvider always ErrNotFound); the assertion is
+	// that PickForAgent was NOT called because override has both fields set.
+	if out.Error == nil {
+		t.Fatalf("expected error from bogus key lookup, got nil")
+	}
+	if picker.pickedForAgent {
+		t.Errorf("picker.PickForAgent should NOT be called when node has ModelOverride")
+	}
+}
+
+func TestAgentDispatcher_NilOverrideFallsBackToPicker(t *testing.T) {
+	picker := &fakeAgentPicker{}
+	d := NewAgentDispatcher(picker, fakeKeyProvider{}, llminfra.NewFactory(), nil, nil, nil)
+	in := mkInput(workflowdomain.NodeSpec{
+		ID:     "a",
+		Type:   workflowdomain.NodeTypeAgent,
+		Config: map[string]any{"prompt": "do it"},
+	}, &flowrundomain.FlowRun{ID: "fr1"})
+
+	out := d.Dispatch(context.Background(), in)
+	if out.Error == nil {
+		t.Fatalf("expected error from picker ErrNotConfigured, got nil")
+	}
+	if !picker.pickedForAgent {
+		t.Errorf("picker.PickForAgent must be called when ModelOverride is nil")
 	}
 }

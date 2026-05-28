@@ -76,11 +76,10 @@ func (d *LLMDispatcher) Dispatch(ctx context.Context, in DispatchInput) Dispatch
 		}
 	}
 
-	// node.ModelOverride wired in Task 11; stub nil for now.
+	// Per-node override; nil = caller falls back to agent scenario default.
 	//
-	// node.ModelOverride 由 Task 11 接入,本任务先 nil 占位。
-	var nodeModelOverride *modeldomain.ModelRef
-	out, err := d.caller.Generate(ctx, nodeModelOverride, prompt, in.ExecCtx.Variables)
+	// 每节点 override;nil = caller 走 agent scenario 默认。
+	out, err := d.caller.Generate(ctx, in.Node.ModelOverride, prompt, in.ExecCtx.Variables)
 	if err != nil {
 		return DispatchOutput{Error: err}
 	}

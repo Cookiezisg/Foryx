@@ -117,13 +117,10 @@ func (d *AgentDispatcher) Dispatch(ctx context.Context, in DispatchInput) Dispat
 	}
 	tools := filterToolsByWhitelist(allTools, enabled)
 
-	// node.ModelOverride lets per-node override the agent scenario default;
-	// Task 11 wires it from NodeSpec.ModelOverride. For now stub nil.
+	// Per-node override; nil = ResolveAgentWithOverride falls back to picker default.
 	//
-	// node.ModelOverride 让每个节点单独 override agent scenario 默认;
-	// Task 11 接入 NodeSpec.ModelOverride,本任务先 nil 占位。
-	var nodeModelOverride *modeldomain.ModelRef // wired in Task 11
-	bundle, err := llmclientpkg.ResolveAgentWithOverride(ctx, nodeModelOverride, d.picker, d.keys, d.factory)
+	// 每节点 override;nil = ResolveAgentWithOverride 走 picker 默认。
+	bundle, err := llmclientpkg.ResolveAgentWithOverride(ctx, in.Node.ModelOverride, d.picker, d.keys, d.factory)
 	if err != nil {
 		return DispatchOutput{Error: fmt.Errorf("agent node %q: resolve LLM: %w", in.Node.ID, err)}
 	}
