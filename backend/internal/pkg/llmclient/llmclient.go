@@ -1,9 +1,9 @@
 // Package llmclient resolves the per-request LLM client via the canonical
-// three-step dance shared by chat / forge / WebFetch callsites:
-// picker.Pick* → keys.ResolveCredentials → factory.Build.
+// three-step dance shared by chat / subagent / forge / workflow callsites:
+// picker.PickForX → keys.ResolveCredentialsByID → factory.Build.
 //
-// Package llmclient 通过 chat / forge / WebFetch 共享的三段式
-// (picker.Pick* → keys.ResolveCredentials → factory.Build) 解析 per-request LLM 客户端。
+// Package llmclient 通过 chat / subagent / forge / workflow 共享的三段式
+// (picker.PickForX → keys.ResolveCredentialsByID → factory.Build) 解析 per-request LLM。
 package llmclient
 
 import (
@@ -18,7 +18,7 @@ import (
 
 // Step sentinels distinguish which resolve stage failed for stage-specific error mapping.
 //
-// Step sentinel 区分解析阶段错误，让调用方按阶段分发错误码。
+// Step sentinel 区分解析阶段错误,让调用方按阶段分发错误码。
 var (
 	ErrPickModel    = errors.New("llmclient: pick model failed")
 	ErrResolveCreds = errors.New("llmclient: resolve credentials failed")
@@ -30,78 +30,95 @@ var (
 // Bundle 是单次请求解析后的 LLM 打包。
 type Bundle struct {
 	Client   llminfra.Client
-	Provider string
+	APIKeyID string // which api_key was used
+	Provider string // derived from credentials.Provider, for logging
 	ModelID  string
 	Key      string
 	BaseURL  string
 }
 
-// Resolve walks picker → keys → factory for the chat scenario.
+// ResolveDialogueWithOverride resolves the dialogue-scenario LLM. If override
+// is non-nil with both fields set, it wins; else falls back to picker.PickForDialogue.
+// Used by chat main loop and subagent spawn.
 //
-// Resolve 按 chat 场景走 picker → keys → factory。
-func Resolve(
-	ctx context.Context,
-	picker modeldomain.ModelPicker,
-	keys apikeydomain.KeyProvider,
-	factory *llminfra.Factory,
-) (*Bundle, error) {
-	provider, modelID, err := picker.PickForChat(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %w", ErrPickModel, err)
-	}
-	return finishResolve(ctx, provider, modelID, keys, factory)
-}
-
-// ResolveWithOverride uses the override pair when both fields set; otherwise falls back to chat-scenario picker.
-//
-// ResolveWithOverride: override 双字段齐时直接用；否则 fall back 到 chat scenario picker。
-func ResolveWithOverride(
+// ResolveDialogueWithOverride 解析 dialogue scenario LLM。override 双字段齐时直接用,
+// 否则 fallback 到 picker.PickForDialogue。chat 主循环和 subagent spawn 共用。
+func ResolveDialogueWithOverride(
 	ctx context.Context,
 	override *modeldomain.ModelRef,
 	picker modeldomain.ModelPicker,
 	keys apikeydomain.KeyProvider,
 	factory *llminfra.Factory,
 ) (*Bundle, error) {
-	if override != nil && override.Provider != "" && override.ModelID != "" {
-		return finishResolve(ctx, override.Provider, override.ModelID, keys, factory)
+	if override != nil && override.APIKeyID != "" && override.ModelID != "" {
+		return finishResolve(ctx, override.APIKeyID, override.ModelID, keys, factory)
 	}
-	return Resolve(ctx, picker, keys, factory)
+	apiKeyID, modelID, err := picker.PickForDialogue(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrPickModel, err)
+	}
+	return finishResolve(ctx, apiKeyID, modelID, keys, factory)
 }
 
-// ResolveForWebSummary resolves the WebFetch summary LLM. Tries the
-// web_summary scenario first; falls back to chat when unconfigured so
-// summarisation works out of the box.
+// ResolveUtility resolves the utility-scenario LLM. No override — utility is
+// tool-internal LLM work, not user-facing conversation.
 //
-// ResolveForWebSummary 解析 WebFetch 摘要用 LLM。先 web_summary 场景，
-// 未配置则 fallback 到 chat，保证开箱即用。
-func ResolveForWebSummary(
+// ResolveUtility 解析 utility scenario LLM。无 override —— utility 是 tool 内部
+// LLM 活儿(autoTitle / compaction / rerank / env-fix / web 摘要),不参与 conv 选择。
+func ResolveUtility(
 	ctx context.Context,
 	picker modeldomain.ModelPicker,
 	keys apikeydomain.KeyProvider,
 	factory *llminfra.Factory,
 ) (*Bundle, error) {
-	provider, modelID, err := picker.PickForWebSummary(ctx)
-	if errors.Is(err, modeldomain.ErrNotConfigured) {
-		provider, modelID, err = picker.PickForChat(ctx)
-	}
+	apiKeyID, modelID, err := picker.PickForUtility(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrPickModel, err)
 	}
-	return finishResolve(ctx, provider, modelID, keys, factory)
+	return finishResolve(ctx, apiKeyID, modelID, keys, factory)
 }
 
-func finishResolve(
+// ResolveAgentWithOverride resolves the agent-scenario LLM. If override is
+// non-nil with both fields set, it wins; else falls back to picker.PickForAgent.
+// Used by workflow agent/llm node dispatchers (override = node.ModelOverride).
+//
+// ResolveAgentWithOverride 解析 agent scenario LLM。override 双字段齐时直接用,
+// 否则 fallback 到 picker.PickForAgent。workflow agent/llm 节点 dispatcher 共用
+// (override = node.ModelOverride)。
+func ResolveAgentWithOverride(
 	ctx context.Context,
-	provider, modelID string,
+	override *modeldomain.ModelRef,
+	picker modeldomain.ModelPicker,
 	keys apikeydomain.KeyProvider,
 	factory *llminfra.Factory,
 ) (*Bundle, error) {
-	creds, err := keys.ResolveCredentials(ctx, provider)
+	if override != nil && override.APIKeyID != "" && override.ModelID != "" {
+		return finishResolve(ctx, override.APIKeyID, override.ModelID, keys, factory)
+	}
+	apiKeyID, modelID, err := picker.PickForAgent(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrPickModel, err)
+	}
+	return finishResolve(ctx, apiKeyID, modelID, keys, factory)
+}
+
+// finishResolve looks up creds by api_key id (not provider), so multi-key-per-provider
+// scenarios route to the exact key the user picked.
+//
+// finishResolve 按 api_key id 查 creds(不按 provider),保证多 key 同 provider
+// 场景下精确落到用户选的那把。
+func finishResolve(
+	ctx context.Context,
+	apiKeyID, modelID string,
+	keys apikeydomain.KeyProvider,
+	factory *llminfra.Factory,
+) (*Bundle, error) {
+	creds, err := keys.ResolveCredentialsByID(ctx, apiKeyID)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrResolveCreds, err)
 	}
 	client, baseURL, err := factory.Build(llminfra.Config{
-		Provider: provider,
+		Provider: creds.Provider,
 		ModelID:  modelID,
 		Key:      creds.Key,
 		BaseURL:  creds.BaseURL,
@@ -111,7 +128,8 @@ func finishResolve(
 	}
 	return &Bundle{
 		Client:   client,
-		Provider: provider,
+		APIKeyID: apiKeyID,
+		Provider: creds.Provider,
 		ModelID:  modelID,
 		Key:      creds.Key,
 		BaseURL:  baseURL,
