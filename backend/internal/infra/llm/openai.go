@@ -83,8 +83,14 @@ func parseOpenAINonStreaming(body io.Reader, yield func(StreamEvent) bool) {
 		return
 	}
 	msg := resp.Choices[0].Message
-	if msg.ReasoningContent != "" {
-		if !yield(StreamEvent{Type: EventReasoning, Delta: msg.ReasoningContent}) {
+	// Prefer reasoning_content (CN family); fall back to reasoning (Ollama /v1).
+	// 优先用 reasoning_content（CN 家族）；fallback 到 reasoning（Ollama /v1）。
+	reasoningText := msg.ReasoningContent
+	if reasoningText == "" {
+		reasoningText = msg.Reasoning
+	}
+	if reasoningText != "" {
+		if !yield(StreamEvent{Type: EventReasoning, Delta: reasoningText}) {
 			return
 		}
 	}
@@ -195,6 +201,17 @@ func emitOpenAIChunk(chunk oaiChunk, state *toolCallState, yield func(StreamEven
 		})
 		return false
 	}
+	// Qwen DashScope flat error envelope: {"code":"...","message":"...","request_id":"..."}.
+	// These arrive as a 200 SSE chunk with no nested "error" object.
+	//
+	// Qwen 扁平错误信封以 200 SSE chunk 形式返回，无嵌套 "error" 字段。
+	if chunk.Code != "" {
+		yield(StreamEvent{
+			Type: EventError,
+			Err:  fmt.Errorf("%w: qwen: %s: %s", ErrProviderError, chunk.Code, chunk.ErrMsg),
+		})
+		return false
+	}
 	if len(chunk.Choices) == 0 {
 		if chunk.Usage != nil {
 			return yield(StreamEvent{
@@ -209,13 +226,19 @@ func emitOpenAIChunk(chunk oaiChunk, state *toolCallState, yield func(StreamEven
 	choice := chunk.Choices[0]
 	delta := choice.Delta
 
-	if delta.Content != "" {
-		if !yield(StreamEvent{Type: EventText, Delta: delta.Content}) {
+	// Emit reasoning before content: CN-family uses reasoning_content; Ollama /v1 uses reasoning.
+	// 先 emit reasoning 再 emit content：CN 家族用 reasoning_content，Ollama 用 reasoning（无下划线）。
+	reasoningDelta := delta.ReasoningContent
+	if reasoningDelta == "" {
+		reasoningDelta = delta.Reasoning
+	}
+	if reasoningDelta != "" {
+		if !yield(StreamEvent{Type: EventReasoning, Delta: reasoningDelta}) {
 			return false
 		}
 	}
-	if delta.ReasoningContent != "" {
-		if !yield(StreamEvent{Type: EventReasoning, Delta: delta.ReasoningContent}) {
+	if delta.Content != "" {
+		if !yield(StreamEvent{Type: EventText, Delta: delta.Content}) {
 			return false
 		}
 	}
@@ -456,6 +479,13 @@ type oaiChunk struct {
 	Choices []oaiChoice    `json:"choices"`
 	Usage   *oaiUsage      `json:"usage"`
 	Error   *oaiChunkError `json:"error,omitempty"`
+	// Qwen flat error envelope: {"code":"...","message":"...","request_id":"..."}.
+	// Detected when Error is nil but Code is non-empty (no nested "error" object).
+	//
+	// Qwen 扁平 error 信封：code/message 在顶层，无 "error" 嵌套。
+	Code      string `json:"code,omitempty"`
+	ErrMsg    string `json:"message,omitempty"`
+	RequestID string `json:"request_id,omitempty"`
 }
 
 type oaiChunkError struct {
@@ -476,9 +506,13 @@ type oaiNonStreamChoice struct {
 }
 
 type oaiNonStreamMessage struct {
-	Role             string             `json:"role"`
+	Role string `json:"role"`
+	// reasoning is Ollama /v1's field name; reasoning_content is the CN-family name.
+	//
+	// reasoning 是 Ollama /v1 用的字段名；reasoning_content 是 CN 家族用的。
 	Content          string             `json:"content"`
 	ReasoningContent string             `json:"reasoning_content"`
+	Reasoning        string             `json:"reasoning"`
 	ToolCalls        []oaiToolCallDelta `json:"tool_calls"`
 }
 
@@ -488,8 +522,14 @@ type oaiChoice struct {
 }
 
 type oaiDelta struct {
-	Content          string             `json:"content"`
+	Content string `json:"content"`
+	// reasoning_content is used by DeepSeek, Qwen, Zhipu, Moonshot, Doubao (CN family).
+	// reasoning is used by Ollama /v1 (no underscore — different field name).
+	//
+	// reasoning_content 是 CN 家族（DeepSeek/Qwen/Zhipu 等）用的字段名；
+	// Ollama /v1 用 reasoning（无下划线）。两者均映射到 EventReasoning。
 	ReasoningContent string             `json:"reasoning_content"`
+	Reasoning        string             `json:"reasoning"`
 	ToolCalls        []oaiToolCallDelta `json:"tool_calls"`
 }
 
