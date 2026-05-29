@@ -92,6 +92,7 @@ import (
 	handlerstore "github.com/sunweilin/forgify/backend/internal/infra/store/handler"
 	documentstore "github.com/sunweilin/forgify/backend/internal/infra/store/document"
 	memorystore "github.com/sunweilin/forgify/backend/internal/infra/store/memory"
+	modelcapoverridestore "github.com/sunweilin/forgify/backend/internal/infra/store/modelcapoverride"
 	modelstore "github.com/sunweilin/forgify/backend/internal/infra/store/model"
 	sandboxstore "github.com/sunweilin/forgify/backend/internal/infra/store/sandbox"
 	todostore "github.com/sunweilin/forgify/backend/internal/infra/store/todo"
@@ -173,6 +174,7 @@ type Harness struct {
 	HookRunner          *hooksapp.Runner
 
 	APIKey       *apikeyapp.Service
+	Capability   *apikeyapp.CapabilityService
 	Model        *modelapp.Service
 	Conversation *convapp.Service
 	Function     *functionapp.Service
@@ -241,6 +243,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		&userdomain.User{},
 		&relationdomain.Relation{},
 		&mcpdomain.HealthSnapshot{},
+		&modeldomain.ModelCapOverride{},
 	); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
@@ -277,6 +280,8 @@ func New(t *testing.T, opts ...Option) *Harness {
 	apikeyService.SetModelConfigRefScanner(modelStoreInst)
 	apikeyService.SetConvOverrideRefScanner(convStoreInst)
 	apikeyService.SetNodeOverrideRefScanner(workflowStoreInst)
+
+	capabilityService := apikeyapp.NewCapabilityService(modelcapoverridestore.New(gdb))
 
 	modelService := modelapp.NewService(modelStoreInst, apikeyService, log)
 
@@ -601,6 +606,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 	handler := routerhttpapi.New(routerhttpapi.Deps{
 		Log:                 log,
 		APIKeyService:       apikeyService,
+		CapabilityService:   capabilityService,
 		ModelService:        modelService,
 		ConversationService: convService,
 		FunctionService:     functionService,
@@ -670,6 +676,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 		Skill:               skillService,
 		Catalog:             catalogService,
 		APIKey:              apikeyService,
+		Capability:          capabilityService,
 		Model:               modelService,
 		Conversation:        convService,
 		Function:            functionService,
