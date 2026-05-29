@@ -369,10 +369,13 @@ func applySetNodeModelOverride(ctx context.Context, g *workflowdomain.Graph, raw
 		}
 	}
 
-	g.Nodes[idx].ModelOverride = &modeldomain.ModelRef{
-		APIKeyID: apiKeyID,
-		ModelID:  modelID,
-	}
+	// Assign the fully-parsed ref so Thinking (and any future ModelRef fields)
+	// survive the round-trip rather than being silently dropped.
+	//
+	// 直接赋值已解析的 ref，让 Thinking 等字段随之保留，而非重新构造只含两字段的对象。
+	ref.APIKeyID = apiKeyID
+	ref.ModelID = modelID
+	g.Nodes[idx].ModelOverride = &ref
 	return nil
 }
 

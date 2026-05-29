@@ -293,3 +293,35 @@ func TestApply_SetNodeModelOverride_MissingAPIKeyID_Returns400(t *testing.T) {
 		t.Fatalf("want ErrInvalidNodeModelOverride, got %v", err)
 	}
 }
+
+func TestApply_SetNodeModelOverride_ThinkingSurvives(t *testing.T) {
+	ops := opsFromJSON(t, `[
+		{"op":"add_node","node":{"id":"node_1","type":"agent","config":{"scenario":"agent"}}},
+		{"op":"set_node_model_override","nodeId":"node_1","modelOverride":{
+			"apiKeyId":"aki_test","modelId":"claude-sonnet-4-5",
+			"thinking":{"mode":"on","effort":"high"}
+		}}
+	]`)
+	g, err := ApplyOps(context.Background(), nil, ops, "", newFakeKeys())
+	if err != nil {
+		t.Fatalf("ApplyOps: %v", err)
+	}
+	idx := findNode(g, "node_1")
+	if idx < 0 {
+		t.Fatal("node_1 missing")
+	}
+	mo := g.Nodes[idx].ModelOverride
+	if mo == nil {
+		t.Fatal("ModelOverride is nil")
+	}
+	if mo.Thinking == nil {
+		t.Fatal("Thinking is nil, want non-nil")
+	}
+	if mo.Thinking.Mode != "on" || mo.Thinking.Effort != "high" {
+		t.Errorf("Thinking = %+v, want {Mode:on Effort:high}", mo.Thinking)
+	}
+	// Verify F1 fields are still set correctly.
+	if mo.APIKeyID != "aki_test" || mo.ModelID != "claude-sonnet-4-5" {
+		t.Errorf("base fields = {%q %q}, want {aki_test claude-sonnet-4-5}", mo.APIKeyID, mo.ModelID)
+	}
+}

@@ -45,6 +45,7 @@ func NewService(repo modeldomain.Repository, keys apikeydomain.KeyProvider, log 
 type UpsertInput struct {
 	APIKeyID string
 	ModelID  string
+	Thinking *modeldomain.ThinkingSpec
 }
 
 var _ modeldomain.ModelPicker = (*Service)(nil)
@@ -106,6 +107,7 @@ func (s *Service) Upsert(ctx context.Context, scenario string, in UpsertInput) (
 	}
 	m.APIKeyID = strings.TrimSpace(in.APIKeyID)
 	m.ModelID = strings.TrimSpace(in.ModelID)
+	m.Thinking = in.Thinking
 	if err := s.repo.Upsert(ctx, m); err != nil {
 		return nil, err
 	}

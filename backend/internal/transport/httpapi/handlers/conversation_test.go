@@ -237,3 +237,37 @@ func TestConvHandler_PatchModelOverride_APIKeyNotFound(t *testing.T) {
 		t.Errorf("code = %q, want API_KEY_NOT_FOUND", code)
 	}
 }
+
+func TestConvHandler_PatchModelOverride_WithThinking_Persisted(t *testing.T) {
+	env := newConvTestServer(t)
+	defer env.srv.Close()
+
+	_, envBody := do(t, env.srv, "POST", "/api/v1/conversations", map[string]any{"title": "thinking-test"})
+	id := dataMap(t, envBody)["id"].(string)
+
+	status, envBody := do(t, env.srv, "PATCH", "/api/v1/conversations/"+id, map[string]any{
+		"modelOverride": map[string]any{
+			"apiKeyId": env.apiKeyID,
+			"modelId":  "claude-sonnet-4-5",
+			"thinking": map[string]any{"mode": "on", "effort": "high"},
+		},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %+v", status, envBody)
+	}
+	d := dataMap(t, envBody)
+	mo, ok := d["modelOverride"].(map[string]any)
+	if !ok {
+		t.Fatalf("modelOverride missing or wrong shape: %+v", d["modelOverride"])
+	}
+	thinking, ok := mo["thinking"].(map[string]any)
+	if !ok {
+		t.Fatalf("modelOverride.thinking missing or wrong shape: %+v", mo["thinking"])
+	}
+	if got := thinking["mode"].(string); got != "on" {
+		t.Errorf("thinking.mode = %q, want on", got)
+	}
+	if got := thinking["effort"].(string); got != "high" {
+		t.Errorf("thinking.effort = %q, want high", got)
+	}
+}

@@ -229,3 +229,28 @@ func TestModelHandler_Upsert_MalformedJSON(t *testing.T) {
 		t.Errorf("code = %q, want INVALID_REQUEST", code)
 	}
 }
+
+func TestModelHandler_Upsert_WithThinking_Persisted(t *testing.T) {
+	env := newModelTestServer(t)
+	defer env.srv.Close()
+
+	status, envBody := do(t, env.srv, "PUT", "/api/v1/model-configs/dialogue", map[string]any{
+		"apiKeyId": env.apiKeyID,
+		"modelId":  "claude-sonnet-4-5",
+		"thinking": map[string]any{"mode": "on", "effort": "high"},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %+v", status, envBody)
+	}
+	d := dataMap(t, envBody)
+	thinking, ok := d["thinking"].(map[string]any)
+	if !ok {
+		t.Fatalf("thinking missing or wrong shape: %+v", d["thinking"])
+	}
+	if got := thinking["mode"].(string); got != "on" {
+		t.Errorf("thinking.mode = %q, want on", got)
+	}
+	if got := thinking["effort"].(string); got != "high" {
+		t.Errorf("thinking.effort = %q, want high", got)
+	}
+}
