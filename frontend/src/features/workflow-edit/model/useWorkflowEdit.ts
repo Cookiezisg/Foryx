@@ -85,13 +85,22 @@ export function nodeToPatch(n: CanvasNode) {
 }
 
 // modelOverrideEq — true when two ModelRef|null|undefined values are
-// semantically equal (treating null and undefined as "no override").
+// semantically equal (treating null and undefined as "no override"). Compares
+// apiKeyId, modelId, AND thinking (mode+effort+budget) so a thinking-only
+// change triggers set_node_model_override.
 //
-// modelOverrideEq —— 比较两个 ModelRef,null/undefined 语义相同(无 override)。
+// modelOverrideEq —— 比较两个 ModelRef,null/undefined 语义相同;含 thinking 字段
+// 比较,thinking-only 变化也会触发 set_node_model_override。
+function thinkingEq(a: ModelRef["thinking"], b: ModelRef["thinking"]): boolean {
+  if (!a && !b) return true;
+  if (!a || !b) return false;
+  return a.mode === b.mode && (a.effort ?? "") === (b.effort ?? "") && (a.budget ?? 0) === (b.budget ?? 0);
+}
+
 function modelOverrideEq(a?: ModelRef | null, b?: ModelRef | null): boolean {
   if (!a && !b) return true;
   if (!a || !b) return false;
-  return a.apiKeyId === b.apiKeyId && a.modelId === b.modelId;
+  return a.apiKeyId === b.apiKeyId && a.modelId === b.modelId && thinkingEq(a.thinking, b.thinking);
 }
 
 export function edgeToSpec(e: CanvasEdge) {

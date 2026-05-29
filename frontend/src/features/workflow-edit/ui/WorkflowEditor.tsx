@@ -21,6 +21,9 @@ import { FloatingInspector } from "@shared/ui/FloatingInspector.tsx";
 import { useWorkflowEdit } from "@features/workflow-edit";
 import { KeyModelPicker } from "@features/settings";
 import type { ModelRef } from "@entities/conversation";
+import { useModelCapabilities, capabilityFor, ThinkingControl } from "@entities/model-config";
+import type { ThinkingSpec } from "@entities/model-config";
+import { useApiKeys } from "@entities/apikey";
 import { useCollapsible } from "@shared/lib/useCollapsible";
 
 type WFNode = { id: string; kind: string; label: string; x: number; y: number; config: Record<string, unknown>; notes: string; onError?: string; timeout?: number; retry?: Record<string, unknown>; modelOverride?: ModelRef | null; sub?: string };
@@ -200,7 +203,14 @@ function CanvasNode({ node, selected, onMouseDown, onHandleMouseDown, connecting
 
 // ── Inspector body ───────────────────────────────────────────────────────
 // Rendered inside a FloatingInspector — no own container/header.
-function InspectorBody({ node, onChange, onDelete }: { node: WFNode; onChange: (patch: Partial<WFNode>) => void; onDelete: () => void }) {
+// caps + apiKeys are passed from the main editor so hooks aren't duplicated.
+function InspectorBody({ node, onChange, onDelete, caps, apiKeys }: {
+  node: WFNode;
+  onChange: (patch: Partial<WFNode>) => void;
+  onDelete: () => void;
+  caps: ReturnType<typeof useModelCapabilities>["data"];
+  apiKeys: ReturnType<typeof useApiKeys>["data"];
+}) {
   const { t } = useTranslation(["forge", "workflow", "common"]);
   const [text, setText] = useState(JSON.stringify(node.config || {}, null, 2));
   useEffect(() => setText(JSON.stringify(node.config || {}, null, 2)), [node.id]);
@@ -215,6 +225,25 @@ function InspectorBody({ node, onChange, onDelete }: { node: WFNode; onChange: (
   };
 
   const supportsModelOverride = node.kind === "agent" || node.kind === "llm";
+
+  // Derive provider from the selected key to resolve capability for ThinkingControl.
+  const resolvedProvider = (apiKeys ?? []).find((k) => k.id === node.modelOverride?.apiKeyId)?.provider ?? "";
+  const capability = node.modelOverride
+    ? capabilityFor(caps ?? [], resolvedProvider, node.modelOverride.modelId)
+    : undefined;
+
+  const handlePickerChange = (v: { apiKeyId: string; modelId: string }) => {
+    // Reset thinking when model/key changes — a budget/effort valid for one
+    // model is meaningless for another.
+    onChange({ modelOverride: { apiKeyId: v.apiKeyId, modelId: v.modelId } });
+  };
+
+  const handleThinkingChange = (spec: ThinkingSpec | undefined) => {
+    if (!node.modelOverride) return;
+    const next: ModelRef = { ...node.modelOverride };
+    if (spec) { next.thinking = spec; } else { delete next.thinking; }
+    onChange({ modelOverride: next });
+  };
 
   return (
     <div className="wf-inspector-form">
@@ -270,7 +299,12 @@ function InspectorBody({ node, onChange, onDelete }: { node: WFNode; onChange: (
             </label>
             <KeyModelPicker
               value={node.modelOverride ?? null}
-              onChange={(v) => onChange({ modelOverride: v })}
+              onChange={handlePickerChange}
+            />
+            <ThinkingControl
+              capability={capability}
+              value={node.modelOverride?.thinking}
+              onChange={handleThinkingChange}
             />
             {node.modelOverride && (
               <Button
@@ -311,6 +345,8 @@ function InspectorBody({ node, onChange, onDelete }: { node: WFNode; onChange: (
 // Version input accepts any server shape — graph may be JSON string or object.
 export function WorkflowEditor({ workflowId, version }: { workflowId: string; version: Record<string, unknown> | null | undefined }) {
   const { t } = useTranslation("forge");
+  const { data: caps } = useModelCapabilities();
+  const { data: apiKeys } = useApiKeys();
   const original = useMemo(() => parseGraph(version), [version?.id]);
   const [nodes, setNodes] = useState(original.nodes);
   const [edges, setEdges] = useState(original.edges);
@@ -578,7 +614,13 @@ export function WorkflowEditor({ workflowId, version }: { workflowId: string; ve
         anchorRef={canvasRef}
       >
         {selectedNode && (
-          <InspectorBody node={selectedNode} onChange={onNodePatch} onDelete={onNodeDelete} />
+          <InspectorBody
+            node={selectedNode}
+            onChange={onNodePatch}
+            onDelete={onNodeDelete}
+            caps={caps}
+            apiKeys={apiKeys}
+          />
         )}
       </FloatingInspector>
     </div>
