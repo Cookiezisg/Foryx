@@ -18,8 +18,9 @@ import (
 // ModelRef 是可跨 domain 复用的 (apiKeyId, modelId) 对(conv 和 node 的 override 复用)。
 // Provider 由 APIKeyID 引用的 api_key 隐含。
 type ModelRef struct {
-	APIKeyID string `json:"apiKeyId"`
-	ModelID  string `json:"modelId"`
+	APIKeyID string        `json:"apiKeyId"`
+	ModelID  string        `json:"modelId"`
+	Thinking *ThinkingSpec `json:"thinking,omitempty"`
 }
 
 // ModelConfig records the user's (apiKeyId, modelId) for one scenario.
@@ -31,6 +32,7 @@ type ModelConfig struct {
 	Scenario  string         `gorm:"not null;type:text;uniqueIndex:idx_mc_user_scenario,priority:2" json:"scenario"`
 	APIKeyID  string         `gorm:"not null;type:text;column:api_key_id" json:"apiKeyId"`
 	ModelID   string         `gorm:"not null;type:text;column:model_id" json:"modelId"`
+	Thinking  *ThinkingSpec  `gorm:"serializer:json;type:text" json:"thinking,omitempty"`
 	CreatedAt time.Time      `json:"createdAt"`
 	UpdatedAt time.Time      `json:"updatedAt"`
 	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`

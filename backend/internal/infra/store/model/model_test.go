@@ -220,6 +220,48 @@ func TestStore_AnyReferencesApiKey_False(t *testing.T) {
 	}
 }
 
+func TestUpsert_ThinkingPersisted(t *testing.T) {
+	s := newStore(t)
+	ctx := ctxFor(userAlice)
+
+	spec := &modeldomain.ThinkingSpec{Mode: "on", Effort: "high"}
+	m := mkConfig("mc-think", userAlice, modeldomain.ScenarioAgent, "aki_openai", "gpt-4o")
+	m.Thinking = spec
+	if err := s.Upsert(ctx, m); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	got, err := s.GetByScenario(ctx, modeldomain.ScenarioAgent)
+	if err != nil {
+		t.Fatalf("GetByScenario: %v", err)
+	}
+	if got.Thinking == nil {
+		t.Fatal("Thinking is nil after reload")
+	}
+	if got.Thinking.Mode != "on" || got.Thinking.Effort != "high" {
+		t.Errorf("Thinking = %+v, want {on high 0}", got.Thinking)
+	}
+}
+
+func TestUpsert_ThinkingNilRoundTrip(t *testing.T) {
+	s := newStore(t)
+	ctx := ctxFor(userAlice)
+
+	m := mkConfig("mc-nil", userAlice, modeldomain.ScenarioUtility, "aki_openai", "gpt-4o")
+	// Thinking intentionally not set (nil).
+	if err := s.Upsert(ctx, m); err != nil {
+		t.Fatalf("Upsert: %v", err)
+	}
+
+	got, err := s.GetByScenario(ctx, modeldomain.ScenarioUtility)
+	if err != nil {
+		t.Fatalf("GetByScenario: %v", err)
+	}
+	if got.Thinking != nil {
+		t.Errorf("Thinking = %+v, want nil", got.Thinking)
+	}
+}
+
 func TestStore_AnyReferencesApiKey_CrossUserIsolated(t *testing.T) {
 	s := newStore(t)
 
