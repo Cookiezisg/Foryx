@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+
+	modelcapspkg "github.com/sunweilin/forgify/backend/internal/pkg/modelcaps"
 )
 
 const (
@@ -172,12 +174,65 @@ func buildAnthropicBody(req Request) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Derive max_tokens from per-model capability; fall back to the old constant
+	// for unknown models so callers are never silently down-capped.
+	//
+	// 从 per-model 能力派生 max_tokens；未知 model 退到旧常量，不静默截低。
+	cap := modelcapspkg.Lookup("anthropic", req.ModelID)
+	maxTok := cap.MaxOutput
+	if maxTok == 0 {
+		maxTok = anthropicDefaultMaxTokens
+	}
+
 	body := anthropicRequest{
 		Model:     req.ModelID,
-		MaxTokens: anthropicDefaultMaxTokens,
+		MaxTokens: maxTok,
 		Messages:  msgs,
 		Stream:    true,
 	}
+
+	// Encode thinking per 03 §4: enabled → budget_tokens (≥1024, < max_tokens);
+	// off → disabled form; nil/auto → omit entirely.
+	//
+	// 按 03 §4 编码 thinking：enabled → budget_tokens（≥1024 且 < max_tokens）；
+	// off → disabled 形；nil/auto → 完全省略。
+	if req.Thinking != nil && req.Thinking.Mode == "on" {
+		budget := req.Thinking.Budget
+		if budget == 0 {
+			// Default: half of max_tokens, at least 1024, at most 8192.
+			// 默认：max_tokens 的一半，至少 1024，至多 8192。
+			budget = maxTok / 2
+			if budget < 1024 {
+				budget = 1024
+			}
+			if budget > 8192 {
+				budget = 8192
+			}
+		}
+		// Enforce minimum.
+		if budget < 1024 {
+			budget = 1024
+		}
+		// Enforce budget < max_tokens: bump max_tokens if needed.
+		// Anthropic 400s when budget >= max_tokens.
+		//
+		// 保证 budget < max_tokens；budget ≥ max_tokens 时上调 max_tokens。
+		if budget >= maxTok {
+			maxTok = budget + 1024
+			body.MaxTokens = maxTok
+		}
+		body.Thinking = &anthropicThinking{Type: "enabled", BudgetTokens: budget}
+	} else if req.Thinking != nil && req.Thinking.Mode == "off" {
+		body.Thinking = &anthropicThinking{Type: "disabled"}
+	}
+	// Note: anthropicRequest has no Temperature/TopP/TopK fields, so there is
+	// nothing to guard off when thinking is enabled. Future additions of those
+	// fields must add the guard here per 03 §4.
+	//
+	// 注：anthropicRequest 当前无 Temperature/TopP/TopK，无需 guard。
+	// 若将来加这些字段，必须在此处加 thinking-on 时的禁发 guard。
+
 	if req.System != "" {
 		// Send system as a block array so cache_control can be attached.
 		// Anthropic accepts system as string OR []text-block; block form is required for caching.
@@ -344,6 +399,17 @@ type anthropicRequest struct {
 	Messages  []anthropicMessage `json:"messages"`
 	Tools     []anthropicTool    `json:"tools,omitempty"`
 	Stream    bool               `json:"stream"`
+	Thinking  *anthropicThinking `json:"thinking,omitempty"`
+}
+
+// anthropicThinking is the wire form of Anthropic's thinking parameter.
+// type "enabled" requires budget_tokens ≥ 1024 and < max_tokens.
+//
+// anthropicThinking 是 Anthropic thinking 参数的 wire 形式。
+// type "enabled" 要求 budget_tokens ≥ 1024 且 < max_tokens。
+type anthropicThinking struct {
+	Type         string `json:"type"`
+	BudgetTokens int    `json:"budget_tokens,omitempty"`
 }
 
 type anthropicMessage struct {

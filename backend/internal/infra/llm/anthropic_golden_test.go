@@ -84,7 +84,6 @@ func TestBuildRequest_Anthropic_GoldenShape(t *testing.T) {
 
 	// max_tokens REQUIRED and non-zero.
 	// max_tokens 必须存在且非零（Anthropic 规定 REQUIRED）。
-	// TODO(P3.4): un-hardcode max_tokens; currently hardcoded to anthropicDefaultMaxTokens (8096).
 	if body.MaxTokens <= 0 {
 		t.Errorf("max_tokens = %d, must be > 0 (REQUIRED by Anthropic)", body.MaxTokens)
 	}
@@ -458,37 +457,50 @@ data: {"type":"message_stop"}
 	}
 }
 
-// TestBuildRequest_Anthropic_MaxTokensHardcoded documents that max_tokens is
-// currently hardcoded to anthropicDefaultMaxTokens (8096) regardless of the
-// model's actual limit or caller intent.
+// TestBuildRequest_Anthropic_MaxTokensPerModel verifies that max_tokens is now
+// derived from modelcaps.Lookup("anthropic", modelID) rather than the old
+// hardcoded constant (8096). claude-sonnet-4-5 matches the "claude-sonnet-4"
+// prefix rule → MaxOutput == 64000. An unknown model uses the modelcaps global
+// fallback (Cap{MaxOutput:8192}) — larger than the old 8096 constant — and only
+// falls back to anthropicDefaultMaxTokens (8096) when Lookup returns MaxOutput==0.
 //
-// 记录 max_tokens 当前硬编码为 anthropicDefaultMaxTokens (8096)，
-// 不受 model 实际上限或 caller 意图影响。
-//
-// TODO(P3.4): un-hardcode max_tokens — look up per-model limit from
-// /v1/models capabilities.max_tokens and expose as a Request field.
-func TestBuildRequest_Anthropic_MaxTokensHardcoded(t *testing.T) {
+// 验证 max_tokens 现在从 modelcaps.Lookup 派生，不再硬编码。
+// claude-sonnet-4-5 匹配 "claude-sonnet-4" 前缀规则 → MaxOutput==64000；
+// 完全未知 model 用 modelcaps 全局 fallback (MaxOutput=8192)；
+// 仅 Lookup 返回 MaxOutput==0 时才退回 anthropicDefaultMaxTokens (8096)。
+func TestBuildRequest_Anthropic_MaxTokensPerModel(t *testing.T) {
 	p := newAnthropicProvider()
-	req := Request{
-		ModelID: "claude-sonnet-4-5",
-		BaseURL: "https://api.anthropic.com",
-		Key:     "sk-ant-test",
-		Messages: []LLMMessage{{Role: RoleUser, Content: "hi"}},
+
+	cases := []struct {
+		modelID    string
+		wantMaxTok int
+		desc       string
+	}{
+		{"claude-sonnet-4-5", 64_000, "known model matches claude-sonnet-4 rule → 64000"},
+		// A model ID with no matching provider prefix hits the global fallback Cap{MaxOutput:8192}.
+		// provider 无前缀匹配时命中全局 fallback Cap{MaxOutput:8192}。
+		{"totally-unknown-model-zzz", 8_192, "unknown model uses modelcaps global fallback 8192"},
 	}
-	httpReq, err := p.BuildRequest(context.Background(), req)
-	if err != nil {
-		t.Fatalf("BuildRequest: %v", err)
+
+	for _, tc := range cases {
+		t.Run(tc.desc, func(t *testing.T) {
+			req := Request{
+				ModelID:  tc.modelID,
+				BaseURL:  "https://api.anthropic.com",
+				Key:      "sk-ant-test",
+				Messages: []LLMMessage{{Role: RoleUser, Content: "hi"}},
+			}
+			httpReq, err := p.BuildRequest(context.Background(), req)
+			if err != nil {
+				t.Fatalf("BuildRequest: %v", err)
+			}
+			var body anthropicRequest
+			if err := json.NewDecoder(httpReq.Body).Decode(&body); err != nil {
+				t.Fatalf("decode body: %v", err)
+			}
+			if body.MaxTokens != tc.wantMaxTok {
+				t.Errorf("max_tokens = %d, want %d", body.MaxTokens, tc.wantMaxTok)
+			}
+		})
 	}
-	var body anthropicRequest
-	if err := json.NewDecoder(httpReq.Body).Decode(&body); err != nil {
-		t.Fatalf("decode body: %v", err)
-	}
-	// Document current value. If this changes, update the TODO(P3.4) fix.
-	// 记录当前值。若改变，同步更新 TODO(P3.4)。
-	if body.MaxTokens != anthropicDefaultMaxTokens {
-		t.Errorf("max_tokens = %d, want hardcoded %d (P3.4 TODO: un-hardcode)",
-			body.MaxTokens, anthropicDefaultMaxTokens)
-	}
-	t.Logf("P3.4: max_tokens is hardcoded to %d — un-hardcode in P3.4 by reading per-model limit from /v1/models",
-		anthropicDefaultMaxTokens)
 }

@@ -7,6 +7,23 @@ import (
 	"testing"
 )
 
+// buildAnthropicBodyForTest is a helper for Anthropic thinking tests that
+// calls buildAnthropicBody directly (the native provider, not openAICompat).
+//
+// buildAnthropicBodyForTest 直接调 buildAnthropicBody（原生 provider）供 Anthropic thinking 测试用。
+func buildAnthropicBodyForTest(t *testing.T, req Request) map[string]json.RawMessage {
+	t.Helper()
+	raw, err := buildAnthropicBody(req)
+	if err != nil {
+		t.Fatalf("buildAnthropicBody: %v", err)
+	}
+	var parsed map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		t.Fatalf("unmarshal body: %v", err)
+	}
+	return parsed
+}
+
 // ──────────────────────────────────────────────────────────────────────────────
 // Thinking encoding golden tests (P3.3)
 //
@@ -745,4 +762,180 @@ func TestThinking_Ollama_Off_EmitsNone(t *testing.T) {
 	if effort != "none" {
 		t.Errorf("ollama off: reasoning_effort = %q, want none", effort)
 	}
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Anthropic (P3.4)
+// ──────────────────────────────────────────────────────────────────────────────
+
+// TestThinking_Anthropic_NilSpec_NoThinkingField verifies that a nil ThinkingSpec
+// produces no thinking field and that max_tokens reflects modelcaps (not the old
+// hardcoded 8096). claude-sonnet-4-5 → 64000.
+//
+// 验证 nil ThinkingSpec 时 Anthropic 请求不含 thinking 字段，max_tokens 反映 modelcaps
+// 而非旧常量 8096（claude-sonnet-4-5 → 64000）。
+func TestThinking_Anthropic_NilSpec_NoThinkingField(t *testing.T) {
+	req := minimalReq("claude-sonnet-4-5")
+	parsed := buildAnthropicBodyForTest(t, req)
+
+	if _, ok := parsed["thinking"]; ok {
+		t.Errorf("nil ThinkingSpec: 'thinking' field must be absent; body: %s", mustMarshal(parsed))
+	}
+
+	var maxTok int
+	if err := json.Unmarshal(parsed["max_tokens"], &maxTok); err != nil {
+		t.Fatalf("max_tokens not present: %v", err)
+	}
+	// claude-sonnet-4-5 matches the "claude-sonnet-4" modelcaps rule → MaxOutput=64000.
+	// claude-sonnet-4-5 匹配 "claude-sonnet-4" 规则 → MaxOutput=64000，不再是 8096。
+	if maxTok != 64_000 {
+		t.Errorf("max_tokens = %d, want 64000 (per-model from modelcaps, not hardcoded 8096)", maxTok)
+	}
+}
+
+// TestThinking_Anthropic_On_BudgetExplicit verifies Mode="on" + Budget=5000:
+// thinking:{type:"enabled",budget_tokens:5000}, max_tokens > 5000, no temperature.
+//
+// 验证 Mode="on"+Budget=5000：thinking.type=enabled、budget_tokens=5000、
+// max_tokens>5000、无 temperature。
+func TestThinking_Anthropic_On_BudgetExplicit(t *testing.T) {
+	req := minimalReq("claude-sonnet-4-5")
+	req.Thinking = &ThinkingSpec{Mode: "on", Budget: 5000}
+	parsed := buildAnthropicBodyForTest(t, req)
+
+	thinkingRaw, ok := parsed["thinking"]
+	if !ok {
+		t.Fatalf("body missing 'thinking' field; body: %s", mustMarshal(parsed))
+	}
+	var thinking map[string]json.RawMessage
+	if err := json.Unmarshal(thinkingRaw, &thinking); err != nil {
+		t.Fatalf("thinking field not object: %v", err)
+	}
+	var typStr string
+	json.Unmarshal(thinking["type"], &typStr)
+	if typStr != "enabled" {
+		t.Errorf("thinking.type = %q, want enabled", typStr)
+	}
+	var budget int
+	json.Unmarshal(thinking["budget_tokens"], &budget)
+	if budget != 5000 {
+		t.Errorf("thinking.budget_tokens = %d, want 5000", budget)
+	}
+
+	var maxTok int
+	json.Unmarshal(parsed["max_tokens"], &maxTok)
+	if maxTok <= 5000 {
+		t.Errorf("max_tokens = %d, must be > budget (5000)", maxTok)
+	}
+
+	// temperature must be absent (Anthropic 400s when thinking on + temperature present).
+	// thinking 开启时 temperature 必须省略（Anthropic 400）。
+	if _, ok := parsed["temperature"]; ok {
+		t.Errorf("temperature must be absent when thinking is enabled; body: %s", mustMarshal(parsed))
+	}
+}
+
+// TestThinking_Anthropic_On_BudgetZero_DefaultsApplied verifies Mode="on" +
+// Budget=0: budget is defaulted (≥1024, < max_tokens).
+//
+// 验证 Mode="on"+Budget=0：budget 有合理默认值（≥1024 且 < max_tokens）。
+func TestThinking_Anthropic_On_BudgetZero_DefaultsApplied(t *testing.T) {
+	req := minimalReq("claude-sonnet-4-5")
+	req.Thinking = &ThinkingSpec{Mode: "on", Budget: 0}
+	parsed := buildAnthropicBodyForTest(t, req)
+
+	thinkingRaw, ok := parsed["thinking"]
+	if !ok {
+		t.Fatalf("body missing 'thinking' field; body: %s", mustMarshal(parsed))
+	}
+	var thinking map[string]json.RawMessage
+	json.Unmarshal(thinkingRaw, &thinking)
+	var budget int
+	json.Unmarshal(thinking["budget_tokens"], &budget)
+	if budget < 1024 {
+		t.Errorf("defaulted budget = %d, must be ≥ 1024", budget)
+	}
+
+	var maxTok int
+	json.Unmarshal(parsed["max_tokens"], &maxTok)
+	if budget >= maxTok {
+		t.Errorf("budget %d must be < max_tokens %d", budget, maxTok)
+	}
+}
+
+// TestThinking_Anthropic_On_BudgetHuge_MaxTokensBumped verifies that when
+// Budget ≥ modelcaps.MaxOutput (64000 for claude-sonnet-4-5), max_tokens is
+// bumped to budget+1024 so the Anthropic constraint (budget < max_tokens) holds.
+//
+// 验证 Budget ≥ modelcaps.MaxOutput 时 max_tokens 上调至 budget+1024，
+// 保证 Anthropic 约束（budget < max_tokens）成立。
+func TestThinking_Anthropic_On_BudgetHuge_MaxTokensBumped(t *testing.T) {
+	req := minimalReq("claude-sonnet-4-5")
+	req.Thinking = &ThinkingSpec{Mode: "on", Budget: 70_000} // > 64000 cap
+	parsed := buildAnthropicBodyForTest(t, req)
+
+	var thinking map[string]json.RawMessage
+	json.Unmarshal(parsed["thinking"], &thinking)
+	var budget int
+	json.Unmarshal(thinking["budget_tokens"], &budget)
+
+	var maxTok int
+	json.Unmarshal(parsed["max_tokens"], &maxTok)
+
+	if budget >= maxTok {
+		t.Errorf("budget %d must be < max_tokens %d (Anthropic constraint)", budget, maxTok)
+	}
+	if maxTok != budget+1024 {
+		t.Errorf("max_tokens = %d, want budget+1024 = %d", maxTok, budget+1024)
+	}
+}
+
+// TestThinking_Anthropic_Off_DisabledForm verifies Mode="off" emits
+// thinking:{type:"disabled"} per 03 §4. No temperature constraint for off.
+//
+// 验证 Mode="off" emit thinking:{type:"disabled"}，对照 03 §4。
+func TestThinking_Anthropic_Off_DisabledForm(t *testing.T) {
+	req := minimalReq("claude-sonnet-4-5")
+	req.Thinking = &ThinkingSpec{Mode: "off"}
+	parsed := buildAnthropicBodyForTest(t, req)
+
+	thinkingRaw, ok := parsed["thinking"]
+	if !ok {
+		t.Fatalf("body missing 'thinking' field for Mode=off; body: %s", mustMarshal(parsed))
+	}
+	var thinking map[string]json.RawMessage
+	json.Unmarshal(thinkingRaw, &thinking)
+	var typStr string
+	json.Unmarshal(thinking["type"], &typStr)
+	if typStr != "disabled" {
+		t.Errorf("thinking.type = %q, want disabled", typStr)
+	}
+	if _, ok := thinking["budget_tokens"]; ok {
+		t.Errorf("thinking.budget_tokens must be absent for Mode=off")
+	}
+}
+
+// TestThinking_Anthropic_Auto_NoThinkingField verifies Mode="auto" emits
+// nothing — current default behaviour (nil and "auto" both silent).
+//
+// 验证 Mode="auto" 不发 thinking 字段（与 nil 行为相同）。
+func TestThinking_Anthropic_Auto_NoThinkingField(t *testing.T) {
+	req := minimalReq("claude-sonnet-4-5")
+	req.Thinking = &ThinkingSpec{Mode: "auto"}
+	parsed := buildAnthropicBodyForTest(t, req)
+
+	if _, ok := parsed["thinking"]; ok {
+		t.Errorf("Mode=auto: 'thinking' field must be absent; body: %s", mustMarshal(parsed))
+	}
+}
+
+// mustMarshal is a test-only JSON marshaller that panics on error.
+//
+// mustMarshal 是仅测试用的 JSON 序列化辅助，出错 panic。
+func mustMarshal(v any) []byte {
+	b, err := json.Marshal(v)
+	if err != nil {
+		panic(err)
+	}
+	return b
 }
