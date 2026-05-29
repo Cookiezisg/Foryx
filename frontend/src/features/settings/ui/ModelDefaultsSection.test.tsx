@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
 
 const mockUpsertModel = vi.fn();
+const mockSetOverride = vi.fn();
+const mockClearOverride = vi.fn();
 let apiKeys: any[] = [];
 let modelConfigs: any[] = [];
 let providers: any[] = [];
@@ -20,6 +22,8 @@ vi.mock("@entities/model-config", async (importOriginal) => {
     useUpsertModelConfig: () => ({ mutate: mockUpsertModel, mutateAsync: mockUpsertModel, isPending: false }),
     useProviders: () => ({ data: providers }),
     useModelCapabilities: () => ({ data: modelCapabilities }),
+    useSetModelCapabilityOverride: () => ({ mutate: mockSetOverride, isPending: false }),
+    useClearModelCapabilityOverride: () => ({ mutate: mockClearOverride, isPending: false }),
   };
 });
 
@@ -54,6 +58,8 @@ function seedStandardKeys() {
 
 beforeEach(() => {
   mockUpsertModel.mockReset().mockResolvedValue({});
+  mockSetOverride.mockReset();
+  mockClearOverride.mockReset();
   apiKeys = [];
   modelConfigs = [];
   providers = [];
@@ -160,6 +166,13 @@ describe("ModelDefaultsSection", () => {
       modelId: "deepseek-v4-flash",
       thinking: { mode: "on", effort: "high" },
     });
+  });
+
+  it("expandedCard_withModel_showsCapOverrideTrigger", () => {
+    seedStandardKeys();
+    render(<ModelDefaultsSection open={true} onToggle={() => {}} />, { wrapper: wrap });
+    // Dialogue card is open by default; the override trigger link must be visible.
+    expect(screen.getByText("能力不对？覆盖")).toBeInTheDocument();
   });
 
   it("changingModel_callsUpsertWithoutThinking", () => {

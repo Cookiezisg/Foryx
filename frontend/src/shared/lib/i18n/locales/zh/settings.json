@@ -142,5 +142,19 @@
       "effortLabel": "思考强度",
       "budgetLabel": "思考预算 (tokens)"
     }
+  },
+  "capOverride": {
+    "trigger": "能力不对？覆盖",
+    "thinkingShapeLabel": "思考控制形态",
+    "contextWindowLabel": "上下文窗口 (tokens)",
+    "maxOutputLabel": "最大输出 (tokens)",
+    "save": "保存",
+    "restore": "恢复默认",
+    "shapes": {
+      "none": "无",
+      "toggle": "开关",
+      "effort": "强度等级",
+      "budget": "Token 预算"
+    }
   }
 }

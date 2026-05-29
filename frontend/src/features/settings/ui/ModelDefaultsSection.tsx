@@ -26,6 +26,7 @@ import {
   type ThinkingSpec,
 } from "@entities/model-config";
 import { LLM_HINTS } from "@shared/lib/onboarding-strings";
+import { ModelCapOverrideEditor } from "./ModelCapOverrideEditor";
 
 const SCENARIOS: Scenario[] = ["dialogue", "utility", "agent"];
 
@@ -239,6 +240,11 @@ function ScenarioCard({
                 capability={capability}
                 value={config.thinking}
                 onChange={onThinkingChange}
+              />
+              <ModelCapOverrideEditor
+                provider={currentProvider}
+                modelId={config.modelId}
+                current={capability}
               />
             </>
           )}

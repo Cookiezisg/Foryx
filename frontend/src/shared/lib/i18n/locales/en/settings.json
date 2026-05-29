@@ -142,5 +142,19 @@
       "effortLabel": "Thinking effort",
       "budgetLabel": "Thinking budget (tokens)"
     }
+  },
+  "capOverride": {
+    "trigger": "Wrong capabilities? Override",
+    "thinkingShapeLabel": "Thinking shape",
+    "contextWindowLabel": "Context window (tokens)",
+    "maxOutputLabel": "Max output (tokens)",
+    "save": "Save",
+    "restore": "Restore defaults",
+    "shapes": {
+      "none": "None",
+      "toggle": "Toggle",
+      "effort": "Effort level",
+      "budget": "Token budget"
+    }
   }
 }
