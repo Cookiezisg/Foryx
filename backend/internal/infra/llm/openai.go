@@ -652,22 +652,6 @@ func encodeThinkingOpenAI(allowed []string) func(*oaiRequest, *ThinkingSpec) {
 	}
 }
 
-// encodeThinkingDeepSeek encodes thinking for DeepSeek V4.
-// on  → thinking:{type:"enabled"} + reasoning_effort (map low/medium→high, xhigh→max; default high)
-// off → thinking:{type:"disabled"}
-//
-// encodeThinkingDeepSeek 编码 DeepSeek V4 thinking 参数：
-// on→enabled+effort（low/medium→high；xhigh→max）；off→disabled。
-func encodeThinkingDeepSeek(body *oaiRequest, spec *ThinkingSpec) {
-	switch spec.Mode {
-	case "on":
-		body.Thinking = &oaiThinkingField{Type: "enabled"}
-		body.ReasoningEffort = deepseekMapEffort(spec.Effort)
-	case "off":
-		body.Thinking = &oaiThinkingField{Type: "disabled"}
-	}
-}
-
 // deepseekMapEffort maps generic effort values to DeepSeek's {high,max} set.
 //
 // deepseekMapEffort 把通用 effort 映射到 DeepSeek 的 {high,max}。
@@ -785,6 +769,106 @@ func encodeThinkingOpenRouter(body *oaiRequest, spec *ThinkingSpec) {
 // encodeThinkingGeminiCompat 编码 Gemini compat 面的 thinking（与 OpenAI 相同）。
 func encodeThinkingGeminiCompat(allowed []string) func(*oaiRequest, *ThinkingSpec) {
 	return encodeThinkingOpenAI(allowed)
+}
+
+// ── Self-contained openaiProvider ────────────────────────────────────────────
+//
+// openaiProvider speaks OpenAI's /chat/completions standard directly. It owns
+// its own BuildRequest (including reasoning_effort for reasoning models per
+// 03 §2) and ParseStream (OpenAI SSE → StreamEvents). All logic is written to
+// OpenAI's documented API — no shared mega-parser.
+//
+// openaiProvider 直接按 OpenAI /chat/completions 标准实现。自有 BuildRequest
+// （含 03 §2 的 reasoning_effort 编码）和 ParseStream（OpenAI SSE→StreamEvent）；
+// 逻辑完全基于 OpenAI 官方文档，不依赖共享 mega-parser。
+
+type openaiProvider struct{}
+
+func newOpenAIProvider() *openaiProvider { return &openaiProvider{} }
+
+func (p *openaiProvider) Name() string           { return "openai" }
+func (p *openaiProvider) DefaultBaseURL() string { return "https://api.openai.com/v1" }
+
+// BuildRequest encodes a Request into an OpenAI /chat/completions HTTP request.
+// Reasoning models (o-series) accept reasoning_effort; standard models ignore it.
+// Auth: Bearer token in Authorization header. URL: base + /chat/completions.
+//
+// BuildRequest 把 Request 编码为 OpenAI /chat/completions HTTP 请求。
+// 推理模型（o 系列）接受 reasoning_effort；标准模型忽略。
+func (p *openaiProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
+	req.Messages = SanitizeMessages(req.Messages)
+	msgs, err := toOpenAIMsgs(req.Messages, req.System)
+	if err != nil {
+		return nil, fmt.Errorf("llm.openai: build messages: %w", err)
+	}
+	body := oaiRequest{
+		Model:    req.ModelID,
+		Messages: msgs,
+		Stream:   !req.DisableStream,
+	}
+	if !req.DisableStream {
+		body.StreamOptions = &oaiStreamOptions{IncludeUsage: true}
+	}
+	if len(req.Tools) > 0 {
+		body.Tools = toOpenAITools(req.Tools)
+	}
+	// reasoning_effort for o-series reasoning models (03 §2).
+	// on  → reasoning_effort = Effort clamp to {none,minimal,low,medium,high,xhigh}; default medium
+	// off → reasoning_effort = "none"
+	// nil/auto → omit (byte-identical to pre-P3 behaviour)
+	//
+	// o 系列推理模型的 reasoning_effort（03 §2）：
+	// on→clamp effort（默认 medium）；off→"none"；nil/auto→省略。
+	if req.Thinking != nil && req.Thinking.Mode != "auto" {
+		openAIAllowed := []string{"none", "minimal", "low", "medium", "high", "xhigh"}
+		switch req.Thinking.Mode {
+		case "on":
+			body.ReasoningEffort = clampEffort(req.Thinking.Effort, openAIAllowed, "medium")
+		case "off":
+			body.ReasoningEffort = "none"
+		}
+	}
+	raw, err := json.Marshal(body)
+	if err != nil {
+		return nil, fmt.Errorf("llm.openai: marshal body: %w", err)
+	}
+	httpReq, err := http.NewRequestWithContext(
+		ctx, http.MethodPost, req.BaseURL+"/chat/completions", bytes.NewReader(raw))
+	if err != nil {
+		return nil, fmt.Errorf("llm.openai: new request: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/json")
+	httpReq.Header.Set("Authorization", "Bearer "+req.Key)
+	return httpReq, nil
+}
+
+// ParseStream reads OpenAI SSE chunks and yields StreamEvents.
+// Uses the shared transport-level scanSSELines for the raw line mechanics.
+//
+// ParseStream 读 OpenAI SSE chunk 并 yield StreamEvent。
+// 用共享的 scanSSELines 处理原始 SSE 行语义。
+func (p *openaiProvider) ParseStream(ctx context.Context, resp *http.Response, req Request) iter.Seq[StreamEvent] {
+	return func(yield func(StreamEvent) bool) {
+		if req.DisableStream {
+			parseOpenAINonStreaming(resp.Body, yield)
+			return
+		}
+		state := newToolCallState()
+		scanErr := scanSSELines(resp.Body, func(payload []byte) bool {
+			if ctx.Err() != nil {
+				return false
+			}
+			var chunk oaiChunk
+			if err := json.Unmarshal(payload, &chunk); err != nil {
+				yield(StreamEvent{Type: EventError, Err: fmt.Errorf("llm.openai: malformed SSE chunk: %w", err)})
+				return false
+			}
+			return emitOpenAIChunk(chunk, state, yield)
+		})
+		if scanErr != nil && ctx.Err() == nil {
+			yield(StreamEvent{Type: EventError, Err: fmt.Errorf("llm.openai: scan: %w", scanErr)})
+		}
+	}
 }
 
 // encodeThinkingOllama encodes thinking for Ollama /v1.

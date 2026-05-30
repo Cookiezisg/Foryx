@@ -23,7 +23,7 @@ import (
 // 验证 DeepSeek BuildRequest 的 wire shape：model/messages/tools/stream/stream_options，
 // 对照 03 §3 黄金请求体。Thinking 字段属 P3，此处不断言。
 func TestBuildRequest_DeepSeek_GoldenShape(t *testing.T) {
-	p := providerRegistry["deepseek"].(*openAICompatProvider)
+	p := providerRegistry["deepseek"]
 	req := Request{
 		ModelID: "deepseek-v4-pro",
 		BaseURL: "https://api.deepseek.com",
@@ -101,10 +101,13 @@ func TestBuildRequest_DeepSeek_GoldenShape(t *testing.T) {
 	}
 }
 
-// TestChatURL_IsBaseSlashChatCompletions verifies that every OpenAI-compat
-// provider appends /chat/completions to its base URL.
+// TestChatURL_IsBaseSlashChatCompletions verifies that every provider that
+// speaks /chat/completions appends it to its base URL. openai and deepseek now
+// have their own provider types but still speak the same /chat/completions path;
+// the test uses the Provider interface directly.
 //
-// 验证所有 OpenAI-compat provider 的 chat 端点 = base + /chat/completions。
+// 验证所有 /chat/completions provider 的 chat 端点 = base + /chat/completions。
+// openai 和 deepseek 已迁移为自有类型，仍走 /chat/completions；此处直接用 Provider 接口。
 func TestChatURL_IsBaseSlashChatCompletions(t *testing.T) {
 	cases := []struct {
 		provider string
@@ -122,10 +125,6 @@ func TestChatURL_IsBaseSlashChatCompletions(t *testing.T) {
 			if !ok {
 				t.Fatalf("provider %q not in registry", tc.provider)
 			}
-			cp, ok := p.(*openAICompatProvider)
-			if !ok {
-				t.Fatalf("provider %q is not openAICompatProvider: %T", tc.provider, p)
-			}
 			req := Request{
 				ModelID: "test-model",
 				BaseURL: tc.wantBase,
@@ -134,7 +133,7 @@ func TestChatURL_IsBaseSlashChatCompletions(t *testing.T) {
 					{Role: RoleUser, Content: "hi"},
 				},
 			}
-			httpReq, err := cp.BuildRequest(context.Background(), req)
+			httpReq, err := p.BuildRequest(context.Background(), req)
 			if err != nil {
 				t.Fatalf("BuildRequest: %v", err)
 			}

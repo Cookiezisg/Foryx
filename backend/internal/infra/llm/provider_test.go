@@ -211,12 +211,15 @@ func TestOllamaProvider_DisablesStreamWhenToolsPresent(t *testing.T) {
 	}
 }
 
-// TestNonBehavioralProviders_NilBeforeRequest asserts that all OpenAI-compat
+// TestNonBehavioralProviders_NilBeforeRequest asserts that OpenAI-compat
 // providers without custom mutations carry a nil beforeRequest hook.
+// openai and deepseek are excluded — they are now self-contained providers,
+// not openAICompatProvider instances (their pre-request logic lives in BuildRequest).
 //
 // TestNonBehavioralProviders_NilBeforeRequest 断言无自定义变换的 compat provider 钩子为 nil。
+// openai/deepseek 已迁移为自有类型，预处理逻辑内嵌于 BuildRequest，故排除在外。
 func TestNonBehavioralProviders_NilBeforeRequest(t *testing.T) {
-	for _, name := range []string{"openai", "qwen", "moonshot", "google", "openrouter", "zhipu", "moonshot", "doubao"} {
+	for _, name := range []string{"qwen", "moonshot", "google", "openrouter", "zhipu", "doubao"} {
 		p, ok := providerRegistry[name]
 		if !ok {
 			t.Fatalf("provider %q not in registry", name)

@@ -73,14 +73,14 @@ func (c *providerClient) Stream(ctx context.Context, req Request) iter.Seq[Strea
 // —— 它们都讲 /chat/completions。
 var providerRegistry = buildProviderRegistry()
 
-// buildProviderRegistry constructs the canonical Provider registry. Providers
-// with non-trivial request mutations (beforeRequest) or thinking encoders
-// (thinkingEncoder) carry their hooks inline. anthropic gets its own
+// buildProviderRegistry constructs the canonical Provider registry. openai and
+// deepseek now use their own self-contained Provider types; the remaining
+// providers still use the shared openAICompatProvider. anthropic uses its own
 // native-dialect Provider; mock is absent (Build short-circuits to MockClient).
 //
-// buildProviderRegistry 构建权威 Provider 注册表。有非平凡 Request 变换
-// (beforeRequest) 或 thinking 编码器 (thinkingEncoder) 的 provider 内联钩子；
-// anthropic 使用自有原生方言 Provider；mock 缺席（Build 直接短路到 MockClient）。
+// buildProviderRegistry 构建权威 Provider 注册表。openai 和 deepseek 已迁移到
+// 各自独立的 Provider 类型；其余 provider 仍使用共享的 openAICompatProvider；
+// anthropic 使用原生方言 Provider；mock 缺席（Build 直接短路到 MockClient）。
 func buildProviderRegistry() map[string]Provider {
 	compat := func(name, baseURL string) *openAICompatProvider {
 		return newOpenAICompatProvider(name, baseURL)
@@ -88,26 +88,19 @@ func buildProviderRegistry() map[string]Provider {
 	reg := map[string]Provider{
 		"custom":    compat("custom", ""),
 		"anthropic": newAnthropicProvider(),
+		// openai: self-contained provider (reasoning_effort for o-series, 03 §2).
+		// openai：自有 provider（o 系列 reasoning_effort，03 §2）。
+		"openai": newOpenAIProvider(),
+		// deepseek: self-contained provider (reasoning_content round-trip + thinking, 03 §3).
+		// deepseek：自有 provider（reasoning_content round-trip + thinking，03 §3）。
+		"deepseek": newDeepSeekProvider(),
 	}
-
-	// openai: reasoning_effort for reasoning models.
-	// openai：推理模型用 reasoning_effort。
-	oa := compat("openai", "https://api.openai.com/v1")
-	oa.thinkingEncoder = encodeThinkingOpenAI([]string{"none", "minimal", "low", "medium", "high", "xhigh"})
-	reg["openai"] = oa
 
 	// google compat: reasoning_effort (same shape as OpenAI compat surface).
 	// google compat：reasoning_effort（与 OpenAI compat 面相同）。
 	gc := compat("google", "https://generativelanguage.googleapis.com/v1beta/openai")
 	gc.thinkingEncoder = encodeThinkingGeminiCompat([]string{"minimal", "low", "medium", "high"})
 	reg["google"] = gc
-
-	// deepseek: strip reasoning_content from plain turns + thinking:{type} + reasoning_effort.
-	// deepseek：剥普通 turn reasoning_content + thinking:{type} + reasoning_effort。
-	ds := compat("deepseek", "https://api.deepseek.com")
-	ds.beforeRequest = deepseekBeforeRequest
-	ds.thinkingEncoder = encodeThinkingDeepSeek
-	reg["deepseek"] = ds
 
 	// qwen: enable_thinking bool + optional thinking_budget (stream guard in buildOpenAIBody).
 	// qwen：enable_thinking bool + 可选 thinking_budget（流式守卫在 buildOpenAIBody）。

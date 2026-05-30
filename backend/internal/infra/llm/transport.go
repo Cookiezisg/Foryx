@@ -1,9 +1,11 @@
 package llm
 
 import (
+	"bufio"
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 )
 
@@ -18,6 +20,35 @@ const sharedHTTPTimeout = 120 * time.Second
 // newSharedHTTPClient 构造所有 Provider 跨请求复用的唯一 *http.Client。
 func newSharedHTTPClient() *http.Client {
 	return &http.Client{Timeout: sharedHTTPTimeout}
+}
+
+// scanSSELines is a generic SSE scanner: it reads lines from r, strips the
+// "data: " prefix, skips comment lines (": ..."), and calls fn for each JSON
+// payload. Returns false from fn to stop early. Stops on "[DONE]". This is
+// "how SSE works" — not a provider concern — so per-provider parsers reuse it.
+//
+// scanSSELines 是通用 SSE 扫描器：读行、剥 "data: " 前缀、跳过注释行（": …"），
+// 对每个 JSON payload 调 fn；fn 返 false 提前停；遇 "[DONE]" 终止。
+// 这是 SSE 协议本身的语义，与具体 provider 无关，各 provider parser 可复用。
+func scanSSELines(r io.Reader, fn func(payload []byte) bool) error {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") {
+			continue // comment lines, blank lines, event: / id: lines
+		}
+		data := strings.TrimPrefix(line, "data: ")
+		if data == "[DONE]" {
+			return nil
+		}
+		if data == "" {
+			continue
+		}
+		if !fn([]byte(data)) {
+			return nil
+		}
+	}
+	return scanner.Err()
 }
 
 // doRequest is the shared transport "iron law": fire the request, swallow the
