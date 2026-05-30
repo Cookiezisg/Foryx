@@ -1,6 +1,8 @@
 # Compaction — 对话上下文压缩
 
 **Phase**：V1.2 §1 final-sweep（与 memory 同批落地）
+
+> **🔧 限制优化（2026-05-31，limits-optimization）**：nil `CapabilityResolver` 时一次性 WARN（防大模型被按 32K 兜底窗口过早压缩——文档自标的"严重 bug"）；上下文边界改由 token 预算 + compaction 投影主导，`chat.buildHistory` 对 archived 消息（含 user）统一跳过。详 [`../adhoc-topic-documents/limits-optimization/`](../adhoc-topic-documents/limits-optimization/)。
 **状态**：✅ 部分实现（2026-05-30：ContextManager 骨架 + 窗口感知压缩 + chat goroutine 竞态修复；fullCompact LLM 调用 + 块降级 + SSE 推流为设计期，待后续完整实现）
 **关联**：
 - [`../backend-design.md`](../backend-design.md) — 总规范

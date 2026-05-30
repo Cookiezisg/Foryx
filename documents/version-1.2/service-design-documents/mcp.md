@@ -1,6 +1,8 @@
 # MCP — V1.2 详设计
 
 **Phase**：Phase 4 准备件（提前到位）
+
+> **🔧 限制优化（2026-05-31，limits-optimization）**：`defaultCallTimeout` 30→180s（agent-recovery 高默认；MCP 工具可能自调 LLM / 爬虫，超时把控制权还给 agent 而非挂死）。详 [`../adhoc-topic-documents/limits-optimization/`](../adhoc-topic-documents/limits-optimization/)。
 **状态**：✅ Marketplace V3 — curated（2026-05-08 curated 化 / 2026-05-09 search→list 化）：domain types + 14 sentinels（10 mcp.go 核心 + 4 registry.go marketplace）+ **21 条 hand-picked RegistrySource**（npm + pypi only）+ ~/.forgify/mcp.json I/O + stdio Client wrapper（go-sdk v1.6）+ Service lifecycle/Search/CallTool/Health/Install/Import/Stderr + 5 system tools (search_mcp_tools / call_mcp_tool / list_mcp_marketplace / install_mcp_server / uninstall_mcp_server) + 11 HTTP endpoints + 4 离线 pipeline 场景 + 1 Live_ 装 everything 场景门控 + `mcp_server` per-name notification（不发全量快照）
 **关联**：
 - [`../backend-design.md`](../backend-design.md) — 总规范

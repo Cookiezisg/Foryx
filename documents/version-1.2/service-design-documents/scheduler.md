@@ -2,6 +2,8 @@
 
 > Workflow 执行编排器,Plan 05 三条腿之一。读 active version → 持 FlowRun → DAG dispatch → retry/onError/timeout → pause/resume → cleanup。
 
+> **🔧 限制优化（2026-05-31，limits-optimization）**：节点墙钟超时（`retry.go` `defaultTimeouts` 整表）**已删**——无人值守 workflow 靠 run-level ctx + 「stop run」+ 各 dispatcher 自身 bound；只留显式 `node.Timeout` 覆盖。agent 节点 `maxTurns` 默认/硬顶经 `limits.Current().Workflow` 可配（`0`=默认，**不放飞**无人值守 agent）。详 [`../adhoc-topic-documents/limits-optimization/`](../adhoc-topic-documents/limits-optimization/)。
+
 **Code 位置**:`backend/internal/app/scheduler/`
 
 **联动文档**:

@@ -4,6 +4,8 @@
 **状态**：✅ 已实现到 Phase 3（含事件日志协议统一 2026-05-08 + loop 引擎抽离 2026-05）；Phase 4-5 时再升级
 **地位**：**全系统最核心的 domain**——用户的每一次对话都从这里进入，一切能力都通过这里编排。
 
+> **🔧 限制优化（2026-05-31，limits-optimization）**：ReAct `maxSteps`（20→150）/ `maxTurnDuration`（10→30min）现读 `limits.Current()`；撞顶写诚实终态 `StopReasonMaxSteps`+`MAX_STEPS_REACHED`（不再冒充 completed）；`maxHistoryMessages` 200→2000 + `buildHistory` 对 archived 消息统一投影（含 user）；LLM idle 死连接超时替代 120s 总墙钟。详 [`../adhoc-topic-documents/limits-optimization/`](../adhoc-topic-documents/limits-optimization/)。
+
 **关联文档**：
 - [`../backend-design.md`](../backend-design.md) — 总规范
 - [`../event-log-protocol.md`](../event-log-protocol.md) — 事件日志协议事实源（5 events × 6 block types）
