@@ -1,16 +1,100 @@
 {
   "_note": "活的研究日志。open 项是『下一轮可挑的实验』,非定论;低分项标 verify-first(R1-R4 教训:低分常是测量假象)。kind ∈ weak/hunch/transfer/lever/coverage/reprobe/redesign/new_axis/scenario_gap。",
   "open": [
-    {"id": "b001", "kind": "weak", "target": "create_workflow", "note": "doc14 复杂大图 usage ~52%。先读 raw 验是真弱还是判官过严,再动。", "verify_first": true, "ts": "seed"},
-    {"id": "b002", "kind": "weak", "target": "create_agent", "note": "doc14 复杂 agent 73%,疑被 G1 畸形 JSON 拖累 → 多半是后端 JSON-repair 的事,非描述。验。", "verify_first": true, "ts": "seed"},
-    {"id": "b003", "kind": "reprobe", "target": "call_mcp_tool / skill / memory", "note": "doc14 selection 67-74 偏低;疑 search-first 假阴性(测量假象高发区)。读 raw 复核。", "verify_first": true, "ts": "seed"},
-    {"id": "b004", "kind": "redesign", "target": "tools.json:create_agent.set_output_schema", "note": "G10:value 裸 object → pin {kind,schema}。schema 是 surface,可直接改 tools.json 试 paired-lift。", "ts": "seed"},
-    {"id": "b005", "kind": "redesign", "target": "tools.json:trigger/edit ops", "note": "G10:cron 字段 / update_code op 形状 pin 死。", "ts": "seed"},
-    {"id": "b006", "kind": "lever", "target": "examples.md", "note": "few-shot gold 示例已放;测它对复杂建的 paired-lift(预期 ~+11)。", "ts": "seed"},
-    {"id": "b007", "kind": "new_axis", "target": "efficiency", "note": "提案新轴:轮数/token 成本。模型有没有绕远(5 轮干 2 轮的活)。先定 how_judged 再立。", "ts": "seed"},
-    {"id": "b008", "kind": "new_axis", "target": "calibration", "note": "提案新轴:该不该用工具/何时反问(Subagent/AskUserQuestion 欠选)。", "ts": "seed"},
-    {"id": "b009", "kind": "scenario_gap", "target": "edit/diagnosis chains", "note": "种子场景偏 create;多造 edit-ops + 死信诊断链,防优化到窄分布。", "ts": "seed"},
-    {"id": "b010", "kind": "redesign", "target": "tool-set", "note": "meta:工具集本身有没有该拆/并/删/加的(如 capability_check 行为)。设计建议进 recommendations.md。", "ts": "seed"}
+    {
+      "id": "b001",
+      "kind": "weak",
+      "target": "create_workflow",
+      "note": "doc14 复杂大图 usage ~52%。先读 raw 验是真弱还是判官过严,再动。",
+      "verify_first": true,
+      "ts": "seed"
+    },
+    {
+      "id": "b002",
+      "kind": "weak",
+      "target": "create_agent",
+      "note": "doc14 复杂 agent 73%,疑被 G1 畸形 JSON 拖累 → 多半是后端 JSON-repair 的事,非描述。验。",
+      "verify_first": true,
+      "ts": "seed"
+    },
+    {
+      "id": "b003",
+      "kind": "reprobe",
+      "target": "call_mcp_tool / skill / memory",
+      "note": "doc14 selection 67-74 偏低;疑 search-first 假阴性(测量假象高发区)。读 raw 复核。",
+      "verify_first": true,
+      "ts": "seed"
+    },
+    {
+      "id": "b004",
+      "kind": "redesign",
+      "target": "tools.json:create_agent.set_output_schema",
+      "note": "G10:value 裸 object → pin {kind,schema}。schema 是 surface,可直接改 tools.json 试 paired-lift。",
+      "ts": "seed"
+    },
+    {
+      "id": "b005",
+      "kind": "redesign",
+      "target": "tools.json:trigger/edit ops",
+      "note": "G10:cron 字段 / update_code op 形状 pin 死。",
+      "ts": "seed"
+    },
+    {
+      "id": "b006",
+      "kind": "lever",
+      "target": "examples.md",
+      "note": "few-shot gold 示例已放;测它对复杂建的 paired-lift(预期 ~+11)。",
+      "ts": "seed"
+    },
+    {
+      "id": "b007",
+      "kind": "new_axis",
+      "target": "efficiency",
+      "note": "提案新轴:轮数/token 成本。模型有没有绕远(5 轮干 2 轮的活)。先定 how_judged 再立。",
+      "ts": "seed"
+    },
+    {
+      "id": "b008",
+      "kind": "new_axis",
+      "target": "calibration",
+      "note": "提案新轴:该不该用工具/何时反问(Subagent/AskUserQuestion 欠选)。",
+      "ts": "seed"
+    },
+    {
+      "id": "b009",
+      "kind": "scenario_gap",
+      "target": "edit/diagnosis chains",
+      "note": "种子场景偏 create;多造 edit-ops + 死信诊断链,防优化到窄分布。",
+      "ts": "seed"
+    },
+    {
+      "id": "b010",
+      "kind": "redesign",
+      "target": "tool-set",
+      "note": "meta:工具集本身有没有该拆/并/删/加的(如 capability_check 行为)。设计建议进 recommendations.md。",
+      "ts": "seed"
+    },
+    {
+      "id": "b011",
+      "kind": "lever",
+      "target": "teaching.md / create_function",
+      "note": "A/B 加一句'代码内的引号不要转义(写 \"\"\" 不是 \\\"\\\")';测 over-escape 率降不降(当前 ~15%)。",
+      "ts": "r1"
+    },
+    {
+      "id": "b012",
+      "kind": "coverage",
+      "target": "create_function selection",
+      "note": "多轮 ReAct 确认 selection:喂 search 的'无匹配'recon,看模型是否接着 create(预期补回那 2 个 → ≈100%)。",
+      "ts": "r1"
+    }
   ],
-  "known_good": []
+  "known_good": [
+    {
+      "tool": "create_function",
+      "axis": "selection",
+      "reason": "selection 漏的 2 个是正确 search-first(用户说'可复用'触发查重);单轮指标冤枉,实≈100%",
+      "round": 1
+    }
+  ]
 }

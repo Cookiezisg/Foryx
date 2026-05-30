@@ -1,10 +1,12 @@
-# STATE — 当前真相(第 0 轮后重生成,勿手改)
+# STATE — 当前真相(第 1 轮后重生成,勿手改)
 
-- 已转 **0** 轮 · 累计 **¥0** · surfaces `a92a6bf12062`
+- 已转 **1** 轮 · 累计 **¥0.028** · surfaces `a92a6bf12062`
 - 维度集: selection, usage
 
 ## 每工具每轴现分(latest)
-_尚无分数。跑第一轮后填充。_
+| tool | selection | usage | n |
+|---|---|---|---|
+| create_function | 87%±17 | 73%±22 | 15 |
 
 ## 待办 top(完整见 backlog.json)
 - `weak` **create_workflow** — doc14 复杂大图 usage ~52%。先读 raw 验是真弱还是判官过严,再动。 ⚠️verify-first

@@ -6,7 +6,8 @@ export const meta = {
   description: 'Author ≥N DISTINCT scenarios per tool (maximize diversity) for a tooltuner target round.',
   phases: [{ title: 'Generate', detail: 'one agent per tool, ≥N distinct scenarios each' }],
 }
-const a = (typeof args !== 'undefined' && args) || {}
+let a = (typeof args !== 'undefined' && args) || {}
+if (typeof a === 'string') { try { a = JSON.parse(a) } catch (e) { /* leave as {} below */ } }
 const TARGET = a.targetDir
 const ROUND = a.roundDir
 const TOOLS = a.tools || []

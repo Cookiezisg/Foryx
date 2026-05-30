@@ -6,7 +6,8 @@ export const meta = {
   description: 'Adversarial N-judge scoring of a round\'s traces against the target\'s current axes; majority.',
   phases: [{ title: 'Judge', detail: 'N judges over the round, per-axis booleans, majority' }],
 }
-const a = (typeof args !== 'undefined' && args) || {}
+let a = (typeof args !== 'undefined' && args) || {}
+if (typeof a === 'string') { try { a = JSON.parse(a) } catch (e) { /* leave as {} below */ } }
 const TARGET = a.targetDir
 const ROUND = a.roundDir
 const AXES = a.axes || [{ key: 'selection' }, { key: 'usage' }]
@@ -48,6 +49,8 @@ const verdicts = ids.map((id) => {
   return v
 })
 
-// Workflow script body has no fs — return verdicts; the operator persists them to <roundDir>/verdicts.json.
-log(`Judged ${verdicts.length} scenarios × ${axisKeys.length} axes, ${JN} judges. Operator: write to ${ROUND}/verdicts.json`)
+// persist via an agent (script body has no fs).
+await agent(`Use the Write tool to write this EXACT content (valid JSON, verbatim, nothing else) to ${ROUND}/verdicts.json:\n${JSON.stringify(verdicts, null, 2)}`,
+  { label: 'persist', phase: 'Judge' })
+log(`Judged ${verdicts.length} scenarios × ${axisKeys.length} axes, ${JN} judges → ${ROUND}/verdicts.json`)
 return { n: verdicts.length, axes: axisKeys, verdicts }
