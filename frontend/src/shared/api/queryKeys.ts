@@ -35,4 +35,5 @@ export const qk = {
   relations:          (entityId: string) => ["relations", entityId] as const,
   notificationsSnap:  () => ["notifications-snapshot"] as const,
   modelCapabilities:  () => ["model-capabilities"] as const,
+  settingsLimits:     () => ["settings-limits"] as const,
 } as const;

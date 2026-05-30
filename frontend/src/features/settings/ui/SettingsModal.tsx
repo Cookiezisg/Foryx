@@ -15,6 +15,7 @@ import { ModelDefaultsSection } from "./ModelDefaultsSection.tsx";
 import { SearchSection } from "./SearchSection.tsx";
 import { AppearanceSection } from "./AppearanceSection.tsx";
 import { SystemSection } from "./SystemSection.tsx";
+import { AdvancedCapabilitiesSection } from "./AdvancedCapabilitiesSection.tsx";
 import { useAccountManager } from "@features/settings";
 
 export function SettingsModal({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -76,6 +77,10 @@ export function SettingsModal({ open, onClose }: { open: boolean; onClose: () =>
               <SystemSection
                 open={openSection === "system"}
                 onToggle={() => toggle("system")}
+              />
+              <AdvancedCapabilitiesSection
+                open={openSection === "advanced"}
+                onToggle={() => toggle("advanced")}
               />
             </div>
           </motion.div>

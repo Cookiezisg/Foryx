@@ -341,10 +341,14 @@ Notion-style 树状文档库 CRUD + move。详见 [`../service-design-documents/
 | GET | `/api/v1/settings` | 当前 `~/.forgify/settings.json` 解析后快照 |
 | PUT | `/api/v1/settings` | 替换整个 settings.json（atomic tmp+rename + reload）|
 | POST | `/api/v1/settings:reload` | 强制从磁盘重读（不依赖 fsnotify watcher）|
+| GET | `/api/v1/settings/limits` | 当前运行上限（settings.json `limits` 块叠加高 ceiling 默认）|
+| PUT | `/api/v1/settings/limits` | upsert `limits` 块（read-modify-write 保 permissions/hooks）+ reload，返新 limits |
 | GET | `/api/v1/permissions/tools` | 列所有已注册 tool + dangerLevel(`read_only`/`workspace_write`/`danger_full_access`) |
 | POST | `/api/v1/permissions/test` | body `{toolName, args, destructive?}` → 返 `{action, reason}` 预测当前规则下结果，无副作用 |
 
 settings.json 顶层 schema：`{permissions:{defaultMode:ask\|allow\|deny\|bypass, deny:[], ask:[], allow:[]}, hooks:{PreToolUse:[], PostToolUse:[], Stop:[]}, protectedPaths:{denyWrite:[]}}`。规则形态 `"Verb(pattern)"`（如 `"Bash(rm -rf *)"`、`"Edit(./src/**)"`、`"WebFetch(domain:github.com)"`）；详 [`../service-design-documents/permissions.md`](../service-design-documents/permissions.md) §5.1。求值：deny→ask→allow→defaultMode 第一匹配赢；session ask-once 缓存让用户答过的同 (tool, args) 不再问。Hook 形态当前仅 shell exec（stdin/stdout JSON 协议），exit 0/2/其他 三态语义；详 §6。
+
+settings.json 另含可选 `limits` 块（运行上限：agent 步数 / 输出 token / 超时 / 工具结果 / workflow agent 上限）——默认 = 高 ceiling，缺失键保默认（`json.Unmarshal` 叠加在 `limits.Default()` 上），热重载；经 `GET/PUT /api/v1/settings/limits` 或前端「高级能力」设置区编辑；后端经 `internal/pkg/limits.Current()` 单点读取。详 [`../adhoc-topic-documents/limits-optimization/`](../adhoc-topic-documents/limits-optimization/)。
 
 #### user（V1.2 §20 multi-user）✅
 详见 [`../service-design-documents/user.md`](../service-design-documents/user.md)。本地多 profile（无 auth、无密码）；DB 自动 user_id scope；前端 X-Forgify-User-ID header 注入。
