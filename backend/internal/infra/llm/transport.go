@@ -22,6 +22,14 @@ func newSharedHTTPClient() *http.Client {
 	return &http.Client{Timeout: sharedHTTPTimeout}
 }
 
+// maxSSELineBytes lets the SSE scanner accept a single large data: line (e.g. a
+// big tool-call arguments frame) instead of aborting the whole stream at bufio's
+// 64KB default token size.
+//
+// maxSSELineBytes 让 SSE 扫描器接受单条大 data: 行（如大 tool-call 参数帧），
+// 而非在 bufio 默认 64KB token 上限处 abort 整条流。
+const maxSSELineBytes = 8 << 20
+
 // scanSSELines is a generic SSE scanner: it reads lines from r, strips the
 // "data: " prefix, skips comment lines (": ..."), and calls fn for each JSON
 // payload. Returns false from fn to stop early. Stops on "[DONE]". This is
@@ -32,6 +40,7 @@ func newSharedHTTPClient() *http.Client {
 // 这是 SSE 协议本身的语义，与具体 provider 无关，各 provider parser 可复用。
 func scanSSELines(r io.Reader, fn func(payload []byte) bool) error {
 	scanner := bufio.NewScanner(r)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxSSELineBytes)
 	for scanner.Scan() {
 		line := scanner.Text()
 		if !strings.HasPrefix(line, "data: ") {

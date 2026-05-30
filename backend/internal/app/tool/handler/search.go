@@ -13,6 +13,7 @@ import (
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 	llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
 	llmparsepkg "github.com/sunweilin/forgify/backend/internal/pkg/llmparse"
 )
@@ -37,7 +38,7 @@ func (t *SearchHandler) Parameters() json.RawMessage {
 		"type": "object",
 		"properties": {
 			"query": {"type": "string", "description": "Natural language description"},
-			"limit": {"type": "integer", "description": "Max results (default 3, max 5)"}
+			"limit": {"type": "integer", "description": "Max results (default 10, max 50)"}
 		},
 		"required": ["query"]
 	}`)
@@ -60,8 +61,8 @@ func (t *SearchHandler) Execute(ctx context.Context, argsJSON string) (string, e
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("search_handler: bad args: %w", err)
 	}
-	if args.Limit <= 0 || args.Limit > 5 {
-		args.Limit = 3
+	if args.Limit <= 0 || args.Limit > limitspkg.MaxSearchTopN {
+		args.Limit = 10 // = limits.Default().Tools.SearchTopN
 	}
 
 	hs, err := t.svc.ListAll(ctx)

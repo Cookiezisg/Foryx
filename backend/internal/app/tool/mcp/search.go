@@ -9,9 +9,10 @@ import (
 
 	mcpapp "github.com/sunweilin/forgify/backend/internal/app/mcp"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 )
 
-const defaultTopK = 5
+const defaultTopK = 10 // = limits.Default().Tools.SearchTopN
 
 // ErrEmptyQuery: query missing or whitespace.
 //
@@ -26,7 +27,7 @@ var searchMCPSchema = json.RawMessage(`{
 	"required": ["query"],
 	"properties": {
 		"query": {"type": "string"},
-		"top_k": {"type": "integer", "minimum": 1, "maximum": 20, "description": "Default 5."}
+		"top_k": {"type": "integer", "minimum": 1, "maximum": 50, "description": "Default 10."}
 	}
 }`)
 
@@ -87,6 +88,9 @@ func (t *SearchMCP) Execute(ctx context.Context, argsJSON string) (string, error
 	topK := args.TopK
 	if topK <= 0 {
 		topK = defaultTopK
+	}
+	if topK > limitspkg.MaxSearchTopN {
+		topK = limitspkg.MaxSearchTopN
 	}
 
 	tools, err := t.svc.Search(ctx, args.Query, topK)

@@ -61,8 +61,19 @@ func (p *geminiProvider) BuildRequest(ctx context.Context, req Request) (*http.R
 	if len(req.Tools) > 0 {
 		body.Tools = []geminiTool{{FunctionDeclarations: toGeminiFunctionDeclarations(req.Tools)}}
 	}
-	if tc := encodeGeminiThinking(req.ModelID, req.Thinking); tc != nil {
-		body.GenerationConfig = &geminiGenerationConfig{ThinkingConfig: tc}
+	// Always send maxOutputTokens = the model's real cap. Gemini's default is a
+	// truncating ~8192 (and thinking counts against the same budget), so omitting
+	// it silently caps long generations. Unknown models use a generous modelcaps fallback.
+	//
+	// 始终发 maxOutputTokens = 模型真实上限。Gemini 默认 ~8192（且 thinking 计入同一
+	// 预算）会静默截断长输出，省略即被腰斩。未知模型用 modelcaps 宽松兜底。
+	gc := &geminiGenerationConfig{}
+	if maxOut := modelcapspkg.Lookup("google", req.ModelID).MaxOutput; maxOut > 0 {
+		gc.MaxOutputTokens = &maxOut
+	}
+	gc.ThinkingConfig = encodeGeminiThinking(req.ModelID, req.Thinking)
+	if gc.MaxOutputTokens != nil || gc.ThinkingConfig != nil {
+		body.GenerationConfig = gc
 	}
 
 	raw, err := json.Marshal(body)
@@ -526,7 +537,13 @@ type geminiFunctionDeclaration struct {
 }
 
 type geminiGenerationConfig struct {
-	ThinkingConfig *geminiThinkingConfig `json:"thinkingConfig,omitempty"`
+	// MaxOutputTokens is sent explicitly because Gemini's default (~8192, shared
+	// with the thinking budget) silently truncates long output; pointer so 0 elides.
+	//
+	// MaxOutputTokens 显式发送：Gemini 默认 ~8192（且与 thinking 预算共享）会静默截断
+	// 长输出；指针使 0 被 omitempty 省略。
+	MaxOutputTokens *int                  `json:"maxOutputTokens,omitempty"`
+	ThinkingConfig  *geminiThinkingConfig `json:"thinkingConfig,omitempty"`
 }
 
 // geminiThinkingConfig is the native thinking knob. ThinkingBudget is a pointer

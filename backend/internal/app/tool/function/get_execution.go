@@ -16,7 +16,7 @@ type GetFunctionExecution struct {
 func (t *GetFunctionExecution) Name() string { return "get_function_execution" }
 
 func (t *GetFunctionExecution) Description() string {
-	return "Full detail of one execution: input + output (4KB cap) plus diagnostic hints (outputEmpty, significantlySlower)."
+	return "Full detail of one execution: input + output (256KB cap) plus diagnostic hints (outputEmpty, significantlySlower)."
 }
 
 func (t *GetFunctionExecution) Parameters() json.RawMessage {
@@ -53,21 +53,16 @@ func (t *GetFunctionExecution) Execute(ctx context.Context, argsJSON string) (st
 		return "", fmt.Errorf("get_function_execution: %w", err)
 	}
 
-	// 4KB truncation for input/output per spec/08-executions.md §7.1.
-	// Reuses the helper in search_executions.go.
+	// 256KB defensive cap (raised from 4KB): the user explicitly asked for THIS
+	// execution, so stop semantically truncating it small. boundedJSON keeps the
+	// envelope valid even when it caps — the old sliced-RawMessage produced
+	// malformed JSON and an empty result on large rows. 08-executions.md §7.1.
 	//
-	// 4KB 截断 input/output(spec §7.1)。复用 search_executions.go 的 helper。
-	inputTrunc := truncateJSON(detail.Input, 4096)
-	outputTrunc := truncateJSON(detail.Output, 4096)
-	// Detect truncation by re-marshaling raw and comparing byte length.
-	inputTruncated := false
-	if rawIn, e := json.Marshal(detail.Input); e == nil && len(rawIn) > 4096 {
-		inputTruncated = true
-	}
-	outputTruncated := false
-	if rawOut, e := json.Marshal(detail.Output); e == nil && len(rawOut) > 4096 {
-		outputTruncated = true
-	}
+	// 256KB 防御上限(从 4KB 抬高)：用户明确要看这条执行，不再语义截小。boundedJSON
+	// 即使截断也保 envelope 合法(旧的切片 RawMessage 是畸形 JSON、大行返空)。
+	const getExecMaxBytes = 256 * 1024
+	inputVal, inputTruncated := boundedJSON(detail.Input, getExecMaxBytes)
+	outputVal, outputTruncated := boundedJSON(detail.Output, getExecMaxBytes)
 
 	out := map[string]any{
 		"id":              detail.ID,
@@ -76,8 +71,8 @@ func (t *GetFunctionExecution) Execute(ctx context.Context, argsJSON string) (st
 		"functionId":      detail.FunctionID,
 		"versionId":       detail.VersionID,
 		"pythonVersion":   detail.PythonVersion,
-		"input":           json.RawMessage(orFallback(inputTrunc, "null")),
-		"output":          json.RawMessage(orFallback(outputTrunc, "null")),
+		"input":           inputVal,
+		"output":          outputVal,
 		"inputTruncated":  inputTruncated,
 		"outputTruncated": outputTruncated,
 		"errorCode":       detail.ErrorCode,
@@ -93,11 +88,4 @@ func (t *GetFunctionExecution) Execute(ctx context.Context, argsJSON string) (st
 	}
 	b, _ := json.Marshal(out)
 	return string(b), nil
-}
-
-func orFallback(s, fallback string) string {
-	if s == "" {
-		return fallback
-	}
-	return s
 }

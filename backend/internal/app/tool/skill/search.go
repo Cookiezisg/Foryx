@@ -9,9 +9,10 @@ import (
 
 	skillapp "github.com/sunweilin/forgify/backend/internal/app/skill"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 )
 
-const defaultTopK = 3
+const defaultTopK = 10 // = limits.Default().Tools.SearchTopN
 
 // ErrEmptyQuery: query missing or whitespace.
 //
@@ -25,7 +26,7 @@ var searchSkillsSchema = json.RawMessage(`{
 	"required": ["query"],
 	"properties": {
 		"query": {"type": "string"},
-		"top_k": {"type": "integer", "minimum": 1, "maximum": 10, "description": "Default 3."}
+		"top_k": {"type": "integer", "minimum": 1, "maximum": 50, "description": "Default 10."}
 	}
 }`)
 
@@ -91,6 +92,9 @@ func (t *SearchSkills) Execute(ctx context.Context, argsJSON string) (string, er
 	topK := args.TopK
 	if topK <= 0 {
 		topK = defaultTopK
+	}
+	if topK > limitspkg.MaxSearchTopN {
+		topK = limitspkg.MaxSearchTopN
 	}
 
 	skills, err := t.svc.Search(ctx, args.Query, topK)

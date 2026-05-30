@@ -670,15 +670,20 @@ func TestThinking_OpenRouter_Off_NoReasoningField(t *testing.T) {
 
 const geminiNativeBase = "https://generativelanguage.googleapis.com/v1beta"
 
-// TestThinking_Gemini_NilSpec_NoFields verifies nil ThinkingSpec on native
-// Gemini emits no generationConfig/thinkingConfig at all.
+// TestThinking_Gemini_NilSpec_NoThinkingConfig verifies nil ThinkingSpec emits no
+// thinkingConfig — but generationConfig is still present, carrying maxOutputTokens
+// (always sent so Gemini doesn't truncate at its ~8192 default).
 //
-// 验证原生 Gemini nil ThinkingSpec 不发 generationConfig/thinkingConfig。
-func TestThinking_Gemini_NilSpec_NoFields(t *testing.T) {
+// 验证原生 Gemini nil ThinkingSpec 不发 thinkingConfig；但 generationConfig 仍在，
+// 携带 maxOutputTokens（始终发，避免 Gemini 默认 ~8192 截断）。
+func TestThinking_Gemini_NilSpec_NoThinkingConfig(t *testing.T) {
 	req := minimalReq("gemini-2.5-flash")
 	body := buildProviderBody(t, "google", geminiNativeBase, req)
-	if bytes.Contains(body, []byte(`"thinkingConfig"`)) || bytes.Contains(body, []byte(`"generationConfig"`)) {
-		t.Errorf("nil ThinkingSpec: body must not contain thinkingConfig/generationConfig; got: %s", body)
+	if bytes.Contains(body, []byte(`"thinkingConfig"`)) {
+		t.Errorf("nil ThinkingSpec: body must not contain thinkingConfig; got: %s", body)
+	}
+	if !bytes.Contains(body, []byte(`"maxOutputTokens"`)) {
+		t.Errorf("nil ThinkingSpec: body should carry maxOutputTokens (always sent); got: %s", body)
 	}
 }
 

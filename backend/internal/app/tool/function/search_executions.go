@@ -147,3 +147,25 @@ func truncateJSON(v any, max int) string {
 	}
 	return string(b[:max]) + "…"
 }
+
+// boundedJSON renders a value for a get_* detail view: valid json.RawMessage when
+// within limit (so the model sees structured JSON), else a truncated STRING value
+// — valid in the envelope, unlike a sliced RawMessage which is malformed JSON and
+// makes the whole tool result fail to marshal (→ empty result). bool = truncated.
+//
+// boundedJSON 为 get_* 详情渲染值：未超 limit 返合法 json.RawMessage（模型见结构化
+// JSON）；超长返截断 STRING（envelope 内合法——切片后的 RawMessage 是畸形 JSON，
+// 会让整个 tool result marshal 失败→返空）。bool 报是否截断。
+func boundedJSON(v any, limit int) (any, bool) {
+	if v == nil {
+		return json.RawMessage("null"), false
+	}
+	b, err := json.Marshal(v)
+	if err != nil {
+		return json.RawMessage("null"), false
+	}
+	if len(b) <= limit {
+		return json.RawMessage(b), false
+	}
+	return fmt.Sprintf("%s…[truncated, %d total bytes]", b[:limit], len(b)), true
+}
