@@ -1,7 +1,8 @@
-# 14a — 全 91 工具目录(spec §3,自 spec_catalog.py 渲染)
+# 15 — 全 91 工具目录(每个 tool 告诉 AI 的描述,最新版)
 
-> 由 `research/llm-experiments/render_spec.py` 从 `spec_catalog.py`(可执行 source of truth)生成。
-> 每个工具:最终 `Description()` + 必填参数 + 关键参数。验证模式见各家族标题。
+> **这是「每个 tool 的描述怎么告诉 AI」的一站式参考。** 由 `research/llm-experiments/render_spec.py` 从 `spec_catalog.py`(可执行 source of truth)渲染——改 `spec_catalog.py` 后重跑即同步。
+> 每个工具:最终 `Description()`(告诉 AI 的原文)+ 必填/可选参数。验证模式见各家族标题。
+> 这是已实测验证的基线;**动土前的改动(case→when:、ops/node pin 形状、forge 教学等 before/after)见 [13-llm-facing-implementation-guide.md](./13-llm-facing-implementation-guide.md)**;实验依据见 [14-llm-validation-research-record.md](./14-llm-validation-research-record.md)。
 > 合计 **91** 工具。被测 deepseek-v4-flash。
 
 ## Function 锻造(11)
