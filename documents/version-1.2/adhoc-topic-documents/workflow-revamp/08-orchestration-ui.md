@@ -1,6 +1,7 @@
 # 08 — 编排 UI
 
 脑爆结论笔记(2026-05-27)。
+2026-05-31 改向 durable execution(详 [00-overview](./00-overview.md))。
 
 > **本 doc 不细抠视觉**——直接沿用 Forgify 现有 `frontend/src/features/workflow-edit/ui/WorkflowEditor.tsx` + `pages/forge/ui/WorkflowDetail.tsx` 的形态。
 > 只列**新设计对画布的功能性影响**(node palette / inspector / 触发入口 / 运行时滴答 / chat 协作)。
@@ -68,7 +69,7 @@ WorkflowDetail 头部加 **Active toggle**:
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Toggle 调 `:activate` / `:deactivate` HTTP action(详 06-workflow-lifecycle.md)。
+Toggle 调 `:activate` / `:deactivate` HTTP action(详 [06-workflow-lifecycle.md](./06-workflow-lifecycle.md))。
 
 ### 4. Trigger 节点上的 ▶ 触发按钮
 
@@ -85,34 +86,36 @@ Toggle 调 `:activate` / `:deactivate` HTTP action(详 06-workflow-lifecycle.md)
             └────────────────────────────┘
 ```
 
-提交 → `POST /workflows/{id}:trigger { triggerNodeId, payload }`(详 01-triggers.md 触发统一抽象段)。
+提交 → `POST /workflows/{id}:trigger { triggerNodeId, payload }`(详 [01-triggers.md](./01-triggers.md) 触发统一抽象段)。一次提交起一个 flowrun(`scheduler.StartRun`);画布随即进入运行时滴答(下一节)。
 
 ### 5. 运行时滴答可视化(新功能,核心)
 
-flowrun 跑起来时,画布实时显示:
+flowrun 跑起来时,画布实时把**该次执行的进度**映射成节点的视觉状态。**节点是唯一的滴答载体——边不画"流动"、不画"消息在传"**(durable execution 模型里边只是"谁接谁"的箭头,数据是当作值传递并记进事件日志的,没有"消息在边上飞"这回事,见 [00-overview](./00-overview.md) 术语映射)。
 
 | 视觉 | 含义 |
 |---|---|
-| 节点 spinning border | 正在处理 message |
-| 节点绿色 ✓ | 已 emit 完下游 |
-| 节点红色 | 失败 / 进死信 |
-| 节点黄色 + ⏸ | approval 暂停 |
-| **edge 上有"流动球"** | message 正在传递 |
-| 节点角标"× N" | 已激活 N 次(case 回边时) |
+| 节点 spinning border | 正在执行这个 activity(node_started 已记账、node_completed 未到) |
+| 节点绿色 ✓ | 该 activity 已完成、结果已记进事件日志 |
+| 节点红色 | 失败 / retry 用尽进死信 |
+| 节点黄色 + ⏸ | approval durable 挂起,等用户信号 |
+| 节点角标"循环第 N 轮" | case 回边触发的结构化循环,当前在第 N 轮(读事件日志里该节点的 `iteration_key`) |
 
-数据源:新加第 4 条 SSE `flowrun-progress`(按需订阅,详 00 待办里我提过)— 这是后端的事,前端订阅 + 画布消费。
+**数据源(关键改动)**:**不新加 SSE**——SSE 上限三条(eventlog / notifications / forge),永不再加(对位后端 E1 + 前端 `cross-cutting.md`)。运行时状态从两处来,都是已有通道:
 
-跟现有 `useForgeProgress`(锻造进度)同模式,新加个 `useFlowrunProgress`。
+- **`notifications` SSE 的 `flowrun` 事件** → react-query invalidate `flowruns` / `flowrun(id)` / `flowrunNodes(id)`(详 `cross-cutting.md` invalidate 映射)→ 重拉节点状态。节点颜色直接读 `FlowRunNode.status`(`pending / running / ok / failed / cancelled / timeout / skipped`),这就是该 flowrun 事件日志投影到 REST 的结果。
+- **`eventlog` SSE** → 正在跑的 agent/tool 节点的 token / reasoning / tool_call / progress 实时流(节点的 `conversationId` 关联),让 spinning 节点能显示活体进度,不用等整步完成。
+
+实现上新加一个 `useFlowrunTicker`(消费上面两条已有流 + 维护"nodeId → 视觉状态"映射),**而不是订一条新 SSE**。心智跟现有 `useForgeProgress`(锻造进度走 forge 流)同类——都是"订已有流 + 映射到 UI 状态机",只是数据流不同。
 
 ### 6. 节点详情 inline diagnostic
 
 用户/AI 点节点 → 右侧 FloatingInspector 显示:
 
 - 节点 config(只读 + "在 chat 里改这个节点" 按钮)
-- 节点的运行时状态(消息流入数 / 失败数 / 平均耗时)
-- 最近 N 条 message(payload + ctx + 结果)
+- 节点的运行时状态(本次执行:状态 / 已重试次数 / 耗时;循环节点则按轮次列)
+- **该 flowrun 在这个节点上的事件日志(trace)**:这个节点每次被执行的 input + 结果 + 分支选择(case)+ 第几轮(循环),按序列出
 
-数据源:`GET /flowruns/{id}/trace?nodeId=X`。
+**数据源:`GET /flowruns/{id}/trace?nodeId=X`**——读的是**该 flowrun 的事件日志(append-only journal,唯一真相)**过滤到该节点的那些条目,而不是任何"消息队列"。trace 即"这次执行在此节点记了哪些账":每条 = 一次 node_started/node_completed(activity 的 input/result)或 branch_taken(case 选了哪条)或 signal_awaited/received(approval)。循环节点会有多条,用事件日志的 `iteration_key` 区分轮次。
 
 ---
 
@@ -154,11 +157,11 @@ chat 自动起话题:"想改这个 agent 节点的什么?prompt / outputSchema /
 | 各 kind inspector 字段(替换现有) | per kind 一个组件,约 50-100 行 |
 | WorkflowDetail 顶部 Active toggle | ~20 行 |
 | Trigger 节点 ▶ 触发按钮 + payloadSchema 表单 | ~50 行 |
-| 滴答动画(`useFlowrunProgress` + 节点状态映射) | ~80 行(订 SSE + state machine) |
-| FloatingInspector 加运行时状态 + recent messages | ~50 行 |
+| 滴答动画(`useFlowrunTicker` + 节点状态映射) | ~80 行(消费已有 notifications + eventlog 两流 + state machine,**不开新 SSE**) |
+| FloatingInspector 加运行时状态 + 节点 trace | ~50 行 |
 | **总** | **~300-400 行,2-3 天** |
 
-加上后端 SSE `flowrun-progress` + Trace API(~200 行),整套 UI 落地估**4-5 天**。
+后端不需要新增 SSE 流——运行时状态复用已有 `notifications`(flowrun 事件)+ `eventlog`(节点 token 流)+ flowrun REST。只需补一个 Trace API(`GET /flowruns/{id}/trace`,读事件日志,~100 行),整套 UI 落地估**3-4 天**。
 
 ---
 
@@ -170,7 +173,7 @@ chat 自动起话题:"想改这个 agent 节点的什么?prompt / outputSchema /
 3. Inspector 字段                                                → 跟新 node config schema(无 hardcoded 默认值)
 4. Workflow Active 开关                                          → 顶部 toggle,调 :activate / :deactivate
 5. Trigger 节点 ▶ 触发                                           → 每个 trigger 节点角上一个按钮 + payloadSchema 表单
-6. 运行时画布滴答                                                → 新加 useFlowrunProgress(订 SSE,实时映射节点状态)
+6. 运行时画布滴答                                                → useFlowrunTicker(消费已有 notifications + eventlog,节点状态来自该次执行的事件日志;不开第 4 条 SSE)
 7. chat-画布协作                                                 → 双向(画布点节点 → chat 起话题;chat 改 → 画布刷新)
 8. AI 帮造 / iterate / accept-pending                            → 沿用现有 forge-iterate + forge-review + VersionRail
 ```

@@ -1,6 +1,7 @@
 # 09 — Agent Domain
 
 脑爆结论笔记(2026-05-27)。
+2026-05-31 改向 durable execution(详 00-overview)。
 
 依赖纲领:[`00-overview.md`](./00-overview.md) 的"能力源自 forge"原则。
 
@@ -66,7 +67,7 @@ type AgentVersion struct {
 跟之前定的语义一致,**只是承载位置从节点 config 改到 agent entity**:
 
 ### 1. prompt
-一段整体指令(不拆 system / user),可 `{{ payload.* }}` / `{{ ctx.* }}` 模板插值。跑时 payload 来自调用方(workflow 节点 emit / chat / 试跑接口)。
+一段整体指令(不拆 system / user),可 `{{ payload.* }}` / `{{ ctx.* }}` 模板插值。跑时 payload 来自调用方(workflow agent 节点的输入 / chat / 试跑接口)。
 
 ### 2. skill
 1 个 skill name(可空)。**预激活**,LLM 不调用 search/activate。skill 作为方法论注入,prompt 仍必填(写"本次任务")。
@@ -218,7 +219,7 @@ agent entity 的设计约束跟之前 02 doc 一致(只是承载位置变了):
 | | chat agent | workflow agent (entity) |
 |---|---|---|
 | 角色 | **老板** | **员工** |
-| 任务来源 | 用户对话 / 探索 | workflow 节点喂的消息 / 试跑接口 |
+| 任务来源 | 用户对话 / 探索 | 程序走到 agent 节点喂给它的输入 / 试跑接口 |
 | skill | 自己 search + activate | entity 上配死 |
 | tools | 自己挑 + 临场 forge | entity 上配死 |
 | subagent | 可 spawn | 不能 |

@@ -1,8 +1,9 @@
 # 06 — Workflow Lifecycle
 
 脑爆结论笔记(2026-05-27)。
+2026-05-31 改向 durable execution(详 [`00-overview.md`](./00-overview.md))。
 
-依赖纲领:[`00-overview.md`](./00-overview.md) 的 message queue 模型 + `Workflow.active` / `FlowRun.IsFromListener` 字段。
+依赖纲领:[`00-overview.md`](./00-overview.md) 的 durable-execution 模型(事件日志 journal + 确定性重放)+ `Workflow.active` / `FlowRun.IsFromListener` 字段。本篇只讲 lifecycle(上线/下线/触发/恢复);执行底盘细节见 00 与 [`11-integration-chains.md`](./11-integration-chains.md)。
 
 ---
 
@@ -128,19 +129,29 @@ AcceptPending(workflowId, pendingVersionId)
 
 ## Boot 恢复
 
+Boot 要恢复两件正交的东西:**(A) 没跑完的 flowrun**(durable execution 的重放)和 **(B) active workflow 的 listener**(入口重挂)。
+
 ```
 Process boot
    │
-   ├── 现有 RehydrateOnBoot:扫 paused flowrun(approval 等待中)注册 cancel handle
+   ├── (A) 扫 status ∈ {running, awaiting_signal} 的 flowrun
+   │       └── 对每个:从头确定性重放程序(详 00-overview「崩溃重放」段)
+   │             ├ 命中事件日志的 activity → 直接抄日志里的结果(不重跑 LLM/工具)
+   │             ├ 走到第一个没记账的步骤 → 真跑一次、记账,接着往下走
+   │             └ awaiting_signal(approval 挂着)→ 重放回到挂起点继续等信号
+   │                 (信号到达也是一条日志事件;无需在内存里持有 cancel handle —
+   │                  挂起点就是日志里的 signal_awaited,重放天然恢复)
    │
-   └── 新加:扫所有 workflow.active = true 的 row
-       └── 对每个重做 activate 流程
-           └── listener 重新注册
+   └── (B) 扫所有 workflow.active = true 的 row
+           └── 对每个重做 activate 流程
+               └── listener 重新注册
 ```
 
-cron 用 `lastFire` 重新算补跑(现有机制)。webhook listener 重挂 mux。fsnotify 重新 watch。polling 重启 tick。
+(A) 替代旧设计里"扫 paused flowrun + 重建内存态 + 重新 drive DAG"——不再有 PausedState / ExecutionContext 的内存快照需要重建,**唯一真相是事件日志**,重放即恢复。approval 的"挂着等人"由 `awaiting_signal` 状态 + 日志里的 `signal_awaited` 事件表达,重放到该点自然停下等信号,**不依赖任何进程内的 cancel handle**。详 [`05-approval-node.md`](./05-approval-node.md)。
 
-进程崩溃 → 重启后 active workflow 的 listener 自动恢复,**用户感知 ≤ 进程启动时间**。
+(B) 的 listener 重挂照旧:cron 用 `lastFire` 重新算补跑(现有机制),webhook listener 重挂 mux,fsnotify 重新 watch,polling 重启 tick。
+
+进程崩溃 → 重启后未完成的 flowrun 接着跑、active workflow 的 listener 自动恢复,**用户感知 ≤ 进程启动时间**。
 
 ---
 
@@ -203,7 +214,8 @@ AI 调 trigger_workflow(wf_xxx, "new_manual_node", payload) → 成功跑
 | trigger Service `onFire` → `scheduler.StartRun(..., isFromListener=true)` | ~5 行 |
 | `dispatch_handler.go` Owner 双模式(根据 IsFromListener) | 4 行 if |
 | AcceptPending 末尾:active 时撤 + 重 register | ~15 行 |
-| `RehydrateOnBoot` 扩展:扫 active workflow 重 register | ~20 行 |
+| `RehydrateOnBoot` 扩展(B):扫 active workflow 重 register listener | ~20 行 |
+| Boot 重放(A):扫 running/awaiting_signal flowrun → 照事件日志确定性重放接着跑(替代旧的扫 paused + 重建 PausedState/ExecutionContext)| 属执行引擎,见 [`11-integration-chains.md`](./11-integration-chains.md) |
 | `:trigger` HTTP body 加 `triggerNodeId` 字段(替代隐式 manual) | ~10 行 |
 | `trigger_workflow` LLM 工具描述加 `triggerNodeId` 必填参数 + 暴露 workflow 的 trigger 节点 list | ~30 行 |
 | 砍 `local-user` magic / 默认 manual:必须显式指定 triggerNodeId | 0 行(自然 by-product) |
@@ -241,6 +253,7 @@ AI 调 trigger_workflow(wf_xxx, "new_manual_node", payload) → 成功跑
 
 进程重启:
   Boot 扫所有 active workflow → 自动重 register listener
-  paused flowrun(approval 等待中)→ 自动注册 cancel handle
+  未完成的 flowrun(running / awaiting_signal)→ 照事件日志确定性重放接着跑
+    (awaiting_signal 的 approval 重放到挂起点继续等信号,无需内存 cancel handle)
   整体感知 ≤ 进程启动时间
 ```

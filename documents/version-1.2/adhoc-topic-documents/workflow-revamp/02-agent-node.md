@@ -1,6 +1,7 @@
 # 02 — Agent 节点
 
 脑爆结论笔记(2026-05-27)。
+2026-05-31 改向 durable execution(详 [`00-overview.md`](./00-overview.md))。
 
 ---
 
@@ -22,13 +23,15 @@ config:
 
 节点 config 就这一个字段。极简。
 
+**在执行模型里,agent 节点 = 一个 activity(记账步骤)**:执行器照图走到这一步时,跑一次 LLM ReAct loop,把结果记进事件日志。跑之前先记"我要调它",跑完把 LLM 输出记账;崩溃重放时,日志里已有结果的 agent 步骤直接抄结果(**不重跑 LLM**),停在第一个没记账的步骤继续。这一活动语义、确定性约束、exactly-once 边界(LLM 调用属不确定性,结果记进日志、重放读缓存)统一由 [`00-overview.md`](./00-overview.md) 的执行底盘负责,本节不重述。
+
 跑时:
 
-1. 节点 consume 上游消息
+1. 执行器照图走到本节点,**读其前驱节点的输出**(程序数据流,该输出已记进事件日志)
 2. 平台按 agentRef 查 agent active version 的所有配置(prompt / skill / knowledge / tools / model / outputSchema)
-3. 用消息 payload 作为 prompt 模板插值数据
+3. 用前驱输出作为 prompt 模板插值数据
 4. 跑 LLM ReAct loop(像 chat 主 agent 一样)
-5. emit 一条新消息进下游 queue,payload = LLM 输出(按 outputSchema 约束)
+5. **产出结果**(按 outputSchema 约束),**记进事件日志**,**传给下游节点**(下游沿图的出边读到本节点的输出)
 
 ---
 
@@ -43,7 +46,7 @@ agent 节点 vs tool 节点(都调 agent)的差异:
 | UX | 在画布上明确标识"这一步是 LLM" | 跟其他 callable 视觉一致 |
 | Inspector | 显示 agent 的 prompt / skill / tools 等(只读 + 跳 ag entity 编辑) | 显示 callable + args |
 | 适合 | 主要的"思考 / 决策"步骤,产品上凸显 | 当 agent 只是"调一下"被消费的步骤 |
-| 实际机制 | 完全一样(都调同一个 agent entity) | 同左 |
+| 实际机制 | 完全一样(都是一个 activity、调同一个 agent entity) | 同左 |
 
 **实际是 syntax sugar 区别** — 选哪个不影响行为,只影响编辑 UX。
 
@@ -54,7 +57,7 @@ agent 节点 vs tool 节点(都调 agent)的差异:
 | | chat agent | workflow agent entity |
 |---|---|---|
 | 角色 | **老板** | **员工** |
-| 任务来源 | 用户对话 / 探索 | workflow 节点喂的消息 / 试跑接口 |
+| 任务来源 | 用户对话 / 探索 | 程序走到这一步喂给它的输入 / 试跑接口 |
 | skill | 自己 search + activate | entity 上配死(预激活) |
 | tools | 自己挑 + 临场 forge | entity 上配死 |
 | subagent | 可 spawn | 不能 |

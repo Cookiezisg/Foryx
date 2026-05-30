@@ -1,6 +1,7 @@
 # 10 — AI 工具清单
 
 脑爆结论笔记(2026-05-29)。
+2026-05-31 改向 durable execution(详 00-overview)。
 
 依赖:[00-overview](./00-overview.md) / [02-agent-node](./02-agent-node.md) / [03-tool-node](./03-tool-node.md) / [06-workflow-lifecycle](./06-workflow-lifecycle.md) / [07-error-handling](./07-error-handling.md) / [09-agent-domain](./09-agent-domain.md)。
 
@@ -85,7 +86,7 @@
 | `accept_pending_workflow(id)` | pending → active |
 | `revert_workflow(id, targetVersion)` | 退回 |
 | `delete_workflow(id)` | 删 |
-| `capability_check_workflow(id)` | 预校验 callable 存在 + kind 匹配 + payload schema 流 |
+| `capability_check_workflow(id)` | 预校验 callable 存在 + kind 匹配 + payload schema 流 + 图良构/可归约(并行分支自包含、循环单入口) |
 
 ---
 
@@ -101,25 +102,31 @@
 
 ## 运行时观察(5 个)
 
+一次 flowrun = 把图当结构化程序确定性跑一遍,每步结果记进事件日志(journal);下列工具读这本日志(详 [00-overview](./00-overview.md) 持久化段)。
+
 | 工具 | 解决问题 | 现状 |
 |---|---|---|
-| `search_flowruns(workflowId, status?, since?)` | 列 flowrun 历史(状态 / 时间过滤) | ✅ 已有 |
+| `search_flowruns(workflowId, status?, since?)` | 列 flowrun 历史(状态 / 时间过滤;status ∈ running / awaiting_signal / completed / failed / cancelled) | ✅ 已有 |
 | `get_flowrun(id)` | flowrun 概况(status / trigger / 耗时) | ✅ 已有 |
-| `get_flowrun_trace(id)` | **看消息流**(message 因果链,画布滴答数据源) | ❌ 新增 |
+| `get_flowrun_trace(id)` | **看事件流**(读事件日志:按 seq 的因果序列 —— 每步开始/结果、分支选择、信号;画布滴答的数据源) | ❌ 新增 |
 | `get_flowrun_nodes(id)` | 看每节点状态(running / completed / failed / approval pending) | ❌ 新增 |
-| `cancel_flowrun(id)` | 取消跑挂的 flowrun | ❌ 新增 |
+| `cancel_flowrun(id)` | 取消一次正在跑或挂起的 flowrun | ❌ 新增 |
 
 ---
 
 ## 错误诊断 + 修复(5 个全新,AI 工程师能力核心)
 
+durable-execution 下没有"死信消息"——失败的是**某个 activity(节点 / 那一轮)**,它的"开始没记成结果"留在事件日志里;诊断 = 读日志找到失败步,修复 = `replay`(重放跳过已记账步、重跑未完成的)。
+
 | 工具 | 解决问题 | 现状 |
 |---|---|---|
-| `query_events(workflowId, type?, since?)` | 查事件流(handler_crash / message_failed / trigger_exhausted) | ❌ 新增 |
-| `list_dead_letters(workflowId, since?)` | 列死信(retry 用尽的 message) | ❌ 新增 |
-| `get_dead_letter(messageId)` | 看死信详情(payload + ctx + 失败原因 + stack trace) | ❌ 新增 |
-| `replay_message(messageId, fromNode?)` | replay — 从原节点 / 整个 flowrun 重跑 | ❌ 新增 |
-| `clear_dead_letters(workflowId)` | 批量清死信 | ❌ 新增 |
+| `query_events(workflowId, type?, since?)` | 查事件流(跨 flowrun 查事件日志 type:`handler_crash` / `node_failed` / `trigger_exhausted`) | ❌ 新增 |
+| `list_failed_steps(workflowId, since?)` | 列失败步(retry 用尽、永久失败的 activity / 节点) | ❌ 新增 |
+| `get_failed_step(flowrunId, nodeId, iterationKey?)` | 看失败步详情(该步输入 + ctx + 失败原因 + stack trace;iterationKey 区分循环不同轮) | ❌ 新增 |
+| `replay_flowrun(flowrunId, fromNode?)` | replay — 重放该 flowrun:命中日志的步直接抄结果,从失败步(或 `fromNode` 指定节点)起真跑;不重复已成功的 LLM/工具调用 | ❌ 新增 |
+| `clear_failed_steps(workflowId)` | 批量清失败步标记(放弃重跑、归档) | ❌ 新增 |
+
+> 命名变更:旧设计称这五个为 `list_dead_letters` / `get_dead_letter(messageId)` / `replay_message(messageId, fromNode?)` / `clear_dead_letters`,把失败建模成"死信 message"。durable 模型下失败建模成"失败的记账步",签名改用 `flowrunId + nodeId`(而非 messageId)。语义对齐 [`07-error-handling.md`](./07-error-handling.md):列失败步 / replay 重跑 / 读事件日志。
 
 ---
 
@@ -154,8 +161,8 @@
 | 等级 | 工具 | 风险点 |
 |---|---|---|
 | 🔴 高 | `create_function(kind=polling)` / `edit_function`(改 polling code) | LLM 写 cursor 容易出 race / 漏事件 / 重复;需要平台提供 cursor 模板库 + 详细教学 prompt |
-| 🔴 高 | `edit_workflow`(复杂 ops 数组) | LLM 长程推理弱,5+ 节点 workflow 容易 ops 顺序乱 / 漏 edge / payload schema 不对齐 |
-| 🟡 中 | `get_flowrun_trace` + `query_events` + `get_dead_letter`(多步诊断 chain) | LLM 多次工具调用时"短期记忆"容易丢;需要 TodoCreate 辅助记录 |
+| 🔴 高 | `edit_workflow`(复杂 ops 数组) | LLM 长程推理弱,5+ 节点 workflow 容易 ops 顺序乱 / 漏 edge / payload schema 不对齐 / 画出不可归约回边 |
+| 🟡 中 | `get_flowrun_trace` + `query_events` + `get_failed_step`(多步诊断 chain) | LLM 多次工具调用时"短期记忆"容易丢;需要 TodoCreate 辅助记录 |
 | 🟡 中 | `edit_handler`(改 state 持久化代码) | thread safety / state persistence LLM 容易疏漏;需要 forge 教学 prompt 强约束 |
 | 🟡 中 | `edit_workflow` 改 case 节点(CEL expression) | CEL 不是 LLM 主流训练数据,复杂 expression(null safety / has() / 嵌套)易错 |
 | 🟢 低 | search / get / 简单 create / version 管理 / activate / replay | LLM 做得很顺,已在 Phase 3-4 验证 |
