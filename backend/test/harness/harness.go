@@ -205,11 +205,18 @@ func New(t *testing.T, opts ...Option) *Harness {
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
-	t.Cleanup(func() {
-		if err := dbinfra.Close(gdb); err != nil {
-			t.Logf("close db: %v", err)
-		}
-	})
+	// Deliberately NOT closing the :memory: DB at teardown. Production spawns
+	// fire-and-forget goroutines (autoTitle, subagent reconcile/stop, scheduler
+	// node exec) on detached context.Background() that legitimately outlive a
+	// request; closing the shared conn races them → flaky "database is closed"
+	// under -race. The :memory: DB is reclaimed when the *sql.DB is GC'd at
+	// test-binary exit; each New(t) gets its own fresh isolated DB regardless.
+	//
+	// 故意不在 teardown 关 :memory: DB。生产用 detached context.Background() 起
+	// autoTitle / subagent reconcile/stop / scheduler 节点执行等 fire-and-forget
+	// goroutine,合法地比请求活得久;关共享连接会和它们抢时序 → -race 下偶发
+	// "database is closed"。:memory: DB 在 *sql.DB 被 GC 时(测试二进制退出)自动
+	// 回收;每个 New(t) 仍拿到各自全新隔离的 DB。
 
 	// SQLite :memory: per-connection isolation; force single connection so goroutines share tables.
 	if sqlDB, err := gdb.DB(); err == nil {
