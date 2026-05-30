@@ -33,11 +33,11 @@ func buildAnthropicBodyForTest(t *testing.T, req Request) map[string]json.RawMes
 // ──────────────────────────────────────────────────────────────────────────────
 
 // buildProviderBody is a helper that calls BuildRequest for a named provider
-// and returns the raw JSON body. Works with any Provider — openai and deepseek
-// have their own types; all others are openAICompatProvider.
+// and returns the raw JSON body. Works with any self-contained Provider from
+// the registry.
 //
 // buildProviderBody 用命名 provider 调 BuildRequest，返回原始 JSON body；
-// 适用于所有 Provider 类型（openai/deepseek 为自有类型，其余为 openAICompatProvider）。
+// 适用于 registry 中任何自有 Provider 类型。
 func buildProviderBody(t *testing.T, providerName, baseURL string, req Request) []byte {
 	t.Helper()
 	p, ok := providerRegistry[providerName]

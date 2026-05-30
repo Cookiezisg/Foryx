@@ -37,14 +37,6 @@ type providerClient struct {
 
 func (c *providerClient) Stream(ctx context.Context, req Request) iter.Seq[StreamEvent] {
 	return func(yield func(StreamEvent) bool) {
-		// Apply per-provider Request mutations (e.g. deepseek reasoning strip,
-		// ollama stream-disable) before wire encoding — same point as the old Adapter.
-		//
-		// 在 wire 编码前应用 per-provider Request 变换（如 deepseek 剥 reasoning、
-		// ollama 关流）——与旧 Adapter 的执行位置相同。
-		if p, ok := c.provider.(*openAICompatProvider); ok && p.beforeRequest != nil {
-			p.beforeRequest(&req)
-		}
 		httpReq, err := c.provider.BuildRequest(ctx, req)
 		if err != nil {
 			yield(StreamEvent{Type: EventError, Err: err})
@@ -122,26 +114,6 @@ func buildProviderRegistry() map[string]Provider {
 		"custom": newCustomProvider(),
 	}
 	return reg
-}
-
-// deepseekBeforeRequest enforces DeepSeek's turn-type-dependent reasoning_content round-trip rule.
-// Kept as a package-level function for test coverage; the logic also lives inside
-// deepseekProvider.BuildRequest so the self-contained provider applies it directly.
-//
-// deepseekBeforeRequest 守 DeepSeek 按 turn 类型的 reasoning_content round-trip 规则。
-// 保留为包级函数供测试覆盖；逻辑同样内嵌于 deepseekProvider.BuildRequest。
-func deepseekBeforeRequest(req *Request) {
-	for i := range req.Messages {
-		m := &req.Messages[i]
-		if m.Role != RoleAssistant {
-			continue
-		}
-		// Plain assistant turn: strip; tool-call turn: preserve (V3.2+ requires it).
-		// 纯文字 turn 剥；含 tool_calls turn 保留（V3.2+ 必须）。
-		if len(m.ToolCalls) == 0 {
-			m.ReasoningContent = ""
-		}
-	}
 }
 
 // lookupProvider resolves the Provider for a Config; "custom" + anthropic-compatible

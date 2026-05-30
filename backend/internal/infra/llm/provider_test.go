@@ -66,10 +66,9 @@ func TestLookupProvider_CustomAnthropicCompatRoutesToAnthropic(t *testing.T) {
 }
 
 // ollama has an empty default base URL — the caller must supply base_url,
-// matching resolveBaseURL's required-base-url path. It is now a self-contained
-// ollamaProvider (not openAICompatProvider).
+// matching resolveBaseURL's required-base-url path. Uses self-contained ollamaProvider.
 //
-// ollama 默认 base URL 为空——caller 必须给 base_url；现为自有 ollamaProvider（非 compat）。
+// ollama 默认 base URL 为空——caller 必须给 base_url；使用自有 ollamaProvider。
 func TestLookupProvider_OllamaIsCompatWithEmptyBase(t *testing.T) {
 	p := lookupProvider(Config{Provider: "ollama"})
 	if p.Name() != "ollama" {
@@ -132,12 +131,18 @@ func TestProviderRegistry_DefaultBaseURLs(t *testing.T) {
 	}
 }
 
-// TestDeepseekProvider_StripsReasoningOnPlainTurn asserts that deepseekBeforeRequest
-// removes reasoning_content from a plain (no tool_calls) assistant turn.
+// TestDeepseekProvider_StripsReasoningOnPlainTurn asserts that
+// deepseekProvider.BuildRequest omits reasoning_content from a plain (no
+// tool_calls) assistant turn in the wire body.
 //
-// TestDeepseekProvider_StripsReasoningOnPlainTurn 断言纯 assistant turn 的 reasoning_content 被剥除。
+// TestDeepseekProvider_StripsReasoningOnPlainTurn 断言纯 assistant turn 的
+// reasoning_content 在 wire body 中被剥除。
 func TestDeepseekProvider_StripsReasoningOnPlainTurn(t *testing.T) {
+	p := newDeepSeekProvider()
 	req := Request{
+		ModelID: "deepseek-chat",
+		BaseURL: "https://api.deepseek.com",
+		Key:     "sk-test",
 		Messages: []LLMMessage{
 			{Role: RoleUser, Content: "hi"},
 			{
@@ -148,51 +153,106 @@ func TestDeepseekProvider_StripsReasoningOnPlainTurn(t *testing.T) {
 			{Role: RoleUser, Content: "next"},
 		},
 	}
-	deepseekBeforeRequest(&req)
-	if req.Messages[1].ReasoningContent != "" {
-		t.Errorf("plain assistant turn should have reasoning_content stripped; got %q",
-			req.Messages[1].ReasoningContent)
+	httpReq, err := p.BuildRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
 	}
-	if req.Messages[1].Content != "hello" {
-		t.Errorf("Content should not be touched; got %q", req.Messages[1].Content)
+	var body oaiRequest
+	if err := json.NewDecoder(httpReq.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	// Index 1 = assistant (after system-less prepend: user at 0, assistant at 1, user at 2).
+	// 索引 1 = assistant 消息（无 system，user→0，assistant→1，user→2）。
+	if body.Messages[1].ReasoningContent != "" {
+		t.Errorf("plain assistant turn: reasoning_content must be stripped in wire body; got %q",
+			body.Messages[1].ReasoningContent)
+	}
+	var content string
+	if err := json.Unmarshal(body.Messages[1].Content, &content); err != nil {
+		t.Fatalf("decode content: %v", err)
+	}
+	if content != "hello" {
+		t.Errorf("Content must be preserved; got %q", content)
 	}
 }
 
-// TestDeepseekProvider_PreservesReasoningOnToolCallTurn asserts that deepseekBeforeRequest
-// keeps reasoning_content on an assistant turn that also has tool_calls (V3.2+).
+// TestDeepseekProvider_PreservesReasoningOnToolCallTurn asserts that
+// deepseekProvider.BuildRequest keeps reasoning_content on an assistant turn
+// that also has tool_calls (V3.2+ requirement).
 //
-// TestDeepseekProvider_PreservesReasoningOnToolCallTurn 断言含 tool_calls 的 turn 保留 reasoning_content（V3.2+）。
+// TestDeepseekProvider_PreservesReasoningOnToolCallTurn 断言含 tool_calls 的
+// turn 在 wire body 中保留 reasoning_content（V3.2+ 必须）。
 func TestDeepseekProvider_PreservesReasoningOnToolCallTurn(t *testing.T) {
+	p := newDeepSeekProvider()
 	req := Request{
+		ModelID: "deepseek-chat",
+		BaseURL: "https://api.deepseek.com",
+		Key:     "sk-test",
 		Messages: []LLMMessage{
 			{
 				Role:             RoleAssistant,
 				ReasoningContent: "I should look this up",
-				ToolCalls:        []LLMToolCall{{ID: "c1", Name: "search"}},
+				ToolCalls:        []LLMToolCall{{ID: "c1", Name: "search", Arguments: `{}`}},
 			},
+			{Role: RoleTool, ToolCallID: "c1", Content: "result"},
+			{Role: RoleUser, Content: "ok"},
 		},
 	}
-	deepseekBeforeRequest(&req)
-	if req.Messages[0].ReasoningContent != "I should look this up" {
-		t.Errorf("tool-call turn must preserve reasoning_content (V3.2 requirement); got %q",
-			req.Messages[0].ReasoningContent)
+	httpReq, err := p.BuildRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
+	}
+	var body oaiRequest
+	if err := json.NewDecoder(httpReq.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	if body.Messages[0].ReasoningContent != "I should look this up" {
+		t.Errorf("tool-call turn must preserve reasoning_content (V3.2); got %q",
+			body.Messages[0].ReasoningContent)
 	}
 }
 
-// TestDeepseekProvider_DoesntTouchNonAssistantMessages asserts that deepseekBeforeRequest
-// leaves user and tool messages untouched.
+// TestDeepseekProvider_DoesntTouchNonAssistantMessages asserts that
+// deepseekProvider.BuildRequest leaves user and tool message content intact.
 //
-// TestDeepseekProvider_DoesntTouchNonAssistantMessages 断言非 assistant 消息不受影响。
+// TestDeepseekProvider_DoesntTouchNonAssistantMessages 断言非 assistant 消息内容不受影响。
 func TestDeepseekProvider_DoesntTouchNonAssistantMessages(t *testing.T) {
+	p := newDeepSeekProvider()
 	req := Request{
+		ModelID: "deepseek-chat",
+		BaseURL: "https://api.deepseek.com",
+		Key:     "sk-test",
 		Messages: []LLMMessage{
-			{Role: RoleUser, Content: "hi", ReasoningContent: "should-not-be-touched"},
-			{Role: RoleTool, ToolCallID: "x", Content: "result"},
+			{Role: RoleUser, Content: "hi"},
+			{Role: RoleAssistant, Content: "ok", ToolCalls: []LLMToolCall{{ID: "c1", Name: "x", Arguments: `{}`}}},
+			{Role: RoleTool, ToolCallID: "c1", Content: "result"},
 		},
 	}
-	deepseekBeforeRequest(&req)
-	if req.Messages[0].ReasoningContent != "should-not-be-touched" {
-		t.Errorf("user message reasoning_content should not be modified")
+	httpReq, err := p.BuildRequest(context.Background(), req)
+	if err != nil {
+		t.Fatalf("BuildRequest: %v", err)
+	}
+	var body oaiRequest
+	if err := json.NewDecoder(httpReq.Body).Decode(&body); err != nil {
+		t.Fatalf("decode body: %v", err)
+	}
+	// User message at index 0.
+	// 索引 0 = user 消息。
+	var userContent string
+	if err := json.Unmarshal(body.Messages[0].Content, &userContent); err != nil {
+		t.Fatalf("decode user content: %v", err)
+	}
+	if userContent != "hi" {
+		t.Errorf("user message content must not be modified; got %q", userContent)
+	}
+	// Tool message at index 2.
+	// 索引 2 = tool 消息。
+	var toolContent string
+	if err := json.Unmarshal(body.Messages[2].Content, &toolContent); err != nil {
+		t.Fatalf("decode tool content: %v", err)
+	}
+	if toolContent != "result" {
+		t.Errorf("tool message content must not be modified; got %q", toolContent)
 	}
 }
 

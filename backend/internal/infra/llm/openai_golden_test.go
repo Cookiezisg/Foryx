@@ -198,12 +198,12 @@ func sseServer(body string) *httptest.Server {
 	}))
 }
 
-// collectFromServer points a compat provider at the given server, fires
-// ParseStream, and returns all events. It bypasses BuildRequest to avoid
-// needing an actual body; the provider's SSE parsing is the target.
+// collectFromServer points openaiProvider at the given server, fires ParseStream,
+// and returns all events. It bypasses BuildRequest to avoid needing an actual
+// body; ParseStream is the target.
 //
-// collectFromServer 把 compat provider 指向测试服务器，执行 ParseStream，
-// 返回所有事件。绕过 BuildRequest（SSE 解析才是目标）。
+// collectFromServer 把 openaiProvider 指向测试服务器执行 ParseStream，
+// 绕过 BuildRequest（SSE 解析才是目标）。
 func collectFromServer(t *testing.T, srv *httptest.Server) []StreamEvent {
 	t.Helper()
 	resp, err := http.Get(srv.URL)
@@ -211,7 +211,7 @@ func collectFromServer(t *testing.T, srv *httptest.Server) []StreamEvent {
 		t.Fatalf("http.Get: %v", err)
 	}
 
-	p := newOpenAICompatProvider("test", srv.URL)
+	p := newOpenAIProvider()
 	req := Request{ModelID: "test-model", BaseURL: srv.URL}
 
 	var events []StreamEvent

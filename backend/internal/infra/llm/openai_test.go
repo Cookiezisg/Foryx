@@ -188,7 +188,7 @@ func TestBuildOpenAIBody_SystemPrepended(t *testing.T) {
 			{Role: RoleUser, Content: "Hello"},
 		},
 	}
-	body, err := buildOpenAIBody(req, nil)
+	body, err := buildOpenAIBody(req)
 	if err != nil {
 		t.Fatalf("buildOpenAIBody: %v", err)
 	}
@@ -220,7 +220,7 @@ func TestBuildOpenAIBody_ToolCall(t *testing.T) {
 			{Role: RoleTool, Content: "晴，25°C", ToolCallID: "call_1"},
 		},
 	}
-	body, err := buildOpenAIBody(req, nil)
+	body, err := buildOpenAIBody(req)
 	if err != nil {
 		t.Fatalf("buildOpenAIBody: %v", err)
 	}
@@ -239,7 +239,7 @@ func TestBuildOpenAIBody_ToolCall(t *testing.T) {
 
 func TestBuildOpenAIBody_StreamEnabled(t *testing.T) {
 	req := Request{ModelID: "gpt-4o", Messages: []LLMMessage{{Role: RoleUser, Content: "hi"}}}
-	body, _ := buildOpenAIBody(req, nil)
+	body, _ := buildOpenAIBody(req)
 	var out oaiRequest
 	json.Unmarshal(body, &out)
 	if !out.Stream {
@@ -261,7 +261,7 @@ func TestBuildOpenAIBody_MultiModalUser(t *testing.T) {
 			},
 		}},
 	}
-	body, err := buildOpenAIBody(req, nil)
+	body, err := buildOpenAIBody(req)
 	if err != nil {
 		t.Fatalf("buildOpenAIBody: %v", err)
 	}
@@ -288,7 +288,7 @@ func TestBuildOpenAIBody_ReasoningOnly_PromotedToContent(t *testing.T) {
 			},
 		},
 	}
-	body, err := buildOpenAIBody(req, nil)
+	body, err := buildOpenAIBody(req)
 	if err != nil {
 		t.Fatalf("buildOpenAIBody: %v", err)
 	}
@@ -319,7 +319,7 @@ func TestBuildOpenAIBody_ReasoningWithText_NoPromotion(t *testing.T) {
 			},
 		},
 	}
-	body, _ := buildOpenAIBody(req, nil)
+	body, _ := buildOpenAIBody(req)
 	var out oaiRequest
 	json.Unmarshal(body, &out)
 	var content string
@@ -348,7 +348,7 @@ func TestBuildOpenAIBody_ReasoningWithToolCall_NoPromotion(t *testing.T) {
 			},
 		},
 	}
-	body, _ := buildOpenAIBody(req, nil)
+	body, _ := buildOpenAIBody(req)
 	var out oaiRequest
 	json.Unmarshal(body, &out)
 	var content string
@@ -378,7 +378,7 @@ func TestBuildOpenAIBody_AssistantContentAlwaysEmitted(t *testing.T) {
 			},
 		},
 	}
-	body, _ := buildOpenAIBody(req, nil)
+	body, _ := buildOpenAIBody(req)
 	// Quick string scan since json.RawMessage handling is annoying for
 	// "is this field present" assertions.
 	// 用字符串扫描快速判断字段是否真的 present。

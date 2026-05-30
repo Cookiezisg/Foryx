@@ -12,57 +12,6 @@ import (
 	"strings"
 )
 
-// openAICompatProvider is the shared OpenAI-compatible wire dialect backing
-// every /chat/completions provider (openai, deepseek, qwen, zhipu, moonshot,
-// doubao, openrouter, google's compat surface, ollama, custom). One copy of
-// the body/SSE logic; per-provider identity (name + base URL) is injected.
-// beforeRequest is an optional hook for per-provider Request mutations applied
-// before BuildRequest (e.g. deepseek reasoning strip, ollama stream-disable).
-// thinkingEncoder is an optional hook for encoding ThinkingSpec into the wire
-// body; nil = emit no thinking fields (default behavior — critical for P3).
-//
-// openAICompatProvider 是所有 /chat/completions provider 共用的 OpenAI-compat
-// wire 方言。body/SSE 逻辑只此一份；per-provider 身份（name + base URL）注入。
-// beforeRequest 是可选的 per-provider Request 变换钩子，在 BuildRequest 前执行。
-// thinkingEncoder 是可选的 thinking 编码钩子；nil = 不发 thinking 字段（默认）。
-type openAICompatProvider struct {
-	name            string
-	defaultBaseURL  string
-	beforeRequest   func(*Request)                    // nil if no per-provider mutation needed
-	thinkingEncoder func(*oaiRequest, *ThinkingSpec)  // nil = no thinking fields
-}
-
-func newOpenAICompatProvider(name, defaultBaseURL string) *openAICompatProvider {
-	return &openAICompatProvider{name: name, defaultBaseURL: defaultBaseURL}
-}
-
-func (p *openAICompatProvider) Name() string           { return p.name }
-func (p *openAICompatProvider) DefaultBaseURL() string { return p.defaultBaseURL }
-
-func (p *openAICompatProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
-	body, err := buildOpenAIBody(req, p.thinkingEncoder)
-	if err != nil {
-		return nil, fmt.Errorf("llm.%s: build body: %w", p.name, err)
-	}
-	httpReq, err := http.NewRequestWithContext(
-		ctx, http.MethodPost, req.BaseURL+"/chat/completions", bytes.NewReader(body))
-	if err != nil {
-		return nil, fmt.Errorf("llm.%s: new request: %w", p.name, err)
-	}
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+req.Key)
-	return httpReq, nil
-}
-
-func (p *openAICompatProvider) ParseStream(ctx context.Context, resp *http.Response, req Request) iter.Seq[StreamEvent] {
-	return func(yield func(StreamEvent) bool) {
-		if req.DisableStream {
-			parseOpenAINonStreaming(resp.Body, yield)
-		} else {
-			parseOpenAISSE(ctx, resp.Body, yield)
-		}
-	}
-}
 
 // parseOpenAINonStreaming reads a single non-streaming JSON body into StreamEvents.
 //
@@ -279,7 +228,13 @@ func emitOpenAIChunk(chunk oaiChunk, state *toolCallState, yield func(StreamEven
 	return true
 }
 
-func buildOpenAIBody(req Request, thinkingEncoder func(*oaiRequest, *ThinkingSpec)) ([]byte, error) {
+// buildOpenAIBody serializes a Request into the OpenAI /chat/completions wire
+// body (model, messages, tools, stream, stream_options). Used by openaiProvider
+// and shared-body tests; thinking encoding is handled per-provider in BuildRequest.
+//
+// buildOpenAIBody 把 Request 序列化为 OpenAI /chat/completions wire body。
+// thinking 编码由各 provider 的 BuildRequest 自行处理。
+func buildOpenAIBody(req Request) ([]byte, error) {
 	// TE-25: sanitize tool_call ↔ tool_result pairing — orphans → 400 lockout.
 	// TE-25：sanitize 配对，orphan 会 400 锁对话。
 	req.Messages = SanitizeMessages(req.Messages)
@@ -297,18 +252,6 @@ func buildOpenAIBody(req Request, thinkingEncoder func(*oaiRequest, *ThinkingSpe
 	}
 	if len(req.Tools) > 0 {
 		body.Tools = toOpenAITools(req.Tools)
-	}
-	// Apply per-provider thinking encoding when spec is non-nil and encoder is
-	// registered. nil spec = auto = no-op (byte-identical to old behaviour).
-	// Qwen guard: enable_thinking=true requires stream:true — skip encoding if
-	// the request is already forced to non-streaming (DisableStream=true).
-	//
-	// spec 非 nil 且 encoder 已注册时编码 thinking；spec=nil 即 auto，不发任何字段。
-	// Qwen 守卫：enable_thinking=true 必须 stream=true；非流式时跳过编码。
-	if req.Thinking != nil && thinkingEncoder != nil && req.Thinking.Mode != "auto" {
-		if !(req.DisableStream && req.Thinking.Mode == "on") {
-			thinkingEncoder(&body, req.Thinking)
-		}
 	}
 	return json.Marshal(body)
 }
@@ -601,16 +544,6 @@ type oaiUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
 }
-
-// ── Per-provider thinking encoders ───────────────────────────────────────────
-//
-// Each encoder is registered as openAICompatProvider.thinkingEncoder.
-// Called only when ThinkingSpec is non-nil and Mode != "auto".
-// Mode="off" emits the provider's explicit-disable form.
-// Mode="on"  emits the provider's enable form with Effort/Budget.
-//
-// 每个 encoder 注册为 openAICompatProvider.thinkingEncoder。
-// 仅在 ThinkingSpec 非 nil 且 Mode != "auto" 时调用。
 
 // clampEffort returns spec.Effort if it appears in allowed; otherwise returns
 // fallback. Empty spec.Effort also returns fallback.
