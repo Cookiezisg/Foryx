@@ -121,6 +121,27 @@
 
 ---
 
+## §5.5 Round-4:API-only 怎么把复杂建推更高(7 实验)
+
+> 约束:deepseek 是直接 API(不能自部署约束解码、不能微调 v4-flash)。靶子:复杂 create_workflow(R3 首发 52%)。过程在 `research-archive/round4-api-optimization-notes.md`。
+
+**枢纽发现:模型的"结构"已做对 ~95-100%**(when 守卫/不悬空/终止分支/重试 emit);复杂建那 ~50% 差距**全在语义架构决策**(agent-vs-function、polling-vs-cron、case 别当分析师、多字段守卫、每路径有动作)。
+
+**7 个 API-only 杠杆,按 paired lift × ROI:**
+| 杠杆 | paired lift | 成本 |
+|---|---|---|
+| few-shot gold 示例(1 例进 prompt)| **~+11pt** | ~免费 🥇 |
+| GEPA 架构守则教学(我当 mutator 进化教学)| **+10pt**(n=20)| ~免费 🥈 |
+| 自一致性(采 N 挑众数结构)| **+7pt** | N× 采样 |
+| reflexion 自审一轮 | **+7pt** | 1 轮 |
+| best-of-N(结构选择器)| +3pt | N× 采样 |
+| 模型分层(reasoner R1)| +3pt | **10× 成本 ❌ 不值** |
+| `:iterate` 回路(建→改)| **67% 正确 / 96% 不破坏** | 1 轮 |
+
+**结论**:① **能动语义的杠杆都便宜(示例/守则/采样/自审 各 +7~11pt);贵的更强模型反而没用(+3@10×)**——差距是 Forgify 约定不是原始智能,强通用模型不更懂 Forgify。② **DeepSeek API 有 `strict:true`**(beta,服务端约束 args 匹配 schema,有畸形-JSON bug → 配 JSON-repair)= 结构侧的 API 版约束解码。③ **绝对判官分 run-to-run 抖 ±15pt(LLM-judge 宽严方差,文献证实)→ 只信 paired lift。** ④ 又抓 1 个 artifact(我的结构验证器误判终止分支)→ 累计 11 个自查纠正。
+
+---
+
 ## §6 怎么复现(框架文件)
 
 实验框架在 `research/llm-experiments/`:

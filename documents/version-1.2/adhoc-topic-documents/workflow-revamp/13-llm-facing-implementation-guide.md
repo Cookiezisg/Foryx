@@ -156,6 +156,21 @@ config:
 
 ---
 
+## §4.5 API-only 把复杂建首发推更高(Round-4 实测,不自部署/不微调)
+
+复杂建首发的差距**全在语义架构决策**(模型的结构已 ~95-100% 对)。纯 API 手段,按性价比叠加:
+
+- **🥇 系统 prompt 里放 1 个 gold 示例**(展示 case+when+retry+approval+cron-fetch 的完整正确 workflow)→ 实测 **~+11pt**,最便宜。**演示 > 说教。**
+- **🥈 加"架构决策守则"教学**(agent-vs-function / polling-vs-cron / case 别当分析师 / 每路径有动作 / 多字段守卫用 && 组合)→ **+10pt**,与 gold 示例互补。
+- **🥉 复杂建时采 N 个候选挑"众数结构"(自一致性)**→ **+7pt**;或 **forge 后加一轮自审**(对照需求查实体类型/悬空/capability_check)→ **+7pt**。
+- **❌ 别上更强模型**:deepseek-reasoner(R1)只 +3pt 却 **10× 成本**——差距是 Forgify 约定不是原始智能,强通用模型不更懂 Forgify。**模型分层对领域 forge 不划算。**
+- **结构侧**:DeepSeek API 有 `strict:true` 函数调用(beta 端点,服务端约束 args 匹配 schema)= API 版约束解码,配 §1-C 的 JSON-repair 兜它的畸形-JSON bug。
+- **叠加预期**:gold 示例 + 架构守则进 prompt,复杂建时自一致性采样 + 自审 → 复杂建可上 85%+;剩下靠 §4 的 `:iterate` 对话兜(实测改一次正确 67%、96% 不破坏其余)。
+
+> ⚠️ 别被单次判官分误导:绝对正确率 run-to-run 抖 ±15pt(LLM-judge 宽严方差);上面是实验内部 paired lift。
+
+---
+
 ## §5 实施清单(改哪个文件 / 建什么)
 
 | 改动 | 落到哪 |

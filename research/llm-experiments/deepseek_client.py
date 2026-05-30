@@ -261,6 +261,7 @@ def chat_complete(
     timeout: float = 60.0,
     max_retries: int = 3,
     disable_thinking: bool = False,
+    model: str = MODEL_FLASH,
 ) -> ChatResult:
     """Call DeepSeek V4-flash chat completion with retries + cost tracking.
 
@@ -272,7 +273,7 @@ def chat_complete(
         raise BudgetExhausted(f"Pre-call budget check failed: ¥{cumulative_cost_rmb():.2f}")
 
     payload: dict[str, Any] = {
-        "model": MODEL_FLASH,
+        "model": model,
         "messages": messages,
     }
     if temperature is not None:
