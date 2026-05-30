@@ -19,7 +19,7 @@
 
 | 调用方式 | args 谁组装 | 谁决定调用 |
 |---|---|---|
-| **tool 节点(流程直接调)** | 编排时静态填(支持模板插值) | workflow 流程 |
+| **tool 节点(流程直接调)** | 编排时静态填(每个 arg 值是裸 CEL 表达式) | workflow 流程 |
 | **agent 节点 tool 挂载(LLM 调)** | LLM 临场组装 | LLM 自治 |
 
 ---
@@ -30,12 +30,12 @@
 type: tool
 config:
   callable: <ref>          # 见下方 ref 语法
-  args: {...}               # 读其前驱节点的输出 / payload / ctx(程序数据流),支持模板插值
+  args: {...}               # 每个 arg 值是一个裸 CEL 表达式,读 payload / ctx 求值出类型化值(count: payload.x + 1 → 数字 6,不是字符串 "6")
   retry: { maxAttempts: 3, backoff: "exponential" }  # 可选,不填 = 0 次,失败立即通知
   timeout: <duration>                                # 可选,不填 = 永不超时
 ```
 
-**args 数据流(durable 语义)**:tool 节点读**其前驱节点已记账的输出**(以及该 flowrun 的 payload / ctx)组装 args。这是程序数据流——值在节点间传递、记进日志,不是"从邮箱里取一条消息"。
+**args 数据流(durable 语义)**:每个 arg 的值是一个**裸 CEL 表达式**,读其前驱节点已记账的输出(以及该 flowrun 的 payload / ctx)**求值出类型化值** —— 如 `count: payload.x + 1` 产出数字 `6`,不是字符串 `"6"`。这是程序数据流——值在节点间传递、记进日志,不是"从邮箱里取一条消息";求值字段用裸 CEL(不走 `{{ }}` 模板插值),详 [`04-case-node.md`](./04-case-node.md) 表达式语言段。
 
 **retry 行为**(跟 [`07-error-handling.md`](./07-error-handling.md) 一致):
 - 这是一个 activity;失败按 `retry` 配置**重跑该 activity**(重放跳过已记账的步骤,只重跑这一个未完成的)。

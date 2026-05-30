@@ -84,6 +84,17 @@ Forgify 是 **嵌入式、跑在自带 SQLite 上的 durable execution 引擎**(
 
 ---
 
+## 表达式语言:全平台一套 CEL
+
+整个 workflow 平台只有**一套表达式语言 = CEL**。按字段输出类型分两种用法,**由字段类型定死,作者不用选**:
+
+- **求值 / 布尔字段**(`case.when`、`case.emit` 的字段值、`tool.args` 的字段值)→ **裸 CEL**,产出类型化值(如 `payload.x + 1` 出数字 `6`)。
+- **文本文档字段**(`agent.prompt`、`approval.prompt`)→ **模板串 `{{ CEL }}`**(`{{ }}` 里是 CEL,求值后字符串化插入)。
+- `{{ }}` 不是第二种语言,**只是 CEL 的插值定界符**。Go `text/template` 作为语言整个退役(无 `if`/`range`/`funcMap` 控制流);列表拼字符串用 CEL 函数一行(如 `payload.items.map(i, i.name).join(...)` 出逗号串)。
+- **实现**:`backend/internal/app/workflow/expression.go`(原 `text/template`)退役 → 一个 CEL 求值核心 + 一个薄的 `{{ CEL }}` 插值 pass。详 [`04-case-node.md`](./04-case-node.md)。
+
+---
+
 ## 并发模型:fork-join(结构化并行)
 
 - **fan-out = 普通节点多条出边 = 把同一份输出广播给每条下游分支,分支并发跑**(进程内 goroutine)。
@@ -185,7 +196,7 @@ Forgify 重启
 > 所有"X 引用 Y"的关系,**Y 永远是 active version**。无 version pinning,没有 `@v3`。
 - 改 Y → 所有引用 X 自动跟新;revert Y → 跟着回滚。
 - forge entity 加 kind 字段(如 function 的 `normal`/`polling`)——**kind 是 version 级**。
-- Workflow accept 时 capability check 校验"引用需要 vs active version 实际 kind",不匹配 → accept 失败 / 标 needs_attention。
+- Workflow accept 时 capability check 校验"引用需要 vs active version 实际 kind",不匹配 → accept 失败 / 标 needs_attention。**capability-check 不只查存在,还查 kind/method/必填参数齐(handler 的 `.method` 在 active version 还在、node/agent 给了必填参数值);报全部问题 + 每条带 next_step,不首违规即短路;被引用实体改了 active version(kind/签名)时反向重查依赖方、标 needs_attention + 通知。** 详 [`11-integration-chains.md`](./11-integration-chains.md) §E3(CANON-X2)。
 - AI 工程师角色:改 entity 前主动告诉用户"这影响 workflow A/B/C"。
 - 跟 K8s deployment "所有 pod 用同一 image" 心智一致 —— 简单 > 灵活,本地单用户无 SaaS 级 pin 必要。
 - (注:`FlowRun.version_id` 钉住**图拓扑**的版本,保证一次执行内图结构稳定;但被引用的 callable(fn_/hd_/ag_)按"永远 prod"在调用时解析到 active version。长跑/挂起重启后可能跑到改过的 callable——这是"永远 prod"刻意的修复回路属性,编排者改 callable 时应保证幂等。)

@@ -95,6 +95,25 @@ type AgentVersion struct {
 
 ---
 
+## outputSchema 运行时强制
+
+forged agent 跑时,平台**强制**其声明的 outputSchema(声明即 schema-pin,见 13 的 G10)。两层:
+
+- **第一层(可选 / 机会主义)**:provider 原生结构化输出 —— OpenAI `response_format` / Anthropic 强制 tool-use / Gemini `responseSchema` / DeepSeek `strict:true`。**能用就用,但替代不了第二层**。
+- **第二层(必建,研究全程靠它)**:agent-run 那薄层做四步 —— JSON-repair(G1)→ 按 outputSchema 校验 → 不合规则回喂带 `next_step` 的结构化错误(G7)→ 重试 ~2 轮(G8:17 → 71 → 88 的 plateau)→ 用尽 = 该 activity 失败(走 07 的失败语义)。
+
+**校验范围**:只对 `enum` / `json_schema` 校验;`free_text` 不校。
+
+**作用层**:只在 **forged-agent run 那层** —— workflow agent 节点 / `run_agent` 试跑 / tool 节点调 agent。通用 `loop.Run` 引擎与 chat 老板**不碰**这套强制。
+
+**默认参数**:agent run 默认 `max_tokens >= 16000`(G2,防截断被误判为不合规)、`thinking` 开(G3,复杂结构化任务别关 thinking)。
+
+**为什么不可怕**:`enum` 输出本是模型强项(~100%),最常见的 **agent → case** 路本就基本可靠;这是接进已验证的第二层 + schema-pin 声明(G10),**不是造大型原生结构化系统**。运行时残留由 N1(agent 真吐合规值)+ case guard 的 fail-to-false(G9)兜。
+
+> 交叉引用 [`13-llm-facing-implementation-guide.md`](./13-llm-facing-implementation-guide.md) / [`14-llm-validation-research-record.md`](./14-llm-validation-research-record.md) 的 G1 / G2 / G3 / G7 / G8 / G10。
+
+---
+
 ## Model 配置
 
 `(apikey, modelId)` 二元组。Fallback 链:

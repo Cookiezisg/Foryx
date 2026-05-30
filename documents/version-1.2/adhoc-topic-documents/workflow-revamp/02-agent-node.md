@@ -33,6 +33,8 @@ config:
 4. 跑 LLM ReAct loop(像 chat 主 agent 一样)
 5. **产出结果**(按 outputSchema 约束),**记进事件日志**,**传给下游节点**(下游沿图的出边读到本节点的输出)
 
+> 注:agent.prompt 是 `{{ CEL }}` 模板字符串(`{{ }}` 内为 CEL,求值后字符串化插入),详 [`04-case-node.md`](./04-case-node.md) 表达式语言段。
+
 ---
 
 ## 跟 tool 节点的关系

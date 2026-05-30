@@ -263,15 +263,15 @@ inst := handlerRegistry.Acquire(ctx, owner, name, spawnFn)
 - listener 类型节点的 payloadSchema 由 kind 固定(cron `{firedAt}` / webhook `{method, headers, body}` 等)
 - manual 节点的 payloadSchema 编排者拍
 
-**E3. Capability check on accept**
+**E3. Capability check on accept(CANON-X2:no-pin 下唯一护栏,查深)**
 
-`internal/app/workflow/crud.go` `:accept` 前:
+no-pin(永远 prod)下没有 version 钉,**capability-check 是唯一护栏,要查深**。`internal/app/workflow/crud.go` `:accept` 前 + agent.tools 挂载时:
 
-- 扫 trigger 节点的 callable ref(polling 引用的 fn_xxx)
-- 拉 ref 的 active version
-- 若 trigger 节点要求 kind=polling 但 active=normal → accept 失败 / 标 needs_attention
+- **检查项**(4 条):存在 + kind 匹配(polling/normal 等)+ handler 的 `.method` 在 active version 还在 + 必填参数齐(node/agent 给了值 → 查有无给值,**不查类型**)。**砍掉 full payload 类型流**(payload 动态无类型,太难;运行时由 N1 + case 的 fail-to-false(G9)兜)。
+- **报全 + next_step**:遍历各节点引用的 fn_/hd_/ag_,**报全部问题、每条带 `next_step`,不首违规就短路**(详 [13](./13-llm-facing-implementation-guide.md) §1-E / [14](./14-llm-validation-research-record.md) G8;端到端实测真查-ref 版 capability_check 0/24 → 23/24 接对)。
+- **两个触发点**:(a) **accept 时 gate**——workflow 节点引用 + `agent.tools` 挂载引用都查;(b) **被引用实体改了 active version(kind/签名)时反向重查依赖方**——标 `needs_attention` + 通知,**复用现有 capability-deletion listener**(从"删"扩到"改")。
 
-> 注:capability check 必须**真查 ref**(遍历各节点引用的 fn_/hd_/ag_,有引用但不存在的报缺失 + `next_step`),否则模型不知道接错了、没法修(详 [13](./13-llm-facing-implementation-guide.md) §1-E / [14](./14-llm-validation-research-record.md) G8;端到端实测真查-ref 版 23/24 接对)。这跟执行底盘无关,durable 改向不影响这条。
+> 这跟执行底盘无关,durable 改向不影响这条。
 
 ---
 
@@ -337,6 +337,8 @@ inst := handlerRegistry.Acquire(ctx, owner, name, spawnFn)
 
 **这是最大单点改造,但规模比旧 message-queue 引擎小**(无需写队列 infra + actor 调度 + 消息状态机 + 原子认领):**~1000-1800 行**(解释器 + journal 记账 + 重放 + fork-join + CEL 求值接 [04](./04-case-node.md))。
 
+> **表达式语言(CANON-N2)**:全平台一套表达式语言 = CEL。`internal/app/workflow/expression.go`(Go text/template)**整个退役**(无 if/range/funcMap 控制流)→ 换成**一个 CEL 求值核心**(求值/布尔字段裸 CEL,产出类型化值)+ **一个薄的 `{{ CEL }}` 插值 pass**(文本文档字段如 agent.prompt / approval.prompt,`{{ }}` 里是 CEL、求值后字符串化插入)。`{{ }}` 不是第二种语言、只是 CEL 的插值定界符;列表拼字符串用 CEL 函数一行(如 `payload.items.map(i,i.name).join`)。详 [04](./04-case-node.md)。
+
 旧脑爆稿的这些机制**由构造消失,不要再写**:
 
 | 旧机制(作废) | durable 下取代物 |
@@ -352,7 +354,7 @@ inst := handlerRegistry.Acquire(ctx, owner, name, spawnFn)
 | 节点 | 解释器怎么处理 |
 |---|---|
 | `trigger` | 程序入口:用 trigger 的 payload + ctx 起跑(不是 activity),append 首条事件 |
-| `agent` | **activity**:调 agent domain `Run(prompt, tools, knowledge, model)`(详 [02](./02-agent-node.md) + [09](./09-agent-domain.md))→ 结果记 journal |
+| `agent` | **activity**:调 agent domain `Run(prompt, tools, knowledge, model)`(详 [02](./02-agent-node.md) + [09](./09-agent-domain.md))→ 结果记 journal。**forged agent run 强制其声明的 `outputSchema`**(CANON-N1:agent-run 薄层做 JSON-repair → 按 schema 校验 → 回喂带 next_step 的结构化错误 → 重试 ~2 轮 → 用尽=该 activity 失败;只校 enum/json_schema、free_text 不校;详 [09](./09-agent-domain.md))|
 | `tool` | **activity**:解 ref(永远 active version)→ 调 callable(fn/hd/mcp/agent)→ 结果记 journal |
 | `case` | **纯控制流**:读已记账 payload 求 CEL → 选分支 / 绕回边,记 `branch_taken`(详 [04](./04-case-node.md)) |
 | `approval` | **durable 等信号**:记 `signal_awaited` + 写 `approvals` 行 + 挂起;用户决策 = 一条 `signal_received` 事件,重放/在线都从此处继续(详 [05](./05-approval-node.md)) |
