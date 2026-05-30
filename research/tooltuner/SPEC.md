@@ -17,23 +17,22 @@ research/tooltuner/
     gen.workflow.js            #   场景生成 Workflow(泛化 wf_gen_r3;可被 critic 质疑多样性)
     judge.workflow.js          #   判官 Workflow(泛化 wf_judge_r3;按"当前轴集"判,轴可扩)
     memory.py                  #   读写 target 记忆 + schema 守门
-  targets/
-    forgify/                   # ① 记忆:第一个 target(三层,见 §2)
-      ── 当前真相(人入口,大小不随轮数涨)──
-      STATE.md                 #   此刻快照:每工具每轴现分 + 当前 best + 待办 top + 已转 N 轮(每轮末重生成)
-      CONCLUSIONS.md           #   durable 结论:已证真理(G 式)/ known-good / 别再 re-litigate
-      ROUNDS.md                #   轮次索引:一轮一行(NNNN·日期·目标·头条·花费)
-      ── 交付物 + 活状态 ──
-      surfaces/                #   当前 best LLM-facing 面:tools.json / system_prompt.md / teaching.md / examples.md / grouping.json
-      axes.json                #   当前质量维度集(起步 selection/usage;可加)
-      backlog.json             #   活的待办:open[] + known_good[]
-      recommendations.md       #   设计级建议(拆/并/删/加/重设计 schema)——给人,不自动改
-      changelog.md             #   只记"被采纳的 surface 改动"(交付物 provenance,短)
-      scores.jsonl             #   机器读时间序列:每轮每工具每轴(喂趋势,人不读)
-      config.json              #   被测模型 / backend / domain hint / judges_n
-      ── 过程(不可变胶囊,可 GC)──
-      rounds/0001/             #   round.md(统一模板)/ scenarios.json / traces/ / verdicts.json
-            0002/ ...
+  target/                      # ① 记忆:被优化的 Forgify 工具集(三层,见 §2)
+    ── 当前真相(人入口,大小不随轮数涨)──
+    STATE.md                   #   此刻快照:每工具每轴现分 + 当前 best + 待办 top + 已转 N 轮(每轮末重生成)
+    CONCLUSIONS.md             #   durable 结论:已证真理(G 式)/ known-good / 别再 re-litigate
+    ROUNDS.md                  #   轮次索引:一轮一行(NNNN·日期·目标·头条·花费)
+    ── 交付物 + 活状态 ──
+    surfaces/                  #   当前 best LLM-facing 面:tools.json / system_prompt.md / teaching.md / examples.md / grouping.json
+    axes.json                  #   当前质量维度集(起步 selection/usage;可加)
+    backlog.json               #   活的待办:open[] + known_good[]
+    recommendations.md         #   设计级建议(拆/并/删/加/重设计 schema)——给人,不自动改
+    changelog.md               #   只记"被采纳的 surface 改动"(交付物 provenance,短)
+    scores.jsonl               #   机器读时间序列:每轮每工具每轴(喂趋势,人不读)
+    config.json                #   被测模型 / backend / domain hint / judges_n
+    ── 过程(不可变胶囊,可 GC)──
+    rounds/0001/               #   round.md(统一模板)/ scenarios.json / traces/ / verdicts.json
+          0002/ ...
   PLAYBOOK.md                  # ③ 方法论文档:AI 跑一轮前读它(见 §4;不是 skill,就是 md)
   PRD.md
   SPEC.md

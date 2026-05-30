@@ -15,11 +15,10 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-TARGETS = ROOT / "targets"
 
 
-def target_dir(name: str = "forgify") -> Path:
-    return TARGETS / name
+def target_dir() -> Path:
+    return ROOT / "target"
 
 
 def _now() -> str:

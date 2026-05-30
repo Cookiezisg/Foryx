@@ -2,7 +2,7 @@
 
 > 你(Claude Code agent)是飞轮的司机。读完这篇,你就能对一个 target 推一轮 = 一次实验。
 > 不是 skill,不自动加载;用户让你「读 research/tooltuner/,跑一轮」时,你读它。
-> 背景见 `PRD.md`(为啥)/ `SPEC.md`(架构 + 数据契约)。被测:`targets/<name>/config.json` 的模型。
+> 背景见 `PRD.md`(为啥)/ `SPEC.md`(架构 + 数据契约)。被测:`target/config.json` 的模型。
 
 ---
 
@@ -31,7 +31,7 @@
 ## 2. 一轮 = 两个动作(全篇的纲)
 
 ### ① 想得宽(imagine — 无边界)
-读 `targets/<name>/STATE.md` + `backlog.json` + `axes.json`。**挑一个实验**,来源不限于低分:
+读 `target/STATE.md` + `backlog.json` + `axes.json`。**挑一个实验**,来源不限于低分:
 - `weak` 可疑低分(**先验真假**,多半是测量假象)· `hunch` 好工具能不能更好 · `reprobe` 复核旧分
 - `transfer` 把某个赢搬给兄弟工具 · `lever` 没试的杠杆(few-shot / 架构守则 / 自一致 / reflexion)
 - `coverage`/`scenario_gap` 盲区 · `redesign` 工具该拆/并/删/加/schema 重设计 · `new_axis` 新维度(效率/校准…)

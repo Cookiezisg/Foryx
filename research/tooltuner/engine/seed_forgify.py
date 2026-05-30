@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT.parent / "llm-experiments"))
 import spec_catalog as sc  # noqa: E402
 
-TARGET = ROOT / "targets" / "forgify"
+TARGET = ROOT / "target"
 SURF = TARGET / "surfaces"
 
 # the 6 lazy domain groups (validated domain-6 > 11-split); rest is resident.

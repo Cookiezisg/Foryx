@@ -14,7 +14,7 @@ import memory as mem
 import model_client as mc
 import run_model
 
-td = mem.target_dir("forgify")
+td = mem.target_dir()
 rd = Path(tempfile.mkdtemp()) / "0000"
 (rd / "traces").mkdir(parents=True)
 

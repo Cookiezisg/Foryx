@@ -30,7 +30,7 @@ BAD = "def calc(x):\n    return x * 3"  # harness asserts ==6 → fails
 def main() -> None:
     td = Path(tempfile.mkdtemp()) / "forgify"
     # minimal target (copy just what run_model needs from the real seed)
-    real = mem.target_dir("forgify")
+    real = mem.target_dir()
     (td / "surfaces").mkdir(parents=True)
     for f in (real / "surfaces").glob("*"):
         (td / "surfaces" / f.name).write_text(f.read_text())

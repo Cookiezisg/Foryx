@@ -13,7 +13,7 @@
 | `PRD.md` | 为啥做、做成啥样(产品) |
 | `SPEC.md` | 怎么搭(架构 + 三层记忆数据契约) |
 | `engine/` | 零件:`memory` `model_client` `run_model` `score` `ab` + `gen`/`judge` Workflow |
-| `targets/forgify/` | 第一个 target(被优化的 91 工具 + 三层记忆) |
+| `target/` | 被优化的 Forgify 工具集(91 工具 + 三层记忆) |
 
 ## 状态
 - ✅ 建成 + 验证:`python3 engine/smoke_mock.py`(零 token 管线自测)· `python3 engine/smoke_live.py`(1 次真 DeepSeek,~¥0.002,全链路通)
