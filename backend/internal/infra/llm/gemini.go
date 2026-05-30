@@ -442,7 +442,7 @@ func encodeGeminiThinking(modelID string, spec *ThinkingSpec) *geminiThinkingCon
 			cap := modelcapspkg.Lookup("google", modelID)
 			budget = cap.BudgetMax
 			if budget == 0 {
-				budget = 8192 // sane default when the model has no budget ceiling on record
+				budget = -1 // dynamic: let Gemini self-pace thinking, vs a flat 8192 that can starve the visible answer
 			}
 		}
 		return &geminiThinkingConfig{ThinkingBudget: &budget, IncludeThoughts: true}

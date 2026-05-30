@@ -74,6 +74,8 @@ type Manager struct {
 
 	calMu sync.Mutex
 	cal   map[string]float64
+
+	nilCapOnce sync.Once
 }
 
 // New wires Manager dependencies; panics on nil log; nil resolveLLM disables fullCompact.

@@ -180,8 +180,18 @@ func Run(
 	}
 
 	if !finalWritten {
-		stopReason = chatdomain.StopReasonMaxTokens
-		host.WriteFinalize(ctx, allBlocks, chatdomain.StatusCompleted, stopReason, "", "", totalIn, totalOut)
+		// maxSteps exhausted while the model still wanted to act. Surface this
+		// honestly — a non-success terminal + a distinct stop_reason — instead of
+		// masquerading as a completed turn. The work isn't lost; the UI offers
+		// "continue" off the MAX_STEPS_REACHED errCode to resume the same conversation.
+		//
+		// maxSteps 耗尽但模型还想动作。诚实暴露——非成功终态 + 独立 stop_reason，
+		// 不再冒充 completed。工作没丢；UI 凭 MAX_STEPS_REACHED 提供「继续」续跑同会话。
+		stopReason = chatdomain.StopReasonMaxSteps
+		finalStatus = chatdomain.StatusError
+		errCode = "MAX_STEPS_REACHED"
+		errMsg = fmt.Sprintf("reached the step limit (%d) before finishing; continue to resume", maxSteps)
+		host.WriteFinalize(ctx, allBlocks, finalStatus, stopReason, errCode, errMsg, totalIn, totalOut)
 	}
 
 	return Result{

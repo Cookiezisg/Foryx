@@ -25,6 +25,15 @@ func (m *Manager) estimate(ctx context.Context, conv *convdomain.Conversation, b
 	if m.capFor != nil {
 		cap = m.capFor(ctx, provider, modelID)
 	} else {
+		// No capability resolver wired → every model is sized as the conservative
+		// 32K/8K fallback, which silently compacts a 200K/1M model far too early.
+		// Warn once so this wiring regression is visible (must never happen in prod).
+		//
+		// 未注入 capability resolver → 所有模型按 32K/8K 兜底，会把 200K/1M 模型远
+		// 过早压缩。警告一次让此装配回归可见（生产不应发生）。
+		m.nilCapOnce.Do(func() {
+			m.log.Warn("contextmgr: no CapabilityResolver wired; using conservative 32K/8K fallback — large models will compact far too early")
+		})
 		cap = conservativeDefault
 	}
 	usable = cap.UsableInput()

@@ -164,6 +164,8 @@ func (s *Service) Spawn(parentCtx context.Context, typeName, prompt string, opts
 		spawn.ErrorMsg = runErr.Error()
 	case result.StopReason == chatdomain.StopReasonCancelled:
 		spawn.Status = StatusCancelled
+	case result.StopReason == chatdomain.StopReasonMaxSteps:
+		spawn.Status = StatusMaxTurns
 	case result.StopReason == chatdomain.StopReasonMaxTokens:
 		spawn.Status = StatusMaxTurns
 	case result.Status == chatdomain.StatusError:

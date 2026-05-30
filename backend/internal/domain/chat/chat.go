@@ -74,6 +74,13 @@ var AllStatuses = []string{
 const (
 	StopReasonEndTurn   = "end_turn"
 	StopReasonMaxTokens = "max_tokens"
+	// StopReasonMaxSteps: the agent loop hit its step ceiling before finishing —
+	// a non-success terminal, surfaced honestly (vs the old masquerade as
+	// completed+max_tokens) so the UI can offer "continue".
+	//
+	// StopReasonMaxSteps：agent 循环未完成就撞到步数上限——非成功终态，诚实暴露
+	//（旧实现冒充 completed+max_tokens），让 UI 提供「继续」。
+	StopReasonMaxSteps  = "max_steps"
 	StopReasonCancelled = "cancelled"
 	StopReasonError     = "error"
 )
