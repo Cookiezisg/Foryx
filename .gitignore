@@ -239,6 +239,8 @@ backend/lintprompts
 backend/fakeserver
 backend/fetch-mise.exe
 backend/coverage-matrix
+backend/doc-lint
+backend/doc-matrix
 
 # Test artifacts
 .env
