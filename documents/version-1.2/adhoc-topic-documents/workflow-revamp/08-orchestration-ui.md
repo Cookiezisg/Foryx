@@ -6,6 +6,8 @@
 > **本 doc 不细抠视觉**——直接沿用 Forgify 现有 `frontend/src/features/workflow-edit/ui/WorkflowEditor.tsx` + `pages/forge/ui/WorkflowDetail.tsx` 的形态。
 > 只列**新设计对画布的功能性影响**(node palette / inspector / 触发入口 / 运行时滴答 / chat 协作)。
 > UI 细节后续优化。
+>
+> **但 V1 前端 bar = 功能可用 + 可测**(不是"随便糊一下"):本 doc 列的每个功能点(5 节点 palette / inspector 字段 / lifecycle 开关 / ▶ 触发 / 运行时滴答 / inline diagnostic)都要**真能用、能端到端点通**,并留**最小可测路径**(关键交互可被 vitest / 手动冒烟覆盖)。视觉抛光与 subpage 右栏精细化留**未来前端重构**;但"功能可用 + 可测"是 V1 硬要求。
 
 ---
 
