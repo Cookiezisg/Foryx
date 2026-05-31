@@ -282,6 +282,25 @@ func TestCancel_CancelsRunningCtx(t *testing.T) {
 	}
 }
 
+// An approval-parked run sits at awaiting_signal (interpreter park), not the legacy paused; it must
+// still be cancellable (R2: the StatusPaused-only gate made parked runs uncancellable zombies).
+func TestCancel_AwaitingSignalRun_Cancellable(t *testing.T) {
+	repo := newFakeRepo()
+	s := newSvc(t, repo, &fakeWorkflowReader{})
+	ctx := ctxWith("u1")
+	_ = repo.Create(ctx, &flowrundomain.FlowRun{
+		ID: "fr_park", UserID: "u1", WorkflowID: "wf1",
+		Status: flowrundomain.StatusAwaitingSignal, StartedAt: time.Now().UTC(),
+	})
+	if err := s.Cancel(context.Background(), "fr_park"); err != nil {
+		t.Fatalf("Cancel of an awaiting_signal run must succeed, got %v", err)
+	}
+	got, _ := repo.Get(context.Background(), "fr_park")
+	if got == nil || got.Status != flowrundomain.StatusCancelled {
+		t.Fatalf("status after cancel = %v, want cancelled", got)
+	}
+}
+
 func TestExecuteFn_PanicRecover_FinalizesFailed(t *testing.T) {
 	repo := newFakeRepo()
 	s := newSvc(t, repo, &fakeWorkflowReader{wf: mkEnabledWorkflow(), ver: mkVersion()})

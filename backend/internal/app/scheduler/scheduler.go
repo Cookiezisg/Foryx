@@ -223,18 +223,30 @@ func (s *Service) Cancel(ctx context.Context, runID string) error {
 		// 被 cancels map miss 路径掩盖）。
 		return fmt.Errorf("schedulerapp.Cancel: %w", flowrundomain.ErrNotCancellable)
 	}
-	if run.Status != flowrundomain.StatusPaused {
+	// Both legacy paused (old loop body) and awaiting_signal (interpreter approval park) are
+	// cancellable parked states. R2: the interpreter parks at awaiting_signal, so the old
+	// StatusPaused-only gate made every approval-parked run an uncancellable zombie.
+	if run.Status != flowrundomain.StatusPaused && run.Status != flowrundomain.StatusAwaitingSignal {
 		return fmt.Errorf("schedulerapp.Cancel: %w", flowrundomain.ErrNotCancellable)
+	}
+	// Journal the cancellation so a crash-replay observes it (EventFlowrunCancelled was declared but
+	// never produced before this).
+	if s.journal != nil {
+		if _, jErr := s.journal.AppendEvent(ctx, &flowrundomain.FlowRunEvent{
+			FlowrunID: runID, Type: flowrundomain.EventFlowrunCancelled,
+		}); jErr != nil {
+			s.log.Warn("journal flowrun_cancelled failed", zap.String("runId", runID), zap.Error(jErr))
+		}
 	}
 	now := time.Now().UTC()
 	elapsed := now.Sub(run.StartedAt).Milliseconds()
-	if err := s.repo.UpdateStatus(ctx, runID, flowrundomain.StatusCancelled, nil, "CANCELLED", "cancelled while paused", &now, elapsed); err != nil {
-		return fmt.Errorf("schedulerapp.Cancel: paused→cancelled: %w", err)
+	if err := s.repo.UpdateStatus(ctx, runID, flowrundomain.StatusCancelled, nil, "CANCELLED", "cancelled while parked", &now, elapsed); err != nil {
+		return fmt.Errorf("schedulerapp.Cancel: parked→cancelled: %w", err)
 	}
 	if err := s.repo.ClearPausedState(ctx, runID); err != nil {
 		s.log.Warn("clear pausedState after cancel failed", zap.String("runId", runID), zap.Error(err))
 	}
-	s.publish(ctx, runID, run.WorkflowID, "cancelled", map[string]any{"fromPaused": true})
+	s.publish(ctx, runID, run.WorkflowID, "cancelled", map[string]any{"fromParked": true})
 	return nil
 }
 

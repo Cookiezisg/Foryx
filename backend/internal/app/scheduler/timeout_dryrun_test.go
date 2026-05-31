@@ -137,9 +137,9 @@ func TestDispatchWithPolicies_DryRun_PreservesPureLogic(t *testing.T) {
 	}
 }
 
-// TestDispatchWithPolicies_DryRun_ApprovalAutoApproves: approval node returns "approved" port.
+// TestDispatchWithPolicies_DryRun_ApprovalAutoApproves: approval node returns the "yes" port (canon).
 //
-// TestDispatchWithPolicies_DryRun_ApprovalAutoApproves：approval 节点返 "approved" 口。
+// TestDispatchWithPolicies_DryRun_ApprovalAutoApproves：approval 节点返 "yes" 端口(canon)。
 func TestDispatchWithPolicies_DryRun_ApprovalAutoApproves(t *testing.T) {
 	repo := &fakeFlowRunRepo{}
 	svc := NewService(repo, nil, notificationspkg.New(nil, zap.NewNop()), zap.NewNop())
@@ -161,7 +161,7 @@ func TestDispatchWithPolicies_DryRun_ApprovalAutoApproves(t *testing.T) {
 	if errors.Is(out.Error, ErrApprovalRequired) {
 		t.Error("approval should be skipped in dry-run; got ErrApprovalRequired")
 	}
-	if out.NextPort != "approved" {
-		t.Errorf("NextPort = %q, want approved", out.NextPort)
+	if out.NextPort != "yes" {
+		t.Errorf("NextPort = %q, want yes", out.NextPort)
 	}
 }
