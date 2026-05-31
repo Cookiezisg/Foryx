@@ -188,7 +188,16 @@ func detectCycle(nodes []workflowdomain.NodeSpec, edges []workflowdomain.EdgeSpe
 	for _, n := range nodes {
 		inDegree[n.ID] = 0
 	}
+	// Reducible single-entry loop back-edges (ADR-017) are excluded from the DAG check: a back-edge
+	// is a legal loop, not an illegal cycle. The interpreter walks the same back-edges (BackEdges is
+	// shared), so authoring and execution agree. An irreducible / non-back-edge cycle still leaves a
+	// cycle in the remainder and is rejected. Nested loops (ADR-017 is 1-D) are not yet explicitly
+	// rejected here — a single loop is the V1-supported shape; the interpreter's iteration_key is 1-D.
+	back := workflowdomain.BackEdges(workflowdomain.Graph{Nodes: nodes, Edges: edges})
 	for _, e := range edges {
+		if back[e.From+">"+e.To] {
+			continue
+		}
 		adj[e.From] = append(adj[e.From], e.To)
 		inDegree[e.To]++
 	}

@@ -82,7 +82,7 @@ func (in *Interpreter) walk(ctx context.Context, flowrunID string, g workflowdom
 	for _, n := range g.Nodes {
 		byID[n.ID] = n
 	}
-	backEdge := detectBackEdges(g)
+	backEdge := workflowdomain.BackEdges(g) // shared with the validator so authoring + execution agree
 	fwdIn, backIn := inDegrees(g, backEdge)
 
 	trigger := triggerNode(g)
@@ -440,34 +440,8 @@ func edgesFrom(g workflowdomain.Graph, fromID string) []workflowdomain.EdgeSpec 
 	return out
 }
 
-// detectBackEdges marks edges whose target is an ancestor on the DFS stack from the trigger — the
-// loop back-edges of a reducible graph (00/04 single-entry loops). Key is "from>to".
-func detectBackEdges(g workflowdomain.Graph) map[string]bool {
-	back := map[string]bool{}
-	onStack := map[string]bool{}
-	visited := map[string]bool{}
-	trigger := triggerNode(g)
-	if trigger == nil {
-		return back
-	}
-	var dfs func(nodeID string)
-	dfs = func(nodeID string) {
-		visited[nodeID] = true
-		onStack[nodeID] = true
-		for _, e := range edgesFrom(g, nodeID) {
-			if onStack[e.To] {
-				back[e.From+">"+e.To] = true
-				continue
-			}
-			if !visited[e.To] {
-				dfs(e.To)
-			}
-		}
-		onStack[nodeID] = false
-	}
-	dfs(trigger.ID)
-	return back
-}
+// Back-edge detection now lives in workflowdomain.BackEdges (shared with the validator so authoring
+// and execution agree on exactly which edges are loops — review R1).
 
 // inDegrees returns the forward (non-back-edge) and back-edge in-degree per node.
 func inDegrees(g workflowdomain.Graph, backEdge map[string]bool) (fwd, back map[string]int) {

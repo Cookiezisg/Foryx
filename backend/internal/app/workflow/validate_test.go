@@ -130,6 +130,9 @@ func TestValidate_SelfLoop(t *testing.T) {
 	}
 }
 
+// A cycle NOT reachable from the trigger (b<->c) is irreducible — the DFS never makes either an
+// ancestor, so it isn't a back-edge loop; it stays a cycle in the DAG remainder and is rejected.
+// (trig→a→b→c→a, in contrast, IS a reducible loop and is now accepted — see ReducibleLoop test.)
 func TestValidate_Cycle(t *testing.T) {
 	g := &workflowdomain.Graph{
 		Nodes: []workflowdomain.NodeSpec{
@@ -140,14 +143,13 @@ func TestValidate_Cycle(t *testing.T) {
 		},
 		Edges: []workflowdomain.EdgeSpec{
 			edge("e0", "trig", "a"),
-			edge("e1", "a", "b"),
-			edge("e2", "b", "c"),
-			edge("e3", "c", "a"),
+			edge("e1", "b", "c"),
+			edge("e2", "c", "b"), // b<->c cycle unreachable from trig → irreducible, rejected
 		},
 	}
 	err := ValidateGraph(context.Background(), g, NopChecker())
 	if !errors.Is(err, workflowdomain.ErrDAGCycle) {
-		t.Errorf("expected ErrDAGCycle, got %v", err)
+		t.Errorf("expected ErrDAGCycle for an unreachable/irreducible cycle, got %v", err)
 	}
 }
 
@@ -346,6 +348,27 @@ func TestValidate_MultipleTriggersRejected(t *testing.T) {
 	}
 	if err := ValidateGraph(context.Background(), g, NopChecker()); !errors.Is(err, workflowdomain.ErrOpInvalid) {
 		t.Errorf("multi-trigger graph must be rejected with ErrOpInvalid, got %v", err)
+	}
+}
+
+// A reducible single-entry loop (b→a back-edge, a is the header) must pass validation — the
+// back-edge is a legal loop (ADR-017), not an illegal cycle. Was rejected by the old Kahn check
+// that left loops authored-but-unreachable (review R1 deferred → now enabled).
+func TestValidate_ReducibleLoopBackEdgeAccepted(t *testing.T) {
+	g := &workflowdomain.Graph{
+		Nodes: []workflowdomain.NodeSpec{
+			nodeT("trig", workflowdomain.NodeTypeTrigger),
+			nodeFn("a", "fn_x"),
+			nodeFn("b", "fn_y"),
+		},
+		Edges: []workflowdomain.EdgeSpec{
+			edge("e1", "trig", "a"),
+			edge("e2", "a", "b"),
+			edge("e3", "b", "a"), // loop back-edge: a is the header
+		},
+	}
+	if err := ValidateGraph(context.Background(), g, NopChecker()); err != nil {
+		t.Errorf("a reducible loop back-edge must pass (was rejected as a cycle), got %v", err)
 	}
 }
 
