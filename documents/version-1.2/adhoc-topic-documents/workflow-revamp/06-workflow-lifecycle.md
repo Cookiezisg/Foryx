@@ -3,7 +3,7 @@
 脑爆结论笔记(2026-05-27)。
 2026-05-31 改向 durable execution(详 [`00-overview.md`](./00-overview.md))。
 
-依赖纲领:[`00-overview.md`](./00-overview.md) 的 durable-execution 模型(事件日志 journal + 确定性重放)+ `Workflow.active` / `FlowRun.IsFromListener` 字段。本篇只讲 lifecycle(上线/下线/触发/恢复);执行底盘细节见 00 与 [`11-integration-chains.md`](./11-integration-chains.md)。
+依赖纲领:[`00-overview.md`](./00-overview.md) 的 durable-execution 模型(事件日志 journal + 确定性重放)+ `Workflow.active` 字段。`FlowRun.IsFromListener`(如保留)仅记录触发来源,与实例归属无关 —— handler/agent 实例 Owner 恒为 `{Kind:"flowrun", ID:flowrunId}`。本篇只讲 lifecycle(上线/下线/触发/恢复);执行底盘细节见 00 与 [`11-integration-chains.md`](./11-integration-chains.md)。
 
 ---
 
@@ -11,7 +11,7 @@
 
 行业里 K8s / n8n / Airflow / GitHub Actions / Lambda 都用 **workflow 自身的 active 状态**表达"上线",**不引入额外的 Deployment 实体**。Forgify 跟进这个标准做法。
 
-数据模型:2 个 entity + 2 个 flag(外加 drain 期的 `lifecycle_state` 枚举 active/draining/inactive + 内存 handler refcount,详 CANON-DRAIN):
+数据模型:2 个 entity + 2 个 flag(外加 drain 期的 `lifecycle_state` 枚举 active/draining/inactive,详 CANON-DRAIN;drain 只跟在途 flowrun,不做实例级 refcount):
 
 ```
 Workflow {
@@ -27,7 +27,7 @@ FlowRun {
 
 Handler Instance Registry(in-memory,不入 DB)
   └── 按 Owner{Kind, ID} 索引
-        Kind ∈ {"workflow", "flowrun"}
+        Kind 恒为 "flowrun"(无 "workflow" 共享实例)
 ```
 
 ---
@@ -37,7 +37,7 @@ Handler Instance Registry(in-memory,不入 DB)
 | 状态 | 行为 |
 |---|---|
 | `active = true` | 扫 workflow graph 中所有 **listener 类型** 的 trigger 节点(cron / fsnotify / webhook / polling),调 `triggerService.RegisterTrigger`(写 `trigger_schedules` 持久化)。listener 开始监听 |
-| `active = false` | 撤所有 listener;走 drain 状态机(active → draining → inactive)排空在途后才销毁 `Owner={Kind:"workflow"}` 的 handler instance(见 Deactivate 流程) |
+| `active = false` | 撤所有 listener + 派发器不起新 flowrun;走 drain 状态机(active → draining → inactive)等在途 flowrun 各自跑完,每个结束时 `DestroyOwner({Kind:"flowrun", ID:flowrunId})` 自销其独占实例(见 Deactivate 流程)。无 workflow 级共享实例需销毁 |
 
 `lifecycle_state`(active/draining/inactive)是 drain 期的中间态:`active` 正常运行,`draining` 停新但在途 flowrun 仍在老实例跑完,in-flight 归 0 后转 `inactive`。
 
@@ -60,20 +60,18 @@ Handler Instance Registry(in-memory,不入 DB)
 不管谁触发,都走同一个底层入口:
 
 ```go
-scheduler.StartRun(workflowId, triggerNodeId, payload, isFromListener) → runID
+scheduler.StartRun(workflowId, triggerNodeId, payload) → runID
 ```
 
-3 套入口汇聚:
+3 套入口汇聚(触发来源**不影响实例归属** —— owner 恒为 `{Kind:"flowrun"}`):
 
-| 入口 | `isFromListener` | 谁组装 `(triggerNodeId, payload)` |
-|---|---|---|
-| Listener 自动触发(cron / fsnotify / webhook / polling) | `true` | listener |
-| UI 用户点 trigger 节点 + 填表单 → `POST /workflows/{id}:trigger` | `false` | 用户 |
-| AI 调 `trigger_workflow(workflowId, triggerNodeId, payload)` 工具 | `false` | LLM(按节点 payloadSchema)|
+| 入口 | 谁组装 `(triggerNodeId, payload)` |
+|---|---|
+| Listener 自动触发(cron / fsnotify / webhook / polling) | listener |
+| UI 用户点 trigger 节点 + 填表单 → `POST /workflows/{id}:trigger` | 用户 |
+| AI 调 `trigger_workflow(workflowId, triggerNodeId, payload)` 工具 | LLM(按节点 payloadSchema)|
 
-**`IsFromListener` 决定 handler Owner**:
-- `true` → `Owner = {Kind: "workflow", ID: workflowId}` —— active workflow 内跨触发复用 handler instance
-- `false` → `Owner = {Kind: "flowrun", ID: flowrunId}` —— per-flowrun 独立 instance
+**handler/agent 实例 Owner 恒为 `{Kind: "flowrun", ID: flowrunId}`**:三套入口无差别,每个 flowrun 独占自己的实例,首次调用时 lazy spawn,flowrun 结束时自销。`IsFromListener` 不决定 owner(无 `{Kind:"workflow"}` 共享实例、无跨触发复用)。暖实例复用如未来需要 = per-handler 的 ephemeral 资源池(Temporal 式),非共享有状态实例,V1 不做。
 
 详 [`03-tool-node.md`](./03-tool-node.md) handler 生命周期段。
 
@@ -112,15 +110,16 @@ POST /workflows/{id}:deactivate
    │        删/停 trigger_schedules row + 派发器不再为本 workflow 起新 flowrun
    │
    ├── (2) 排空:在途 flowrun(durable、靠 journal 活着)在老实例跑完
-   │        共享 handler 按 refcount 递减,归 0 才 DestroyOwner
+   │        每个 flowrun 结束时 DestroyOwner({Kind:"flowrun", ID:flowrunId}) 自销其独占实例
+   │        (无 refcount、无共享 handler)
    │
-   └── (3) in-flight = 0 后:销毁 {Kind:"workflow", ID: id} 的 handler instance
-            lifecycle_state = inactive
+   └── (3) in-flight = 0 后:lifecycle_state = inactive
+            (无 workflow 级共享实例需销毁 —— 各 flowrun 已自销)
 ```
 
-**不再即时 `DestroyOwner`(CANON-DRAIN)**:deactivate 走 active → draining → inactive 状态机,**绝不抽在途的 handler**。在途 flowrun 是 durable 的(journal + 重放),在老实例跑完;共享 handler 用引用计数(refcount),归 0 才销毁。这直接修了 [`00-overview.md`](./00-overview.md) 列的 **E6「抽在途 handler」**——旧设计 deactivate 即时 `DestroyOwner({workflow})`,会把正在用该 handler 的在途 flowrun 拆掉。`lifecycle_state`(active/draining/inactive)+ handler refcount 两处数据模型详 [`11-integration-chains.md`](./11-integration-chains.md)(CANON-DATA / CANON-DRAIN)。
+**不再即时 `DestroyOwner`(CANON-DRAIN)**:deactivate 走 active → draining → inactive 状态机,**绝不抽在途的 handler**。在途 flowrun 是 durable 的(journal + 重放),在老实例跑完;每个 flowrun 结束时各自销毁自己 `{Kind:"flowrun"}` 的独占实例,无 refcount、无共享 handler。这直接修了 [`00-overview.md`](./00-overview.md) 列的 **E6「抽在途 handler」**——旧设计 deactivate 即时 `DestroyOwner({workflow})`,会把正在用该 handler 的在途 flowrun 拆掉。`lifecycle_state`(active/draining/inactive)数据模型详 [`11-integration-chains.md`](./11-integration-chains.md)(CANON-DATA / CANON-DRAIN)。
 
-> **挂起的 approval 不阻塞 drain(C3)**:`refcount` 只计**正在跑 activity** 的在途 flowrun;`awaiting_signal`(挂起等人、可能等 30d)的 flowrun **不占 refcount、不钉老实例**——它没在用 handler,只是 parked 在 journal 里。所以一个长挂 approval **不会让 drain 卡 30 天**:drain 等的是"正在跑的活儿"清零,parked 的等信号 run 继续 durable 地挂着;信号到了照样按 **active 版本**逻辑续(它本就要换到新版本——符合"永远 prod")。这避免了"长挂 approval 饿死 drain + 钉死老实例一个月"。
+> **挂起的 approval 不阻塞 drain(C3)**:drain 只等**正在跑 activity** 的在途 flowrun 清零;`awaiting_signal`(挂起等人、可能等 30d)的 flowrun **不计为在途、不钉老实例**——它没在用 handler,只是 parked 在 journal 里。所以一个长挂 approval **不会让 drain 卡 30 天**:drain 等的是"正在跑的活儿"清零,parked 的等信号 run 继续 durable 地挂着;信号到了照样按 **active 版本**逻辑续(它本就要换到新版本——符合"永远 prod")。这避免了"长挂 approval 饿死 drain + 钉死老实例一个月"。
 
 ---
 
@@ -135,13 +134,13 @@ AcceptPending(workflowId, pendingVersionId)
        ├── (1) 停新:lifecycle_state = draining
        │        triggerService.UnregisterByWorkflow(id)  ← 撤老 listener
        │        停老 trigger_schedules + 派发器不为老版本起新 flowrun
-       ├── (2) 排空:老版本在途 flowrun 跑完;共享 handler 按 refcount,归 0 才销毁
-       └── (3) in-flight = 0 后:销毁老 instance
-                + 重做 activate 流程(扫新 graph,写新 trigger_schedules,重挂 listener)
+       ├── (2) 排空:老版本在途 flowrun 跑完,各自结束时 DestroyOwner({Kind:"flowrun", ID:flowrunId}) 自销其独占实例(无 refcount、无共享 handler)
+       └── (3) in-flight = 0 后:重做 activate 流程(扫新 graph,写新 trigger_schedules,重挂 listener)
                 lifecycle_state = active
+                (无 workflow 级共享老实例需销毁 —— 各 flowrun 已自销)
 ```
 
-**换版不即时拆老实例(CANON-DRAIN)**:走 active → draining → active 状态机。正在跑的 flowrun 用老版本的逻辑跑完(durable、靠 journal 活着),共享 handler 按 refcount 归 0 才销毁;in-flight 清零后才挂新版本 listener。新 listener 触发的 flowrun 用新版本。**用户感知零停机、绝不抽在途**(同样修 [`00-overview.md`](./00-overview.md) **E6**)。
+**换版不即时拆老实例(CANON-DRAIN)**:走 active → draining → active 状态机。正在跑的 flowrun 用老版本的逻辑跑完(durable、靠 journal 活着),各自结束时销毁自己 `{Kind:"flowrun"}` 的独占实例(无 refcount、无共享 handler);in-flight 清零后才挂新版本 listener。新 listener 触发的 flowrun 用新版本。**用户感知零停机、绝不抽在途**(同样修 [`00-overview.md`](./00-overview.md) **E6**)。
 
 ---
 
@@ -185,7 +184,7 @@ Process boot
 
 **(c) 必须先于 (d):boot 阶段串行(C7)**——派发器 (d) **等 (c) 重放全部完成才开闸**消费收件箱。否则 catchup 的 firing 会给一个"正在被重放"的 workflow 起新 flowrun,而 overlap-policy 此刻还看不到那个重放中的 run、可能误判"没在跑"从而违反 `BufferOne`。规则:**重放中的 run 对 overlap 计为 "running"**;(d) 在 (c) 完成后再按 overlap_policy 消费,看到的"在跑集合"才完整。
 
-**draining 的 refcount 在 boot 时重建**——`lifecycle_state=draining` 持久,但 handler `refcount` 只活在内存、随进程崩丢。boot 时对每个 draining 的 workflow,**从 journal 在途 run 推导 refcount**:扫它老版本的 `running` flowrun(`awaiting_signal` 的不算,见 C3)按 handler 归组重新计数,drain 接着等这个重建后的计数归 0。这样进程崩在 drain 中途也能续上,不会"refcount 丢了 → 要么永不销毁、要么提前抽实例"。
+**draining 在 boot 时自然续上**——`lifecycle_state=draining` 持久;boot 时对每个 draining 的 workflow,从 journal 重放它老版本的在途 `running` flowrun(`awaiting_signal` 的不算,见 C3),drain 等这些 flowrun 各自跑完(每个结束时自销其独占实例)。**无 refcount 可丢、无 boot 时 refcount 重建**:drain 完成的判据就是"在途 running flowrun 清零",崩在 drain 中途也能续上,不会"要么永不销毁、要么提前抽实例"。
 
 收件箱 / 派发器 / catchup 策略详 [`11-integration-chains.md`](./11-integration-chains.md)(CANON-INBOX / CANON-DISPATCH / CANON-SCHEDULE)。
 
@@ -205,8 +204,9 @@ workflow.active = false
        ├── HTTP POST /workflows/{id}:trigger {triggerNodeId, payload}
        └── AI 调 trigger_workflow(workflowId, triggerNodeId, payload)
        
-   → scheduler.StartRun(..., isFromListener=false)
-   → handler instance Owner = {Kind:"flowrun"},per-flowrun 独立
+   → scheduler.StartRun(...)
+   → handler/agent 实例 Owner 恒为 {Kind:"flowrun"},per-flowrun 独立
+     (owner 与触发来源无关 —— 不因 listener / 显式触发而不同)
 ```
 
 适合**调试 / 开发 / 偶尔跑一次**场景——不用 activate 也能跑。
@@ -247,20 +247,20 @@ AI 调 trigger_workflow(wf_xxx, "new_manual_node", payload) → 成功跑
 | `Workflow.active bool` + `Workflow.lifecycle_state`(active/draining/inactive)字段 | DB migration 两列 |
 | `FlowRun.trigger_node_id TEXT` + `FlowRun.is_from_listener bool` | DB migration 两列 |
 | `trigger_schedules` 表(持久化 listener 注册 + `last_fired_at` 入库,取代内存 `lastFire`)| 见 [`11-integration-chains.md`](./11-integration-chains.md) CANON-DATA |
-| handler 实例注册表加引用计数(refcount,供 drain) | 见 [`11-integration-chains.md`](./11-integration-chains.md) CANON-DRAIN |
+| drain 跟在途 flowrun 计数(归 0 = 排空完成;无实例级 refcount,flowrun 结束自销其独占实例) | 见 [`11-integration-chains.md`](./11-integration-chains.md) CANON-DRAIN |
 | `POST /workflows/{id}:activate` / `:deactivate` HTTP action | `handlers/workflow.go` + `app/workflow/lifecycle.go` 新 ~50 行 |
 | activate:扫 graph 提取 trigger 节点 → `RegisterTrigger` + 写 `trigger_schedules` | ~40 行 |
-| deactivate:drain 状态机(停新 → 排空 → refcount 归 0 销毁 → inactive,取代即时 `DestroyOwner`)| ~25 行 |
-| trigger Service `onFire` → 先写 `trigger_firings` 收件箱 → 派发器 `StartRun(..., isFromListener=true)` | 见 [`11-integration-chains.md`](./11-integration-chains.md) CANON-INBOX |
-| `dispatch_handler.go` Owner 双模式(根据 IsFromListener) | 4 行 if |
-| AcceptPending 末尾:active 时走 drain 换版(停新 → 排空 → 重 register 新 graph) | ~30 行 |
+| deactivate:drain 状态机(停新 → 排空在途 flowrun(各自销毁自有实例)→ inactive,取代即时 `DestroyOwner`)| ~25 行 |
+| trigger Service `onFire` → 先写 `trigger_firings` 收件箱 → 派发器 `StartRun(workflowId, triggerNodeId, payload)` | 见 [`11-integration-chains.md`](./11-integration-chains.md) CANON-INBOX |
+| `dispatch_handler.go` Owner 恒为 `{Kind:"flowrun"}`(现状已无条件如此,无 IsFromListener 分支) | 0 行(已就绪) |
+| AcceptPending 末尾:active 时走 drain 换版(停新 → 排空在途老版本 flowrun(各自销毁自有实例,无 refcount)→ 重 register 新 graph) | ~30 行 |
 | `RehydrateOnBoot`(CANON-BOOT a/b):从 `trigger_schedules` 重挂 + cron-math+catchup 材化漏的 firing | ~40 行 |
 | Boot 重放(CANON-BOOT c):扫 running/awaiting_signal flowrun → 照事件日志确定性重放接着跑(替代旧的扫 paused + 重建 PausedState/ExecutionContext)| 属执行引擎,见 [`11-integration-chains.md`](./11-integration-chains.md) |
 | `:trigger` HTTP body 加 `triggerNodeId` 字段(替代隐式 manual) | ~10 行 |
 | `trigger_workflow` LLM 工具描述加 `triggerNodeId` 必填参数 + 暴露 workflow 的 trigger 节点 list | ~30 行 |
 | 砍 `local-user` magic / 默认 manual:必须显式指定 triggerNodeId | 0 行(自然 by-product) |
 
-drain / 收件箱 / 持久调度的数据模型 + 派发器细节落在 [`11-integration-chains.md`](./11-integration-chains.md)(CANON-DATA / DRAIN / INBOX / DISPATCH / SCHEDULE);本篇行数只算 lifecycle 入口侧改动。
+drain / 收件箱 / 持久调度的数据模型 + 派发器细节落在 [`11-integration-chains.md`](./11-integration-chains.md)(CANON-DATA / DRAIN / INBOX / DISPATCH / SCHEDULE);drain 状态只是 `lifecycle_state` + 在途 flowrun 集合(从 flowrun status 推导),不含实例级 refcount。本篇行数只算 lifecycle 入口侧改动。
 
 ---
 
@@ -279,16 +279,18 @@ drain / 收件箱 / 持久调度的数据模型 + 派发器细节落在 [`11-int
 上线:
   AI 调 :activate → listener 开始跑
   cron 自动每天 9 点触发 / webhook 接外部 / polling 启动...
-  Owner=workflow,handler instance 跨触发复用,state 持续
+  每次触发起一个 flowrun,Owner=flowrun,实例 per-flowrun 隔离(首调 lazy spawn,flowrun 结束自销)
+  无跨触发复用;durable/业务状态进 journaled 作用域变量/payload 或外部 store,不放进程内存
 
 日常使用:
   AI 调 trigger_workflow(wfId, manualNodeId, payload)
     → 触发 manual trigger 节点 → Owner=flowrun,独立 instance
-    → 跟 active workflow 内的 listener-触发 完全隔离
+    → 跟其他 flowrun(含 listener-触发)同样 per-flowrun 互相隔离
+      (没有共享的 listener 实例可供"隔离"—— 所有 flowrun 一律独占自己的实例)
 
 下线:
   AI 调 :deactivate → listener 停(停新)→ 在途 flowrun drain 跑完
-    → handler refcount 归 0 才销毁(绝不抽在途)→ inactive
+    → 每个 flowrun 结束时各自 DestroyOwner({Kind:"flowrun"}) 自销其独占实例(绝不抽在途,无 refcount)→ inactive
   Manual 触发仍可用(workflow 还在就能调)
   workflow 不删,inactive 状态保存
 

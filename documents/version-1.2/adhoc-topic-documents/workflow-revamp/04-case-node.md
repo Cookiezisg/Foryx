@@ -13,7 +13,7 @@
 
 - **多路 switch** 取代二元 if-else
 - **回边** 形成**结构化循环**,取代嵌套 body 子图
-- **变量完全砍** — 循环外算的值就是**程序作用域里的变量**,循环体直接读;真要持久化跨执行状态用 handler。不再有隐式全局变量
+- **变量完全砍** — 循环外算的值就是**程序作用域里的变量**,循环体直接读;真要持久化跨执行状态写进 **journaled 作用域变量 / payload** 或**外部 store**(DB 经 handler 方法,或 Forgify document·memory 实体)。handler 实例进程内存只放可重建的 ephemeral 资源(连接池 / 缓存 / 客户端),绝不跨执行保存业务态。不再有隐式全局变量
 
 ---
 
@@ -235,7 +235,7 @@ trigger
 variable 节点砍除后,跨节点状态有两条路:
 
 1. **程序作用域变量**:循环外算的值(节点 A 的输出)就是作用域里的一个变量,下游节点 / 循环体直接读出来。**因果可追**(每个值都记进事件日志,能 trace 回它的产生节点)
-2. **真持久化状态**:用 handler stateful class(跨执行复用的实例,Owner 由 lifecycle 决定)
+2. **真持久化状态**:写进 **journaled 作用域变量 / payload**,或**外部 store**(DB 经 handler 方法调用,或 Forgify document·memory 实体)。handler 实例是 **per-flowrun 隔离**的(Owner 恒为 `{Kind:"flowrun", ID:flowrunId}`,首次调用时 lazy spawn、flowrun 结束时随之销毁),进程内存只放可重建的 ephemeral 资源,绝不跨执行保存结果态 / 累积态
 
 variable 想做的"workflow 级全局变量"完全被这两条覆盖,且**没有隐式状态污染**——任何节点拿到的值都能从事件日志 trace 回它的产生节点。
 

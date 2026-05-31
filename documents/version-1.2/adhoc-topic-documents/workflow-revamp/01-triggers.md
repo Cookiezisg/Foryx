@@ -131,19 +131,19 @@ AI 主动诊断 + 帮修:"polling 调 Gmail 时 429,interval 太密。
 ```
 触发 = (triggerNodeId, payload)
        ↓
-scheduler.StartRun(workflowId, triggerNodeId, payload, isFromListener)
+scheduler.StartRun(workflowId, triggerNodeId, payload)
        ↓
 起一个 flowrun(确定性地把这张图跑一遍)
 ```
 
-| 触发来源 | `(triggerNodeId, payload)` 谁提供 | isFromListener |
-|---|---|---|
-| cron / fsnotify / webhook / polling listener 自动 | listener 生成 | `true` |
-| UI 用户点画布上某个 trigger 节点 + 填表单 | 用户 | `false` |
-| AI 调 `trigger_workflow` 工具 | LLM(按 trigger 节点的 payloadSchema) | `false` |
-| HTTP `POST /workflows/{id}:trigger { triggerNodeId, payload }` | 调用方 | `false` |
+| 触发来源 | `(triggerNodeId, payload)` 谁提供 |
+|---|---|
+| cron / fsnotify / webhook / polling listener 自动 | listener 生成 |
+| UI 用户点画布上某个 trigger 节点 + 填表单 | 用户 |
+| AI 调 `trigger_workflow` 工具 | LLM(按 trigger 节点的 payloadSchema) |
+| HTTP `POST /workflows/{id}:trigger { triggerNodeId, payload }` | 调用方 |
 
-**三套入口汇聚到一个底层 API**。`StartRun` 是唯一入口。`isFromListener` 决定本次执行内 handler 实例的 Owner(`true→{workflow}` 跨触发复用;`false→{flowrun}` 隔离),详 [`03-tool-node.md`](./03-tool-node.md) + [`06-workflow-lifecycle.md`](./06-workflow-lifecycle.md)。
+**三套入口汇聚到一个底层 API**。`StartRun` 是唯一入口。触发来源不影响实例归属:handler / agent 实例 Owner 恒为 `{Kind:"flowrun", ID:flowrunId}`,每个 flowrun 独占自己的实例、首次调用时 lazy spawn、flowrun 结束时 `DestroyOwner({Kind:"flowrun", ID:flowrunId})` 自清,无 `{Kind:"workflow"}` 共享实例、无跨触发复用。详 [`03-tool-node.md`](./03-tool-node.md) + [`06-workflow-lifecycle.md`](./06-workflow-lifecycle.md)。(暖复用如未来需要 = per-handler 的 ephemeral 资源池,非共享有状态实例,V1 不做。)
 
 ### Trigger 节点的 payloadSchema
 
@@ -220,7 +220,7 @@ trigger 永远是**分发任务**:每个触发事件先落 `trigger_firings` 收
 |---|---|---|
 | `trigger_schedules` | `workflow_id, trigger_node_id, kind, spec, last_fired_at, catchup_window, overlap_policy` | **持久化 listener 注册**,取代内存里的 lastFire。原 `workflow.LastFiredAt` 是 `gorm:"-"` 不入库,正是 E1(重启漏触发)根因 —— `last_fired_at` 落库根治。 |
 | `trigger_firings` | `id, workflow_id, trigger_node_id, payload, scheduled_at, enqueued_at, status(pending/claimed/started/skipped/superseded), flowrun_id, outcome` | **durable 触发收件箱**,每条触发一行、每条都有 outcome。也走事件日志 GC 默认 retention。 |
-| `workflows.lifecycle_state` | `active / draining / inactive` + handler 实例注册表加引用计数(refcount) | 给 drain 用(见 CANON-DRAIN)。 |
+| `workflows.lifecycle_state` | `active / draining / inactive` | 给 drain 用(见 CANON-DRAIN)。停新后等在途 flowrun 各自跑完(每个结束时自销其独占实例),无实例级 refcount。 |
 
 ### CANON-INBOX — 收件箱
 
@@ -263,10 +263,10 @@ trigger 永远是**分发任务**:每个触发事件先落 `trigger_firings` 收
 `:deactivate` / `:accept` **不即时 `DestroyOwner`**(那会抽在途),走状态机:
 
 1. **停新** —— 撤 listener + 派发器不再起新 flowrun,workflow 进 `draining`
-2. **排空** —— 在途 flowrun(durable、靠 journal 活着)在老版本 / 老实例跑完;共享 handler 按 **refcount**,归 0 才销毁
-3. **`in-flight=0` 后** —— 销毁老实例 +(`:accept`)挂新版本 listener → `inactive` / 新 `active`
+2. **排空** —— 在途 flowrun(durable、靠 journal 活着)在老版本跑完,各自结束时 `DestroyOwner({Kind:"flowrun", ID:flowrunId})` 自销其独占实例;无 refcount、无共享 handler
+3. **`in-flight=0` 后** —— (`:accept`)挂新版本 listener → `inactive` / 新 `active`;无 workflow 级共享实例需销毁(各 flowrun 已自清)
 
-零停机、**绝不抽在途**。Owner 模型(`{workflow}` 跨触发复用 vs `{flowrun}` 隔离)详 [`03-tool-node.md`](./03-tool-node.md) + [`06-workflow-lifecycle.md`](./06-workflow-lifecycle.md)。
+零停机、**绝不抽在途**。Owner 恒为 `{Kind:"flowrun", ID:flowrunId}` —— 实例 per-flowrun 隔离,绝不跨触发共享或复用。详 [`03-tool-node.md`](./03-tool-node.md) + [`06-workflow-lifecycle.md`](./06-workflow-lifecycle.md)。
 
 ### CANON-MP — Mechanism vs Policy
 

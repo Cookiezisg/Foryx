@@ -95,8 +95,8 @@
 | 工具 | 解决问题 | 现状 |
 |---|---|---|
 | `activate_workflow(id)` | 上线 — 注册 listener,workflow.active=true | ❌ 新增 |
-| `deactivate_workflow(id)` | 下线 — 撤 listener + 销毁 owner=workflow instance | ❌ 新增 |
-| `trigger_workflow(id, triggerNodeId, payload)` | **统一触发**:产品调用(manual 节点) + 调试(cron / webhook 等其他节点 + mock payload),IsFromListener=false → Owner=flowrun 隔离 | ⚠️ 改造(加 triggerNodeId 必填) |
+| `deactivate_workflow(id)` | 下线 — 撤 listener(停起新 flowrun);在途 flowrun 跑完时各自 `DestroyOwner({Kind:"flowrun", ID:flowrunId})` 自清独占实例。无 workflow 级共享实例需销毁、无 refcount | ❌ 新增 |
+| `trigger_workflow(id, triggerNodeId, payload)` | **统一触发**:产品调用(manual 节点) + 调试(cron / webhook 等其他节点 + mock payload);Owner 恒为 `{Kind:"flowrun", ID:flowrunId}`(每次触发独占隔离实例,无 IsFromListener 分支、无跨触发共享实例) | ⚠️ 改造(加 triggerNodeId 必填) |
 
 ---
 

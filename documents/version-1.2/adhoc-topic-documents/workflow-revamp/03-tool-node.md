@@ -64,23 +64,21 @@ config:
 
 ---
 
-## Handler 生命周期跟 workflow active 状态走
+## Handler 生命周期跟 flowrun 走
 
-**`workflow.active = true`** 时,listener 自动触发的 flowrun 共享 handler instance;其他情况(用户/AI 显式触发 / inactive workflow)per-flowrun 独立 instance。
+handler(及 agent)实例 **per-flowrun 隔离,恒为** `Owner = {Kind: "flowrun", ID: flowrunId}` —— 不论触发来源(listener / 用户 UI / AI)。首次调用时 lazy spawn,flowrun 结束时 `DestroyOwner({Kind: "flowrun", ID: flowrunId})` 自清。**没有 active-vs-其他的区分**,没有 `{Kind: "workflow"}` 共享实例、没有跨触发复用。
 
-由 `FlowRun.IsFromListener` flag 决定 Owner key:
+| 触发来源 | Handler Owner | instance 生命周期 |
+|---|---|---|
+| Active workflow 的 listener 自动触发(cron / fsnotify / webhook / polling) | `{Kind: "flowrun", ID: flowrun.id}` | 跟 flowrun 同寿,跑完销毁 |
+| 用户 UI 点 trigger 节点 / AI `trigger_workflow` 工具 / inactive workflow 的任何触发 | `{Kind: "flowrun", ID: flowrun.id}` | 跟 flowrun 同寿,跑完销毁 |
 
-| 触发来源 | `IsFromListener` | Handler Owner | instance 生命周期 |
-|---|---|---|---|
-| Active workflow 的 listener 自动触发(cron / fsnotify / webhook / polling) | true | `{Kind: "workflow", ID: workflow.id}` | **跟 workflow.active 同寿,跨触发复用** |
-| 用户 UI 点 trigger 节点 / AI `trigger_workflow` 工具 / inactive workflow 的任何触发 | false | `{Kind: "flowrun", ID: flowrun.id}` | 跟 flowrun 同寿,跑完销毁 |
-
-意思是:
-- cron 每小时触发 active workflow → **复用同一个 handler instance**(connection pool / counter / cache 跨触发持续)
-- 用户在 UI 上点 manual trigger 节点测试 → **独立 instance**,跑完销毁,不污染 active workflow
+`IsFromListener` 不再决定 owner(如保留仅记录触发来源,与实例归属无关)。意思是:
+- cron 每小时触发 active workflow → 每次触发**各起独立 flowrun-隔离实例**;connection pool / cache 是 ephemeral、随 respawn 重建;counter / 累积业务态进 journaled 作用域变量 / payload 或外部 store(DB 经 handler 方法,或 Forgify document / memory 实体),**绝不放进程内存跨触发**。
+- 用户在 UI 上点 manual trigger 节点测试 → **独立 instance**,跑完销毁,不污染其他 flowrun
 - AI 调 `trigger_workflow` 跑一次 → **独立 instance**,同上
 
-Handler 作为 **stateful object** 的对象能力 ✓ 保留(active workflow 内 state 跨触发持续)。
+Handler 作为 **stateful object** 的对象能力 ✓ 保留,但进程内存只放 ephemeral、可重建、不影响结果的资源(连接池 / 缓存 / 客户端);durable / 影响结果的状态进 journal 或外部 store,**不跨触发持续**。暖实例复用如未来需要 = per-handler 的 ephemeral 资源池(Temporal 式),非共享有状态实例,V1 不做。
 
 ### Crash 处理
 
@@ -111,7 +109,7 @@ config:
 |---|---|
 | 完全无状态 | crash 无影响 |
 | in-memory state + 丢了不要紧(连接池 / 缓存) | crash 接受丢,新 instance 重建 |
-| **in-memory state + 要紧(counter / 业务状态)** | **handler 内部自己写到 file / SQLite**(如 `~/.forgify/handler_state/{handler_id}/`) |
+| **durable / 影响结果的状态(counter / 累积业务态)** | 进 journaled 作用域变量 / payload,或外部 store(DB 经 handler 方法,或 Forgify document / memory 实体),**按 flowrun 作用域**;绝不放进程内存、不写跨触发存活的全局 per-handler-id 文件(重放会分叉、并发 flowrun 会撞) |
 
 forge 系统在锻造 handler 时,**教学 prompt 必须明示**:
 
@@ -124,8 +122,8 @@ forge 系统在锻造 handler 时,**教学 prompt 必须明示**:
 
 ### Workflow 改 / handler config 改时
 
-- 用户改 workflow version 后 `:accept` → 如果 workflow active,撤旧 `{Kind: "workflow"}` instance + 撤旧 listener + 注册新 listener
-- 新 instance **lazy** 等首次 listener 触发时 `Acquire` 时 spawn
+- 用户改 workflow version 后 `:accept` → 如果 workflow active,撤旧 listener + 注册新 listener,然后 drain:停新 flowrun + 派发器不起新 flowrun,等在途 flowrun 各自跑完(每个结束时经 `DestroyOwner({Kind: "flowrun", ID: flowrunId})` 自销其独占实例)。**没有 `{Kind: "workflow"}` 共享实例需要撤,没有 refcount / 实例级记账。**
+- 实例 **lazy** 等 flowrun 内首次调用时 spawn
 - 详见 [`06-workflow-lifecycle.md`](./06-workflow-lifecycle.md)
 
 ### Forgify 本体重启
@@ -137,14 +135,12 @@ Forgify 启动
   ↓
 扫所有 workflow.active = true 的 row(详 06-workflow-lifecycle.md)
   ↓
-re-register 所有 listener
+re-register 所有 listener(不预先 spawn、不重建任何 handler 实例、无 refcount 重建)
   ↓
-handler instance 不预先 spawn(lazy,等首次 listener 触发时 Acquire 时 spawn)
-  ↓
-handler 内部业务 state(如果作者持久化了)在新 instance init 时从 file/SQLite 读回
+实例 lazy:等每个 flowrun 内首次调用时才 spawn(per-flowrun 独占)
 ```
 
-同时,执行器扫 `status=running / awaiting_signal` 的 flowrun 并从头确定性重放(命中日志的 activity 抄结果、停在第一个未记账步骤续跑,详 [`00-overview.md`](./00-overview.md) 持久化段)。第一次触发延迟略高(handler 启动 ~5s),本地单用户场景可接受。
+同时,执行器扫 `status=running / awaiting_signal` 的 flowrun 并从头确定性重放(命中日志的 activity 抄结果、停在第一个未记账步骤续跑,详 [`00-overview.md`](./00-overview.md) 持久化段)。flowrun 的 durable 状态靠确定性 journal 重放恢复,**不靠从 file/SQLite 回灌 handler 进程内存**。第一次触发延迟略高(handler 启动 ~5s),本地单用户场景可接受。
 
 ### 通知 / 监控
 
@@ -175,19 +171,19 @@ AI:edit_handler → :accept → 重跑失败的 flowrun(从日志续放)
 
 ## Handler 并发(单管道安全 — 平台必兜的完整性)
 
-> 这一段对齐 [`00-overview.md`](./00-overview.md) 的 "handler 并发" 段。**结论已反转旧脑爆稿**:旧稿曾写"砍 `infra/handler/client.go` 的 per-instance `sync.Mutex`、让 method 调用真并发"——**作废**。durable 模型下,并发来自 fork-join 的并行分支(以及跨 flowrun 共享同一 active-workflow 实例),这恰恰要求实例处串行。
+> 这一段对齐 [`00-overview.md`](./00-overview.md) 的 "handler 并发" 段。**结论已反转旧脑爆稿**:旧稿曾写"砍 `infra/handler/client.go` 的 per-instance `sync.Mutex`、让 method 调用真并发"——**作废**。durable 模型下,同一实例的并发调用来自 fork-join 的并行分支(同一 flowrun 内),这恰恰要求实例处串行。
 
-handler 是单 subprocess、单 stdin/stdout 管道的 JSON-RPC。**对同一个 handler 实例的并发调用(同 flowrun 的并行分支,或跨 flowrun 共享的 active-workflow 实例)在实例处串行——保留 per-instance `sync.Mutex`。绝不砍 mutex。**
+handler 是单 subprocess、单 stdin/stdout 管道的 JSON-RPC。**对同一个 handler 实例的并发调用(同一 flowrun 的并行分支)在实例处串行——保留 per-instance `sync.Mutex`。绝不砍 mutex。** 跨 flowrun 不共享实例:不同 flowrun 各有独立实例,对单实例不存在跨 flowrun 的并发调用。
 
 为什么绝不砍:
 - **单管道并发写会撕裂帧、并发读会抢错响应** — 单 stdin/stdout 上多个 in-flight 请求没有帧隔离,锁是正确性前提,不是性能调优开关。
 - **这是平台的完整性保证(mechanism)** — 跟"平台保 activity 不被重复跑、给 handler 发指令的管道不串字节"同一类承诺(详 [`00-overview.md`](./00-overview.md) 并发模型段)。
 
-真并发发生在**不同能力之间**:不同 function / 不同 handler 实例彼此独立并发(fork 出的并行分支各打各的 callable,互不阻塞)。**打同一个有状态 handler 实例本就该串行**——共享可变状态的天然串行点,串行是语义上正确的行为,不是退化。
+真并发来自**更多实例**:不同 flowrun 调同一 handler 各起独立实例并发(per-flowrun 隔离),以及不同 callable 之间(不同 function / 不同 handler)独立并发(fork 出的并行分支各打各的 callable,互不阻塞)。**只有对同一实例的并发调用(同一 flowrun 内)才串行**——共享可变状态的天然串行点,串行是语义上正确的行为,不是退化。
 
 若某 handler 成瓶颈:锻造者把它**写成无状态**,让每次调用走独立实例 / 独立 function 并行(回到"不同能力之间真并发"那条路)。这是锻造者的设计选择,不是平台砍锁。
 
-> 与 00 并发模型段呼应:**平台保完整性(管道不串字节 + activity 不重复记账)、业务并发归锻造**。两条并行分支同时改同一处外部状态、谁先谁后影响结果 = 锻造的人写成幂等 / 设计成不撞。forge 系统在锻造 handler 时,template / 教学 prompt 应明示"stateful class,跨调用共享状态,平台会串行化对它的调用;要真并发请写成无状态"。
+> 与 00 并发模型段呼应:**平台保完整性(管道不串字节 + activity 不重复记账)、业务并发归锻造**。两条并行分支同时改同一处外部状态、谁先谁后影响结果 = 锻造的人写成幂等 / 设计成不撞。forge 系统在锻造 handler 时,template / 教学 prompt 应明示:"handler 是 stateful subprocess,进程内存只放 ephemeral、per-flowrun 的状态;同一实例的调用平台会串行化(per-instance mutex,正确);任何 durable / 影响结果的状态进 journaled 作用域变量 / payload 或外部 store,不在内存里跨调用共享。要更高的跨实例并发请锻造成无状态。"
 
 ---
 

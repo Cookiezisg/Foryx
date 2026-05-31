@@ -222,7 +222,7 @@ mcp 从 marketplace 装,不算 forge。Quadrinity 严格指 forge 四元 = **fun
 
 ## handler 并发(单管道安全 — 平台必兜的完整性)
 
-handler 是单 subprocess、单 stdin/stdout 管道的 JSON-RPC。**对同一个 handler 实例的并发调用(同 flowrun 的并行分支 或 跨 flowrun 共享实例)在实例处串行(保留 mutex)**——这是平台的完整性保证。**绝不"砍 mutex 让真并发"**(单管道并发写会撕裂帧、读会抢错响应)。真并发只发生在**不同能力之间**(不同 function/handler 独立并发);打同一个有状态 handler 实例本就该串行(共享可变状态的天然串行点)。若某 handler 成瓶颈,锻造者可写成无状态(让每次调用走独立实例/函数并行)。详 [`03-tool-node.md`](./03-tool-node.md)。
+handler 是单 subprocess、单 stdin/stdout 管道的 JSON-RPC。**对同一个 handler 实例的并发调用(同一 flowrun 的并行分支)在实例处串行(保留 mutex)**——这是平台的完整性保证。跨 flowrun 不共享实例——不同 flowrun 各有独立实例,天然并发。**绝不"砍 mutex 让真并发"**(单管道并发写会撕裂帧、读会抢错响应)。真并发来自更多实例——不同 flowrun 调同一 handler 各起独立实例并发,以及不同 callable 之间独立并发;并发从不来自对同一实例的并发调用。打同一个有状态 handler 实例本就该串行(共享可变状态的天然串行点)。若某 handler 成瓶颈,锻造者可写成无状态(让每次调用走独立实例/函数并行)。详 [`03-tool-node.md`](./03-tool-node.md)。
 
 ---
 
@@ -242,7 +242,7 @@ handler 是单 subprocess、单 stdin/stdout 管道的 JSON-RPC。**对同一个
 
 ## Workflow lifecycle
 
-**没有独立 "Deployment" 抽象层。**用 `Workflow.active: bool` 表达"上线/下线",`FlowRun.IsFromListener: bool` 表达"触发来自 listener 自动还是用户/AI 显式"。`active=true` 扫 graph 中 listener 类 trigger 节点(cron/fsnotify/webhook/polling)注册监听;`active=false` 撤监听 + 销毁 `Owner={Kind:"workflow"}` 的 handler 实例。`IsFromListener` 决定 handler Owner(`true→{workflow}` 跨触发复用;`false→{flowrun}` 隔离)。详 [`06-workflow-lifecycle.md`](./06-workflow-lifecycle.md) + [`03-tool-node.md`](./03-tool-node.md)。触发统一入口 `scheduler.StartRun(workflowId, triggerNodeId, payload, isFromListener)`,起一个 flowrun。
+**没有独立 "Deployment" 抽象层。**用 `Workflow.active: bool` 表达"上线/下线"。`active=true` 扫 graph 中 listener 类 trigger 节点(cron/fsnotify/webhook/polling)注册监听;`active=false` 撤监听 + 停起新 flowrun,在途 flowrun 跑完时各自 `DestroyOwner({Kind:"flowrun", ID:flowrunId})` 自清实例(没有 `{Kind:"workflow"}` 共享实例需要销毁)。handler 与 agent 实例 Owner 恒为 `{Kind:"flowrun", ID:flowrunId}`,每个 flowrun 独占自己的实例,无跨触发复用(暖实例复用如未来需要,走 per-handler ephemeral 资源池,非共享有状态实例,V1 不做)。`IsFromListener` 不再决定 owner(如保留仅记录触发来源,与实例归属无关)。详 [`06-workflow-lifecycle.md`](./06-workflow-lifecycle.md) + [`03-tool-node.md`](./03-tool-node.md)。触发统一入口 `scheduler.StartRun(workflowId, triggerNodeId, payload)`,起一个 flowrun。
 
 ### trigger / dispatch / lifecycle 也 durable(Theme 3)
 
@@ -251,7 +251,7 @@ Theme 1 把 flowrun **内部**做成 durable(journal + 重放);Theme 3 把 trigg
 - **收件箱先落库**:任何触发(cron/fsnotify/webhook/polling/manual)在尝试跑之前先写一条 `trigger_firings`;所有触发统一走收件箱 → 派发器 → flowrun,崩在"事件到→flowrun 起"之间也不丢。manual 默认 overlap=AllowAll(显式动作,立即跑)。
 - **持久调度 + catchup**:`last_fired_at` 落库(取代原内存里 `gorm:"-"` 不入库的 `LastFiredAt`);开机按 cron 表达式算漏了哪几次,按 Catchup Window 策略(不补 / 补最近一次[默认] / 补窗口内全部)材化进收件箱。诚实边界:cron 靠 cron-math、polling 靠 cursor 自愈;webhook/fsnotify 停机期事件是外部 ephemeral,明说不假装兜住。
 - **单派发器 + overlap**:派发器按 `workflow.concurrency` + `trigger.overlap_policy` 消费收件箱;撞上"正在跑"时 overlap:Skip / BufferOne(默认) / BufferAll / AllowAll。铁律:**每条 firing 都有 outcome,绝不静默丢**。
-- **优雅 drain**:deactivate/accept 不即时销毁,走状态机——停新(撤 listener、不再起新 flowrun、进 draining)→ 排空(在途 flowrun 跑完,共享 handler 按 refcount 归 0 才销毁)→ 销毁老实例 +(accept)挂新版本 listener。零停机、绝不抽在途。
+- **优雅 drain**:deactivate/accept 不即时销毁,走状态机——停新(撤 listener、不再起新 flowrun、进 draining)→ 排空(在途 flowrun 跑完,各自销毁自己 `{Kind:"flowrun"}` 的实例;无 refcount,无共享 handler)→ inactive +(accept)挂新版本 listener。零停机、绝不抽在途。
 - **Mechanism vs Policy**:平台保证(mechanism)——触发绝不静默丢 / 每条 firing 有 outcome / 在途绝不被强拆;编排者拍(policy)——catchup_window、overlap_policy(sane 默认:overlap=BufferOne、catchup=补最近一次)。
 
 详 [`01-triggers.md`](./01-triggers.md) + [`06-workflow-lifecycle.md`](./06-workflow-lifecycle.md) + [`11-integration-chains.md`](./11-integration-chains.md)。
