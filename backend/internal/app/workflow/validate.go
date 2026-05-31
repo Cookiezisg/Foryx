@@ -86,6 +86,11 @@ func validateSubgraph(
 	if requireTrigger && triggerCount == 0 {
 		return fmt.Errorf("%w: graph has no trigger node", workflowdomain.ErrNoTrigger)
 	}
+	// Exactly one trigger: the interpreter walks from a single trigger node (triggerNode returns the
+	// first), so a second trigger's subgraph would be silently dropped (concurrency-error-edges-4).
+	if triggerCount > 1 {
+		return fmt.Errorf("%w: graph has %d trigger nodes; exactly one is allowed", workflowdomain.ErrOpInvalid, triggerCount)
+	}
 
 	varSeen := make(map[string]bool, len(vars))
 	declaredVars := make(map[string]bool, len(vars))

@@ -331,6 +331,24 @@ func TestValidate_ApprovalEdgeYesPasses(t *testing.T) {
 	}
 }
 
+// The interpreter walks from a single trigger; a second trigger's subgraph would be silently
+// dropped, so authoring must reject it (concurrency-error-edges-4).
+func TestValidate_MultipleTriggersRejected(t *testing.T) {
+	g := &workflowdomain.Graph{
+		Nodes: []workflowdomain.NodeSpec{
+			nodeT("t1", workflowdomain.NodeTypeTrigger),
+			nodeT("t2", workflowdomain.NodeTypeTrigger),
+			nodeFn("fn1", "fn_x"),
+		},
+		Edges: []workflowdomain.EdgeSpec{
+			edge("e1", "t1", "fn1"),
+		},
+	}
+	if err := ValidateGraph(context.Background(), g, NopChecker()); !errors.Is(err, workflowdomain.ErrOpInvalid) {
+		t.Errorf("multi-trigger graph must be rejected with ErrOpInvalid, got %v", err)
+	}
+}
+
 func TestValidate_SingleOutputNodeRejectsFromPort(t *testing.T) {
 	g := &workflowdomain.Graph{
 		Nodes: []workflowdomain.NodeSpec{
