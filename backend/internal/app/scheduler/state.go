@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -12,6 +13,7 @@ import (
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
+	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
 // ExecutionContext is the per-run mutable state, persisted as PausedState JSON when paused.
@@ -127,6 +129,17 @@ func (s *Service) executeRun(ctx context.Context, run *flowrundomain.FlowRun, gr
 	}
 	parked, err := New(s.journal, s.router).Run(ctx, run.ID, *graph, run.TriggerInput)
 	if err != nil {
+		// Cancel/timeout is a distinct terminal from a node failure (concurrency-error-edges-2).
+		// Finalize on a fresh detached ctx — the run ctx is already cancelled, so its DB write fails.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			fctx := reqctxpkg.SetUserID(context.Background(), run.UserID)
+			if errors.Is(ctxErr, context.DeadlineExceeded) {
+				s.finalizeRun(fctx, run, flowrundomain.StatusFailed, nil, "RUN_TIMEOUT", ctxErr.Error())
+			} else {
+				s.finalizeRun(fctx, run, flowrundomain.StatusCancelled, nil, "CANCELLED", ctxErr.Error())
+			}
+			return
+		}
 		s.finalizeRun(ctx, run, flowrundomain.StatusFailed, nil, "NODE_FAILED", err.Error())
 		return
 	}

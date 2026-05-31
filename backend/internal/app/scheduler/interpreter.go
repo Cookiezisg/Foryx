@@ -76,6 +76,10 @@ func (in *Interpreter) walk(ctx context.Context, flowrunID string, g workflowdom
 	if input == nil {
 		input = map[string]any{}
 	}
+	// ctxMap is the run-scoped read-only context CEL guards/emits read as `ctx` (17 §7: input =
+	// payload + ctx). Replay-deterministic — runId + the original trigger payload are fixed for the
+	// flowrun, so a guard on ctx.* evaluates identically on first run and replay (cel-safety-3).
+	ctxMap := map[string]any{"runId": flowrunID, "trigger": input}
 
 	agenda := []agendaItem{{node: trigger.ID, iter: 0, payload: input}}
 	executed := map[string]bool{}
@@ -133,6 +137,11 @@ func (in *Interpreter) walk(ctx context.Context, flowrunID string, g workflowdom
 	}
 
 	for len(agenda) > 0 {
+		select {
+		case <-ctx.Done():
+			return parked, ctx.Err() // cancel/timeout surfaces distinctly, not as NODE_FAILED
+		default:
+		}
 		it := agenda[0]
 		agenda = agenda[1:]
 		k := ck(it.node, it.iter)
@@ -152,7 +161,7 @@ func (in *Interpreter) walk(ctx context.Context, flowrunID string, g workflowdom
 				activeTo = append(activeTo, e.To)
 			}
 		case workflowdomain.NodeTypeCondition: // 5-node "case"
-			selected, p, cErr := in.caseDecide(ctx, flowrunID, spec, it.iter, it.payload, branchTaken)
+			selected, p, cErr := in.caseDecide(ctx, flowrunID, spec, it.iter, it.payload, ctxMap, branchTaken)
 			if cErr != nil {
 				return false, cErr
 			}
@@ -214,7 +223,7 @@ func (in *Interpreter) walk(ctx context.Context, flowrunID string, g workflowdom
 // caseDecide returns the chosen branch's `to` node + emitted payload, journaling branch_taken; on
 // replay it copies the recorded decision. First-true-wins over per-branch CEL guards (fail-to-false G9).
 func (in *Interpreter) caseDecide(ctx context.Context, flowrunID string, node workflowdomain.NodeSpec,
-	iter int, payload map[string]any, branchTaken map[string]map[string]any) (string, map[string]any, error) {
+	iter int, payload, ctxMap map[string]any, branchTaken map[string]map[string]any) (string, map[string]any, error) {
 
 	if bt, ok := branchTaken[ck(node.ID, iter)]; ok {
 		to, _ := bt["to"].(string)
@@ -232,7 +241,7 @@ func (in *Interpreter) caseDecide(ctx context.Context, flowrunID string, node wo
 		if err != nil {
 			continue
 		}
-		match, evalErr := prg.EvalBool(payload, nil)
+		match, evalErr := prg.EvalBool(payload, ctxMap)
 		if evalErr != nil {
 			match = false // G9 fail-to-false
 		}
@@ -242,7 +251,11 @@ func (in *Interpreter) caseDecide(ctx context.Context, flowrunID string, node wo
 		to, _ := bm["to"].(string)
 		out := payload
 		if emit, has := bm["emit"].(map[string]any); has {
-			out = evalEmit(emit, payload)
+			o, eErr := evalEmit(emit, payload, ctxMap)
+			if eErr != nil {
+				return "", nil, fmt.Errorf("scheduler.case %s: %w", node.ID, eErr)
+			}
+			out = o
 		}
 		if _, err := in.journal.AppendEvent(ctx, &flowrundomain.FlowRunEvent{
 			FlowrunID: flowrunID, Type: flowrundomain.EventBranchTaken, NodeID: node.ID, IterationKey: iter,
@@ -295,8 +308,12 @@ func (in *Interpreter) activityRun(ctx context.Context, flowrunID string, node w
 	return res.Outputs, nil
 }
 
-// evalEmit evaluates each emit field as a bare CEL expression producing a typed value.
-func evalEmit(emit, payload map[string]any) map[string]any {
+// evalEmit evaluates each emit field as a bare CEL expression producing a typed value. A compile or
+// eval error is RETURNED, not swallowed to nil — a bad emit is an authoring/data bug the operator
+// must see (surfaced as a node failure, cel-safety-2). A non-string literal passes through.
+//
+// evalEmit 把每个 emit 字段当裸 CEL 求值;编译/求值错**返回**(不再吞成 nil)——坏 emit 是必须暴露的 bug。
+func evalEmit(emit, payload, ctxMap map[string]any) (map[string]any, error) {
 	out := make(map[string]any, len(emit))
 	for k, v := range emit {
 		expr, ok := v.(string)
@@ -306,17 +323,15 @@ func evalEmit(emit, payload map[string]any) map[string]any {
 		}
 		prg, err := workflowapp.CompileCEL(expr)
 		if err != nil {
-			out[k] = nil
-			continue
+			return nil, fmt.Errorf("emit %q: %w", k, err)
 		}
-		val, err := prg.Eval(payload, nil)
+		val, err := prg.Eval(payload, ctxMap)
 		if err != nil {
-			out[k] = nil
-			continue
+			return nil, fmt.Errorf("emit %q: %w", k, err)
 		}
 		out[k] = val
 	}
-	return out
+	return out, nil
 }
 
 // mergeMaps overlays b onto a copy of a (AND-join combines its activated in-edges' payloads).

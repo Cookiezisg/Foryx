@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
@@ -404,5 +405,72 @@ func TestInterpreter_Approval_ResumeRoutesByDecision(t *testing.T) {
 	}
 	if router.calls["dy"] != 1 || router.calls["dn"] != 0 {
 		t.Fatalf("decision=yes must route to dy: %v", router.calls)
+	}
+}
+
+// A cancelled run ctx surfaces as context.Canceled from the walk (so executeRun maps it to
+// cancelled), NOT swallowed into a NODE_FAILED (concurrency-error-edges-2).
+func TestInterpreter_CancelledCtx_ReturnsCtxErr(t *testing.T) {
+	journal := newJournal(t)
+	router := &countingRouter{calls: map[string]int{}}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := New(journal, router).Run(ctx, "fr_cancel", linearGraph(), nil)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("cancelled ctx must surface context.Canceled, got %v", err)
+	}
+}
+
+// A malformed emit CEL expression fails the case node (returned error) instead of silently
+// writing nil into the payload field (cel-safety-2).
+func TestInterpreter_EmitCompileError_FailsNode(t *testing.T) {
+	journal := newJournal(t)
+	router := &countingRouter{calls: map[string]int{}}
+	g := workflowdomain.Graph{
+		Name: "bad_emit",
+		Nodes: []workflowdomain.NodeSpec{
+			{ID: "t", Type: workflowdomain.NodeTypeTrigger},
+			{ID: "c", Type: workflowdomain.NodeTypeCondition, Config: map[string]any{
+				"branches": []any{
+					map[string]any{"when": "true", "to": "x", "emit": map[string]any{"bad": "payload.("}},
+				},
+			}},
+		},
+		Edges: []workflowdomain.EdgeSpec{{ID: "e1", From: "t", To: "c"}},
+	}
+	if _, err := New(journal, router).Run(context.Background(), "fr_bademit", g, nil); err == nil {
+		t.Fatal("a malformed emit expr must fail the node, not silently write nil")
+	}
+}
+
+// ctx is wired (17 §7 input = payload + ctx): a case guard reading ctx.runId routes correctly,
+// proving the variable is populated — not the old declared-but-empty fail-to-false (cel-safety-3).
+func TestInterpreter_CtxWired_GuardReadsRunId(t *testing.T) {
+	journal := newJournal(t)
+	router := &countingRouter{calls: map[string]int{}}
+	g := workflowdomain.Graph{
+		Name: "ctx_guard",
+		Nodes: []workflowdomain.NodeSpec{
+			{ID: "t", Type: workflowdomain.NodeTypeTrigger},
+			{ID: "c", Type: workflowdomain.NodeTypeCondition, Config: map[string]any{
+				"branches": []any{
+					map[string]any{"when": "ctx.runId == 'fr_ctx'", "to": "hit"},
+					map[string]any{"when": "true", "to": "miss"},
+				},
+			}},
+			{ID: "hit", Type: workflowdomain.NodeTypeFunction},
+			{ID: "miss", Type: workflowdomain.NodeTypeFunction},
+		},
+		Edges: []workflowdomain.EdgeSpec{
+			{ID: "e1", From: "t", To: "c"},
+			{ID: "e2", From: "c", To: "hit"},
+			{ID: "e3", From: "c", To: "miss"},
+		},
+	}
+	if _, err := New(journal, router).Run(context.Background(), "fr_ctx", g, nil); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if router.calls["hit"] != 1 || router.calls["miss"] != 0 {
+		t.Fatalf("ctx.runId guard must route to hit (ctx wired, not empty): %v", router.calls)
 	}
 }
