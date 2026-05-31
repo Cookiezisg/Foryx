@@ -70,7 +70,7 @@
 - **N4** 列表强制分页：`?cursor=xxx&limit=50` → `{data, nextCursor, hasMore}`
 - **N5** 资源用名词；状态改动走 `PATCH`；动词用 `:action` 后缀。**`:iterate`**（AI 编辑对话）和 **`:triage`**（AI 调试对话）是标准 action 名，分别挂在 function/handler/workflow/document 和 flowrun 上，统一返 `{conversationId}`（201）
 - **N6** upsert 类 PUT 无论新建/更新一律返 200
-- **N7** SSE：`event:` + `id:` + `data:` 格式；Last-Event-ID 重连；超 buffer 返 410 `SEQ_TOO_OLD`。详见 `event-log-protocol.md`
+- **N7** SSE：`event:` + `id:` + `data:` 格式；Last-Event-ID 重连；超 buffer 返 410 `SEQ_TOO_OLD`。详见 `docs/references/backend/events.md`
 
 ## 数据库（D 系列）
 
@@ -171,10 +171,10 @@
 
 | 代码变动 | 必改文档 |
 |---|---|
-| 新 entity / 表 / struct 字段 / 约束 | `<domain>.md` + `database-design.md` + `progress-record.md` |
-| 新 sentinel / errmap 行 | `<domain>.md` + `error-codes.md` + `progress-record.md` + `errcodes/sweep_pipeline_test.go` 加 sweep case + `// covers: errcode:CODE` annotation + `make matrix` |
-| 新 endpoint / path 变 | `<domain>.md` + `api-design.md` + `progress-record.md` + 对应 `api/<domain>/<domain>_pipeline_test.go` 加测试 + `// covers: METHOD /path` annotation + `make matrix` |
-| 新事件 / struct 改 | `<domain>.md` + `events-design.md` + `progress-record.md` + `sse_truth.go` 加枚举（如属 SSE 协议）+ `// covers: sse:<stream>:<event>` annotation + `make matrix` |
+| 新 entity / 表 / struct 字段 / 约束 | `<domain>.md` + `database.md` + `changelog.md` |
+| 新 sentinel / errmap 行 | `<domain>.md` + `error-codes.md` + `changelog.md` + `errcodes/sweep_pipeline_test.go` 加 sweep case + `// covers: errcode:CODE` annotation + `make matrix` |
+| 新 endpoint / path 变 | `<domain>.md` + `api.md` + `changelog.md` + 对应 `api/<domain>/<domain>_pipeline_test.go` 加测试 + `// covers: METHOD /path` annotation + `make matrix` |
+| 新事件 / struct 改 | `<domain>.md` + `events.md` + `changelog.md` + `sse_truth.go` 加枚举（如属 SSE 协议）+ `// covers: sse:<stream>:<event>` annotation + `make matrix` |
 | 新跨 domain 锈川 | `<domain>.md` + `seams.yaml` 加 id + `cross/<file>_pipeline_test.go` 加测试 + `// covers: cross:<id>` annotation + `make matrix` |
 | 方法签名 / 接口变 | `<domain>.md`（影响对外入口才动 contract 文档）|
 | 新跨 domain 依赖 | `<domain>.md` + 受影响的 `<other>.md` |
@@ -183,15 +183,15 @@
 
 - [ ] `<domain>.md` 实现清单勾 ✅
 - [ ] 改了 API/schema/error → contract 文档对应行更新
-- [ ] `progress-record.md` 加 dev log（含做了什么 + 测试数 + 新规范/决策）
+- [ ] `changelog.md` 加 dev log（含做了什么 + 测试数 + 新规范/决策）
 - [ ] 新规范/原则变动 → 加到本文件
 
 ## domain 完工 checklist
 
 - [ ] `<domain>.md` 整体逐字段匹配代码
 - [ ] `docs/references/backend/*.md` 该 domain 行从 ⬜ 改 ✅
-- [ ] `progress-record.md` 完工日志
-- [ ] 新跨域模式 → 更新 `backend-design.md`
+- [ ] `changelog.md` 完工日志
+- [ ] 新跨域模式 → 更新 `architecture.md`
 
 发现文档与代码不符 → **立刻停下修文档**，记 `[doc-fix]` dev log。
 
@@ -414,7 +414,7 @@ wails dev                    # 冒烟：窗口起得来 + 能连后端
 
 **修的方式：最完整修改。** 彻底搞清问题的机理，不只是表面现象。
 
-**修完后：** 在 `progress-record.md` 记一行 `[bug-fix]` dev log。用一句话说明现象和修法，不需要确认。
+**修完后：** 在 `changelog.md` 记一行 `[bug-fix]` dev log。用一句话说明现象和修法，不需要确认。
 
 ## 已定型的视觉决策（勿在"优化"中改掉）
 
@@ -457,22 +457,22 @@ wails dev                    # 冒烟：窗口起得来 + 能连后端
 
 | 前端代码变动 | 必改文档 |
 |---|---|
-| 新 slice / entity / feature / widget / page | `docs/references/frontend/slices/<slice>.md` + `fsd-layers.md`（slice 清单行）+ `progress-record.md` |
-| 新 entity TS 类型 / 字段变 | `docs/references/frontend/entity-types.md` + `progress-record.md` |
-| DIP / errorMap / SSE / queryKeys 接口变 | `docs/references/frontend/cross-cutting.md` + `progress-record.md` |
-| FSD 层边界变 / 依赖规则变 | `docs/references/frontend/fsd-layers.md` + `CLAUDE.md §FSD` + `progress-record.md` |
-| 新 API endpoint / path 变 | `frontend-prd.md §17` + `entity-types.md` + `progress-record.md` |
-| 发现并修了 UI bug | `progress-record.md` dev log（`[bug-fix]`）|
-| Phase 完成 | `frontend-prd.md §15` 对应项打勾 + `progress-record.md` |
-| 设计决策变更 | `frontend-prd.md §3` 或对应章节 + `progress-record.md` |
-| 所有改动（兜底） | `progress-record.md` dev log（格式同后端：1-2 句 ~30-100 汉字） |
+| 新 slice / entity / feature / widget / page | `docs/references/frontend/slices/<slice>.md` + `fsd-layers.md`（slice 清单行）+ `changelog.md` |
+| 新 entity TS 类型 / 字段变 | `docs/references/frontend/entity-types.md` + `changelog.md` |
+| DIP / errorMap / SSE / queryKeys 接口变 | `docs/references/frontend/cross-cutting.md` + `changelog.md` |
+| FSD 层边界变 / 依赖规则变 | `docs/references/frontend/fsd-layers.md` + `CLAUDE.md §FSD` + `changelog.md` |
+| 新 API endpoint / path 变 | `frontend-prd.md §17` + `entity-types.md` + `changelog.md` |
+| 发现并修了 UI bug | `changelog.md` dev log（`[bug-fix]`）|
+| Phase 完成 | `frontend-prd.md §15` 对应项打勾 + `changelog.md` |
+| 设计决策变更 | `frontend-prd.md §3` 或对应章节 + `changelog.md` |
+| 所有改动（兜底） | `changelog.md` dev log（格式同后端：1-2 句 ~30-100 汉字） |
 
 ### 子任务完成 checklist（前端版）
 
 - [ ] `docs/references/frontend/slices/<slice>.md` 实现清单勾 ✅
 - [ ] 新 entity 类型 → `entity-types.md` 对应行更新
 - [ ] 横切变动 → `cross-cutting.md` 对应行更新
-- [ ] `progress-record.md` 加 dev log
+- [ ] `changelog.md` 加 dev log
 - [ ] 新规范/决策变动 → 加到本文件 + 对应 contract 文档
 
 发现文档与代码不符 → **立刻停下修文档**，记 `[doc-fix]` dev log。
