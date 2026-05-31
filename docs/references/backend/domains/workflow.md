@@ -117,7 +117,7 @@ type EdgeSpec struct {
 
 | Node type | FromPort 必填 | 合法值 |
 |---|---|---|
-| `approval` | ✓ | `"approved"` / `"rejected"` |
+| `approval` | ✓ | `"yes"` / `"no"`（17 §7 canon；`approved`/`rejected` 是 `approvals.status` / API decision 值，**非端口**）|
 | `loop` | ✓ | `"iterate"` / `"done"` |
 | `condition` | ✓ | 节点 config.cases 里声明的 case 名 |
 
