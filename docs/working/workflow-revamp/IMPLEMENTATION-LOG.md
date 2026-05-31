@@ -121,3 +121,17 @@ The durable interpreter now drives `StartRun`'s execution. **Final cutover (one 
 **Net M2:** durable interpreter is the execution engine; replay determinism proven (interpreter_test); linear flows run end-to-end. Known M2-scope gaps, by design: case/fork-join/loop (M3), approval/timer (M4) — interpreter currently treats those nodes' dispatchers as plain activities (case ignores NextPort; approval's `ErrApprovalRequired` → node_failed), rebuilt at their milestones.
 
 Next: **M3 — control flow** (case CEL guards + branch_taken + active-branch join + structured loop/iteration_key; CEL replaces text/template; begin the 14→5 dispatcher collapse, deleting the old loop).
+
+### 2026-05-31 — M3 progress: CEL + case + structured loop (½ done)
+
+**Done (3 commits, pushed; TDD):**
+- **CEL core** (`app/workflow/cel.go`, ADR-011): `cel-go` v0.28.1, `CompileCEL`/`Eval`/`EvalBool` reading `payload`+`ctx` only — **no now()/wall-clock** (env exposes none → replay-deterministic, 00 §determinism). Bare CEL for case.when (bool, fail-to-false/G9) + emit/tool.args (typed, nested list/map). 5 tests. Old text/template `expression.go` kept for the not-yet-folded dispatchers.
+- **case node** (interpreter): `NodeTypeCondition` handled as pure control flow — per-branch CEL guards, first-true-wins, fail-to-false, routes via `branches[].to` with emit'd payload, journals `branch_taken`. `Run`/`Resume` thread the flowrun payload. Replay copies `branch_taken` (no re-eval).
+- **structured loop** (interpreter, ADR-017): walk maintains `iterKey` + a per-iteration `visited` set; a case successor that's already-visited = the loop back-edge → `iterKey++`. **All journal writes + copy-hits key on `(nodeID, iteration_key)`** — iterations don't collide, replay copies each. Counter rides in the payload via case `emit` (04 §loop). 2 loop tests (iteration_key 0/1/2; replay no-rerun).
+- Interpreter test suite: **7 green** (linear + replay-determinism + 3 case + 2 loop).
+
+**Design note (payload data flow, observed during loop TDD):** the loop counter rides in `payload` and is advanced by case `emit` (which constructs the downstream payload). Activity output→payload semantics (replace vs merge) for loops where the counter must survive an activity is a real seam to pin when M3's fork-join + the agent/tool data flow land — flagged for the join sub-task / M3 spec. The self-loop test sidesteps it (case-only counter).
+
+**Remaining M3:** active-branch join + AND-split fork-join (multi-out-edge concurrency; join awaits activated-not-skipped in-edges derived from `branch_taken`, 17 §3 — the interpreter's biggest control-flow extension, single-walk → fork-join); then the 14→5 dispatcher collapse (delete the old loop: `pause.go`/`subdag.go`/`retry.go`/`dispatch_condition|loop_parallel`, retire `ExecutionContext`). active-branch join is a correctness命脉 (no-deadlock on the case-diamond, A-1) — next sub-task.
+
+**M4–M8** (after M3): approval+timer / trigger inbox+dispatcher / lifecycle drain+`:replay`+failures / agent domain+node / observability+SSE+e2e gate.
