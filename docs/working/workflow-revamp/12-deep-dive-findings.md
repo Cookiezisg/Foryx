@@ -14,7 +14,7 @@ landed-into:
 脑爆结论笔记(2026-05-29)。
 2026-05-31 改向 durable execution(详 [`00-overview.md`](./00-overview.md))。
 
-依赖:00-11 全部。本 doc patch [11-integration-chains.md](./11-integration-chains.md) 的初版盘点 — 深挖出 doc 11 漏掉的:**Memory 给 agent 节点的 严重员工思维漏洞 / Forge SSE 现有协议状态 / Relations 7 种新 kind / Catalog 已天然 "永远 prod" 合规 / Lazy 分组方案 / Frontend 5 新 feature slice**。
+依赖:00-11 全部。本 doc patch [11-integration-chains.md](./11-integration-chains.md) 的初版盘点 — 深挖出 doc 11 漏掉的:**Memory 给 agent 节点的 严重员工思维漏洞 / Forge SSE 现有协议状态 / Relations 6 种新 kind / Catalog 已天然 "永远 prod" 合规 / Lazy 分组方案 / Frontend 5 新 feature slice**。
 
 > 执行底盘已从旧的 message-queue + actor 模型改向 **durable execution**(详 [`00-overview.md`](./00-overview.md)):节点 = activity(记账步骤),执行器照图走,事件日志(journal)记每步结果,崩了确定性重放。本篇凡涉执行模型处一律按此理解;本篇结论本身**多数与执行模型无关**(forge SSE / relations / catalog / 跨域涟漪 / HTTP API / 测试基建 / frontend),改向不影响。受影响的只有 S1(lazy 分组,见下)、S7 的执行引擎 seam、综合改造规模表里执行引擎相关项 —— 已就地对齐。
 
@@ -119,7 +119,7 @@ landed-into:
 
 > **CANON-X1(扩的是共享 scope 枚举,不另立 forge 私有枚举)**:给 forge SSE 加 `agent` / `document` / `skill` kind(→ 6),本质是扩 **eventlog 的共享 scope-kind 闭枚举**——`forge.IsValidScopeKind` 复用 `eventlogdomain.Kind*`,两条 SSE 共用同一套 scope 词表。这是项目重构,扩这个共享枚举是接受的、**不另立 forge 私有枚举**。按 **E2**(闭枚举先改协议文档再加 code)先更新 `event-log-protocol.md` 再加 kind。澄清旧表述里"eventlog SSE 不动"——**实际共享 scope 枚举要扩(加 agent/document/skill)**。
 
-### S3. Relations — 7 种新 kind + DB CHECK migration
+### S3. Relations — 6 种新 kind + DB CHECK migration
 
 **好消息**:`relations` 表**当前无 version_id 列** — 永远 prod 天然合规 ✅。
 
@@ -134,12 +134,12 @@ agent_uses_document              # agent knowledge 挂载
 agent_uses_skill                 # agent skill 挂载
 ```
 
-> **CANON-X5(chat 锻造/编辑用通用边,不为 agent 立专边)**:chat 老板锻造/编辑 agent **不加** `conversation_forged_agent` / `conversation_edited_agent`——冗余且反既有通用模式。用既有通用边 `conversation_forged_entity` / `conversation_edited_entity` + `to_kind=agent` 即可。真正新增的边类型 = `workflow_uses_agent` + 6 个 `agent_uses_*`(function / handler / agent / mcp / document / skill),共 **7 种**。
+> **CANON-X5(chat 锻造/编辑用通用边,不为 agent 立专边)**:chat 老板锻造/编辑 agent **不加** `conversation_forged_agent` / `conversation_edited_agent`——冗余且反既有通用模式。用既有通用边 `conversation_forged_entity` / `conversation_edited_entity` + `to_kind=agent` 即可。真正新增的边类型 = `workflow_uses_agent` + 5 个 `agent_uses_*`(function / handler / mcp / document / skill),共 **6 种**(**无 `agent_uses_agent`** —— agent 不能调 agent,员工思维,C-3)。
 
 **改动**(`backend/internal/domain/relation/relation.go`):
 
 - 加 `EntityKindAgent = "agent"`(line 74+)
-- 加 7 个 kind 常量(`workflow_uses_agent` + 6 `agent_uses_*`)
+- 加 6 个 kind 常量(`workflow_uses_agent` + 5 `agent_uses_*`,无 `agent_uses_agent`)
 - 改 `IsValidKind` switch (line 54)
 - 改 `IsValidEntityKind` switch (line 81)
 - 改 DB CHECK constraint 列举(line 26)
@@ -247,7 +247,7 @@ agent_uses_skill                 # agent skill 挂载
 | Lazy 划分(C1)| 提议 7 组(workflow 膨胀到 22) | **domain-6**(按 forge 实体分 6 组,不细分 mutate/inspect)+ `catalog-query`(7 个 `search_*`)入 Resident(详 S1;Round-3 实测推翻了"细分到 11"的旧结论) |
 | Forge SSE(G1) | 只说 "加 agent kind" | kind 扩到 **6(加 agent / document / skill)** —— 右栏 subpage 要对 6 大锻造工具流式呈现;各 kind emit 点补漏 + ForgeOpApplied 真 emit + 试跑结果 emit |
 | 错诊工具放哪 | 待用户拍 | **已答**:并入 Lazy `workflow` 组(domain-6,不单拆 `workflow-debug`) |
-| Relations 改造 | **doc 11 完全没提** | 新加段落:7 种 kind(`workflow_uses_agent` + 6 `agent_uses_*`;chat 锻造/编辑走通用边 `conversation_*_entity` + `to_kind=agent`,不立专边)+ DB migration + AgentReader |
+| Relations 改造 | **doc 11 完全没提** | 新加段落:6 种 kind(`workflow_uses_agent` + 5 `agent_uses_*`,无 `agent_uses_agent`;chat 锻造/编辑走通用边 `conversation_*_entity` + `to_kind=agent`,不立专边)+ DB migration + AgentReader |
 | Catalog 改造 | doc 11 只提 source 加 reader | 补 `Kind` / `Active` 字段加进 Item + token cost 估算 |
 | Memory 给 agent | **doc 11 完全没提** | 新加段:agent 不接 memory(产品决策),dispatch 走独立 system prompt 装配链 |
 | 执行引擎(H 段)| doc 11 旧稿仍写 `driveLoop → message-queue-driven` + 5 节点 actor + `infra/messagequeue/` | 对齐 **durable execution**:执行器照图走 + 事件日志 + 确定性重放(详 [`00-overview.md`](./00-overview.md));`infra/messagequeue/` 这类全删,换 `flowrun_events` journal |

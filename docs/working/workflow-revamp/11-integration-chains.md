@@ -98,9 +98,9 @@ flowruns        ( id, workflow_id, version_id,        -- version_id 启动时钉
 -- 唯一真相:journal(append-only)。写入契约(per-flowrun 串行写 / seq 事务内分配 /
 --   record-once + first-wins 的 UNIQUE / agent 子步 key)详 00 "Journal 写入契约 + replay key" 段
 flowrun_events  ( id, flowrun_id, seq,                -- UNIQUE(flowrun_id, seq);seq per-flowrun 严格单调(写入事务内分配)
-                  type,                                -- node_started/completed · branch_taken · signal_awaited/received · timer_armed/fired · agent_step_started/completed · node_failed
-                  node_id, iteration_key,              -- replay key;UNIQUE(flowrun_id,node_id,iteration_key,type[,turn,tool_call_id]) = record-once / first-wins
-                  turn, tool_call_id,                  -- 仅 agent 子事件:定位第几 turn / 哪个 tool-call(其余事件留空)
+                  type,                                -- 结果类:node_completed / branch_taken / signal_received / timer_fired;attempt 类:node_started / node_failed;其他:signal_awaited / timer_armed / agent_step_*
+                  node_id, iteration_key, attempt,     -- replay key=(flowrun_id,node_id,iteration_key);**record-once UNIQUE 只对结果类 kind**(详 00 Journal 写入契约);attempt 仅 node_started/failed 用、append-many 留 retry 痕(A-2)
+                  turn, tool_call_id,                  -- 仅 agent 子事件:定位第几 turn / 哪个 tool-call(其余留空)
                   result )                             -- JSON(activity 输出 / 分支选择 / 信号 / timer deadline)
 
 -- durable 等待(approval)

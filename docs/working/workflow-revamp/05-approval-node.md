@@ -96,8 +96,10 @@ approval 是 durable execution 里的"挂起等信号"步骤(对位 Temporal 的
    │         → 执行器从 approval 之后沿 yes 端口继续(payload 透传)
    ├─ 拒绝 → append signal_received 事件(decision=no) + approvals.status=rejected
    │         → 执行器从 approval 之后沿 no 端口继续(payload 透传)
-   └─ 超时 → 按 timeoutBehavior 处理(reject 走 no 端口 / approve 走 yes 端口 / fail 终止 flowrun);
-            同样落一条 signal_received(来源=timeout)事件
+   └─ 超时 → 按 timeoutBehavior 处理 + 落一条 signal_received(来源=timeout)事件:
+            reject → approvals.status=rejected,走 no 端口
+            approve → approvals.status=approved,走 yes 端口
+            fail   → approvals.status=failed + flowrun 标 failed(A-6;status 枚举含 timed_out/failed,对位 00 approvals 表)
 ```
 
 **状态归属**:挂起期间的真相在 **approvals 表(parked)+ 事件日志的 awaiting_signal 事件**,不在任何内存里。决策本身是日志里的一条 signal_received 事件——**它是已记账的结果,所以重放时控制流走哪个端口是确定的**(满足 00 的确定性约束:控制流只读已记账的值)。

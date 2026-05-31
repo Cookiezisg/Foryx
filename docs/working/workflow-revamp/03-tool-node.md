@@ -71,7 +71,7 @@ config:
 
 引用 entity 的 active version 改了 / revert 了,**所有 tool 节点自动跟新 / 跟着回滚**。Workflow accept 时 capability check 校验 active version 是否符合引用上下文(如 trigger 节点要求 function kind=polling)。
 
-> 注:`FlowRun.version_id` 钉住**图拓扑**版本(保证一次执行内图结构稳定),但被引用的 callable 按"永远 prod"在 activity 执行时解析到 active version。长跑 / 挂起重启后可能跑到改过的 callable——这是"永远 prod"刻意的修复回路属性,叠加上面的幂等边界,编排者改 callable 时应保证幂等。
+> 注(版本语义,A-5):"引用永远指 active、改了自动跟新 / revert 跟着回滚" 是**编排 / 引用**语义。**执行另说** —— flowrun **启动时 pin 住图拓扑(`version_id`)+ 它要调的 callable 版本**(`pinned_callables` 快照),整个生命周期(含崩溃重放 / parked resume)用这份快照,**callable 不漂移**(= Temporal versioning,采纳标准)。新 flowrun 才用新 active。详 [`00`](./00-overview.md) §3 / 确定性段。
 
 ---
 

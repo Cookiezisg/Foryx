@@ -129,7 +129,7 @@ POST /workflows/{id}:deactivate
 
 **不再即时 `DestroyOwner`(CANON-DRAIN)**:deactivate 走 active → draining → inactive 状态机,**绝不抽在途的 handler**。在途 flowrun 是 durable 的(journal + 重放),在老实例跑完;每个 flowrun 结束时各自销毁自己 `{Kind:"flowrun"}` 的独占实例,无 refcount、无共享 handler。这直接修了 [`00-overview.md`](./00-overview.md) 列的 **E6「抽在途 handler」**——旧设计 deactivate 即时 `DestroyOwner({workflow})`,会把正在用该 handler 的在途 flowrun 拆掉。`lifecycle_state`(active/draining/inactive)数据模型详 [`11-integration-chains.md`](./11-integration-chains.md)(CANON-DATA / CANON-DRAIN)。
 
-> **挂起的 approval 不阻塞 drain(C3)**:drain 只等**正在跑 activity** 的在途 flowrun 清零;`awaiting_signal`(挂起等人、可能等 30d)的 flowrun **不计为在途、不钉老实例**——它没在用 handler,只是 parked 在 journal 里。所以一个长挂 approval **不会让 drain 卡 30 天**:drain 等的是"正在跑的活儿"清零,parked 的等信号 run 继续 durable 地挂着;信号到了**按它自己 pinned 的老图拓扑续跑**(`FlowRun.version_id` 钉的是图;只有它之后调的 callable 解析到 active = "永远 prod",见 [`00`](./00-overview.md) 确定性段)。这避免了"长挂 approval 饿死 drain + 钉死老实例一个月"。
+> **挂起的 approval 不阻塞 drain(C3)**:drain 只等**正在跑 activity** 的在途 flowrun 清零;`awaiting_signal`(挂起等人、可能等 30d)的 flowrun **不计为在途、不钉老实例**——它没在用 handler,只是 parked 在 journal 里。所以一个长挂 approval **不会让 drain 卡 30 天**:drain 等的是"正在跑的活儿"清零,parked 的等信号 run 继续 durable 地挂着;信号到了**按它自己 pinned 的图 + pinned callable 版本续跑**(整个 flowrun 启动时就 pin 了图拓扑 + callable 版本快照,见 [`00`](./00-overview.md) §3/确定性;**无版本漂移** —— A-5 采纳标准 pin)。这避免了"长挂 approval 饿死 drain + 钉死老实例一个月"。
 
 ---
 
