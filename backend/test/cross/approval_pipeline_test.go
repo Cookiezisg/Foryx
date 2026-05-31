@@ -13,7 +13,6 @@ import (
 
 // covers: cross:workflow_scheduler:approval_pause_resume
 func TestApproval_PauseResumeComplete_E2E(t *testing.T) {
-	t.Skip("approval = M4: ADR-016 cutover routes executeRun through the durable interpreter, which models approval as a journal signal only from M4. The old pause/resume flow is bypassed; re-enable when M4 reimplements approval on the interpreter.")
 	h := th.New(t)
 	ctx := th.CtxAs("test-user")
 
@@ -127,7 +126,6 @@ func TestApproval_InvalidDecision_Returns400(t *testing.T) {
 
 // covers: cross:workflow_scheduler:approval_pause_resume
 func TestApproval_WrongNodeID_Returns404(t *testing.T) {
-	t.Skip("approval = M4: depends on the flowrun reaching paused, which the durable interpreter models only from M4 (ADR-016 cutover). Re-enable with M4.")
 	h := th.New(t)
 	ctx := th.CtxAs("test-user")
 

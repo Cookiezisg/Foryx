@@ -10,13 +10,13 @@ import (
 
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
-	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// pauseRun persists ExecutionContext as PausedState and flips status=paused.
+// pauseRun persists ExecutionContext as PausedState and flips status=paused. Still used by the old
+// loop-body path (runReadyLoop → subdag), deleted with the 14→5 collapse.
 //
-// pauseRun 把 ExecutionContext 持久化为 PausedState 并把 status 翻为 paused。
+// pauseRun 把 ExecutionContext 持久化为 PausedState 并把 status 翻为 paused（旧 loop body 路径）。
 func (s *Service) pauseRun(ctx context.Context, run *flowrundomain.FlowRun, execCtx *ExecutionContext, pausedNodeID string, position []string) error {
 	ps := &flowrundomain.PausedState{
 		NodeID:    pausedNodeID,
@@ -28,9 +28,6 @@ func (s *Service) pauseRun(ctx context.Context, run *flowrundomain.FlowRun, exec
 	if err := s.repo.SetPausedState(ctx, run.ID, ps); err != nil {
 		return fmt.Errorf("schedulerapp.pauseRun: SetPausedState: %w", err)
 	}
-	// Status → paused (no ended_at — run not terminal). Output / err
-	// fields stay empty;they'll be filled on final terminal flip.
-	// status → paused;不写 ended_at(run 非终态)。
 	if err := s.repo.UpdateStatus(ctx, run.ID, flowrundomain.StatusPaused, nil, "", "", nil, 0); err != nil {
 		return fmt.Errorf("schedulerapp.pauseRun: UpdateStatus: %w", err)
 	}
@@ -40,208 +37,107 @@ func (s *Service) pauseRun(ctx context.Context, run *flowrundomain.FlowRun, exec
 	return nil
 }
 
-// ResumeApproval rehydrates a paused FlowRun and continues execution with the user's decision.
-// reason is an optional free-form note — preserved in the flowrun_nodes row's
-// output for audit. Empty reason is allowed (user can skip).
+// ResumeApproval records the user's decision as a durable journal signal (signal_received) and
+// re-drives the interpreter, which copy-hits the signal at the parked approval and routes via the
+// yes/no port (ADR-016). Crash-safe by construction: the decision is a journaled event, so the
+// continuation survives a restart. reason is an optional audit note carried in the event.
 //
-// ResumeApproval 重建 paused FlowRun 并按用户决策继续执行。
-// reason 是可选自由文本备注——写到 flowrun_nodes 行 output 留痕。
-// 用户可不填（空字符串允许）。
+// ResumeApproval 把用户决策记成 durable journal 信号(signal_received)并重驱解释器;
+// 解释器在 parked approval 命中信号、按 yes/no 端口续走。崩溃安全(决策是已记账事件)。
 func (s *Service) ResumeApproval(ctx context.Context, runID, nodeID, decision, reason string) error {
 	if decision != "approved" && decision != "rejected" {
 		return fmt.Errorf("schedulerapp.ResumeApproval: %w", flowrundomain.ErrApprovalDecisionInvalid)
 	}
-
 	run, err := s.repo.Get(ctx, runID)
 	if err != nil {
 		return fmt.Errorf("schedulerapp.ResumeApproval: %w", err)
 	}
-	if run.Status != flowrundomain.StatusPaused {
+	if run.Status != flowrundomain.StatusAwaitingSignal {
 		return fmt.Errorf("schedulerapp.ResumeApproval: %w (status=%s)", flowrundomain.ErrNotPaused, run.Status)
 	}
-	if run.PausedState == nil {
-		return fmt.Errorf("schedulerapp.ResumeApproval: %w", flowrundomain.ErrNotPaused)
-	}
-	if run.PausedState.NodeID != nodeID {
-		return fmt.Errorf("schedulerapp.ResumeApproval: %w (paused at %s, asked for %s)",
-			flowrundomain.ErrApprovalNodeNotFound, run.PausedState.NodeID, nodeID)
-	}
-
-	// Look up the workflow version to get the frozen graph. The version
-	// pinned at run-start is what's still executing — even if the active
-	// version flipped meanwhile, the in-flight run sticks to its locked
-	// version.
-	// 取 version 的冻结图;run 锁定的 version 始终是它执行的图。
-	v, err := s.workflowRead.GetActiveVersion(ctx, run.WorkflowID)
-	if err == nil && v.ID != run.VersionID {
-		// Active flipped — load the specific frozen version below.
-		// active 已翻;以 run.VersionID 为准。
+	iter, ok := s.approvalParkedIter(ctx, runID, nodeID)
+	if !ok {
+		return fmt.Errorf("schedulerapp.ResumeApproval: %w (no parked approval at node %s)", flowrundomain.ErrApprovalNodeNotFound, nodeID)
 	}
 	graph, err := s.loadFrozenGraph(ctx, run)
 	if err != nil {
 		return fmt.Errorf("schedulerapp.ResumeApproval: load graph: %w", err)
 	}
 
-	// Snapshot PausedState before ClearPausedState wipes it from the
-	// in-memory cache (fakeRepo mutates the same row reference; prod
-	// fetches a fresh row each call so this is just defensive).
-	// 把 PausedState 拷出来再清,防 in-memory cache 把它一并 nil。
-	savedPaused := run.PausedState
-	if err := s.repo.ClearPausedState(ctx, runID); err != nil {
-		s.log.Warn("ResumeApproval: ClearPausedState failed",
-			zap.String("runID", runID), zap.Error(err))
+	// approved → yes port, rejected → no port (17 §7 ports yes/no; approvals.status approved/rejected).
+	port := "no"
+	if decision == "approved" {
+		port = "yes"
 	}
-	run.PausedState = savedPaused
+	if _, err := s.journal.AppendEvent(ctx, &flowrundomain.FlowRunEvent{
+		FlowrunID: runID, Type: flowrundomain.EventSignalReceived, NodeID: nodeID, IterationKey: iter,
+		Result: map[string]any{"decision": port, "reason": reason},
+	}); err != nil {
+		return fmt.Errorf("schedulerapp.ResumeApproval: journal signal: %w", err)
+	}
+	if err := s.repo.UpdateStatus(ctx, runID, flowrundomain.StatusRunning, nil, "", "", nil, 0); err != nil {
+		return fmt.Errorf("schedulerapp.ResumeApproval: flip running: %w", err)
+	}
+	s.publish(ctx, runID, run.WorkflowID, "resumed", map[string]any{"nodeID": nodeID, "decision": decision})
 
-	// Detached ctx (same pattern as StartRun) so resume survives HTTP
-	// caller-cancel. Register the cancel func so subsequent Cancel calls
-	// still work.
-	// detached ctx + 注 cancel,保证 Cancel 仍能杀。
+	// Detached ctx (same as StartRun) so the continuation survives HTTP caller-cancel.
 	runCtx := reqctxpkg.SetUserID(context.Background(), run.UserID)
 	runCtx, cancel := context.WithCancel(runCtx)
 	s.cancelsMu.Lock()
 	s.cancels[runID] = cancel
 	s.cancelsMu.Unlock()
-
-	if err := s.repo.UpdateStatus(runCtx, runID, flowrundomain.StatusRunning, nil, "", "", nil, 0); err != nil {
-		return fmt.Errorf("schedulerapp.ResumeApproval: flip running: %w", err)
-	}
-
-	// Write a flowrun_nodes row for the approval decision so audit trail of
-	// "who decided what + reason" survives PausedState clearing. reason may
-	// be empty — user chose to skip it.
-	//
-	// 写一行 flowrun_nodes 留 approval 审计——decision+reason 在 PausedState
-	// 清空后仍能查到。reason 可空（用户选择不填）。
-	approvalEnded := time.Now().UTC()
-	approvalRow := &flowrundomain.Node{
-		ID:          idgenpkg.New("frn"),
-		UserID:      run.UserID,
-		Status:      flowrundomain.NodeStatusOK,
-		TriggeredBy: "workflow",
-		Input:       map[string]any{},
-		Output:      map[string]any{"decision": decision, "reason": reason},
-		StartedAt:   savedPaused.PausedAt,
-		EndedAt:     approvalEnded,
-		ElapsedMs:   approvalEnded.Sub(savedPaused.PausedAt).Milliseconds(),
-		FlowrunID:   runID,
-		NodeID:      nodeID,
-		NodeType:    workflowdomain.NodeTypeApproval,
-		Attempts:    1,
-	}
-	if err := s.repo.CreateNode(runCtx, approvalRow); err != nil {
-		s.log.Warn("ResumeApproval: write approval audit node failed",
-			zap.String("runID", runID), zap.Error(err))
-	}
-
-	s.publish(runCtx, runID, run.WorkflowID, "resumed", map[string]any{
-		"decision": decision,
-		"reason":   reason,
-		"nodeID":   nodeID,
-	})
-
 	go func() {
 		defer s.releaseCancel(runID)
 		defer func() {
 			if r := recover(); r != nil {
-				s.log.Error("ResumeApproval: continuation panic",
-					zap.String("runID", runID), zap.Any("recover", r))
+				s.log.Error("ResumeApproval: continuation panic", zap.String("runID", runID), zap.Any("recover", r))
 			}
 		}()
-		s.continueRun(runCtx, run, graph, nodeID, decision)
+		s.executeRun(runCtx, run, graph)
 	}()
 	return nil
 }
 
-// continueRun rebuilds ExecutionContext from PausedState and drives the remaining DAG.
+// approvalParkedIter finds the iteration_key of nodeID's latest signal_awaited not yet answered by
+// a signal_received — i.e. the approval currently parked (handles an approval inside a loop).
 //
-// continueRun 从 PausedState 重建 ExecutionContext 并推剩余 DAG。
-func (s *Service) continueRun(ctx context.Context, run *flowrundomain.FlowRun, graph *workflowdomain.Graph, pausedNodeID, decision string) {
-	execCtx := &ExecutionContext{
-		Run:       run,
-		Graph:     graph,
-		Variables: run.PausedState.Variables,
-		Outputs:   run.PausedState.Outputs,
-		Done:      make(map[string]bool),
-		Failed:    make(map[string]string),
-		Attempts:  make(map[string]int),
-		NextPort:  make(map[string]string),
+// approvalParkedIter 找 nodeID 最新一条未被 signal_received 应答的 signal_awaited 的 iteration_key。
+func (s *Service) approvalParkedIter(ctx context.Context, runID, nodeID string) (int, bool) {
+	evs, err := s.journal.LoadJournal(ctx, runID)
+	if err != nil {
+		return 0, false
 	}
-	if execCtx.Variables == nil {
-		execCtx.Variables = make(map[string]any)
-	}
-	if execCtx.Outputs == nil {
-		execCtx.Outputs = make(map[string]map[string]any)
-	}
-	for nodeID := range execCtx.Outputs {
-		execCtx.Done[nodeID] = true
-	}
-	// Approval node finalization: mark it done + record the decision as
-	// its output + queue downstream advance with NextPort=decision.
-	// approval 节点终态化:置 done + decision 写 Outputs + NextPort=decision
-	// 推下游。
-	execCtx.Done[pausedNodeID] = true
-	execCtx.Outputs[pausedNodeID] = map[string]any{"decision": decision}
-	execCtx.NextPort[pausedNodeID] = decision
-
-	topo := buildTopo(graph)
-	// Replay completed in-degree decrements so topo state is correct for
-	// the continuation. Order: every already-done node had its downstream
-	// in-degrees decremented when it originally completed.
-	// 回放已完成节点的 in-degree decrement;按完成顺序回放保 topo 正确。
-	for doneID := range execCtx.Done {
-		port := execCtx.NextPort[doneID]
-		_ = topo.advance(doneID, port)
-	}
-	// Now collect the new ready set from the approval node's downstream.
-	// 然后收 approval 节点下游新 ready。
-	ready := topo.advance(pausedNodeID, decision)
-	// Already advance ran above for pausedNodeID via the Done loop too —
-	// the second call decrements twice. Compensate by re-building topo
-	// fresh and replaying without the paused node, then advance for it.
-	// 重建 topo,把 paused 节点之外的 done 节点回放,然后 advance paused 节点。
-	topo = buildTopo(graph)
-	for doneID := range execCtx.Done {
-		if doneID == pausedNodeID {
+	awaited := -1
+	answered := map[int]bool{}
+	for _, e := range evs {
+		if e.NodeID != nodeID {
 			continue
 		}
-		_ = topo.advance(doneID, execCtx.NextPort[doneID])
+		switch e.Type {
+		case flowrundomain.EventSignalAwaited:
+			if e.IterationKey > awaited {
+				awaited = e.IterationKey
+			}
+		case flowrundomain.EventSignalReceived:
+			answered[e.IterationKey] = true
+		}
 	}
-	ready = topo.advance(pausedNodeID, decision)
-
-	// Drive the rest of the DAG (same loop as executeRun).
-	// 推剩余 DAG(跟 executeRun 同循环)。
-	s.driveLoop(ctx, run, graph, execCtx, topo, ready)
+	if awaited >= 0 && !answered[awaited] {
+		return awaited, true
+	}
+	return 0, false
 }
 
-// driveLoop is the per-ready-set loop body shared by executeRun and continueRun.
+// runReadyLoop is the old ready-set evaluator; still used by the loop body (subdag) until the
+// 14→5 collapse. Returns (status, errCode, errMsg, paused).
 //
-// driveLoop 是 executeRun 与 continueRun 共享的 per-ready-set 循环本体。
-func (s *Service) driveLoop(ctx context.Context, run *flowrundomain.FlowRun, graph *workflowdomain.Graph, execCtx *ExecutionContext, topo *topoState, ready []string) {
-	status, errCode, errMsg, paused := s.runReadyLoop(ctx, run, execCtx, topo, ready)
-	if paused {
-		return // pauseRun already wrote terminal state
-	}
-	output := map[string]any{
-		"nodesCompleted": len(execCtx.Done),
-		"nodesTotal":     len(graph.Nodes),
-	}
-	s.finalizeRun(ctx, run, status, output, errCode, errMsg)
-}
-
-// runReadyLoop is the shared ready-set evaluator; returns (status, errCode, errMsg, paused).
-// Sub-graphs (loop body, future parallel branches) reuse this without finalizeRun.
-//
-// runReadyLoop 是 ready-set 循环主体；返 (status, errCode, errMsg, paused)。
-// 子图（loop body、未来 parallel branches）复用此函数但不调 finalizeRun。
+// runReadyLoop 是旧 ready-set 循环主体；loop body(subdag)仍复用，14→5 折叠时删。
 func (s *Service) runReadyLoop(ctx context.Context, run *flowrundomain.FlowRun, execCtx *ExecutionContext, topo *topoState, ready []string) (status, errCode, errMsg string, paused bool) {
 	status = flowrundomain.StatusCompleted
 
 	for len(ready) > 0 {
 		select {
 		case <-ctx.Done():
-			// Distinguish run-level timeout (DeadlineExceeded) from explicit cancel (Canceled).
-			// 区分 run 级超时 (DeadlineExceeded) 与显式 cancel (Canceled)。
 			if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 				status = flowrundomain.StatusFailed
 				errCode = "RUN_TIMEOUT"
@@ -262,8 +158,6 @@ func (s *Service) runReadyLoop(ctx context.Context, run *flowrundomain.FlowRun, 
 
 		nextReady := make([]string, 0)
 		for _, res := range results {
-			// Approval node — pause + return (don't write flowrun_node
-			// row;the node hasn't actually completed yet).
 			if errors.Is(res.Output.Error, ErrApprovalRequired) {
 				position := make([]string, 0, len(ready))
 				position = append(position, ready...)
@@ -309,17 +203,11 @@ func (s *Service) runReadyLoop(ctx context.Context, run *flowrundomain.FlowRun, 
 	return
 }
 
-// loadFrozenGraph fetches the specific Version graph the FlowRun is pinned to.
+// loadFrozenGraph fetches the Version graph the FlowRun is pinned to (V1 fast-path via
+// GetActiveVersion; matching run.VersionID exactly when active flips is a later enhancement).
 //
 // loadFrozenGraph 取 run 锁定的 Version 的冻结图。
 func (s *Service) loadFrozenGraph(ctx context.Context, run *flowrundomain.FlowRun) (*workflowdomain.Graph, error) {
-	// We need a generic "GetVersion(versionID)" port — workflowRead is a
-	// reader interface that doesn't expose this directly. For V1 we go
-	// through GetActiveVersion as a fast path (works when the version
-	// hasn't been replaced mid-run, which is the common case for paused
-	// runs resumed within minutes). When active has flipped, GetWorkflow
-	// → loop versions → match by ID is a Plan 06 enhancement.
-	// V1:走 GetActiveVersion 快路径;active 已翻情况是 Plan 06 增强。
 	v, err := s.workflowRead.GetActiveVersion(ctx, run.WorkflowID)
 	if err != nil {
 		return nil, err
