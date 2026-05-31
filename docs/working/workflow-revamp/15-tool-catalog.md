@@ -136,9 +136,9 @@ landed-into:
 | agent `set_output_schema` | `value:{}` 无类型 | `{kind:'json_schema'\|'enum'\|'free_text', schema:<JSON Schema>}` | **0→87** |
 | trigger cron 字段 | `config:{}` 无类型 | `{kind:'cron', cron:'<5段>'}`(字段名写死 `cron`)| 73% 放错字段(schedule/expression/cronExpr…6 种)→ **100** |
 | edit `update_code` | ops 裸 `{}` | `{op:'update_code', code:'<代码>'}` | **46/30→66/77** |
-| `node.config` 逐 type | 无类型 | trigger`{kind,cron}` · tool`{ref,args}` · agent`{ref}` · case`{branches:{when,to}}` · approval`{prompt,branches,timeoutSeconds?,onTimeout?}` | — |
+| `node.config` 逐 type | 无类型 | trigger`{kind,spec}` · tool`{callable,args}` · agent`{agentRef}` · case`{branches:[{when,to}]}` · approval`{prompt,timeout?,timeoutBehavior?}`(端口 yes/no;**字段名 canon 见 [`17`](./17-execution-contract.md) §7**)| — |
 
-> tool 节点 `{ref,args}` 模型本来就一致,不用改。**后端字段名定死哪个都行(cron 还是 schedule),关键是 schema 里唯一。**
+> tool 节点 `{callable,args}` 模型本来就一致,不用改。**字段名 canon 统一在 [`17`](./17-execution-contract.md) §7(agent=`agentRef`、tool=`callable`、approval 端口=`yes`/`no`);schema 里唯一、不再各文档各写。**
 
 ### case 节点形态(头号脆弱点,单列)
 - **现状**(doc 04):`config.expression`(CEL 求值出一个**值**)+ `branches` 按名(invoice/inquiry/_default),**分支名必须 == expression 的值**。

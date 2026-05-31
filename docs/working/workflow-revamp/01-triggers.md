@@ -203,6 +203,8 @@ trigger 永远是**分发任务**:每个触发事件先落 `trigger_firings` 收
 
 **Fan-out 走"收件箱 → 派发器 → N flowrun",不在 workflow 图里画**——不需要 splitter 节点。早先把 fan-out 说成"trigger Service 隐式直发"的表述按本节口径作废:N 条事件 = N 条 firing,由派发器按并发/overlap 落地(详下方 CANON-DISPATCH)。
 
+> **claim 原子性**(`pending→claimed` + 建 flowrun + 回填 `flowrun_id` 单事务,无"claimed 但无 flowrun"卡死态)**+ dedup_key 幂等键**(cron=`scheduled_at` / webhook=请求 hash / polling=`(cursor, 段内 index)`,**不要求 poll 函数返事件 ID**)的精确契约见 [`17`](./17-execution-contract.md) §6。
+
 理由:
 
 | | flowrun 层 fan-out(本设计) | workflow 内 splitter 节点 |

@@ -147,7 +147,7 @@ config:
 - **现状描述已很好**(BARE-NAMES 契约:`__init__`/method 收裸命名参数非 dict;init_schema/methods_schema 声明参数名)。实测 handler 是已解决表面(复杂状态机 code-exec 93%)。**不用大改,保留 bare-names 教学。**
 
 ### create_workflow / edit_workflow
-- **case 改 when:**(§1-A);**node.config 逐 type pin 形状**(§1-B):trigger `{kind,cron}`、tool `{ref,args}`、agent `{ref}`、case `{branches:{when,to}}`、approval `{prompt,branches,timeoutSeconds?,onTimeout?}`。
+- **case 改 when:**(§1-A);**node.config 逐 type pin 形状**(§1-B;字段名 canon 见 [`17`](./17-execution-contract.md) §7):trigger `{kind,spec}`、tool `{callable,args}`、agent `{agentRef}`、case `{branches:[{when,to,emit?}]}`、approval `{prompt,timeout?,timeoutBehavior?}`(端口 yes/no)。
 - 构图守则进系统 prompt(§2-6),不必塞满工具描述(实测中等教学 > 全套教学)。
 
 ### activate_tools(lazy 分组 — 保持 domain-6)

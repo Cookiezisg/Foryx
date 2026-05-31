@@ -92,7 +92,7 @@ Forgify 是 **嵌入式、跑在自带 SQLite 上的 durable execution 引擎**(
 | `condition` | 合到 case |
 | `loop` | 合到 case + 回边(= 程序里的结构化循环) |
 | `variable` | 跨节点状态本就是**程序作用域里的变量**(循环外算的值在循环里直接读);真要持久化跨执行的状态进 **journaled 作用域变量 / payload 或外部 store**(DB 经 handler 方法,或 document·memory),不放 handler 进程内存。不需要节点表达 |
-| `parallel` | 并发是 infra 行为:**普通节点多条出边 = fork,汇合处 = join(await 全部)**,程序结构原生表达,不需要节点 |
+| `parallel` | 并发是 infra 行为:**普通节点多条出边 = fork,汇合处 = AND-join(await 全部)**;`case` 分支汇合则是 active-branch(只等被激活的入边,见 [`17`](./17-execution-contract.md) §3)。程序结构原生表达,不需要节点 |
 | `wait` | 延迟不是独立节点 —— 做成**任意(非 trigger)节点的 durable-timer gate**(见下"Durable timer"段):`at`(绝对:到 T 才放行)/ `after`(相对:输入到齐后空 D 才放行)。比 wait 节点更灵活(任意节点可门控),5 节点数不变 |
 | `http` | 用 forge function 包装,跟"能力源自 forge"原则一致 |
 
@@ -173,12 +173,14 @@ approvals       ( id, flowrun_id, node_id, prompt, payload,
 
 **`messages` / `node_state` / 版本列 / 前沿 / 空票 —— 全部不存在了。**
 
+> ⚠️ **本节 schema + 下方"Journal 写入契约" 是心智摘要**;字段 / 约束 / event type 全集 / record-once / replay-reset / join 激活 的 **canon 单一事实源在 [`17-execution-contract.md`](./17-execution-contract.md)**(§1-§4),以 17 为准 —— 避免 00/11 各存一份再漂移。
+
 ### Journal 写入契约 + replay key(承重 —— 重放正确性的地基)
 
 "append-only + seq 单调"是 invariant、不是写入协议。把协议写死(单进程 + 单 SQLite,比分布式简单太多):
 
 - **per-flowrun 串行写**:同一 flowrun 的 journal 由**单写入者**落(并行分支 goroutine 不并发裸写同一本;走 per-flowrun 写锁 / 串行 channel)。`seq` 在写入事务内分配 → per-flowrun 严格单调。
-- **record-once 只作用于"结果事件"(A-2)**:`UNIQUE(flowrun_id, node_id, iteration_key, kind)` **仅对结果类 kind**(`node_completed` / `branch_taken` / `signal_received` / `timer_fired`)—— 重放 / 重试重复写撞 UNIQUE = 已记账 → 丢弃,绝不两份结果。**attempt 轨迹(`node_started` / `node_failed`)是 append-many**(带 `attempt` 序号,retry 多次失败都留痕,见 [`07`](./07-error-handling.md)),**不设 type 级 UNIQUE**。重放取该步**第一条结果事件**当缓存结果。
+- **record-once 只作用于"结果事件"(A-2)**:`UNIQUE(flowrun_id, node_id, iteration_key, type, generation)` **仅对结果类 type**(`node_completed` / `branch_taken` / `signal_received` / `timer_fired`;`generation` 维度见 [`17`](./17-execution-contract.md) §4 replay-reset)—— 重放 / 重试重复写撞 UNIQUE = 已记账 → 丢弃,绝不两份结果。**attempt 轨迹(`node_started` / `node_failed`)是 append-many**(带 `attempt` 序号,retry 多次失败都留痕,见 [`07`](./07-error-handling.md)),**不设 type 级 UNIQUE**。重放取该步**第一条结果事件**当缓存结果。
 - **signal / timer first-wins**:approval 的 `signal_received`、timer 的 `timer_fired` 走 compare-and-insert(同上 UNIQUE)—— 用户决策与 timeout 同刻到,**第一条胜出、第二条 no-op**。
 - **replay key = `(flowrun_id, node_id, iteration_key)`**:`iteration_key` 区分循环轮次(一维,见 04 不嵌套)。重放靠它判"这步记账没":命中抄结果、未命中真跑。
 - **agent 节点子步**:agent run 内部多步,journal 记**子事件** `agent_step_started/completed`,键 = `(flowrun_id, node_id, iteration_key, turn, tool_call_id)`,result 含该 tool-call / LLM turn 输出 → 重放判"前 N 个 tool-call 已记账、第 N+1 个没"(= agent 重放粒度子步级,对位 [`02`](./02-agent-node.md))。
