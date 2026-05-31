@@ -215,6 +215,8 @@ agent 跟 function / handler 完全等地位,锻造流程一致。
 
 **mcp** 是从 marketplace 装的不算 forge — Forgify 的 forge 体系是**四元**:function / handler / agent / workflow。
 
+> 区分两个 axis(详 [`12`](./12-deep-dive-findings.md) §S2 / B5):这里"**四元**"是**锻造实体分类**(有版本 / pending / accept 的能力实体)。而 **forge SSE 流式通道**另外覆盖 document / skill,共 **6 kind** —— 那是驱动前端 subpage 右栏实时呈现编辑的 **UI 通道**,document/skill 在通道里但**不是**锻造实体。**6 kind(通道)≠ 四元(分类)**,两 axis 不冲突。
+
 ---
 
 ## 不变的:员工思维 + 禁令

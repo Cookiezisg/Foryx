@@ -178,7 +178,7 @@ Process boot
 
 **(a) 持久重挂取代旧的内存 `lastFire`(CANON-SCHEDULE)**:listener 注册的真相是 `trigger_schedules`(`last_fired_at` 入库),不再依赖只活在内存、随进程消失的 `lastFire`。这跟 Activate 段一起修了 [`00-overview.md`](./00-overview.md) **E1「重启丢补跑」**。
 
-**(b) catchup 材化进收件箱**:停机期漏的 cron firing 不再当场补跑,而是按 catchup_window 策略写进 `trigger_firings` 收件箱(先持久化再动作),由派发器 (d) 统一消费——崩在"事件到 → flowrun 起"之间也不丢。补多少是编排者拍的 policy(CANON-MP),平台只保证不静默丢。
+**(b) catchup 材化进收件箱**:停机期漏的 cron firing 不再当场补跑,而是按 catchup_window 策略写进 `trigger_firings` 收件箱(先持久化再动作),由派发器 (d) 统一消费——已落库 firing 不丢(cron firing 由 cron-math 幂等可重算,崩在 catchup 中途下次开机重算补上)。补多少是编排者拍的 policy(CANON-MP),平台只保证不静默丢。
 
 **(c) 替代旧设计的"扫 paused flowrun + 重建内存态 + 重新 drive DAG"**——不再有 PausedState / ExecutionContext 的内存快照需要重建,**唯一真相是事件日志**,重放即恢复(Theme 1)。approval 的"挂着等人"由 `awaiting_signal` 状态 + 日志里的 `signal_awaited` 事件表达,重放到该点自然停下等信号,**不依赖任何进程内的 cancel handle**。详 [`05-approval-node.md`](./05-approval-node.md)。
 

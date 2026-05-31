@@ -134,7 +134,7 @@ ALTER TABLE workflows ADD COLUMN lifecycle_state TEXT DEFAULT 'inactive';  -- ac
 
 DB CHECK `lifecycle_state IN ('active','draining','inactive')`、`trigger_firings.status` / `overlap_policy` / `catchup_window` 各按枚举(D3:稳定白名单)。`trigger_firings` 也走**事件日志 GC 默认 retention**(见风险表)。
 
-> **统一框架**:任何触发(cron/fsnotify/webhook/polling/manual)在尝试跑之前先写一条 `trigger_firings`(先持久化再动作)→ 统一走收件箱 → 单派发器 → flowrun;崩在"事件到 → flowrun 起"之间也不丢。manual 默认 `overlap=AllowAll`(显式动作,立即跑)。**Mechanism**(平台保证):触发绝不静默丢失 / 每条 firing 有 outcome / 在途绝不被强拆;**Policy**(编排者拍):`catchup_window`(补多少)+ `overlap_policy`(撞车怎么办),给显式选项 + sane 默认。
+> **统一框架**:任何触发(cron/fsnotify/webhook/polling/manual)在尝试跑之前先写一条 `trigger_firings`(先持久化再动作)→ 统一走收件箱 → 单派发器 → flowrun;**已落库 firing 不丢**(落库前内存窗口:webhook 靠 200-after-persist + 重试、fsnotify best-effort,详 C8/C9)。manual 默认 `overlap=AllowAll`(显式动作,立即跑)。**Mechanism**(平台保证):触发绝不静默丢失 / 每条 firing 有 outcome / 在途绝不被强拆;**Policy**(编排者拍):`catchup_window`(补多少)+ `overlap_policy`(撞车怎么办),给显式选项 + sane 默认。
 
 ---
 
@@ -276,7 +276,7 @@ dispatcher.Start()
 ```go
 // onFire:先持久化一条 firing(pending),绝不在此处直接 StartRun
 func onFire(workflowID, nodeID, payload) {
-    appendFiring(workflowID, nodeID, payload)   // 崩在"事件到→flowrun 起"之间也不丢
+    appendFiring(workflowID, nodeID, payload)   // 落库后即 durable(落库前窗口见 C9)
     bumpLastFiredAt(workflowID, nodeID)         // last_fired_at 落库(给 catchup)
 }
 

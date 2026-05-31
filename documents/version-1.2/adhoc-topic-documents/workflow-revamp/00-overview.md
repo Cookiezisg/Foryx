@@ -80,7 +80,7 @@ Forgify 是 **嵌入式、跑在自带 SQLite 上的 durable execution 引擎**(
 | `skill`(独立节点) | 改 agent 的挂载 |
 | `condition` | 合到 case |
 | `loop` | 合到 case + 回边(= 程序里的结构化循环) |
-| `variable` | 跨节点状态本就是**程序作用域里的变量**(循环外算的值在循环里直接读);真要持久化跨执行状态用 handler。不需要节点表达 |
+| `variable` | 跨节点状态本就是**程序作用域里的变量**(循环外算的值在循环里直接读);真要持久化跨执行的状态进 **journaled 作用域变量 / payload 或外部 store**(DB 经 handler 方法,或 document·memory),不放 handler 进程内存。不需要节点表达 |
 | `parallel` | 并发是 infra 行为:**普通节点多条出边 = fork,汇合处 = join(await 全部)**,程序结构原生表达,不需要节点 |
 | `wait` | 延迟 = 程序里的一个 durable timer(记"睡到 T"、重放时按日志判断),不是节点类型 |
 | `http` | 用 forge function 包装,跟"能力源自 forge"原则一致 |
@@ -180,6 +180,23 @@ Forgify 重启
 
 ---
 
+## 平台健壮性 = 4 轴(执行健壮性总纲)
+
+"执行靠不靠谱"拆成 **4 条正交的轴**,每轴一条原则、各管一类 corner。设计里的健壮性 corner case 都归到这 4 条里 —— 不是零散补丁:
+
+| 轴 | 一句话原则 | 管什么 |
+|---|---|---|
+| **重放对** | durable execution:不确定性全在 activity、结果记 journal;**确定性是"对 journal 而言"**(已记账抄结果、未记账才真跑) | 重放粒度 / CEL 禁墙钟 / callable 版本漂移 / durable 定时器 / drain / boot 恢复 |
+| **不丢** | **先持久化再动作**:收件箱 = durability 边界。已落库 = durable + 有 outcome;落库前 = at-least-once(webhook 200-after-persist + 发送方重试、fsnotify best-effort) | 触发不 fire-and-forget / cursor 推进时机 / 落库前窗口 |
+| **不崩** | **"防平台崩"豁免**(mechanism-vs-policy 的资源例外):能无界增长的点给"高默认 + 可配 + 超帽落 outcome + 通知"的安全帽 | 收件箱深度 / `AllowAll` 并发 / respawn 速率 / CEL 求值超时 / 超长循环 continue-as-new |
+| **不畸形** | **accept 只收良构 / 可归约图**:并行分支自包含、循环单入口、不嵌套结构化循环 | 乱回边 / 不可归约 / 嵌套循环 |
+
+**为什么是 4 条不是 1 个**:Theme 1 能"一个抽象(durable execution)让 join / loop / 并发窟窿由构造消失",是因为那些窟窿**都在控制流这一个轴**;健壮性跨了 4 个轴(重放正确 / 投递 / 资源 / 静态结构),**没有单一抽象能一并吞掉** —— 但每轴有自己那条原则,所以仍是**原则化**而非打补丁。**新出现的 corner 先认它属哪条轴、用那条的统一姿势处理,别单独打补丁。**
+
+> **边界诚实(贯穿 4 轴)**:平台保 **mechanism**(记账一次 / 不静默丢 / 不撑爆 / 拒畸形图);**外部副作用 exactly-once 归锻造**(幂等);**落库前的 ephemeral 窗口靠源端重试**。都是命名清楚的责任线,不假装兜住。
+
+---
+
 ## 三条总纲
 
 ### 1. 员工思维
@@ -195,7 +212,7 @@ Forgify 重启
 |---|---|
 | trigger 层 | polling function(AI 帮造,对接 SaaS / 复杂判断 / 第三方无 webhook) |
 | tool 层 | function / handler / agent 都是用户/AI 锻造;mcp 是 marketplace 装 |
-| 状态层 | 跨节点持久状态用 handler stateful class(循环内临时状态用程序作用域变量) |
+| 状态层 | 循环内 / 跨节点临时状态用**程序作用域变量**;durable / 影响结果的状态进 **journaled 作用域变量 / payload 或外部 store**(DB 经 handler 方法 / document·memory),**不放 handler 进程内存**(否则 durable 重放分叉) |
 
 ### 3. 永远 prod
 > 所有"X 引用 Y"的关系,**Y 永远是 active version**。无 version pinning,没有 `@v3`。
@@ -248,7 +265,7 @@ handler 是单 subprocess、单 stdin/stdout 管道的 JSON-RPC。**对同一个
 
 Theme 1 把 flowrun **内部**做成 durable(journal + 重放);Theme 3 把 trigger→dispatch→lifecycle 这一**边界层**也做成 durable —— durable 触发收件箱 + 持久调度器 + 优雅 drain 生命周期。一条根原则:**先持久化再动作 + 受管生命周期,不许有 fire-and-forget**。两层合起来端到端无 fire-and-forget。
 
-- **收件箱先落库**:任何触发(cron/fsnotify/webhook/polling/manual)在尝试跑之前先写一条 `trigger_firings`;所有触发统一走收件箱 → 派发器 → flowrun,崩在"事件到→flowrun 起"之间也不丢。manual 默认 overlap=AllowAll(显式动作,立即跑)。
+- **收件箱先落库**:任何触发(cron/fsnotify/webhook/polling/manual)在尝试跑之前先写一条 `trigger_firings`;所有触发统一走收件箱 → 派发器 → flowrun。**已落库 firing 不丢**(崩在"firing 落库→flowrun 起"之间重放从收件箱续;落库前的内存窗口:webhook 靠 200-after-persist + 发送方重试、fsnotify best-effort,详 [`01`](./01-triggers.md) C8/C9)。manual 默认 overlap=AllowAll(显式动作,立即跑)。
 - **持久调度 + catchup**:`last_fired_at` 落库(取代原内存里 `gorm:"-"` 不入库的 `LastFiredAt`);开机按 cron 表达式算漏了哪几次,按 Catchup Window 策略(不补 / 补最近一次[默认] / 补窗口内全部)材化进收件箱。诚实边界:cron 靠 cron-math、polling 靠 cursor 自愈;webhook/fsnotify 停机期事件是外部 ephemeral,明说不假装兜住。
 - **单派发器 + overlap**:派发器按 `workflow.concurrency` + `trigger.overlap_policy` 消费收件箱;撞上"正在跑"时 overlap:Skip / BufferOne(默认) / BufferAll / AllowAll。铁律:**每条 firing 都有 outcome,绝不静默丢**。
 - **优雅 drain**:deactivate/accept 不即时销毁,走状态机——停新(撤 listener、不再起新 flowrun、进 draining)→ 排空(在途 flowrun 跑完,各自销毁自己 `{Kind:"flowrun"}` 的实例;无 refcount,无共享 handler)→ inactive +(accept)挂新版本 listener。零停机、绝不抽在途。
