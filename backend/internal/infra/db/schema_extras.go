@@ -36,6 +36,20 @@ var schemaExtraGroups = []extraGroup{
 		},
 	},
 	{
+		table: "flowrun_events",
+		stmts: []string{
+			// record-once (ADR-018): result/waiting/agent-substep/control events are
+			// deduped on dedup_key; attempt-class (node_started/node_failed) carry
+			// dedup_key='' and are excluded here so they append freely (retry trail).
+			//
+			// record-once:结果/等待/agent 子步/控制事件按 dedup_key 去重;
+			// attempt 类(node_started/node_failed)dedup_key='' 被此排除,自由 append。
+			`CREATE UNIQUE INDEX IF NOT EXISTS idx_fre_record_once
+				ON flowrun_events(flowrun_id, dedup_key)
+				WHERE type NOT IN ('node_started','node_failed')`,
+		},
+	},
+	{
 		table: "handlers",
 		stmts: []string{
 			`CREATE UNIQUE INDEX IF NOT EXISTS idx_handlers_user_name_active

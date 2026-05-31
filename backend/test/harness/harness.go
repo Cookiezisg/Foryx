@@ -240,6 +240,8 @@ func New(t *testing.T, opts ...Option) *Harness {
 		&workflowdomain.Version{},
 		&flowrundomain.FlowRun{},
 		&flowrundomain.Node{},
+		&flowrundomain.FlowRunEvent{},
+		&flowrundomain.Approval{},
 		&mcpdomain.Call{},
 		&skilldomain.Execution{},
 		&sandboxdomain.Runtime{},
