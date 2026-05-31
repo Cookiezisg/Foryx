@@ -90,3 +90,21 @@ Plan: `docs/superpowers/plans/2026-05-31-m2-interpreter-core-replay.md`.
 - **M3 inherits:** full `ExecutionContext` removal happens when the 14→5 collapse rewrites the dispatchers into the 5-node activity model.
 
 This keeps M2's cut clean (engine swap, not dispatcher rewrite) and avoids dragging M3's collapse forward. The cutover surgery (this scoped T3 + T4 pipeline) is the next unit — multi-file, build-break-prone, best executed with fresh budget against the live files.
+
+### 2026-05-31 — M2-T3 cutover, EVIDENCE-BASED execution plan (corrects the entanglement worry)
+
+Read `state.go` + `dispatcher.go` + every `dispatch_*.go`. **Evidence corrects my earlier "ExecutionContext-entangled → defer to M3" worry:**
+- Old engine's cross-node data flow is barely wired: `buildNodeInput` returns an **empty map**; `FunctionDispatcher` reads only static `Node.Config["functionId"]`/`["args"]`, **never `ExecCtx`**.
+- Only **4** dispatchers touch `ExecCtx`: `condition`/`loop_parallel` (read `.Outputs`/`.Variables` — the deep flow, = M3 case/collapse), `llm` (`.Variables`, linear unused), `handler` (**`.Run.ID` only**). **7** dispatchers don't touch it (function/agent/approval/http/mcp/skill/wait).
+- ∴ the **M2 linear path (trigger+function+handler) does NOT need the deep `ExecCtx`** — function ignores it, handler needs only `Run.ID`. So the cutover is M2-doable with **no journal→ExecCtx bridge patch**; `ExecutionContext` stays (the 4-dispatcher contract; removed in M3's collapse).
+
+**Precise cutover steps (next unit, zero-rediscovery):**
+1. `interpreter.step` passes `ExecCtx: &ExecutionContext{Run: &flowrundomain.FlowRun{ID: flowrunID}, Variables: map[string]any{}, Outputs: map[string]map[string]any{}}` (handler gets Run.ID; nil-safe empties for any reader). T1–T2 tests unaffected (countingRouter ignores ExecCtx).
+2. `Service`: add `journal flowrundomain.JournalRepository` field + `SetJournal(j)` setter (non-breaking); wire in `main.go` + `harness.go` (construct `flowruneventstore.New(gdb)` + `SetJournal`).
+3. Rewrite `executeRun`: empty graph → `finalizeRun(completed)`; else `New(s.journal, s.router).Run(ctx, run.ID, *graph)` → `finalizeRun(completed/failed)`. Drop `ExecuteFn` pluggability.
+4. **Delete the old loop as one cut** (executeRun no longer references them → all become dead): `pause.go`, `rehydrate.go`, `subdag.go`; from `state.go` delete `topoState`/`buildTopo`/`initialReady`/`advance`/`dispatchBatch`/`recordNode`/`buildNodeInput`/`dispatchResult`/`nodeOnError`/`maxInt` (KEEP `ExecutionContext` + `newExecutionContext` + `finalizeRun`); from `retry.go` delete `dispatchWithPolicies` + `nodeTimeoutDuration` (the M1-skipped test + its fn die here). Resolve every U1000 unused.
+5. `FlowRun.PausedState` field+struct + `ErrNotPaused`/`ErrApprovalNodeNotFound`/`ErrApprovalDecisionInvalid` sentinels deleted; `SetPausedState`/`ClearPausedState`/`ListPaused` off the flowrun repo port+impl; `Cancel`'s paused branch (scheduler.go L220–230) removed (running-only cancel; awaiting_signal resume = M4); `RehydrateOnBoot` paused-scan off main.go.
+6. Delete/rewrite the now-dead scheduler tests: `pause_test`/`state_test`/`timeout_dryrun`/`loop_body`(uses ExecCtx loop) — keep `scheduler_test`/`dispatchers_capability` adjusted; fix `flowrun` domain+store tests referencing PausedState.
+7. T4: linear pipeline test in `test/durable/`; full gate (unit+mock+staticcheck) green.
+
+This is the old→new engine swap as one coherent build-green commit; `ExecutionContext` + the 4 deep-flow dispatchers (condition/loop/llm) carry to M3's 14→5 collapse where the deep data flow is rewired to journal scope-vars (§5) + CEL.
