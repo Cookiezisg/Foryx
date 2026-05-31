@@ -53,8 +53,9 @@
 
 ### approvals
 
-`id`、`flowrun_id`、`node_id`、`prompt`、`payload`(JSON)、`reason`、`allow_reason`(BOOL)、`decided_at`，+ D1/D2。
+`id`、`user_id`(NOT NULL，inbox 按用户 scope)、`flowrun_id`、`node_id`、`prompt`、`payload`(JSON)、`reason`、`allow_reason`(BOOL)、`decided_at`，+ D1/D2。
 `status` TEXT NOT NULL，CHECK IN `(parked, approved, rejected, timed_out, failed, cancelled)`（**+cancelled** — flowrun 取消时 parked approval 标 cancelled，07）。
+**UNIQUE(flowrun_id, node_id)** — interpreter park 时 upsert(DoNothing)写本行,重放幂等。**执行真相是 journal**(signal_awaited/received);本行是 UI inbox + 审计投影。读出口:`GET /api/v1/approvals`(当前用户所有 parked,前端 banner/inbox 数据源)。
 
 ### trigger_schedules
 
