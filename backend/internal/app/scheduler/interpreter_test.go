@@ -183,3 +183,72 @@ func TestInterpreter_CaseReplay_CopiesDecision(t *testing.T) {
 		t.Fatalf("replay must copy the branch decision (hi once, lo zero): %v", router.calls)
 	}
 }
+
+// trigger -> case(loop head): while payload.n < 2, emit n+1 and back-edge to itself; else -> done.
+// A structured loop via a case back-edge; counter rides in the payload (04 §loop).
+func loopGraph() workflowdomain.Graph {
+	return workflowdomain.Graph{
+		Name: "loop",
+		Nodes: []workflowdomain.NodeSpec{
+			{ID: "t", Type: workflowdomain.NodeTypeTrigger},
+			{ID: "c", Type: workflowdomain.NodeTypeCondition, Config: map[string]any{
+				"branches": []any{
+					map[string]any{"when": "payload.n < 2", "to": "c", "emit": map[string]any{"n": "payload.n + 1"}},
+					map[string]any{"when": "true", "to": "done"},
+				},
+			}},
+			{ID: "done", Type: workflowdomain.NodeTypeFunction},
+		},
+		Edges: []workflowdomain.EdgeSpec{{ID: "e1", From: "t", To: "c"}},
+	}
+}
+
+// the loop runs to exit; each case activation gets a distinct iteration_key (ADR-017 back-edge
+// ordinal), so the per-iteration branch_taken events don't collide and `done` runs exactly once.
+func TestInterpreter_StructuredLoop_IterationKey(t *testing.T) {
+	journal := newJournal(t)
+	router := &countingRouter{calls: map[string]int{}}
+	ctx := context.Background()
+
+	if err := New(journal, router).Run(ctx, "fr_loop", loopGraph(), map[string]any{"n": 0}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if router.calls["done"] != 1 {
+		t.Fatalf("done should run exactly once after the loop exits: %v", router.calls)
+	}
+	var iters []int
+	for _, e := range mustLoad(t, journal, "fr_loop") {
+		if e.Type == flowrundomain.EventBranchTaken && e.NodeID == "c" {
+			iters = append(iters, e.IterationKey)
+		}
+	}
+	if len(iters) != 3 || iters[0] != 0 || iters[1] != 1 || iters[2] != 2 {
+		t.Fatalf("case branch_taken iteration_keys = %v, want [0 1 2]", iters)
+	}
+}
+
+// replaying a completed loop copies every iteration's recorded decision/result — no re-run.
+func TestInterpreter_LoopReplay_NoRerun(t *testing.T) {
+	journal := newJournal(t)
+	router := &countingRouter{calls: map[string]int{}}
+	ctx := context.Background()
+
+	if err := New(journal, router).Run(ctx, "fr_lr", loopGraph(), map[string]any{"n": 0}); err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	if err := New(journal, router).Resume(ctx, "fr_lr", loopGraph(), map[string]any{"n": 0}); err != nil {
+		t.Fatalf("resume: %v", err)
+	}
+	if router.calls["done"] != 1 {
+		t.Fatalf("replay must copy the loop (done once total): %v", router.calls)
+	}
+}
+
+func mustLoad(t *testing.T, j *flowruneventstore.Store, id string) []flowrundomain.FlowRunEvent {
+	t.Helper()
+	evs, err := j.LoadJournal(context.Background(), id)
+	if err != nil {
+		t.Fatalf("load: %v", err)
+	}
+	return evs
+}
