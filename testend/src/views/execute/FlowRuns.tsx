@@ -6,7 +6,8 @@ import { qk } from "@/hooks/queryKeys";
 import { EmptyView, StatusBadge, RelTime, Pill } from "@/ui";
 import type { FlowRun } from "@frontend/entities/flowrun/model/types";
 
-const STATUSES = ["", "running", "paused", "completed", "failed", "cancelled"];
+// awaiting_signal = durable approval park; paused = legacy (kept for backwards display compat).
+const STATUSES = ["", "running", "awaiting_signal", "paused", "completed", "failed", "cancelled"];
 
 export function FlowRuns() {
   const [status, setStatus] = useState("");

@@ -6,11 +6,13 @@ import { EmptyView, RelTime, StatusBadge } from "@/ui";
 import type { FlowRun } from "@frontend/entities/flowrun/model/types";
 
 export function ApprovalsQueue() {
+  // awaiting_signal = durable-execution status when a flowrun is parked at an approval node.
+  // The old "paused" status is no longer emitted in revamp; awaiting_signal is the canonical one.
   const { data } = useQuery({
-    queryKey: qk.flowruns({ status: "paused" }),
-    queryFn: () => getPage<FlowRun>("/api/v1/flowruns", { status: "paused", limit: 50 }),
+    queryKey: qk.flowruns({ status: "awaiting_signal" }),
+    queryFn: () => getPage<FlowRun>("/api/v1/flowruns", { status: "awaiting_signal", limit: 50 }),
   });
-  if (!data || data.data.length === 0) return <EmptyView>no paused flowruns awaiting approval</EmptyView>;
+  if (!data || data.data.length === 0) return <EmptyView>no flowruns awaiting approval</EmptyView>;
   return (
     <div style={{ height: "100%", overflow: "auto", padding: 12, display: "flex", flexDirection: "column", gap: 8 }}>
       {data.data.map((r) => (

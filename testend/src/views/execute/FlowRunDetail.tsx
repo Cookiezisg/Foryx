@@ -20,10 +20,15 @@ export function FlowRunDetail() {
     queryFn: () => getJSON<FlowRunNode[]>(`/api/v1/flowruns/${id}/nodes`),
     enabled: !!id,
   });
+  // Durable approval endpoint: POST /flowruns/{id}/approvals/{nodeId} with {decision, reason}.
+  // decision values: "approved" | "rejected" (not the old "approve"/"reject").
   const approve = useMutation({
-    mutationFn: ({ nodeId, decision }: { nodeId: string; decision: "approve" | "reject" }) =>
-      postJSON(`/api/v1/flowruns/${id}/nodes/${nodeId}:approve`, { decision }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: qk.flowrunNodes(id ?? "") }),
+    mutationFn: ({ nodeId, decision }: { nodeId: string; decision: "approved" | "rejected" }) =>
+      postJSON(`/api/v1/flowruns/${id}/approvals/${nodeId}`, { decision, reason: "" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: qk.flowrunNodes(id ?? "") });
+      qc.invalidateQueries({ queryKey: qk.flowrun(id ?? "") });
+    },
   });
   if (!id || !run) return <EmptyView>loading…</EmptyView>;
 
@@ -57,7 +62,11 @@ export function FlowRunDetail() {
         </thead>
         <tbody>
           {nodes.map((n) => {
-            const isPendingApproval = n.status === "pending" && n.nodeType === "approval";
+            // In the durable model the flowrun status is awaiting_signal when ANY approval is parked.
+            // A parked approval node's own FlowRunNode.status can be "running" or "pending"; there is
+            // no guaranteed "waiting_approval" node status. Show the approve/reject buttons for all
+            // approval-type nodes when the run is awaiting_signal — simple and correct for a dev tool.
+            const isPendingApproval = n.nodeType === "approval" && (run?.status === "awaiting_signal" || run?.status === "paused");
             return (
               <tr key={n.id}>
                 <td className="mono" style={{ fontSize: 10 }}>{n.nodeId}</td>
@@ -69,14 +78,14 @@ export function FlowRunDetail() {
                 <td>
                   {isPendingApproval ? (
                     <span>
-                      <button onClick={() => approve.mutate({ nodeId: n.id, decision: "approve" })} style={{
+                      <button onClick={() => approve.mutate({ nodeId: n.nodeId, decision: "approved" })} style={{
                         padding: "2px 8px", fontSize: 10, background: "var(--status-success)", color: "white",
                         border: "none", borderRadius: 3, cursor: "pointer", marginRight: 4,
-                      }}>approve</button>
-                      <button onClick={() => approve.mutate({ nodeId: n.id, decision: "reject" })} style={{
+                      }}>approved</button>
+                      <button onClick={() => approve.mutate({ nodeId: n.nodeId, decision: "rejected" })} style={{
                         padding: "2px 8px", fontSize: 10, background: "var(--status-error)", color: "white",
                         border: "none", borderRadius: 3, cursor: "pointer",
-                      }}>reject</button>
+                      }}>rejected</button>
                     </span>
                   ) : (
                     <button onClick={() => ui.showRaw(n.nodeId, n)} className="muted" style={{

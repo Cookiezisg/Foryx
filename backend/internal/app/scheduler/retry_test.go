@@ -1,3 +1,10 @@
+// Package scheduler retry tests cover the withRetry / dispatchWithPolicies / nextDelay helpers.
+// These helpers belong to the loop-body dispatch path (runReadyLoop → dispatchBatch →
+// dispatchWithPolicies → withRetry), which is still production code for loop / parallel node
+// types that route through subdag.go. They are DISTINCT from the top-level interpreter path
+// (New(journal, dispatch).Run) which dispatches activities directly without retry wrapping.
+// Both paths are production code; these tests cover the loop-body layer specifically.
+
 package scheduler
 
 import (
