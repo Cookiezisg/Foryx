@@ -8,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 vi.mock("@entities/flowrun", () => ({
   useFlowRun: vi.fn(),
   useFlowRunNodes: vi.fn(),
+  useApprovalInbox: vi.fn(),
   useCancelFlowRun: vi.fn(),
   useApproveNode: vi.fn(),
   useRejectNode: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock("@entities/relation", () => ({
 }));
 
 import {
-  useFlowRun, useFlowRunNodes, useCancelFlowRun, useTriageFlowRun,
+  useFlowRun, useFlowRunNodes, useApprovalInbox, useCancelFlowRun, useTriageFlowRun,
   useApproveNode, useRejectNode,
 } from "@entities/flowrun";
 import { useToastStore } from "@shared/ui/toastStore";
@@ -31,6 +32,7 @@ import { FlowRunDetail } from "./FlowRunDetail.tsx";
 
 const mockUseFlowRun = useFlowRun as any;
 const mockUseFlowRunNodes = useFlowRunNodes as any;
+const mockUseApprovalInbox = useApprovalInbox as any;
 const mockUseCancelFlowRun = useCancelFlowRun as any;
 const mockUseApproveNode = useApproveNode as any;
 const mockUseRejectNode = useRejectNode as any;
@@ -51,6 +53,7 @@ beforeEach(() => {
   useToastStore.setState({ toasts: [] });
   mockUseFlowRun.mockReturnValue({ data: BASE_RUN });
   mockUseFlowRunNodes.mockReturnValue({ data: NODES });
+  mockUseApprovalInbox.mockReturnValue({ data: [] });
   mockUseCancelFlowRun.mockReturnValue({ mutate: vi.fn(), isPending: false });
   mockUseApproveNode.mockReturnValue({ mutate: vi.fn(), isPending: false });
   mockUseRejectNode.mockReturnValue({ mutate: vi.fn(), isPending: false });
@@ -158,9 +161,13 @@ describe("FlowRunDetail", () => {
     expect(container.querySelectorAll(".fr-gantt-row")).toHaveLength(3);
   });
 
-  it("waitingApproval_approvalBannerVisible", () => {
-    mockUseFlowRunNodes.mockReturnValue({
-      data: [{ id: "n_a", status: "waiting_approval", label: "Approve me" }],
+  it("parkedApproval_approvalBannerVisible", () => {
+    mockUseApprovalInbox.mockReturnValue({
+      data: [{
+        id: "ap_1", userId: "u_1", flowrunId: "fr_xy", nodeId: "n_a",
+        prompt: "Approve me", status: "parked", allowReason: false,
+        createdAt: "2026-06-01T00:00:00Z", updatedAt: "2026-06-01T00:00:00Z",
+      }],
     });
     render(<FlowRunDetail runId="fr_xy" onBack={() => {}} />);
     expect(screen.getByText("等待审批")).toBeInTheDocument();

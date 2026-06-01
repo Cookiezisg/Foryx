@@ -51,6 +51,7 @@ openRunId null    → ExecuteOverview
 |---|---|---|
 | `ExecuteOverview` | `ui/ExecuteOverview.tsx` | FlowRun 列表（状态过滤 + 触发手动执行） |
 | `FlowRunDetail` | `ui/FlowRunDetail.tsx` | 单次执行详情（节点树 + 状态时间线 + 日志 + 跳 chat） |
+| `ApprovalBanner` | `ui/ApprovalBanner.tsx` | FlowRunDetail 顶部 sticky banner；自取 `useApprovalInbox` 按 runId 过滤 parked，每行 approve/reject + 可选 reason |
 
 ---
 
@@ -63,10 +64,11 @@ openRunId null    → ExecuteOverview
 详情:
   useFlowRun(id)    → run 元数据 + status
   useFlowRunNodes(id)  → 节点执行树
+  useApprovalInbox()   → 当前用户 parked approval；ApprovalBanner 按 runId 过滤渲染
 
 SSE notifications:
-  flowrun 类型通知 → useNotifications → qc.invalidateQueries(qk.flowruns(), qk.flowrun(id))
-  → 列表 + 详情自动刷新
+  flowrun 类型通知 → useNotifications → qc.invalidateQueries(qk.flowruns(), qk.flowrun(id), qk.approvals())
+  → 列表 + 详情 + approval banner 自动刷新
 ```
 
 ---
@@ -78,4 +80,5 @@ SSE notifications:
 | `frontend/src/pages/execute/ExecutePage.tsx` | 主路由组件 |
 | `frontend/src/pages/execute/ui/ExecuteOverview.tsx` | FlowRun 列表 |
 | `frontend/src/pages/execute/ui/FlowRunDetail.tsx` | 执行详情 |
+| `frontend/src/pages/execute/ui/ApprovalBanner.tsx` | parked approval banner（自取 inbox，按 runId 过滤）|
 | `frontend/src/pages/execute/index.ts` | public API export |

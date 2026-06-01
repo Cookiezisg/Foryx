@@ -145,7 +145,7 @@ export function FlowRunDetail({ runId, onBack, onOpenChat }: FlowRunDetailProps)
         </div>
       </div>
 
-      <ApprovalBanner runId={runId} nodes={nodes} />
+      <ApprovalBanner runId={runId} />
 
       <div className="fr-shell" ref={shellRef}>
         <FlowRunDag nodes={nodesAny} selected={selected?.id} onSelect={setSelectedNodeId} />

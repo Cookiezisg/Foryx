@@ -1,14 +1,15 @@
-// ApprovalBanner — sticky banner over waiting_approval nodes with
-// approve/reject + reason expand. Mutations hit /flowruns/{runId}/approvals.
+// ApprovalBanner — sticky banner over the run's PARKED approvals. Data comes
+// from the inbox endpoint (GET /approvals) filtered by runId + status==="parked";
+// rows approve/reject via POST /flowruns/{runId}/approvals/{nodeId}.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { createElement } from "react";
-import { setupFetchSpy } from "@shared/lib/testHarness";
 import { useToastStore } from "../../../shared/ui/toastStore.ts";
 import { ApprovalBanner } from "./ApprovalBanner.tsx";
+import type { Approval } from "@entities/flowrun";
 
 function wrap({ children }: { children: any }) {
   const client = new QueryClient({
@@ -17,133 +18,140 @@ function wrap({ children }: { children: any }) {
   return createElement(QueryClientProvider, { client }, children);
 }
 
-let calls: any;
+function approval(p: Partial<Approval>): Approval {
+  return {
+    id: "ap_" + (p.nodeId || "x"),
+    userId: "u_1",
+    flowrunId: "fr_1",
+    nodeId: "n1",
+    prompt: "",
+    status: "parked",
+    allowReason: false,
+    createdAt: "2026-06-01T00:00:00Z",
+    updatedAt: "2026-06-01T00:00:00Z",
+    ...p,
+  };
+}
+
+interface Call { url: string; method: string; body: string }
+
+// Route GET /approvals → the parked inbox; capture every call (POST decisions
+// land here too). The inbox URL ends in "/approvals"; the decision URL ends in
+// the nodeId, so endsWith cleanly distinguishes them.
+function mockInbox(parked: Approval[]): Call[] {
+  const calls: Call[] = [];
+  globalThis.fetch = vi.fn(async (url: string | URL, init: RequestInit = {}) => {
+    const u = typeof url === "string" ? url : url.toString();
+    const method = (init.method as string) || "GET";
+    calls.push({ url: u, method, body: (init.body as string) ?? "" });
+    if (method === "GET" && u.endsWith("/approvals")) {
+      return { ok: true, status: 200, json: async () => ({ data: parked }) };
+    }
+    return { ok: true, status: 200, json: async () => ({ data: {} }) };
+  }) as unknown as typeof fetch;
+  return calls;
+}
+
 beforeEach(async () => {
-  calls = setupFetchSpy();
   useToastStore.setState({ toasts: [] });
   const bridge = await import("@shared/bridge/wails");
   await bridge.initBaseUrl();
 });
 
 describe("ApprovalBanner", () => {
-  it("noPendingNodes_rendersNothing", () => {
-    const { container } = render(
-      <ApprovalBanner runId="fr_1" nodes={[{ id: "n1", status: "completed" }]} />,
-      { wrapper: wrap }
-    );
+  it("noParkedApprovals_rendersNothing", async () => {
+    const calls = mockInbox([]);
+    const { container } = render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/approvals"))).toBe(true));
     expect(container.firstChild).toBeNull();
   });
 
-  it("emptyNodes_rendersNothing", () => {
-    const { container } = render(
-      <ApprovalBanner runId="fr_1" nodes={[]} />,
-      { wrapper: wrap }
-    );
-    expect(container.firstChild).toBeNull();
-  });
-
-  it("undefinedNodes_doesNotThrow_rendersNothing", () => {
-    const { container } = render(
-      <ApprovalBanner runId="fr_1" nodes={undefined} />,
-      { wrapper: wrap }
-    );
-    expect(container.firstChild).toBeNull();
-  });
-
-  it("waitingApprovalNodes_rendersBannerWithCount", () => {
-    render(
-      <ApprovalBanner
-        runId="fr_1"
-        nodes={[
-          { id: "n1", status: "waiting_approval", label: "Step One" },
-          { id: "n2", status: "waiting_approval", label: "Step Two" },
-        ]}
-      />,
-      { wrapper: wrap }
-    );
-    expect(screen.getByText("等待审批")).toBeInTheDocument();
+  it("parkedApprovals_rendersBannerWithCount", async () => {
+    mockInbox([
+      approval({ nodeId: "n1", prompt: "Step One" }),
+      approval({ nodeId: "n2", prompt: "Step Two" }),
+    ]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    expect(await screen.findByText("等待审批")).toBeInTheDocument();
     expect(screen.getByText(/2 个节点需要决定/)).toBeInTheDocument();
     expect(screen.getByText("Step One")).toBeInTheDocument();
     expect(screen.getByText("Step Two")).toBeInTheDocument();
   });
 
-  it("waitingStatusAliases_alsoCountAsPending", () => {
-    render(
-      <ApprovalBanner
-        runId="fr_1"
-        nodes={[
-          { id: "a", status: "waiting", label: "W" },
-          { id: "b", status: "wait", label: "X" },
-        ]}
-      />,
-      { wrapper: wrap }
-    );
-    expect(screen.getByText(/2 个节点需要决定/)).toBeInTheDocument();
+  it("filtersToRunId_showsOnlyMatchingRun", async () => {
+    mockInbox([
+      approval({ flowrunId: "fr_other", nodeId: "n_other", prompt: "Other" }),
+      approval({ flowrunId: "fr_1", nodeId: "n_mine", prompt: "Mine" }),
+    ]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    expect(await screen.findByText("Mine")).toBeInTheDocument();
+    expect(screen.queryByText("Other")).toBeNull();
+    expect(screen.getByText(/1 个节点需要决定/)).toBeInTheDocument();
   });
 
-  it("nodeKind_renderedAsChip", () => {
-    render(
-      <ApprovalBanner
-        runId="fr_1"
-        nodes={[{ id: "n1", status: "waiting_approval", label: "L", kind: "approval" }]}
-      />,
-      { wrapper: wrap }
-    );
-    expect(screen.getByText("approval")).toBeInTheDocument();
+  it("filtersToParkedStatus_decidedRowsHidden", async () => {
+    mockInbox([
+      approval({ nodeId: "n_done", prompt: "Done", status: "approved" }),
+      approval({ nodeId: "n_wait", prompt: "Wait", status: "parked" }),
+    ]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    expect(await screen.findByText("Wait")).toBeInTheDocument();
+    expect(screen.queryByText("Done")).toBeNull();
   });
 
-  it("addReasonButton_expandsInputField", async () => {
-    render(
-      <ApprovalBanner
-        runId="fr_1"
-        nodes={[{ id: "n1", status: "waiting_approval", label: "Step" }]}
-      />,
-      { wrapper: wrap }
-    );
+  it("approvalWithoutPrompt_fallsBackToNodeId", async () => {
+    mockInbox([approval({ nodeId: "node_xyz", prompt: "" })]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    expect(await screen.findByText("node_xyz")).toBeInTheDocument();
+  });
+
+  it("allowReasonTrue_showsReasonButton_thatExpandsInput", async () => {
+    mockInbox([approval({ nodeId: "n1", prompt: "Step", allowReason: true })]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    await screen.findByText("Step");
     expect(screen.queryByPlaceholderText(/审批理由/)).toBeNull();
     await userEvent.click(screen.getByText("加理由"));
     expect(screen.getByPlaceholderText(/审批理由/)).toBeInTheDocument();
     expect(screen.getByText("收起")).toBeInTheDocument();
   });
 
+  it("allowReasonFalse_hidesReasonButton", async () => {
+    mockInbox([approval({ nodeId: "n1", prompt: "Step", allowReason: false })]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    await screen.findByText("Step");
+    expect(screen.queryByText("加理由")).toBeNull();
+  });
+
   it("approveClick_postsApproveDecisionWithCorrectUrl", async () => {
-    render(
-      <ApprovalBanner
-        runId="fr_1"
-        nodes={[{ id: "n_a", status: "waiting_approval", label: "Step" }]}
-      />,
-      { wrapper: wrap }
-    );
-    await userEvent.click(screen.getByText("批准"));
-    await waitFor(() => expect(calls.length).toBeGreaterThan(0));
-    expect(calls[0].url).toBe("/api/v1/flowruns/fr_1/approvals/n_a");
-    expect(calls[0].method).toBe("POST");
-    expect(JSON.parse(calls[0].body)).toEqual({ decision: "approved", reason: "" });
+    const calls = mockInbox([approval({ nodeId: "n_a", prompt: "Step" })]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    await userEvent.click(await screen.findByText("批准"));
+    let post: Call | undefined;
+    await waitFor(() => {
+      post = calls.find((c) => c.method === "POST");
+      expect(post).toBeTruthy();
+    });
+    expect(post!.url).toBe("/api/v1/flowruns/fr_1/approvals/n_a");
+    expect(JSON.parse(post!.body)).toEqual({ decision: "approved", reason: "" });
   });
 
   it("rejectClick_postsRejectDecision", async () => {
-    render(
-      <ApprovalBanner
-        runId="fr_1"
-        nodes={[{ id: "n_b", status: "waiting_approval", label: "Step" }]}
-      />,
-      { wrapper: wrap }
-    );
-    await userEvent.click(screen.getByText("拒绝"));
-    await waitFor(() => expect(calls.length).toBeGreaterThan(0));
-    expect(calls[0].url).toBe("/api/v1/flowruns/fr_1/approvals/n_b");
-    expect(JSON.parse(calls[0].body)).toEqual({ decision: "rejected", reason: "" });
+    const calls = mockInbox([approval({ nodeId: "n_b", prompt: "Step" })]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    await userEvent.click(await screen.findByText("拒绝"));
+    let post: Call | undefined;
+    await waitFor(() => {
+      post = calls.find((c) => c.method === "POST");
+      expect(post).toBeTruthy();
+    });
+    expect(post!.url).toBe("/api/v1/flowruns/fr_1/approvals/n_b");
+    expect(JSON.parse(post!.body)).toEqual({ decision: "rejected", reason: "" });
   });
 
   it("successApprove_replacesRowWithDecidedState_andToasts", async () => {
-    render(
-      <ApprovalBanner
-        runId="fr_1"
-        nodes={[{ id: "n_c", status: "waiting_approval", label: "Step Three" }]}
-      />,
-      { wrapper: wrap }
-    );
-    await userEvent.click(screen.getByText("批准"));
+    mockInbox([approval({ nodeId: "n_c", prompt: "Step Three" })]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    await userEvent.click(await screen.findByText("批准"));
     await waitFor(() => expect(screen.getByText("已批准")).toBeInTheDocument());
     expect(screen.queryByText("批准")).toBeNull();
     expect(useToastStore.getState().toasts.length).toBeGreaterThan(0);
@@ -151,41 +159,24 @@ describe("ApprovalBanner", () => {
   });
 
   it("successReject_showsRejectedState_andWarnToast", async () => {
-    render(
-      <ApprovalBanner
-        runId="fr_1"
-        nodes={[{ id: "n_d", status: "waiting_approval", label: "Step" }]}
-      />,
-      { wrapper: wrap }
-    );
-    await userEvent.click(screen.getByText("拒绝"));
+    mockInbox([approval({ nodeId: "n_d", prompt: "Step" })]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    await userEvent.click(await screen.findByText("拒绝"));
     await waitFor(() => expect(screen.getByText("已拒绝")).toBeInTheDocument());
     expect(useToastStore.getState().toasts[0].kind).toBe("warn");
   });
 
-  it("nodeWithoutLabel_fallsBackToId", () => {
-    render(
-      <ApprovalBanner
-        runId="fr_1"
-        nodes={[{ id: "node_xyz", status: "waiting_approval" }]}
-      />,
-      { wrapper: wrap }
-    );
-    expect(screen.getByText("node_xyz")).toBeInTheDocument();
-  });
-
   it("reasonTyped_includedInRequestBody", async () => {
-    render(
-      <ApprovalBanner
-        runId="fr_1"
-        nodes={[{ id: "n_r", status: "waiting_approval", label: "Step" }]}
-      />,
-      { wrapper: wrap }
-    );
-    await userEvent.click(screen.getByText("加理由"));
+    const calls = mockInbox([approval({ nodeId: "n_r", prompt: "Step", allowReason: true })]);
+    render(<ApprovalBanner runId="fr_1" />, { wrapper: wrap });
+    await userEvent.click(await screen.findByText("加理由"));
     await userEvent.type(screen.getByPlaceholderText(/审批理由/), "looks safe");
     await userEvent.click(screen.getByText("批准"));
-    await waitFor(() => expect(calls.length).toBeGreaterThan(0));
-    expect(JSON.parse(calls[0].body)).toEqual({ decision: "approved", reason: "looks safe" });
+    let post: Call | undefined;
+    await waitFor(() => {
+      post = calls.find((c) => c.method === "POST");
+      expect(post).toBeTruthy();
+    });
+    expect(JSON.parse(post!.body)).toEqual({ decision: "approved", reason: "looks safe" });
   });
 });

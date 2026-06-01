@@ -6,6 +6,7 @@ import type {
   FlowRunsParams,
   ApproveNodeVars,
   RejectNodeVars,
+  Approval,
 } from "../model/types";
 
 export function useFlowRuns(params: FlowRunsParams = {}) {
@@ -32,6 +33,19 @@ export function useFlowRunNodes(id: string) {
     queryFn: () => apiFetch(`/flowruns/${id}/nodes`),
     select: pickList<FlowRunNode>,
     enabled: !!id,
+  });
+}
+
+// Backend: GET /approvals → the caller's currently-parked approvals (17 §9 inbox).
+// The journal is execution truth; this projection tells the banner WHICH node is
+// parked. Banner filters the list by runId. Invalidated on every approve/reject.
+//
+// 后端 /approvals 返回当前用户所有 parked approval(inbox 投影);banner 按 runId 过滤。
+export function useApprovalInbox() {
+  return useQuery<Approval[]>({
+    queryKey: qk.approvals(),
+    queryFn: () => apiFetch("/approvals"),
+    select: pickList<Approval>,
   });
 }
 
@@ -64,6 +78,7 @@ export function useApproveNode() {
       qc.invalidateQueries({ queryKey: qk.flowruns() });
       qc.invalidateQueries({ queryKey: qk.flowrun(runId) });
       qc.invalidateQueries({ queryKey: qk.flowrunNodes(runId) });
+      qc.invalidateQueries({ queryKey: qk.approvals() });
     },
   });
 }
@@ -79,6 +94,7 @@ export function useRejectNode() {
     onSuccess: (_, { runId }) => {
       qc.invalidateQueries({ queryKey: qk.flowruns() });
       qc.invalidateQueries({ queryKey: qk.flowrun(runId) });
+      qc.invalidateQueries({ queryKey: qk.approvals() });
     },
   });
 }

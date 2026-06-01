@@ -25,6 +25,7 @@ export const qk = {
   flowruns:           () => ["flowruns"] as const,
   flowrun:            (id: string) => ["flowrun", id] as const,
   flowrunNodes:       (id: string) => ["flowrun-nodes", id] as const,
+  approvals:          () => ["approvals"] as const,
   skills:             () => ["skills"] as const,
   skill:              (id: string) => ["skill", id] as const,
   mcpServers:         () => ["mcp-servers"] as const,

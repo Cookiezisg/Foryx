@@ -177,7 +177,7 @@ SSE 事件名固定为 `notification`；dispatch 由 `payload.type` 字段驱动
 | `function` | invalidate functions + function(id) + functionVersions(id) |
 | `handler` | invalidate handlers + handler(id) + handlerVersions(id) + handlerConfig(id) |
 | `workflow` | invalidate workflows + workflow(id) + workflowVersions(id) |
-| `flowrun` | invalidate flowruns + flowrun(id) + flowrunNodes(id) |
+| `flowrun` | invalidate flowruns + flowrun(id) + flowrunNodes(id) + approvals()（approval 可能 park/decide）|
 | `mcp_server` | invalidate `qk.mcpServers()` |
 | `skill` | invalidate `qk.skills()` |
 | `memory` | invalidate `["memories"]` |
@@ -217,6 +217,7 @@ SSE 事件名固定为 `notification`；dispatch 由 `payload.type` 字段驱动
 | `qk.flowruns()` | `["flowruns"]` | `GET /api/v1/flowruns` |
 | `qk.flowrun(id)` | `["flowrun", id]` | `GET /api/v1/flowruns/{id}` |
 | `qk.flowrunNodes(id)` | `["flowrun-nodes", id]` | `GET /api/v1/flowruns/{id}/nodes` |
+| `qk.approvals()` | `["approvals"]` | `GET /api/v1/approvals`（当前用户 parked approval inbox;approve/reject 后失效）|
 | `qk.skills()` | `["skills"]` | `GET /api/v1/skills` |
 | `qk.skill(id)` | `["skill", id]` | `GET /api/v1/skills/{id}` |
 | `qk.mcpServers()` | `["mcp-servers"]` | `GET /api/v1/mcp-servers` |

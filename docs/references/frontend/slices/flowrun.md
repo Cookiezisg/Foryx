@@ -33,10 +33,11 @@ audience: [human, ai]
 ## 2. 类型（`model/types.ts`）
 
 ```ts
-type FlowRunStatus = "running" | "paused" | "completed" | "failed" | "cancelled";
+type FlowRunStatus = "running" | "paused" | "awaiting_signal" | "completed" | "failed" | "cancelled";
 type FlowRunTriggerKind = "cron" | "fsnotify" | "webhook" | "manual";
 type FlowRunNodeStatus = "pending" | "running" | "ok" | "failed" | "cancelled" | "timeout" | "skipped";
-type ApprovalDecision = "approve" | "reject";
+type ApprovalDecision = "approved" | "rejected";
+type ApprovalStatus = "parked" | "approved" | "rejected" | "timed_out" | "failed" | "cancelled";
 
 interface PausedState {
   nodeId; variables: Record<string,unknown>;
@@ -63,6 +64,15 @@ interface FlowRunNode {
 interface FlowRunsParams { workflowId?; status?; triggerKind?; cursor?; limit? }
 interface ApproveNodeVars { runId; nodeId; decision?: ApprovalDecision; reason? }
 interface RejectNodeVars { runId; nodeId; reason? }
+
+// Approval — durable parked state of an approval node (后端 17 §9 投影)。
+// inbox 端点返回当前用户所有 parked 行；banner 按 runId + status==="parked" 过滤。
+interface Approval {
+  id; userId; flowrunId; nodeId;
+  prompt; payload?; status: ApprovalStatus;
+  allowReason: boolean; reason?; decidedAt?;
+  createdAt; updatedAt;
+}
 ```
 
 `pausedState` 在 approval node 等待时非空，包含当前执行上下文供前端展示暂停详情。
@@ -76,12 +86,13 @@ interface RejectNodeVars { runId; nodeId; reason? }
 | `useFlowRuns(params)` | GET `/flowruns?{qs}` | 列表，支持多维过滤 |
 | `useFlowRun(id)` | GET `/flowruns/{id}` | 单条详情 |
 | `useFlowRunNodes(id)` | GET `/flowruns/{id}/nodes` | 节点执行记录 |
+| `useApprovalInbox()` | GET `/approvals` | 当前用户所有 parked approval；**banner 数据源**，按 runId 过滤；approve/reject 后失效 |
 | `useCancelFlowRun()` | DELETE `/flowruns/{id}` | 取消；invalidate flowruns + flowrun(id) |
-| `useApproveNode()` | POST `/flowruns/{runId}/approvals/{nodeId}` body `{decision:"approve", reason}` | 人工审批-通过 |
-| `useRejectNode()` | POST `/flowruns/{runId}/approvals/{nodeId}` body `{decision:"reject", reason}` | 人工审批-拒绝 |
+| `useApproveNode()` | POST `/flowruns/{runId}/approvals/{nodeId}` body `{decision:"approved", reason}` | 人工审批-通过；invalidate flowruns + flowrun(id) + flowrunNodes(id) + approvals() |
+| `useRejectNode()` | POST `/flowruns/{runId}/approvals/{nodeId}` body `{decision:"rejected", reason}` | 人工审批-拒绝；invalidate flowruns + flowrun(id) + approvals() |
 | `useTriageFlowRun()` | POST `/flowruns/{id}:triage` | AI 调试，返回 conversationId |
 
-注意：取消走 DELETE（非 :cancel action）；审批走 `/approvals/{nodeId}`（非 `/nodes/{nodeId}:approve`）。
+注意：取消走 DELETE（非 :cancel action）；审批走 `/approvals/{nodeId}`（非 `/nodes/{nodeId}:approve`）；decision 值必须 `approved`/`rejected`（后端 canon，否则 400）。banner 不再靠节点 status（interpreter 从不发 `waiting_approval` 节点态），改读 `/approvals` inbox 投影。
 
 ---
 
@@ -90,13 +101,15 @@ interface RejectNodeVars { runId; nodeId; reason? }
 ### 4.1 人工审批节点
 
 ```
-FlowRun 状态 = "paused"，pausedState.nodeId 指向 approval 节点
-  → widgets/ApprovalPrompt 展示 pausedState.variables
+interpreter park approval 节点 → 写 approvals 投影行 (status=parked)
+  → useApprovalInbox() GET /approvals 返回该用户所有 parked 行
+  → pages/execute/ui/ApprovalBanner 按 runId + status==="parked" 过滤渲染
   → 用户点击"批准"
-  → useApproveNode().mutate({runId, nodeId, decision:"approve"})
-      → POST /flowruns/{runId}/approvals/{nodeId}  {decision:"approve"}
-      → 后端恢复执行
-      → onSuccess: invalidate flowruns + flowrun(runId) + flowrunNodes(runId)
+  → useApproveNode().mutate({runId, nodeId, decision:"approved"})
+      → POST /flowruns/{runId}/approvals/{nodeId}  {decision:"approved"}
+      → 后端 journal signal_received + 恢复执行 + 投影行翻 approved
+      → onSuccess: invalidate flowruns + flowrun(runId) + flowrunNodes(runId) + approvals()
+      → inbox 重取 → 该行不再 parked → banner 行消失
 ```
 
 ### 4.2 AI 调试
@@ -115,6 +128,6 @@ FlowRun 失败，用户点击"AI 调试"
 
 | 文件 | 说明 |
 |---|---|
-| `frontend/src/entities/flowrun/model/types.ts` | FlowRun / FlowRunNode / PausedState / Approval* 类型 |
-| `frontend/src/entities/flowrun/api/flowrun.ts` | 7 个 hooks |
+| `frontend/src/entities/flowrun/model/types.ts` | FlowRun / FlowRunNode / Approval / PausedState / Approval* 类型 |
+| `frontend/src/entities/flowrun/api/flowrun.ts` | 8 个 hooks（含 `useApprovalInbox`）|
 | `frontend/src/entities/flowrun/index.ts` | public API |

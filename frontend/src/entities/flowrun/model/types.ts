@@ -81,3 +81,31 @@ export interface RejectNodeVars {
   nodeId: string;
   reason?: string;
 }
+
+export type ApprovalStatus =
+  | "parked"
+  | "approved"
+  | "rejected"
+  | "timed_out"
+  | "failed"
+  | "cancelled";
+
+// Approval — durable parked state of an approval node (backend 17 §9). The
+// inbox endpoint (GET /approvals) returns the caller's parked rows; the banner
+// reads this projection to learn WHICH node awaits a decision.
+//
+// Approval —— approval 节点的 durable 挂起态;inbox 端点返回当前用户的 parked 行。
+export interface Approval {
+  id: string;
+  userId: string;
+  flowrunId: string;
+  nodeId: string;
+  prompt: string;
+  payload?: Record<string, unknown>;
+  status: ApprovalStatus;
+  allowReason: boolean;
+  reason?: string;
+  decidedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}

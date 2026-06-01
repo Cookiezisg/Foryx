@@ -33,7 +33,7 @@
 ## 改代码前必做
 
 1. 读对应 `docs/references/backend/domains/<domain>.md`
-2. 改完跑 `make test-backend`（单测）+ `cd backend && go build ./... && staticcheck ./...`（编译 + 静态）
+2. 改完跑 `make unit`（Go 单测）+ `cd backend && go build ./... && staticcheck ./...`（编译 + 静态）
 3. 同步联动文档（§S14）
 
 ---
@@ -43,7 +43,7 @@
 1. **每个 Phase 独立交付价值** — 不会出现"做了 80% 但啥都用不了"
 2. **依赖严格自下而上** — 每个 Phase 只依赖前面已完成的
 3. **复杂度阶梯式增长** — CRUD → 编排 → 智能
-4. **前后端分阶段、不并行开发** — 后端 Phase 0-4 已交付定型，现转入前端阶段（见末节"前端开发守则"）；后端如需改动走 curl / testend / `make test-backend` 验证
+4. **前后端分阶段、不并行开发** — 后端 Phase 0-4 已交付定型，现转入前端阶段（见末节"前端开发守则"）；后端如需改动走 curl / testend / `make unit` 验证
 5. **端到端推演先行** — 开工前必走完整数据流 + 列出跨域依赖，**不走不开工**
 6. **反校验剧场** — 本地单用户同人写前后端；只保留有价值的校验（JSON 畸形、必填非空、NotFound、DB CHECK/UNIQUE）；加校验前问："前端能防住？下游自然炸？"两者都是则不加
 7. **📌 文档与代码同步（最高优先级）** — 每个代码改动必须伴随文档更新（见 §S14）。**文档落后于代码 = bug**
@@ -391,12 +391,12 @@ entities/conversation/
 ## Verification（前端门禁）
 
 ```bash
-make lint-frontend          # eslint + tsc --noEmit + steiger（FSD 结构）
-make test-frontend           # vitest
+make lint                    # tsc --noEmit + eslint + steiger（FSD 结构；在仓库根跑）
+make web                     # vitest
 wails dev                    # 冒烟：窗口起得来 + 能连后端
 ```
 
-`make lint-frontend` 与后端 `staticcheck` 同等地位；违规 push 不过去。
+`make lint` 与后端 `staticcheck` 同等地位；违规 push 不过去。
 
 ---
 

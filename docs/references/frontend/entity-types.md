@@ -87,10 +87,14 @@ audience: [human, ai]
 |---|---|---|
 | `FlowRun` | `id / userId / workflowId / versionId / triggerKind / status(FlowRunStatus) / startedAt / endedAt? / elapsedMs / pausedState? / dryRun` | `GET /api/v1/flowruns` / `GET /api/v1/flowruns/{id}` |
 | `FlowRunNode` | `id / status(FlowRunNodeStatus) / nodeId / nodeType / input / output? / elapsedMs / attempts / conversationId?` | `GET /api/v1/flowruns/{id}/nodes` |
+| `Approval` | `id / userId / flowrunId / nodeId / prompt / payload? / status(ApprovalStatus) / allowReason / reason? / decidedAt? / createdAt / updatedAt` | `GET /api/v1/approvals`（当前用户所有 parked approval;approval banner 数据源,17 §9）|
 | `FlowRunsParams` | `workflowId? / status? / triggerKind? / cursor? / limit?` | query params |
-| `ApproveNodeVars` | `runId / nodeId / decision? / reason?` | `POST /api/v1/flowruns/{id}/nodes/{nodeId}:approve` |
+| `ApproveNodeVars` | `runId / nodeId / decision? / reason?` | `POST /api/v1/flowruns/{id}/approvals/{nodeId}`（body `{decision,reason}`;decision 值必须 `approved`/`rejected`）|
+| `RejectNodeVars` | `runId / nodeId / reason?` | 同上(decision 固定 `rejected`)|
 
-**FlowRunStatus**：`running` / `paused` / `completed` / `failed` / `cancelled`
+**FlowRunStatus**：`running` / `paused` / `awaiting_signal` / `completed` / `failed` / `cancelled`
+
+**ApprovalStatus**：`parked` / `approved` / `rejected` / `timed_out` / `failed` / `cancelled`（banner 只显示 `parked`）
 
 **FlowRunNodeStatus**：`pending` / `running` / `ok` / `failed` / `cancelled` / `timeout` / `skipped`
 
