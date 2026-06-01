@@ -91,6 +91,7 @@ audience: [human, ai]
 | `FlowRunsParams` | `workflowId? / status? / triggerKind? / cursor? / limit?` | query params |
 | `ApproveNodeVars` | `runId / nodeId / decision? / reason?` | `POST /api/v1/flowruns/{id}/approvals/{nodeId}`（body `{decision,reason}`;decision 值必须 `approved`/`rejected`）|
 | `RejectNodeVars` | `runId / nodeId / reason?` | 同上(decision 固定 `rejected`)|
+| `TraceEntry` | `seq / type / nodeId / iterationKey / generation / turn? / result? / at` | `GET /api/v1/flowruns/{id}/trace`（journal 只读投影；08 §6 节点诊断；loop 多轮按 iterationKey 区分）|
 
 **FlowRunStatus**：`running` / `paused` / `awaiting_signal` / `completed` / `failed` / `cancelled`
 

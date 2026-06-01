@@ -62,13 +62,21 @@ openRunId null    → ExecuteOverview
   useFlowRuns()     → ExecuteOverview 列表数据
 
 详情:
-  useFlowRun(id)    → run 元数据 + status
+  useFlowRun(id)    → run 元数据 + status（awaiting_signal = parked at approval）
   useFlowRunNodes(id)  → 节点执行树
   useApprovalInbox()   → 当前用户 parked approval；ApprovalBanner 按 runId 过滤渲染
+  useFlowRunTrace(runId, nodeId)  → 节点 inspector "Journal" tab（GET /flowruns/{id}/trace?nodeId=X）
+                                   → 每条 TraceEntry 展示 seq/type/result；loop 按 iterationKey 分轮
+                                   → 重连/丢 tick 时可作全量补
+
+状态过滤:
+  ExecuteOverview statusFilter 用 "awaiting_signal"（canonical）过滤 parked 审批运行；
+  本地 filter predicate 同时匹配 "waiting_approval" 兼容旧数据。
 
 SSE notifications:
   flowrun 类型通知 → useNotifications → qc.invalidateQueries(qk.flowruns(), qk.flowrun(id), qk.approvals())
   → 列表 + 详情 + approval banner 自动刷新
+  flowrun data.action="tick"（ephemeral）→ 同样触发上述 invalidate 但不计未读（08 CANON-X4）
 ```
 
 ---

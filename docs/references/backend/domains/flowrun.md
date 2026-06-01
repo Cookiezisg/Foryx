@@ -134,15 +134,36 @@ spawner 为 nil 时返 503 `FEATURE_UNAVAILABLE`。用于 failed/paused run 的 
 
 ---
 
-## 7. 错误码 (6 sentinels)
+## 7. Approval 超时（durable timer，M4）
+
+approval 节点 config 可配 `timeoutSec: number`（秒）和 `timeoutBehavior: "approve" | "reject"（default: "reject"）`:
+- interpreter park 时用 `time.Now() + timeoutSec` 计算绝对 `deadline`，写入 `approvals.deadline`（DB 持久）
+- **到期检查器**（`scheduler.StartExpiryChecker`，每 30s 扫一次）查 `approvals WHERE status='parked' AND deadline < now`：
+  1. 先写 `signal_received(source=timeout)` 进 journal（durable truth，journal 写必先于投影）
+  2. 再 `approvals.Decide → status=timed_out`（best-effort 投影；即使失败 interpreter 也能恢复）
+  3. CAS `ClaimStatus(awaiting_signal → running)` → re-drive interpreter（与 ResumeApproval 同路径）
+- `timeoutBehavior="approve"` → journal decision="yes"；`"reject"` → decision="no"；`"fail"` → flowrun 标 failed
+- 双信号 first-wins：用户决策与 timeout 竞争时，先写 journal 的胜出（ADR-018 dedup_key）
+
+**Approval struct（domain/flowrun/approval.go，M4 新增字段）**：
+
+```go
+Deadline        *time.Time // 非 nil = 到期检查器监控此行；nil = 无超时
+TimeoutBehavior string     // "approve" | "reject"（default）| "fail"
+```
+
+---
+
+## 8. 错误码 (7 sentinels)
 
 详 [`../references/backend/error-codes.md`](../references/backend/error-codes.md):
 - `FLOWRUN_NOT_FOUND` (404)
 - `FLOWRUN_NOT_CANCELLABLE` (422) — Cancel/ResumeApproval 时已无 cancel 句柄
-- `FLOWRUN_NOT_PAUSED` (422) — ResumeApproval 时 status != paused
-- `FLOWRUN_APPROVAL_NODE_NOT_FOUND` (404) — ResumeApproval 时 nodeID 不匹配 PausedState.NodeID
+- `FLOWRUN_NOT_PAUSED` (422) — ResumeApproval 时 status != awaiting_signal（durable）或 paused（旧）
+- `FLOWRUN_APPROVAL_NODE_NOT_FOUND` (404) — ResumeApproval 时 nodeID 不匹配 parked approval
 - `FLOWRUN_APPROVAL_DECISION_INVALID` (400) — decision ∉ {approved, rejected}
 - `FLOWRUN_NODE_NOT_FOUND` (404) — GetNode 未命中
+- `FLOWRUN_NOT_REPLAYABLE` (422) — :replay 时 run 非 failed 终态
 
 ---
 

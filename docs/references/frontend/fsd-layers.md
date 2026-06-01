@@ -101,7 +101,7 @@ entities/<X>/@x/<Y>.ts   →  给相邻 entities/<Y> 使用的专用 public 片
 | `features/send-message` | 发送消息（输入 → POST /conversations/{id}/messages:send）|
 | `features/forge-iterate` | 锻造迭代（AI 编辑 function/handler/workflow）|
 | `features/forge-review` | 锻造审查（diff 查看 + accept/reject）|
-| `features/workflow-edit` | 工作流编辑（节点图 CRUD）|
+| `features/workflow-edit` | 工作流编辑（节点图 CRUD）；palette 已按 revamp 设计折叠为 **5 种**：trigger / agent / tool（→function） / case（→condition） / approval；旧 14 种仍在 canvas 渲染（向后兼容），仅 palette 新增入口关闭 |
 | `features/onboarding` | 首次启动流程（创建 user + 配置 API key）|
 | `features/settings` | 用户偏好设置 UI（主题/语言/API key 管理）；**2026-05-30 新增**：`ui/ModelCapOverrideEditor.tsx`（stale-catalog 逃生舱，允许手动覆盖 thinkingShape / contextWindow / maxOutput）；**2026-05-31 新增**：`ui/AdvancedCapabilitiesSection.tsx`（「高级能力」运行上限区，编辑 settings.json `limits` 块）|
 | `features/ask-user` | ask_user tool 响应（approval/input 弹窗）|

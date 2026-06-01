@@ -73,6 +73,14 @@ interface Approval {
   allowReason: boolean; reason?; decidedAt?;
   createdAt; updatedAt;
 }
+
+// TraceEntry — GET /flowruns/{id}/trace 的 journal 投影条目（08 §6 节点诊断）。
+// 只读；seq 严格递增；loop 多轮按 iterationKey 区分；重连时全量补。
+interface TraceEntry {
+  seq: number; type: string; nodeId: string;
+  iterationKey: number; generation: number;
+  turn?: number; result?: Record<string, unknown>; at: string;
+}
 ```
 
 `pausedState` 在 approval node 等待时非空，包含当前执行上下文供前端展示暂停详情。
@@ -86,6 +94,7 @@ interface Approval {
 | `useFlowRuns(params)` | GET `/flowruns?{qs}` | 列表，支持多维过滤 |
 | `useFlowRun(id)` | GET `/flowruns/{id}` | 单条详情 |
 | `useFlowRunNodes(id)` | GET `/flowruns/{id}/nodes` | 节点执行记录 |
+| `useFlowRunTrace(runId, nodeId?)` | GET `/flowruns/{id}/trace?nodeId=X` | journal 投影给编排 UI **节点诊断**（只读；`nodeId` 过滤单节点；loop 多轮按 iterationKey 区分；重连全量补；返 `TraceEntry[]`）|
 | `useApprovalInbox()` | GET `/approvals` | 当前用户所有 parked approval；**banner 数据源**，按 runId 过滤；approve/reject 后失效 |
 | `useCancelFlowRun()` | DELETE `/flowruns/{id}` | 取消；invalidate flowruns + flowrun(id) |
 | `useApproveNode()` | POST `/flowruns/{runId}/approvals/{nodeId}` body `{decision:"approved", reason}` | 人工审批-通过；invalidate flowruns + flowrun(id) + flowrunNodes(id) + approvals() |
@@ -129,5 +138,5 @@ FlowRun 失败，用户点击"AI 调试"
 | 文件 | 说明 |
 |---|---|
 | `frontend/src/entities/flowrun/model/types.ts` | FlowRun / FlowRunNode / Approval / PausedState / Approval* 类型 |
-| `frontend/src/entities/flowrun/api/flowrun.ts` | 8 个 hooks（含 `useApprovalInbox`）|
+| `frontend/src/entities/flowrun/api/flowrun.ts` | 9 个 hooks（含 `useApprovalInbox` + `useFlowRunTrace`）；`TraceEntry` 接口 |
 | `frontend/src/entities/flowrun/index.ts` | public API |
