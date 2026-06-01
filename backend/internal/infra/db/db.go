@@ -64,15 +64,26 @@ func Open(cfg Config) (*gorm.DB, error) {
 	}
 
 	// :memory: gives each sql conn its own empty DB — pin pool to 1 for shared state.
-	// :memory: DSN 每条 sql conn 独立 DB，所以锁 1 连接共享状态；文件 DSN 不需要。
-	if cfg.DataDir == "" {
-		sqlDB, err := db.DB()
-		if err != nil {
-			_ = Close(db)
-			return nil, fmt.Errorf("gorm.DB(): %w", err)
-		}
-		sqlDB.SetMaxOpenConns(1)
+	// Pin to one connection for ALL database types:
+	// - :memory: needs it for data isolation (each sql conn has its own empty DB).
+	// - file DB needs it to prevent SQLITE_BUSY: WAL mode allows only one writer
+	//   at a time. With multiple GORM connections, concurrent goroutines that open
+	//   deferred write transactions race to upgrade the lock; the loser gets
+	//   SQLITE_BUSY even after busy_timeout if the winner holds the lock too long
+	//   (e.g. AppendEvent's SELECT+INSERT inside a transaction). A single connection
+	//   serializes all writes at the Go level before they reach SQLite, eliminating
+	//   the lock-upgrade race entirely. SQLite is single-writer regardless; the
+	//   extra connections provided no concurrency benefit and only caused contention.
+	//
+	// 所有 DB 类型都锁 1 连接:
+	// :memory: 需要隔离(每条 sql conn 独立 DB);file DB 需要防 SQLITE_BUSY——
+	// WAL 单写者、多连接竞升锁导致 busy_timeout 后仍失败。
+	sqlDB, err := db.DB()
+	if err != nil {
+		_ = Close(db)
+		return nil, fmt.Errorf("gorm.DB(): %w", err)
 	}
+	sqlDB.SetMaxOpenConns(1)
 
 	if err := verifyPragmas(db); err != nil {
 		_ = Close(db)

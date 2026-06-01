@@ -37,6 +37,18 @@ func (d *FunctionDispatcher) Dispatch(ctx context.Context, in DispatchInput) Dis
 	if args == nil {
 		args, _ = in.Node.Config["input"].(map[string]any)
 	}
+	// NodeIn carries the upstream payload (trigger input + prior node outputs merged).
+	// Prefer static config args; fall back to NodeIn; then empty map — never nil.
+	// An empty map lets Python call `main(**{})` which works when all params have defaults,
+	// whereas `main(**None)` raises TypeError regardless of default values.
+	//
+	// 静态 args 未配置时，用 NodeIn(上游 payload)；再兜底 {} 防 `main(**None)` 崩溃。
+	if args == nil && len(in.NodeIn) > 0 {
+		args = in.NodeIn
+	}
+	if args == nil {
+		args = map[string]any{}
+	}
 	versionID, _ := in.Node.Config["version"].(string)
 
 	result, err := d.svc.RunFunction(ctx, functionapp.RunInput{
