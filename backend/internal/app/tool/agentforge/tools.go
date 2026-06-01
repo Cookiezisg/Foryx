@@ -208,7 +208,7 @@ func (t *CreateAgent) Execute(ctx context.Context, argsJSON string) (string, err
 	out := map[string]any{
 		"id": a.ID, "name": a.Name,
 		"versionId": v.ID, "activeVersionId": a.ActiveVersionID,
-		"next_step": "Agent created. You can now reference it with ag_" + a.ID + " in workflow tool nodes, or run it with run_agent.",
+		"next_step": "Agent created. Reference it as " + a.ID + " in a workflow agent node (config.agentRef) or a tool node (config.callable=" + a.ID + ").",
 	}
 	b, _ := json.Marshal(out)
 	return string(b), nil

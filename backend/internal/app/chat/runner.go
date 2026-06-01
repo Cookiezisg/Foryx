@@ -314,7 +314,7 @@ const criticalRulesSection = `CRITICAL RULES — highest priority, follow exactl
 //
 // toolsSection 统一讲工具模型 + 三个标准字段,避免在每个 tool schema 里重复。
 const toolsSection = `Common tools are always loaded; pull the rest on demand with activate_tools(category):
-function / handler / workflow — create · edit · delete · revert · run/call/trigger · inspect; document (manage docs) · mcp (external servers) · skill (execution logs).
+function / handler / workflow / agent — create · edit · delete · revert · run/call/trigger · inspect (agent = a first-class, reusable AI worker entity you forge directly, NOT just a workflow node); document (manage docs) · mcp (external servers) · skill (execution logs).
 Three standard fields on every call: summary (one line: what + why), destructive (true if irreversible), execution_group (int; same group runs in parallel, groups run in order).
 Prefer Read/Edit/Grep/Glob over Bash cat/sed/grep. Search before you act; call by a real id, never a guess.`
 
@@ -332,6 +332,7 @@ var categoryLabels = map[string]string{
 	"function": "create/edit/delete/inspect functions",
 	"handler":  "create/edit/delete/inspect handlers",
 	"workflow": "create/edit/delete/trigger workflows",
+	"agent":    "create/edit/delete/inspect agent entities (first-class reusable AI workers — forge them directly here, not only as workflow nodes)",
 	"mcp":      "install/call external MCP servers",
 	"document": "manage documents",
 	"skill":    "skill execution logs",
