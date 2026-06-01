@@ -99,15 +99,19 @@ running ←→ paused (approval/wait 长延时)
 
 ---
 
-## 5. HTTP API (5 端点 + 1 action + 1 webhook 子树)
+## 5. HTTP API (读 6 + 改 3 + action 2 + webhook 子树)
 
 | Method | Path | 用途 |
 |---|---|---|
 | GET    | `/api/v1/flowruns` | 列表 (workflowId/status/triggerKind 过滤) |
 | GET    | `/api/v1/flowruns/{id}` | 单 FlowRun |
 | GET    | `/api/v1/flowruns/{id}/nodes` | per-node 执行记录 |
+| GET    | `/api/v1/flowruns/{id}/failures` | 节点失败列表 (journal node_failed;highest-generation;M6) |
+| GET    | `/api/v1/flowruns/{id}/trace` | journal 投影给编排 UI 节点诊断 (`?nodeId=X` 过滤;loop 多轮按 iterationKey 区分;只读、不碰运行引擎;M8 §08) |
+| GET    | `/api/v1/approvals` | 当前用户所有 parked approval inbox (17 §9;前端 banner 数据源) |
 | DELETE | `/api/v1/flowruns/{id}` | 取消 (scheduler.Cancel) |
-| POST   | `/api/v1/flowruns/{id}/approvals/{nodeId}` | approval 签收 (body: `{decision, reason?}`) |
+| POST   | `/api/v1/flowruns/{id}/approvals/{nodeId}` | approval 签收 (body: `{decision, reason?}`;decision ∈ `{approved, rejected}`) |
+| POST   | `/api/v1/flowruns/{id}:replay` | 重跑失败 run (generation++;202;非失败 422 `FLOWRUN_NOT_REPLAYABLE`;M6) |
 | POST   | `/api/v1/flowruns/{id}:triage` | 起 AI 调试对话（askai.Spawner）；返 `{conversationId}` |
 | POST   | `/api/v1/webhooks/{wfId}/{path}` | webhook trigger 入口 (由 trigger.webhook listener 直接挂 ServeMux) |
 

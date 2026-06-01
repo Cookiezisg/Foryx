@@ -210,3 +210,89 @@ func TestPlan05_BootSmoke(t *testing.T) {
 		t.Errorf("Scheduler.Cancel(unknown) returned nil error")
 	}
 }
+
+// The trace API projects the flowrun journal (durable truth) for the orchestration UI's per-node
+// diagnostic (08 §6). A completed activity run journals node_started/completed; the endpoint returns
+// them seq-ordered, the ?nodeId filter narrows to one node, an unknown node yields an empty list.
+//
+// covers: GET /api/v1/flowruns/{id}/trace
+func TestFlowRun_HTTP_TraceProjectsJournal(t *testing.T) {
+	h := th.New(t)
+	ctx := th.CtxAs("test-user")
+	wf, _, err := h.Workflow.Create(ctx, workflowapp.CreateInput{
+		Ops: []workflowapp.Op{
+			{Type: "set_meta", Raw: []byte(`{"op":"set_meta","name":"fr_trace","description":"e2e trace"}`)},
+			{Type: "add_node", Raw: []byte(`{"op":"add_node","node":{"id":"trig","type":"trigger","config":{"triggerType":"manual"}}}`)},
+			{Type: "add_node", Raw: []byte(`{"op":"add_node","node":{"id":"step","type":"variable","config":{"operation":"set","name":"done","value":"yes"}}}`)},
+			{Type: "add_edge", Raw: []byte(`{"op":"add_edge","edge":{"id":"e1","from":"trig","to":"step"}}`)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create workflow: %v", err)
+	}
+
+	var trigResp struct {
+		Data struct {
+			RunID string `json:"runId"`
+		} `json:"data"`
+	}
+	if status := th.DoRequest(t, h, "POST", "/api/v1/workflows/"+wf.ID+":trigger",
+		map[string]any{}, &trigResp); status != 201 {
+		t.Fatalf("trigger: %d", status)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		run, gErr := h.FlowRunRepo.Get(ctx, trigResp.Data.RunID)
+		if gErr == nil && run.Status == flowrundomain.StatusCompleted {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
+	type traceEntry struct {
+		Seq    int64  `json:"seq"`
+		Type   string `json:"type"`
+		NodeID string `json:"nodeId"`
+	}
+
+	var full struct {
+		Data []traceEntry `json:"data"`
+	}
+	if status := th.DoRequest(t, h, "GET", "/api/v1/flowruns/"+trigResp.Data.RunID+"/trace", nil, &full); status != 200 {
+		t.Fatalf("GET /trace: %d", status)
+	}
+	if len(full.Data) == 0 {
+		t.Fatalf("whole-run trace empty — the step activity must have journaled node_started/completed")
+	}
+	for i := 1; i < len(full.Data); i++ {
+		if full.Data[i].Seq <= full.Data[i-1].Seq {
+			t.Fatalf("trace not seq-ordered at %d: %d <= %d", i, full.Data[i].Seq, full.Data[i-1].Seq)
+		}
+	}
+
+	var filtered struct {
+		Data []traceEntry `json:"data"`
+	}
+	if status := th.DoRequest(t, h, "GET", "/api/v1/flowruns/"+trigResp.Data.RunID+"/trace?nodeId=step", nil, &filtered); status != 200 {
+		t.Fatalf("GET /trace?nodeId=step: %d", status)
+	}
+	if len(filtered.Data) == 0 {
+		t.Fatalf("node filter for 'step' returned nothing")
+	}
+	for _, e := range filtered.Data {
+		if e.NodeID != "step" {
+			t.Fatalf("node filter leaked %q (want step)", e.NodeID)
+		}
+	}
+
+	var none struct {
+		Data []traceEntry `json:"data"`
+	}
+	if status := th.DoRequest(t, h, "GET", "/api/v1/flowruns/"+trigResp.Data.RunID+"/trace?nodeId=__nope__", nil, &none); status != 200 {
+		t.Fatalf("GET /trace?nodeId=unknown: %d", status)
+	}
+	if len(none.Data) != 0 {
+		t.Fatalf("unknown-node trace want empty, got %d", len(none.Data))
+	}
+}

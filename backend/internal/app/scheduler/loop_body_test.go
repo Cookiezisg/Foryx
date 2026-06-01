@@ -14,7 +14,7 @@ import (
 	notificationspkg "github.com/sunweilin/forgify/backend/internal/pkg/notifications"
 )
 
-var testFailErr = errors.New("test: deliberate failure")
+var errTestFail = errors.New("test: deliberate failure")
 
 // mkLoopTestService spins a Service with a Router that knows `loop` + `variable` for body subgraphs.
 //
@@ -153,7 +153,7 @@ func TestLoopBody_FailFast_StopsOnFirstError(t *testing.T) {
 	// failing dispatcher: always returns error.
 	// 故意失败 dispatcher。
 	router.Set("alwaysfail", DispatcherFunc(func(_ context.Context, _ DispatchInput) DispatchOutput {
-		return DispatchOutput{Error: testFailErr} // any error
+		return DispatchOutput{Error: errTestFail} // any error
 	}))
 	svc.SetRouter(router)
 	d := NewLoopDispatcher(svc)
@@ -188,7 +188,7 @@ func TestLoopBody_OnErrorContinue_CollectsFailures(t *testing.T) {
 	router := NewRouter()
 	router.Set(workflowdomain.NodeTypeLoop, NewLoopDispatcher(svc))
 	router.Set("alwaysfail", DispatcherFunc(func(_ context.Context, _ DispatchInput) DispatchOutput {
-		return DispatchOutput{Error: testFailErr}
+		return DispatchOutput{Error: errTestFail}
 	}))
 	svc.SetRouter(router)
 	d := NewLoopDispatcher(svc)

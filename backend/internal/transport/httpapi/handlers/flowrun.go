@@ -43,6 +43,7 @@ func (h *FlowRunHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/flowruns/{id}", h.Get)
 	mux.HandleFunc("GET /api/v1/flowruns/{id}/nodes", h.ListNodes)
 	mux.HandleFunc("GET /api/v1/flowruns/{id}/failures", h.Failures)
+	mux.HandleFunc("GET /api/v1/flowruns/{id}/trace", h.Trace)
 	mux.HandleFunc("DELETE /api/v1/flowruns/{id}", h.Cancel)
 	mux.HandleFunc("GET /api/v1/approvals", h.Inbox)
 	mux.HandleFunc("POST /api/v1/flowruns/{id}/approvals/{nodeId}", h.Approve)
@@ -67,6 +68,19 @@ func (h *FlowRunHandler) Inbox(w http.ResponseWriter, r *http.Request) {
 // Failures 列出 flowrun 的节点失败(操作者排查;M6 failures API)。
 func (h *FlowRunHandler) Failures(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.scheduler.ListFailures(r.Context(), r.PathValue("id"))
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, rows)
+}
+
+// Trace projects a flowrun's journal (the durable truth) to the orchestration UI's per-node trace
+// (08 §6 inline diagnostic + reconnect full-pull). ?nodeId=X filters to one node; empty = whole run.
+//
+// Trace 把 flowrun journal 投影成编排 UI 的节点 trace(08 §6);?nodeId=X 过滤单节点,空=整 run。
+func (h *FlowRunHandler) Trace(w http.ResponseWriter, r *http.Request) {
+	rows, err := h.scheduler.GetTrace(r.Context(), r.PathValue("id"), r.URL.Query().Get("nodeId"))
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

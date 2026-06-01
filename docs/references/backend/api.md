@@ -235,6 +235,7 @@ type Error = {
 | GET    | `/api/v1/flowruns/{id}`                                | 单 FlowRun |
 | GET    | `/api/v1/flowruns/{id}/nodes`                          | per-node 执行记录分页 |
 | GET    | `/api/v1/flowruns/{id}/failures`                       | 节点失败列表 (highest-generation;M6 failures API) |
+| GET    | `/api/v1/flowruns/{id}/trace`                          | journal 投影给编排 UI 节点诊断 (`?nodeId=X` 过滤;loop 多轮按 iterationKey 区分;只读;M8 §08 §6) |
 | POST   | `/api/v1/flowruns/{id}:replay`                         | 重跑失败 run (generation++;202;非失败 422 `FLOWRUN_NOT_REPLAYABLE`) |
 | DELETE | `/api/v1/flowruns/{id}`                                | 取消 (scheduler.Cancel;in-flight 204 或 已终态 422)|
 | POST   | `/api/v1/flowruns/{id}/approvals/{nodeId}`             | approval 签收 (body `{decision, reason?}`;decision ∈ `{approved, rejected}`)|
