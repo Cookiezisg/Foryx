@@ -314,6 +314,9 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*workflowdomain.W
 	// Relation hooks: forged edge (from origin conv) + outgoing uses_* + edited (suppressed on Create).
 	s.syncRelationsAfterCreate(ctx, wfID, v.ForgedInConversationID)
 	s.syncRelationsAfterActiveVersionChange(ctx, wfID)
+	// Create auto-accepts v1 + enables (Enabled:true above), so register its trigger listeners now —
+	// otherwise an enabled workflow's listeners wouldn't exist until the next boot.
+	s.syncActiveTriggers(ctx, wfID)
 	return w, v, nil
 }
 
@@ -431,6 +434,9 @@ func (s *Service) AcceptPending(ctx context.Context, id string) (*workflowdomain
 
 	// Relation hooks: active_version_id flipped, recompute outgoing + edited
 	s.syncRelationsAfterActiveVersionChange(ctx, id)
+	// Active graph changed → re-register listeners so they track the new version's trigger set
+	// (a new accepted version may add/remove/retune trigger nodes).
+	s.syncActiveTriggers(ctx, id)
 	return pending, nil
 }
 
@@ -520,6 +526,11 @@ func (s *Service) UpdateMeta(ctx context.Context, in UpdateMetaInput) (*workflow
 	}
 	if err := s.repo.SaveWorkflow(ctx, w); err != nil {
 		return nil, fmt.Errorf("workflowapp.UpdateMeta: %w", err)
+	}
+	// :activate / :deactivate — register or tear down the workflow's trigger listeners. Before this
+	// hook the listeners never registered (the activate handler only flipped `enabled`).
+	if in.Enabled != nil {
+		s.syncActiveTriggers(ctx, w.ID)
 	}
 	s.publish(ctx, w.ID, "updated", nil)
 	return w, nil

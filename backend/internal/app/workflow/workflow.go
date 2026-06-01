@@ -22,6 +22,7 @@ type Service struct {
 	notif       notificationspkg.Publisher
 	relations   RelationSyncer                // optional; nil disables relation hooks
 	keyProvider apikeydomain.KeyProvider      // optional; nil skips F1 node-override validation
+	triggerSync TriggerSync                   // optional; nil disables :activate→listener registration
 	log         *zap.Logger
 }
 

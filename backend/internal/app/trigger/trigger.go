@@ -14,6 +14,7 @@ import (
 
 	"go.uber.org/zap"
 
+	workflowapp "github.com/sunweilin/forgify/backend/internal/app/workflow"
 	triggerdomain "github.com/sunweilin/forgify/backend/internal/domain/trigger"
 	croninfra "github.com/sunweilin/forgify/backend/internal/infra/trigger/cron"
 	fsnotifyinfra "github.com/sunweilin/forgify/backend/internal/infra/trigger/fsnotify"
@@ -230,6 +231,40 @@ func (s *Service) SetScheduler(starter SchedulerStarter) {
 	s.mu.Lock()
 	s.scheduler = starter
 	s.mu.Unlock()
+}
+
+// SyncWorkflowTriggers implements workflowapp.TriggerSync — the workflow→trigger wire invoked on
+// :activate / :deactivate. It clears any stale registrations (idempotent), then on enable registers
+// each trigger node's listener. Owner userID comes from ctx (set by the activate request or boot loop).
+// A bad listener spec (e.g. invalid cron) is returned as firstErr but does not abort the others —
+// fail-soft, matching the listener Register contract; the trigger State endpoint surfaces the error.
+//
+// SyncWorkflowTriggers 实现 workflowapp.TriggerSync —— :activate/:deactivate 的 workflow→trigger 接线。
+func (s *Service) SyncWorkflowTriggers(ctx context.Context, workflowID string, enabled bool, triggers []workflowapp.TriggerNodeInfo) error {
+	s.UnregisterByWorkflow(workflowID) // idempotent: drop stale listeners from a prior version/activate
+	if !enabled {
+		return nil
+	}
+	uid, _ := reqctxpkg.GetUserID(ctx)
+	var firstErr error
+	for _, t := range triggers {
+		err := s.RegisterTrigger(triggerdomain.Spec{
+			WorkflowID: workflowID,
+			UserID:     uid,
+			NodeID:     t.NodeID,
+			Kind:       t.Kind,
+			Config:     t.Config,
+		})
+		if err != nil {
+			s.log.Warn("triggerapp.SyncWorkflowTriggers: RegisterTrigger failed",
+				zap.String("workflowId", workflowID), zap.String("nodeId", t.NodeID),
+				zap.String("kind", t.Kind), zap.Error(err))
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
 }
 
 // RegisterTrigger registers a trigger spec to its underlying listener.

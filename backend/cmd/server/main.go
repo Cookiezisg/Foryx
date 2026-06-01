@@ -573,6 +573,9 @@ func main() {
 		pollingFunctionCallerFn(functionService),
 		triggerStore,
 	)
+	// Wire workflow→trigger: :activate/:deactivate now registers/unregisters the workflow's
+	// trigger listeners (the missing link — before this, activate only flipped `enabled`).
+	workflowService.SetTriggerSync(triggerService)
 
 	router := schedulerapp.NewRouter()
 	router.Set(workflowdomain.NodeTypeTrigger, schedulerapp.NewTriggerDispatcher())
@@ -613,6 +616,26 @@ func main() {
 		}
 	} else {
 		log.Warn("rehydrate: skipped (user list failed)", zap.Error(err))
+	}
+
+	// CANON-BOOT (a): re-hang trigger listeners for every enabled workflow. Without this, cron/
+	// fsnotify/webhook/polling listeners never re-register after a restart — the workflow stays
+	// `enabled` in the DB but silently never fires.
+	if enabledWfs, err := workflowService.ListEnabled(context.Background()); err == nil {
+		for _, wf := range enabledWfs {
+			wctx := reqctxpkg.SetUserID(context.Background(), wf.UserID)
+			triggers, tErr := workflowService.ActiveTriggers(wctx, wf.ID)
+			if tErr != nil {
+				log.Warn("boot trigger sync: ActiveTriggers failed", zap.String("workflow_id", wf.ID), zap.Error(tErr))
+				continue
+			}
+			if sErr := triggerService.SyncWorkflowTriggers(wctx, wf.ID, true, triggers); sErr != nil {
+				log.Warn("boot trigger sync: register failed (workflow enabled but listeners may be down)",
+					zap.String("workflow_id", wf.ID), zap.Error(sErr))
+			}
+		}
+	} else {
+		log.Warn("boot trigger sync: skipped (enabled-workflow list failed)", zap.Error(err))
 	}
 
 	// Durable timer: approval expiry checker scans for timed-out approval nodes and auto-decides them.
