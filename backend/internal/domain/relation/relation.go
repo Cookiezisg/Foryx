@@ -23,7 +23,8 @@ type Relation struct {
 	ToKind   string `gorm:"not null;type:text;index:idx_rel_rev,priority:2;uniqueIndex:uq_rel,priority:4" json:"toKind"`
 	ToID     string `gorm:"not null;type:text;index:idx_rel_rev,priority:3;uniqueIndex:uq_rel,priority:5" json:"toId"`
 
-	Kind string `gorm:"not null;type:text;index:idx_rel_user_kind,priority:2;uniqueIndex:uq_rel,priority:6;check:kind IN ('conversation_forged_entity','conversation_edited_entity','workflow_uses_function','workflow_uses_handler','workflow_uses_mcp','workflow_uses_skill','workflow_uses_document','document_links_entity')" json:"kind"`
+	// check constraint enumerates all valid kinds; update this AND IsValidKind when adding new kinds.
+	Kind string `gorm:"not null;type:text;index:idx_rel_user_kind,priority:2;uniqueIndex:uq_rel,priority:6;check:kind IN ('conversation_forged_entity','conversation_edited_entity','workflow_uses_function','workflow_uses_handler','workflow_uses_mcp','workflow_uses_skill','workflow_uses_document','document_links_entity','workflow_uses_agent','agent_uses_function','agent_uses_handler','agent_uses_mcp','agent_uses_document','agent_uses_skill')" json:"kind"`
 
 	Attrs map[string]any `gorm:"serializer:json;type:text;default:'{}'" json:"attrs,omitempty"`
 
@@ -33,9 +34,10 @@ type Relation struct {
 
 func (Relation) TableName() string { return "relations" }
 
-// Closed edge kind enumeration (8 kinds). DB CHECK + service validation both reference these constants.
+// Closed edge kind enumeration (14 kinds). DB CHECK + service validation both reference these constants.
+// Note: agent_uses_agent is intentionally absent — agents cannot call other agents (员工思维, doc 00).
 //
-// 8 种闭合边类型枚举。DB CHECK + service 校验都引用这些常量。
+// 14 种闭合边类型枚举。注意：无 agent_uses_agent（员工思维，agent 不能调 agent）。
 const (
 	KindConversationForgedEntity = "conversation_forged_entity"
 	KindConversationEditedEntity = "conversation_edited_entity"
@@ -45,17 +47,27 @@ const (
 	KindWorkflowUsesSkill        = "workflow_uses_skill"
 	KindWorkflowUsesDocument     = "workflow_uses_document"
 	KindDocumentLinksEntity      = "document_links_entity"
+	// Agent relation kinds (doc 11 §S3 / doc 09 quadrinity). No agent_uses_agent.
+	KindWorkflowUsesAgent = "workflow_uses_agent"
+	KindAgentUsesFunction = "agent_uses_function"
+	KindAgentUsesHandler  = "agent_uses_handler"
+	KindAgentUsesMCP      = "agent_uses_mcp"
+	KindAgentUsesDocument = "agent_uses_document"
+	KindAgentUsesSkill    = "agent_uses_skill"
 )
 
-// IsValidKind reports whether k is one of the 8 closed enum values.
+// IsValidKind reports whether k is one of the 14 closed enum values.
 //
-// IsValidKind 报告 k 是否 8 种闭合枚举之一。
+// IsValidKind 报告 k 是否 14 种闭合枚举之一。
 func IsValidKind(k string) bool {
 	switch k {
 	case KindConversationForgedEntity, KindConversationEditedEntity,
 		KindWorkflowUsesFunction, KindWorkflowUsesHandler,
 		KindWorkflowUsesMCP, KindWorkflowUsesSkill, KindWorkflowUsesDocument,
-		KindDocumentLinksEntity:
+		KindDocumentLinksEntity,
+		KindWorkflowUsesAgent,
+		KindAgentUsesFunction, KindAgentUsesHandler, KindAgentUsesMCP,
+		KindAgentUsesDocument, KindAgentUsesSkill:
 		return true
 	}
 	return false
@@ -72,15 +84,17 @@ const (
 	EntityKindConversation = "conversation"
 	EntityKindSkill        = "skill"
 	EntityKindMCP          = "mcp"
+	EntityKindAgent        = "agent" // quadrinity 4th member (doc 09)
 )
 
-// IsValidEntityKind reports whether k is one of the 7 entity kinds that can appear in from_kind/to_kind.
+// IsValidEntityKind reports whether k is one of the 8 entity kinds that can appear in from_kind/to_kind.
 //
-// IsValidEntityKind 报告 k 是否 7 种可出现在 from_kind/to_kind 的实体类型之一。
+// IsValidEntityKind 报告 k 是否 8 种可出现在 from_kind/to_kind 的实体类型之一。
 func IsValidEntityKind(k string) bool {
 	switch k {
 	case EntityKindWorkflow, EntityKindFunction, EntityKindHandler,
-		EntityKindDocument, EntityKindConversation, EntityKindSkill, EntityKindMCP:
+		EntityKindDocument, EntityKindConversation, EntityKindSkill, EntityKindMCP,
+		EntityKindAgent:
 		return true
 	}
 	return false

@@ -212,7 +212,7 @@ enabledTools, _ := parseEnabledTools(cfg)
 - flowrun cancel ✅
 - enable/disable 基础逻辑 ✅
 
-#### ❌-9 🔴 `POST /workflows/{id}:activate` / `:deactivate` 端点缺失
+#### ✅-9 🔴 `POST /workflows/{id}:activate` / `:deactivate` 端点缺失
 
 **设计要求（doc 06 §S6）：**
 > - 新 `POST /workflows/{id}:activate`：检查 active version 存在 + capability check 通过 → 注册 listeners + 推通知
@@ -220,7 +220,7 @@ enabledTools, _ := parseEnabledTools(cfg)
 
 **实际代码：** 只有 `enabled: bool` 字段 toggle，没有 activate/deactivate 状态机。没有独立的 HTTP 端点。
 
-#### ❌-10 🔴 `:trigger` 端点缺 `triggerNodeId` 必填参数
+#### ✅-10(partial) 🔴 `:trigger` 端点缺 `triggerNodeId` 必填参数
 
 **设计要求（doc 06 §S6）：**
 > 改造 `POST /workflows/{id}:trigger`，body 加 `triggerNodeId` **必填**（breaking）：明确指定从哪个 trigger 节点触发，携带该节点 config 定义的 payload schema。
@@ -403,7 +403,7 @@ grep -rn "PublishOpApplied\|ForgeOpApplied\|op_applied" backend/ → 0 productio
 ```
 协议声明了但从不发。
 
-#### ❌-24 🔴 Relations：6 种 Agent 新边类型缺失
+#### ✅-24(partial) 🔴 Relations：6 种 Agent 新边类型缺失
 
 **设计要求（doc 11 §S3）：**
 > 新增 6 种 relation kind：
@@ -607,12 +607,12 @@ polling 教学完全缺失。
 | # | Gap | 对应文档 |
 |---|---|---|
 | ❌-5  | overlap 策略（BufferOne/BufferAll/AllowAll/Skip）未实现 | doc 01/06 |
-| ❌-9  | activate/deactivate 端点缺失 | doc 06 |
-| ❌-10 | :trigger 端点缺 triggerNodeId 必填参数 | doc 06 |
+| ✅-9  | activate/deactivate 端点缺失 | doc 06 |
+| ✅-10(partial) | :trigger 端点缺 triggerNodeId 必填参数 | doc 06 |
 | ✅-13 | 节点级 retry 在新 interpreter 路径中不生效 | doc 07 |
 | ❌-15 | useFlowrunTicker 实时节点状态机未实现 | doc 08 |
 | ✅-23(partial) | ForgeOpApplied 事件从未真正 emit | doc 11 §S2 |
-| ❌-24 | Relations 缺 6 种 agent 新边类型 | doc 11 §S3 |
+| ✅-24(partial) | Relations 缺 6 种 agent 新边类型 | doc 11 §S3 |
 | ❌-27 | agent 系统 prompt 独立装配链未实现 | doc 09/11 |
 | ✅-31 | 系统 prompt 缺 gold 示例（+11pt）+ 架构守则（+10pt） | doc 13 §4.5 |
 | ✅-32 | 错误 envelope 无 next_step 字段 | doc 13 §1-E |
