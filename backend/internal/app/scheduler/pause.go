@@ -100,14 +100,16 @@ func (s *Service) ResumeApproval(ctx context.Context, runID, nodeID, decision, r
 	s.cancelsMu.Lock()
 	s.cancels[runID] = cancel
 	s.cancelsMu.Unlock()
+	s.runWG.Add(1)
 	go func() {
+		defer s.runWG.Done()
 		defer s.releaseCancel(runID)
 		defer func() {
 			if r := recover(); r != nil {
 				s.log.Error("ResumeApproval: continuation panic", zap.String("runID", runID), zap.Any("recover", r))
 			}
 		}()
-		s.executeRun(runCtx, run, graph)
+		s.ExecuteFn(runCtx, run, graph)
 	}()
 	return nil
 }

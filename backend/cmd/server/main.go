@@ -705,6 +705,10 @@ func main() {
 	}
 
 	handlerService.Shutdown(shutdownCtx)
+
+	// Drain in-flight flowruns so a clean SIGTERM doesn't leave `running` zombies for the next
+	// boot's reconciliation (M6 lifecycle). Cancels any that overrun the shutdown deadline.
+	schedulerService.Drain(shutdownCtx)
 }
 
 // registerSandboxStack registers Marketplace V3 runtimes (python/node/uv) and env managers.

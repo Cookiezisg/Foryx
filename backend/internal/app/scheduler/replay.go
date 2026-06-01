@@ -53,7 +53,9 @@ func (s *Service) ReplayRun(ctx context.Context, runID string) error {
 	s.cancelsMu.Lock()
 	s.cancels[runID] = cancel
 	s.cancelsMu.Unlock()
+	s.runWG.Add(1)
 	go func() {
+		defer s.runWG.Done()
 		defer s.releaseCancel(runID)
 		defer func() {
 			if r := recover(); r != nil {

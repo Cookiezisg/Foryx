@@ -83,7 +83,9 @@ func (s *Service) spawnRun(run *flowrundomain.FlowRun, graph *workflowdomain.Gra
 	s.cancelsMu.Lock()
 	s.cancels[run.ID] = cancel
 	s.cancelsMu.Unlock()
+	s.runWG.Add(1)
 	go func() {
+		defer s.runWG.Done()
 		defer s.releaseCancel(run.ID)
 		defer func() {
 			if r := recover(); r != nil {
