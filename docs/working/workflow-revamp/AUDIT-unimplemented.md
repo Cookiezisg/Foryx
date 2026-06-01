@@ -158,7 +158,7 @@ enabledTools, _ := parseEnabledTools(cfg)
 - agent 作为 tool node 的 callable 有 AgentDispatcher ✅
 - handler 并发 mutex 串行 ✅
 
-#### ❌-8 🟡 tool 节点没有统一的 `callable` 字段 + 前缀路由
+#### ✅-8 🟡 tool 节点没有统一的 `callable` 字段 + 前缀路由
 
 **设计要求（doc 03 §"config"段）：**
 > ```yaml
@@ -267,7 +267,7 @@ enabledTools, _ := parseEnabledTools(cfg)
 - 5 节点 palette（前端 WorkflowEditor）✅
 - flowrun 节点列表（GET /nodes，现写 flowrun_nodes）✅
 
-#### ❌-15 🔴 `useFlowrunTicker` 实时节点状态机未实现
+#### ✅-15 🔴 `useFlowrunTicker` 实时节点状态机未实现
 
 **设计要求（doc 08 §5 "运行时滴答可视化"）：**
 > 新 `useFlowrunTicker`（消费 notifications + eventlog 两已有流 + 维护 "nodeId → 视觉状态" 映射 + 重连/丢失时从 trace 全量补），不订新 SSE。节点颜色读 `FlowRunNode.status`：spinning = running，绿色 = ok，红色 = failed，黄色⏸ = awaiting_signal。
@@ -610,7 +610,7 @@ polling 教学完全缺失。
 | ✅-9  | activate/deactivate 端点缺失 | doc 06 |
 | ✅-10(partial) | :trigger 端点缺 triggerNodeId 必填参数 | doc 06 |
 | ✅-13 | 节点级 retry 在新 interpreter 路径中不生效 | doc 07 |
-| ❌-15 | useFlowrunTicker 实时节点状态机未实现 | doc 08 |
+| ✅-15 | useFlowrunTicker 实时节点状态机未实现 | doc 08 |
 | ✅-23(partial) | ForgeOpApplied 事件从未真正 emit | doc 11 §S2 |
 | ✅-24(partial) | Relations 缺 6 种 agent 新边类型 | doc 11 §S3 |
 | ✅-27 | agent 系统 prompt 独立装配链未实现 | doc 09/11 |
@@ -625,7 +625,7 @@ polling 教学完全缺失。
 | ❌-2  | continue-as-new（超长循环续期）未实现 | doc 00 |
 | ❌-3  | text/template 引擎未完全退役（dispatch_condition/subdag）| doc 00/04 |
 | ✅-6  | trigger 用尽 → workflow deactivate 未实现 | doc 01/07 |
-| ❌-8  | tool 节点没有统一 callable 字段 + 前缀路由 | doc 03 |
+| ✅-8  | tool 节点没有统一 callable 字段 + 前缀路由 | doc 03 |
 | ❌-11 | draining 状态机未持久化 | doc 06 |
 | ✅-12(same as ✅-5(partial)) | 同 ✅-5(partial:AllowAll+serial implemented; BufferOne/BufferAll queuing deferred) | — |
 | ❌-14 | 同 ✅-6 | — |

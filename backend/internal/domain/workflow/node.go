@@ -63,6 +63,11 @@ const (
 	NodeTypeApproval  = "approval"
 	NodeTypeWait      = "wait"
 	NodeTypeVariable  = "variable"
+	// NodeTypeTool is the unified callable node (revamp 5-node palette, doc 00/03).
+	// config.callable = "fn_xxx" | "hd_xxx.method" | "ag_xxx" | "mcp:server/tool"
+	// config.args = {"key": "<CEL expr>"}
+	// Routes to the appropriate sub-dispatcher based on callable prefix.
+	NodeTypeTool = "tool"
 )
 
 func IsValidNodeType(t string) bool {
@@ -70,7 +75,7 @@ func IsValidNodeType(t string) bool {
 	case NodeTypeTrigger, NodeTypeFunction, NodeTypeHandler, NodeTypeMCP,
 		NodeTypeSkill, NodeTypeLLM, NodeTypeAgent, NodeTypeHTTP, NodeTypeCondition,
 		NodeTypeLoop, NodeTypeParallel, NodeTypeApproval, NodeTypeWait,
-		NodeTypeVariable:
+		NodeTypeVariable, NodeTypeTool:
 		return true
 	}
 	return false
@@ -81,7 +86,8 @@ func IsValidNodeType(t string) bool {
 // IsCapabilityNode 报告 t 是否 capability 调用节点（可挂 retry/onError/timeout）。
 func IsCapabilityNode(t string) bool {
 	switch t {
-	case NodeTypeFunction, NodeTypeHandler, NodeTypeMCP, NodeTypeSkill, NodeTypeLLM, NodeTypeAgent, NodeTypeHTTP:
+	case NodeTypeFunction, NodeTypeHandler, NodeTypeMCP, NodeTypeSkill, NodeTypeLLM, NodeTypeAgent, NodeTypeHTTP,
+		NodeTypeTool: // unified tool node routes internally by callable prefix
 		return true
 	}
 	return false

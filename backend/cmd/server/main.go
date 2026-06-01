@@ -592,6 +592,8 @@ func main() {
 	router.Set(workflowdomain.NodeTypeApproval, schedulerapp.NewApprovalDispatcher())
 	router.Set(workflowdomain.NodeTypeWait, schedulerapp.NewWaitDispatcher())
 	router.Set(workflowdomain.NodeTypeVariable, schedulerapp.NewVariableDispatcher())
+	// Unified tool node (doc 00/03 5-node palette): routes by callable prefix fn_/hd_/ag_/mcp:
+	router.Set(workflowdomain.NodeTypeTool, schedulerapp.NewToolDispatcher(router))
 	schedulerService.SetRouter(router)
 
 	// §multi-user: rehydrate paused FlowRuns for every user, not just default.

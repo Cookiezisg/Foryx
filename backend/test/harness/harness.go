@@ -618,6 +618,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 	router.Set(workflowdomain.NodeTypeApproval, schedulerapp.NewApprovalDispatcher())
 	router.Set(workflowdomain.NodeTypeWait, schedulerapp.NewWaitDispatcher())
 	router.Set(workflowdomain.NodeTypeVariable, schedulerapp.NewVariableDispatcher())
+	router.Set(workflowdomain.NodeTypeTool, schedulerapp.NewToolDispatcher(router))
 	schedulerService.SetRouter(router)
 
 	tools = append(tools, workflowtool.WorkflowExecutionTools(flowrunRepo)...)
