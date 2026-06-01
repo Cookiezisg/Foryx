@@ -19,6 +19,11 @@ const (
 	KindFunction     = "function"
 	KindHandler      = "handler"
 	KindWorkflow     = "workflow"
+	// New forge kinds (doc 11 §S2 CANON-X1): forge SSE extended to 6 kinds.
+	// Agent = quadrinity 4th member; Document + Skill = right-pane subpage streaming.
+	KindAgent    = "agent"
+	KindDocument = "document"
+	KindSkill    = "skill"
 )
 
 // String returns "<kind>:<id>", used as Bridge map key and HTTP ?scope= value.
@@ -46,7 +51,8 @@ func ParseScope(raw string) (Scope, error) {
 
 func IsValidKind(kind string) bool {
 	switch kind {
-	case KindConversation, KindFlowRun, KindFunction, KindHandler, KindWorkflow:
+	case KindConversation, KindFlowRun, KindFunction, KindHandler, KindWorkflow,
+		KindAgent, KindDocument, KindSkill:
 		return true
 	}
 	return false

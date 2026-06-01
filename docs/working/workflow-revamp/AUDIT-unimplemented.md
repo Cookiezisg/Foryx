@@ -380,7 +380,7 @@ grep -rn "agents\|ag_xxx\|agentRef" domain/       → 0 results（domain 层）
 - Relations：workflow_uses_function 等基础类型 ✅
 - Catalog function/handler/workflow sources ✅
 
-#### ❌-22 🔴 forge SSE 缺 agent/document/skill 三种 kind
+#### ✅-22 🔴 forge SSE 缺 agent/document/skill 三种 kind
 
 **设计要求（doc 11 §S2）：**
 > forge SSE 从 3 kind 扩到 **6 kind**（function/handler/workflow/agent/document/skill），驱动前端**右栏 subpage 流式呈现**。`IsValidScopeKind` 加 3 个 kind。
@@ -532,7 +532,7 @@ polling 教学完全缺失。
 
 ### doc 15 — Tool Catalog
 
-#### ❌-34 🔴 create_agent 工具描述未建（全新）
+#### ✅-34 🔴 create_agent 工具描述未建（全新）
 
 **设计要求（doc 15 §A）：**
 > create_agent 描述：
@@ -598,7 +598,7 @@ polling 教学完全缺失。
 | ✅-28 | JSON-repair 未实现 | doc 13 §1-C | 复杂 workflow forge 时 4-8% 工具调用失败 |
 | ✅-29 | ops/node.config 形状未 pin | doc 15 §E | trigger cron 73%放错字段；set_output_schema 0% 正确 |
 | ✅-30 | 系统 prompt critical rules 6 条缺失（殿后） | doc 13 §2 | 不可能能力禁令 17→95；可满足性检查 0→85 |
-| ❌-22 | forge SSE 缺 agent/document/skill kind | doc 11 §S2 | 右栏 subpage 无法流式呈现 |
+| ✅-22 | forge SSE 缺 agent/document/skill kind | doc 11 §S2 | 右栏 subpage 无法流式呈现 |
 | ❌-4  | polling 触发器完全未实现 | doc 01 | SaaS 集成无法无 webhook 对接 |
 | ✅-7  | agentRef 字段未实现（agent 节点内嵌非引用） | doc 02 | — |
 
@@ -635,7 +635,7 @@ polling 教学完全缺失。
 | ✅-25 | Catalog Item 缺 Kind/Active 字段 | doc 11 §S4 |
 | ✅-26 | 自动激活未激活工具组未实现 | doc 11/13 |
 | ✅-33 | create_function 缺 polling 教学 | doc 13 |
-| ❌-34 | create_agent 工具描述（随 ✅-18(partial:domain+store+service+6tools; no HTTP handlers) 一并实现）| doc 15 §A |
+| ✅-34 | create_agent 工具描述（随 ✅-18(partial:domain+store+service+6tools; no HTTP handlers) 一并实现）| doc 15 §A |
 | ✅-35 | WP11 隐式终止未落注释/文档 | doc 16 |
 | ✅-36 | WP19/20 取消粒度语义未规约 | doc 16 |
 | ✅-37 | A-3 trigger schedule 层 retry 规约未对齐 | doc 16 |

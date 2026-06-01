@@ -25,12 +25,15 @@ func IsValidOperation(op string) bool {
 	return false
 }
 
-// IsValidScopeKind reports whether kind is a forge-able trinity entity (function/handler/workflow).
+// IsValidScopeKind reports whether kind is a forge-able entity. Extended from trinity
+// (function/handler/workflow) to 6 kinds including agent + document + skill (doc 11 §S2 CANON-X1).
+// document/skill are not forge entities but their right-pane editing streams via forge SSE.
 //
-// IsValidScopeKind 报告 kind 是否 forge-able（function/handler/workflow）。
+// IsValidScopeKind 报告 kind 是否走 forge SSE（quadrinity + document/skill，共 6 种）。
 func IsValidScopeKind(kind string) bool {
 	switch kind {
-	case eventlogdomain.KindFunction, eventlogdomain.KindHandler, eventlogdomain.KindWorkflow:
+	case eventlogdomain.KindFunction, eventlogdomain.KindHandler, eventlogdomain.KindWorkflow,
+		eventlogdomain.KindAgent, eventlogdomain.KindDocument, eventlogdomain.KindSkill:
 		return true
 	}
 	return false
