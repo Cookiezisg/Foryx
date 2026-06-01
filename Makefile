@@ -217,7 +217,7 @@ lint:
 # 需要 key/resource 的测试自动 skip。
 mock:
 	$(AUTO_DEVBOX)
-	@cd backend && go test -count=1 -race -tags=pipeline -p 1 -timeout=10m ./test/...
+	@cd backend && { SBX="$$(mktemp -d)"; FORGIFY_TEST_SANDBOX_DIR="$$SBX" go test -count=1 -race -tags=pipeline -p 1 -timeout=10m ./test/...; rc=$$?; rm -rf "$$SBX"; exit $$rc; }
 
 # sandbox — mock + real-sandbox lifecycle tests.
 # Tests requiring FORGIFY_DEV_RESOURCES skip cleanly when unset.

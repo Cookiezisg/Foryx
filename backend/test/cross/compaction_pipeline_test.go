@@ -132,13 +132,25 @@ func TestCompaction_FullCompactSummaryReachesNextTurn(t *testing.T) {
 	}
 	_ = sub1
 
+	// Compaction runs ASYNC after the turn (MaybeCompact fires in a goroutine); WaitForAssistantTerminal
+	// only covers the chat turn, not the follow-on compact. Poll until it lands before asserting — a
+	// faster suite otherwise reads the pre-compaction state and flakes (the compaction completes a few ms
+	// later). Truth is the DB row count, not a timer.
+	var archivedCnt, compactionCnt int64
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		h.DB.Raw("SELECT COUNT(*) FROM message_blocks WHERE conversation_id=? AND context_role='archived'", conv.ID).Scan(&archivedCnt)
+		if archivedCnt > 0 {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
 	var conv1 convdomain.Conversation
 	h.DB.Raw("SELECT * FROM conversations WHERE id=?", conv.ID).Scan(&conv1)
 	if !strings.Contains(conv1.Summary, "first reply") {
 		t.Errorf("conv.Summary missing expected text\nsummary:\n%s", conv1.Summary)
 	}
-	var archivedCnt, compactionCnt int64
-	h.DB.Raw("SELECT COUNT(*) FROM message_blocks WHERE conversation_id=? AND context_role='archived'", conv.ID).Scan(&archivedCnt)
 	h.DB.Raw("SELECT COUNT(*) FROM message_blocks WHERE conversation_id=? AND type='compaction'", conv.ID).Scan(&compactionCnt)
 	if archivedCnt == 0 {
 		t.Errorf("expected ≥1 archived block after fullCompact, got 0")

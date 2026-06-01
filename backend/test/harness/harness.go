@@ -303,11 +303,18 @@ func New(t *testing.T, opts ...Option) *Harness {
 
 	llmFactory := llminfra.NewFactory()
 
-	// PluginSandbox v2 rooted at per-test tempdir; Bootstrap failure → degraded mode.
+	// PluginSandbox v2 dataDir; Bootstrap failure → degraded mode. Order: explicit WithSandboxDataDir
+	// > FORGIFY_TEST_SANDBOX_DIR (set by `make mock` so the ~67MB mise extract happens ONCE for the
+	// whole serial -p1 suite instead of per test — repeated extracts otherwise inflated wall-clock
+	// toward the 10m suite timeout, flaking whichever test was running when it hit) > per-test tempdir.
+	// Per-test sandbox envs stay isolated by owner id; only the mise binary/caches are shared.
 	var dataDir string
-	if cfg.sandboxDataDir != "" {
+	switch {
+	case cfg.sandboxDataDir != "":
 		dataDir = cfg.sandboxDataDir
-	} else {
+	case os.Getenv("FORGIFY_TEST_SANDBOX_DIR") != "":
+		dataDir = os.Getenv("FORGIFY_TEST_SANDBOX_DIR")
+	default:
 		dataDir = t.TempDir()
 	}
 	eventLogBridge := eventloginfra.NewBridge(log)
