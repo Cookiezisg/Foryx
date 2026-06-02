@@ -11,7 +11,7 @@ audience: [human, ai]
 # Agent Domain — 实体化 AI Worker 与 Quadrinity 规格
 
 > **核心地位**：Agent 是 Forgify 的“第四支柱” (Quadrinity)。与临时生成的 Chat Agent 不同，本域定义的 Agent 是 **“持久化、版本化、可重用”** 的专业 AI Worker。它可以独立存在，也可以作为 Workflow 节点被引用。
-
+！！！现在写的缺tool
 ---
 
 ## 1. 物理模型 (Data Anatomy)
@@ -24,10 +24,10 @@ type Agent struct {
     Name            string         `gorm:"not null;type:text" json:"name"`
     Description     string         `gorm:"type:text;default:''" json:"description"`
     Tags            []string       `gorm:"serializer:json;type:text;default:'[]'" json:"tags"`
-    
+
     NeedsAttention  bool           `gorm:"not null;default:false" json:"needsAttention"`
     AttentionReason string         `gorm:"type:text;default:''" json:"attentionReason,omitempty"`
-    
+
     ActiveVersionID string         `gorm:"type:text;default:''" json:"activeVersionId"`
     CreatedAt       time.Time      `json:"createdAt"`
     UpdatedAt       time.Time      `json:"updatedAt"`
@@ -42,17 +42,17 @@ type AgentVersion struct {
     AgentID       string         `gorm:"not null;index" json:"agentId"`
     Status        string         `gorm:"not null;default:'pending'" json:"status"` // pending|accepted
     Version       *int           `gorm:"type:integer" json:"version,omitempty"`
-    
+
     // 挂载件 (Mounts)
     Prompt        string         `gorm:"type:text;default:''" json:"prompt"` // System Prompt
     Skill         string         `gorm:"type:text;default:''" json:"skill"`  // 引用的 Skill 名
     Knowledge     []string       `gorm:"serializer:json;type:text" json:"knowledge"` // doc_ID 列表
     Tools         []ToolRef      `gorm:"serializer:json;type:text" json:"tools"`     // 引用的实体列表
-    
+
     // 约束
     OutputSchema  *OutputSchema  `gorm:"serializer:json;type:text" json:"outputSchema"`
     ModelOverride *ModelRef      `gorm:"serializer:json;type:text" json:"modelOverride"`
-    
+
     CreatedAt     time.Time      `json:"createdAt"`
     UpdatedAt     time.Time      `json:"updatedAt"`
 }
