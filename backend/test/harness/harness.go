@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap/zaptest"
 	"gorm.io/gorm"
 
+	agentapp "github.com/sunweilin/forgify/backend/internal/app/agent"
 	apikeyapp "github.com/sunweilin/forgify/backend/internal/app/apikey"
 	askapp "github.com/sunweilin/forgify/backend/internal/app/ask"
 	askaiapp "github.com/sunweilin/forgify/backend/internal/app/askai"
@@ -40,6 +41,7 @@ import (
 	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	todoapp "github.com/sunweilin/forgify/backend/internal/app/todo"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	agentforgetool "github.com/sunweilin/forgify/backend/internal/app/tool/agentforge"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	documenttool "github.com/sunweilin/forgify/backend/internal/app/tool/document"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
@@ -56,10 +58,7 @@ import (
 	toolsettool "github.com/sunweilin/forgify/backend/internal/app/tool/toolset"
 	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
 	workflowtool "github.com/sunweilin/forgify/backend/internal/app/tool/workflow"
-	agentforgetool "github.com/sunweilin/forgify/backend/internal/app/tool/agentforge"
 	triggerapp "github.com/sunweilin/forgify/backend/internal/app/trigger"
-	agentapp "github.com/sunweilin/forgify/backend/internal/app/agent"
-	agentstore "github.com/sunweilin/forgify/backend/internal/infra/store/agent"
 	userapp "github.com/sunweilin/forgify/backend/internal/app/user"
 	workflowapp "github.com/sunweilin/forgify/backend/internal/app/workflow"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
@@ -88,11 +87,12 @@ import (
 	notificationsinfra "github.com/sunweilin/forgify/backend/internal/infra/notifications"
 	sandboxinfra "github.com/sunweilin/forgify/backend/internal/infra/sandbox"
 	settingsinfra "github.com/sunweilin/forgify/backend/internal/infra/settings"
+	agentstore "github.com/sunweilin/forgify/backend/internal/infra/store/agent"
 	apikeystore "github.com/sunweilin/forgify/backend/internal/infra/store/apikey"
+	approvalstore "github.com/sunweilin/forgify/backend/internal/infra/store/approval"
 	chatstore "github.com/sunweilin/forgify/backend/internal/infra/store/chat"
 	convstore "github.com/sunweilin/forgify/backend/internal/infra/store/conversation"
 	documentstore "github.com/sunweilin/forgify/backend/internal/infra/store/document"
-	approvalstore "github.com/sunweilin/forgify/backend/internal/infra/store/approval"
 	flowrunstore "github.com/sunweilin/forgify/backend/internal/infra/store/flowrun"
 	flowruneventstore "github.com/sunweilin/forgify/backend/internal/infra/store/flowrunevent"
 	functionstore "github.com/sunweilin/forgify/backend/internal/infra/store/function"
@@ -515,6 +515,7 @@ func New(t *testing.T, opts ...Option) *Harness {
 	catalogService.RegisterSource(mcpService.AsCatalogSource())
 	catalogService.RegisterSource(workflowService.AsCatalogSource())
 	catalogService.RegisterSource(documentService.AsCatalogSource())
+	catalogService.RegisterSource(agentService.AsCatalogSource())
 	chatService.SetSystemPromptProvider(catalogService)
 	chatService.SetMemoryProvider(memoryService)
 	chatService.SetDocumentResolver(documentService)

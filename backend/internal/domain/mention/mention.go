@@ -15,6 +15,7 @@ const (
 	MentionFunction MentionType = "function"
 	MentionHandler  MentionType = "handler"
 	MentionWorkflow MentionType = "workflow"
+	MentionAgent    MentionType = "agent" // quadrinity: @-mention an agent entity like the trinity
 )
 
 // MentionInput is the wire shape the frontend sends per mention: type + id only.

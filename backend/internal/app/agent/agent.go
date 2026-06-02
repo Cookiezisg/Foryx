@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 
 	agentdomain "github.com/sunweilin/forgify/backend/internal/domain/agent"
+	catalogdomain "github.com/sunweilin/forgify/backend/internal/domain/catalog"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -33,14 +34,14 @@ func New(repo agentdomain.Repository, log *zap.Logger) *Service {
 
 // CreateInput is the request for creating a new agent.
 type CreateInput struct {
-	Name         string
-	Description  string
-	Tags         []string
-	Prompt       string
-	Skill        string
-	Knowledge    []string
-	Tools        []agentdomain.ToolRef
-	OutputSchema *agentdomain.OutputSchema
+	Name          string
+	Description   string
+	Tags          []string
+	Prompt        string
+	Skill         string
+	Knowledge     []string
+	Tools         []agentdomain.ToolRef
+	OutputSchema  *agentdomain.OutputSchema
 	ModelOverride string
 	ChangeReason  string
 }
@@ -301,20 +302,52 @@ func (s *Service) RejectPending(ctx context.Context, agentID string) error {
 	return nil
 }
 
-// AsCatalogSource returns a catalog.CatalogSource for this service.
-func (s *Service) AsCatalogSource() *AgentCatalogSource {
+// AsCatalogSource returns the catalogdomain.CatalogSource port adapter so agents appear in the
+// library survey / system-prompt asset menu alongside function/handler/workflow (quadrinity parity).
+// Before this, AgentCatalogSource didn't satisfy the interface (missing Granularity/InvokeTool,
+// ListAll instead of ListItems) so it was never registrable — agents were invisible to the LLM's
+// catalog, which is why the assistant never surveyed or searched existing agents.
+//
+// AsCatalogSource 返 catalogdomain.CatalogSource 适配器，让 agent 与 trinity 同台出现在资产菜单。
+func (s *Service) AsCatalogSource() catalogdomain.CatalogSource {
 	return &AgentCatalogSource{svc: s}
 }
 
-// AgentCatalogSource implements catalog.CatalogSource for agents.
+// AgentCatalogSource implements catalogdomain.CatalogSource for agents.
 type AgentCatalogSource struct {
 	svc *Service
 }
 
-func (c *AgentCatalogSource) Name() string { return "agent" }
+func (c *AgentCatalogSource) Name() string                           { return "agent" }
+func (c *AgentCatalogSource) Granularity() catalogdomain.Granularity { return catalogdomain.PerItem }
+
+// InvokeTool: get_agent is the actionable handle from the menu (inspect an agent before referencing
+// it as config.agentRef in a workflow agent node / config.callable in a tool node). There is no
+// direct chat "run agent" tool — agents run as workflow nodes.
+func (c *AgentCatalogSource) InvokeTool() string { return "get_agent" }
 
 // ListItems returns agents for catalog injection (LLM system prompt capability menu).
-func (c *AgentCatalogSource) ListAll(ctx context.Context) ([]*agentdomain.Agent, error) {
+func (c *AgentCatalogSource) ListItems(ctx context.Context) ([]catalogdomain.Item, error) {
 	agents, _, err := c.svc.List(ctx, 200, "")
-	return agents, err
+	if err != nil {
+		return nil, err
+	}
+	items := make([]catalogdomain.Item, 0, len(agents))
+	for _, a := range agents {
+		desc := strings.TrimSpace(a.Description)
+		if desc == "" {
+			if joined := strings.Join(a.Tags, ", "); joined != "" {
+				desc = joined
+			} else {
+				desc = "(no description)"
+			}
+		}
+		items = append(items, catalogdomain.Item{
+			Source:      "agent",
+			ID:          a.ID,
+			Name:        a.Name,
+			Description: desc,
+		})
+	}
+	return items, nil
 }

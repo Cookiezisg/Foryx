@@ -19,6 +19,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	agentapp "github.com/sunweilin/forgify/backend/internal/app/agent"
 	apikeyapp "github.com/sunweilin/forgify/backend/internal/app/apikey"
 	askapp "github.com/sunweilin/forgify/backend/internal/app/ask"
 	askaiapp "github.com/sunweilin/forgify/backend/internal/app/askai"
@@ -40,6 +41,7 @@ import (
 	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	todoapp "github.com/sunweilin/forgify/backend/internal/app/todo"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	agentforgetool "github.com/sunweilin/forgify/backend/internal/app/tool/agentforge"
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	documenttool "github.com/sunweilin/forgify/backend/internal/app/tool/document"
 	fstool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
@@ -56,16 +58,14 @@ import (
 	toolsettool "github.com/sunweilin/forgify/backend/internal/app/tool/toolset"
 	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
 	workflowtool "github.com/sunweilin/forgify/backend/internal/app/tool/workflow"
-	agentforgetool "github.com/sunweilin/forgify/backend/internal/app/tool/agentforge"
 	triggerapp "github.com/sunweilin/forgify/backend/internal/app/trigger"
-	agentapp "github.com/sunweilin/forgify/backend/internal/app/agent"
 	userapp "github.com/sunweilin/forgify/backend/internal/app/user"
 	workflowapp "github.com/sunweilin/forgify/backend/internal/app/workflow"
+	agentdomain "github.com/sunweilin/forgify/backend/internal/domain/agent"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	chatdomain "github.com/sunweilin/forgify/backend/internal/domain/chat"
 	convdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	documentdomain "github.com/sunweilin/forgify/backend/internal/domain/document"
-	agentdomain "github.com/sunweilin/forgify/backend/internal/domain/agent"
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	handlerdomain "github.com/sunweilin/forgify/backend/internal/domain/handler"
@@ -89,12 +89,12 @@ import (
 	notificationsinfra "github.com/sunweilin/forgify/backend/internal/infra/notifications"
 	sandboxinfra "github.com/sunweilin/forgify/backend/internal/infra/sandbox"
 	settingsinfra "github.com/sunweilin/forgify/backend/internal/infra/settings"
+	agentstore "github.com/sunweilin/forgify/backend/internal/infra/store/agent"
 	apikeystore "github.com/sunweilin/forgify/backend/internal/infra/store/apikey"
+	approvalstore "github.com/sunweilin/forgify/backend/internal/infra/store/approval"
 	chatstore "github.com/sunweilin/forgify/backend/internal/infra/store/chat"
 	convstore "github.com/sunweilin/forgify/backend/internal/infra/store/conversation"
 	documentstore "github.com/sunweilin/forgify/backend/internal/infra/store/document"
-	approvalstore "github.com/sunweilin/forgify/backend/internal/infra/store/approval"
-	agentstore "github.com/sunweilin/forgify/backend/internal/infra/store/agent"
 	flowrunstore "github.com/sunweilin/forgify/backend/internal/infra/store/flowrun"
 	flowruneventstore "github.com/sunweilin/forgify/backend/internal/infra/store/flowrunevent"
 	functionstore "github.com/sunweilin/forgify/backend/internal/infra/store/function"
@@ -460,6 +460,7 @@ func main() {
 	catalogService.RegisterSource(mcpService.AsCatalogSource())
 	catalogService.RegisterSource(workflowService.AsCatalogSource())
 	catalogService.RegisterSource(documentService.AsCatalogSource())
+	catalogService.RegisterSource(agentService.AsCatalogSource()) // quadrinity: agents in the library survey + asset menu too
 	chatService.SetSystemPromptProvider(catalogService)
 	chatService.SetMemoryProvider(memoryService)
 	chatService.SetDocumentResolver(documentService)
@@ -467,6 +468,7 @@ func main() {
 	chatService.RegisterMentionResolver(functionService.AsMentionResolver())
 	chatService.RegisterMentionResolver(handlerService.AsMentionResolver())
 	chatService.RegisterMentionResolver(workflowService.AsMentionResolver())
+	chatService.RegisterMentionResolver(agentService.AsMentionResolver()) // @-mention agents like the trinity
 
 	// V1.2 §3 final-sweep — permissions + hooks.
 	// settings.json lives at <homeRoot>/settings.json; gate reads via
