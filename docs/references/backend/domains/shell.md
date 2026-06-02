@@ -4,526 +4,62 @@ type: reference
 status: active
 owner: @weilin
 created: 2026-04-22
-reviewed: 2026-05-31
-review-due: 2026-06-30
+reviewed: 2026-06-02
+review-due: 2026-09-01
 audience: [human, ai]
 ---
-# Shell Tools — V1.2 详设计
+# Shell Domain — 宿主机交互与 Bash 自动重定向原理
 
-**Phase**：5（System Tool 第二代 shell 批次）
-**状态**：✅ 实现完成（2026-05-04，B1-B2）+ Sandbox auto-route（B5，sandbox.md §9.5）
-**关联**：
-- [`../backend-design.md`](../backend-design.md) — 总规范
-- [`../../../CLAUDE.md`](../../../CLAUDE.md) §S18 — Tool 接口规约
-- [`./chat.md`](./chat.md) §4.4 — 系统工具完整目录
-- [`./task.md`](./task.md) §10 — AgentState 跨 tool 共享状态生命周期
-- [`./sandbox.md`](./sandbox.md) §9.5 — Bash auto-route 与 sandbox env 协议
-- 实现包：`backend/internal/app/tool/shell/`（6 文件：shell.go / manager.go / bash.go / **bash_route.go** / output.go / kill.go）
+> **核心职责**：Shell 域是 Forgify 赋予 Agent 的 **“物理之手”**。它允许 LLM 通过 Bash 命令操作宿主机。为了安全，系统实现了一套精密的自动重定向机制，将所有的 Python/Node 操作“偷梁换柱”到沙箱环境中。
 
 ---
 
-## 1. 一句话
+## 1. 核心原理 (Principles)
 
-LLM 跑 shell 命令的三件套：**Bash**（前后台双模式 + cd 状态机 + **sandbox auto-route**）/ **BashOutput**（轮询后台进程新输出）/ **KillShell**（终止后台进程）。**故意**不带 banned-command 列表——单用户本地场景下 Bash 是用户日常命令的代理，banned-list 没意义。后台进程子系统：`ProcessManager` 注册表 + 256 KB 环形输出缓冲 + 读游标。**Sandbox auto-route**（§3a）：检测 runtime-bound 命令（`pip` / `python` / `npm` / `cargo` / `go` 等）通过 mvdan.cc/sh AST，自动给 PATH 前置 per-conversation mise-managed env 的 bin 目录——`pip install` 不污染系统 Python。
+### 1.1 Command Interception (指令劫持)
+这是 Shell 域最核心的技术细节。后端通过正则和轻量级词法分析，对 LLM 输入的 Bash 字符串进行预处理：
+- **场景**：LLM 输入 `pip install pandas`。
+- **劫持**：后端识别到 `pip` 关键词，自动查找当前对话关联的 `se_xxx` 沙箱。
+- **改写**：物理执行的命令变为 `/Users/.../se_xxx/bin/python -m pip install pandas`。
+- **效果**：LLM 感觉自己在操作全局环境，实则所有副作用都困在沙箱内。
 
----
+### 1.2 Interactive-to-Batch (交互转批处理)
+由于 LLM 生成是单向的，无法处理交互式 Shell (如 `vim`, `less`, `sudo` 提问)：
+- **原理**：系统强制将子进程的 `stdin` 关闭或重定向到 `/dev/null`。
+- **后果**：任何需要用户输入的命令都会立即以“Input required”错误结束。
+- **例外**：未来计划通过 PTY 实现交互模式，当前 V1.2 为 **纯批处理 (Non-interactive)**。
 
-## 2. 端到端推演（设计原则 #5）
-
-### Bash 前台路径
-
-```
-触发源：LLM 调 Bash(command, [timeout])
-  → ValidateInput: command 非空 / timeout ∈ [0, 600000]
-  → Execute:
-      cmdText := strings.TrimSpace(args.Command)
-      target, ok := parseCDOnly(cmdText)
-      if ok → handleCD(target):
-          路径解析（绝对 / 相对 cwd）+ Stat 验证目录
-          state.SetCwd(target)         // 更新 AgentState.Cwd
-          → "Changed working directory to <abs path>"
-      else:
-          cwd = resolveCwd(ctx)
-          extraPath, autoRouteErr := t.maybeAutoRoute(ctx, cmdText)   // §3a sandbox auto-route
-          if autoRouteErr != nil:
-              → formatAutoRouteError(autoRouteErr)  // 不静默降到 host shell — §S3 错误不吞
-          if Background → runBackground(ctx, cmdText, cwd, extraPath)
-          else → runForeground(ctx, cmdText, cwd, extraPath, timeout):
-              context.WithTimeout(ctx, timeout) → exec.CommandContext("/bin/sh", "-c", cmd)
-              cmd.Env = augmented PATH（extraPath 前置 + 继承 host env）
-              cmd.Stdout = cmd.Stderr = &buf  // 合并捕获
-              cmd.Run() 阻塞
-              switch runCtx.Err():
-                DeadlineExceeded  → "[command timed out after Xs]"
-                Canceled          → "[cancelled]"  (batch 1 修的 UX bug)
-                err is *ExitError → "[exit code: N]"
-                err other         → "[exec failed: <msg>]"
-              capOutput(buf, 256 KB)
-  → tool_result：正文 + 状态尾注
-```
-
-### Bash 后台路径
-
-```
-LLM 调 Bash(command, run_in_background=true)
-  → maybeAutoRoute(ctx, cmdText) → extraPath / autoRouteErr   (§3a 同前台)
-  → 失败 → formatAutoRouteError 直接返
-  → runBackground(ctx, cmdText, cwd, extraPath):
-      cmd := exec.CommandContext(context.Background(), ...)  // 故意 Background ctx
-      cmd.Env = augmented PATH（extraPath 前置 + 继承 host env）
-      stdout/stderr Pipe + cmd.Start
-      proc := &BgProcess{ID=bsh_<16hex>, ConvID, Command, Cmd, StartedAt, status=Running}
-      mgr.Register(proc)
-      go pumpReader(stdout) → proc.appendOutput
-      go pumpReader(stderr) → proc.appendOutput
-      go reaper:
-          pumpWG.Wait()
-          err := cmd.Wait()
-          → markFinished(StatusExited|Killed) / markErrored
-  → tool_result：「Started background command (bash_id=bsh_xxx): <cmd>\n... 」
-```
-
-### BashOutput 路径
-
-```
-LLM 调 BashOutput(bash_id, [filter])
-  → ValidateInput: bash_id 非空 / filter regex 合法
-  → Execute:
-      proc := mgr.Get(id) → ErrProcessNotFound 时返友好字符串
-      newBytes, dropped, status, exitCode := proc.drainNew()  // 推进读游标
-      filter regex 应用（可选）
-      formatOutputResult: 正文 + ring overflow 提示 + 状态尾注
-  → tool_result
-```
-
-### KillShell 路径
-
-```
-LLM 调 KillShell(bash_id)
-  → ValidateInput: bash_id 非空
-  → Execute:
-      proc := mgr.Get(id) → 不存在时返友好字符串（**幂等**）
-      proc.Cmd.Process.Kill()  // SIGKILL；尝试杀，失败也不报错
-      mgr.Remove(id)
-      → "Killed background shell <id>." / "Background shell <id> already finished; removed from registry."
-```
-
-**端到端跨 domain 依赖**：
-- `pkg/agentstate.AgentState.Cwd` — Bash cd 状态机的存储；通过 `pkg/reqctx.WithAgentState` ctx 注入
-- `pkg/reqctx.GetConversationID` — 后台进程注册时记 ConvID + auto-route 派 sandbox env owner
-- `pkg/idgen.New("bsh")` — 后台进程 ID 生成
-- **`app/sandbox.Service`** — auto-route 调 `IsReady()` / `BootstrapError()` / `EnsureEnv(ctx, owner, spec, progress)` / `SandboxRoot()`；nil 时 runtime 命令立刻报错（不静默降到 host shell）
-- `domain/sandbox` — `OwnerKindConversation` / `EnvSpec` / `RuntimeSpec` / `ProgressFunc`
-- `pkg/installprogress.Run` — 包 `EnsureEnv` 让装包进度作 progress block 流式挂在 Bash tool_call 父下
-- `mvdan.cc/sh/v3/syntax` — Bash 命令 AST 解析（§3a auto-route 用）
-- `os/exec` + `os.Kill` — Unix 系统调用
-- 无 DB / SSE / HTTP API
-- **故意不依赖** PathGuard（Bash 的安全 trade-off，详 §6）
+### 1.3 Wall-clock Backstop (超时强杀)
+- **物理阈值**：所有 `run_bash` 指令强制带有一个 **30 秒** 的 `context.WithTimeout`。
+- **防止僵尸**：即便子进程内部陷入死循环，后端协程超时后会发送 `SIGKILL -PGID` 强杀整个进程组。
 
 ---
 
-## 3. 关键决策
+## 2. 生命周期 (Lifecycle)
 
-| 决策 | 选择 | 理由 |
-|---|---|---|
-| Banned-command 列表 | **不实现** | 本地单用户：Bash 是"用户本来就会在终端敲的命令"的代理；banned-list 无价值（`bash cat ~/.ssh/id_rsa` 能成功，挡住反而误伤合理 cmd）|
-| PathGuard 集成 | **不集成**（RequiresWorkspace=false）| 同上 trade-off。PathGuard 是 file-tool 的护栏，不是安全边界（详 pathguard.go 包注释）|
-| Shell 选择 | `/bin/sh -c "<cmd>"` Unix；`cmd /c` Windows（best-effort）| Unix 标准；Windows 非本期 v1 范围但 best-effort 不阻止 |
-| cd 状态机 | **整命令 `cd <path>`** 短路更新 AgentState.Cwd；链式 `cd && other` **不追踪** | 链式跟"子 shell exit 后父 cwd 不变"语义一致；短路简化实现避免写 mini-parser |
-| 前台 timeout | 默认 120s，硬上限 600s | 覆盖典型 build / test / install；真长跑走后台 |
-| 后台 ctx | `context.Background()`（**不用** request ctx）| 让 conversation cancel 不杀后台子进程（按设计：bg 命令 outlive turn）|
-| 后台 timeout | **无** | 用户主动 KillShell 或 backend shutdown 时 mgr.Stop() 杀 |
-| 输出 cap | 前台 256 KB（截头）/ 后台环形 256 KB（环绕，丢头）| LLM context 不被失控命令撑爆；后台允许长流但有界 |
-| Cancel UX | 父 ctx Canceled 时报 `[cancelled]` 而不是 `[exec failed: signal: killed]` | **Tool 自检 batch 1 修的 UX bug**——LLM 看到 "exec failed" 会错以为命令本身崩 |
-| Cd 引号剥除 | 一对包裹 `"` 或 `'` 剥；不剥不平衡引号 | 让 `cd "/tmp/with space"` 顺手；不试图当完整 shell parser |
-| 进程组 / SIGTERM 优雅 | **v1 仅 SIGKILL** | 原生 `cmd.Process.Kill()`；进程组 + SIGTERM-then-SIGKILL 是后续优化点 |
-| Banned cmd metadata | IsReadOnly=false（Bash） / true（BashOutput） / false（KillShell） | 文档性，框架不强制（同 §S18 §8 对照表）|
-| **Sandbox auto-route** | Bash 检测 runtime-bound 命令 → 自动用 per-conv mise env 的 PATH | 让 `pip install` / `npm install` 不污染 host Python / Node；详 §3a |
-| Auto-route 失败策略 | **报错给 LLM，不静默降级** | runtime 命令降到 system Python 给 LLM 假事实（"macOS 自带 3.9.6" vs sandbox 3.12）；§S3 错误不吞 |
-| Auto-route 检测方式 | mvdan.cc/sh/v3 AST + 8 runtime kind 正则 | 覆盖嵌套 `bash -c "pip ..."` / `env VAR=v python ...` / `cd && python ...` / 命令替换；first-token regex 兜底 parser 拒绝 |
-| Auto-route 静态逃逸 | `eval` / `source` / `$(<dynamic>)` 是 best-effort（parser 看不到）| Bash description 已警示 LLM 避免这种写法 |
+1. **发起 (Emitting)**：LLM 发起 `run_bash(cmd)`。
+2. **分析 (Analyzing)**：`shell.Service` 检查 cmd 是否包含非法字符或高危路径。
+3. **路由 (Routing)**：Sandbox 模块计算当前环境下最合适的解释器路径（重定向）。
+4. **拉起 (Spawning)**：`os/exec` 启动进程，劫持 `stdout/stderr`。
+5. **归档 (Logging)**：命令及其输出被记录到审计日志，并以 `ProgressBlock` 形式流式推向 SSE。
 
 ---
 
-## 3a. Sandbox auto-route（`bash_route.go`，383 行）
+## 3. 跨域集成 (Interactions)
 
-### 角色
-
-Bash tool 在 `Execute` 内于 `cd` 短路之后、`runForeground` / `runBackground` 之前调 `t.maybeAutoRoute(ctx, cmdText)`。返回的 `extraPath []string` 前置到子进程 `PATH`，让 Python / Node 命令（`python` / `pip` / `uv` / `node` / `npm` / `npx` / `yarn` / `pnpm` 等）跑在 per-conversation sandbox env 而非 host。其他语言（rust / go / ruby / php / java / dotnet）走系统 PATH——sandbox 不参与。
-
-### 路由策略
-
-1. **AST 解析** — `mvdan.cc/sh/v3/syntax.NewParser().Parse(command)` → 走 `syntax.Walk` 检每个 `CallExpr`：
-   - 剥前导 env 赋值（`FOO=bar python ...`）+ env 命令包装（`env PYTHONPATH=. python ...`）
-   - 剥路径前缀（`/usr/bin/python3` → `python3`）
-   - 自省命令递归（`which python3` → 按 argument 路由）
-   - `bash -c "pip ..."` 递归进 `-c` 内层
-   - 命令替换 / subshell 走 Walk 下钻
-2. **正则匹配** — 命令名匹配 2 个 `runtimeDetector` 之一：
-   - `python` → `python3?(\.\d+)?` / `pip3?` / `uv` / `virtualenv` / `pipenv` / `poetry`
-   - `node` → `node` / `npm` / `npx` / `yarn` / `pnpm`
-3. **AST parser 拒绝畸形 shell** → fallback 到 first-token regex（罕见）。
-
-> rust / go / ruby / php / java / dotnet detector 已删——sandbox stack 没装它们；这些命令 detect 不到 → 落系统 shell（同 `git status` 路径，由用户自己装 mise / docker 隔离）。
-
-### 调用链
-
-```
-maybeAutoRoute(ctx, command):
-  kind := detectRuntime(command)
-  if kind == "" → return nil, nil   // 非 runtime 命令，host shell 即可
-  if t.sandbox == nil → return nil, fmt.Errorf("sandbox service not wired")
-  if !t.sandbox.IsReady() → return nil, fmt.Errorf("sandbox not ready (%s)", reason)
-  convID, ok := reqctxpkg.GetConversationID(ctx)
-  if !ok → return nil, fmt.Errorf("no conversation context — %s commands need conv-scoped sandbox env")
-  owner := sandboxdomain.Owner{
-      Kind: OwnerKindConversation,
-      ID:   convID + "_" + kind,                        // owner.ID 是直接目录名（PATH 段不能含 ":"）
-      Name: fmt.Sprintf("Conv %s scratch (%s)", convID, kind),
-  }
-  env, err := installprogresspkg.Run(ctx, fields, func(progress) {
-      return t.sandbox.EnsureEnv(ctx, owner, EnvSpec{Runtime: RuntimeSpec{Kind: kind}}, progress)
-  })
-  // installprogress 让安装进度作 progress block 流式挂在 Bash tool_call 父下
-  if err → return nil, fmt.Errorf("sandbox env install failed: %w", err)
-  envPath := filepath.Join(t.sandbox.SandboxRoot(), env.Path)
-  return envBinDirsForKind(envPath, kind), nil
-```
-
-### per-runtime PATH 前置目录（`envBinDirsForKind`）
-
-| Kind | 前置目录 | 用途 |
-|---|---|---|
-| python | `<env>/.venv/bin`（POSIX）/ `<env>/.venv/Scripts`（Windows）| Python venv 跨平台 |
-| node | `<env>/node_modules/.bin` | npm 包安装到 local node_modules |
-
-> rust / go / ruby / php / java / dotnet 不在 detect 列表 → 不进 envBinDirsForKind 路径；走系统 PATH。
-
-### 失败语义（不静默降级）
-
-`formatAutoRouteError(err)` 把 sandbox-prep 失败转成 LLM 可读的 tool_result。错误已在 `maybeAutoRoute` 内分类（无 §S16 wrap 前缀、无 UI/版本号叙事），原样作为 body 透传：
-
-```
-sandbox unavailable for <kind>: <classified reason>
-
-[exit code: -1]
-[sandbox auto-route failed]
-```
-
-classified reasons：
-- `runtime not configured`（service 未接线）
-- `bootstrap incomplete` / `bootstrap failed: <err>`（mise / runtime 未就绪）
-- `no conversation context`（ctx 无 conversationID）
-- `env install failed: <err>`（per-conv env 装包失败）
-
-返 `(string, nil)` 让框架当成普通 tool result 而非 tool 框架错误重试。
-
-### 扩展协议
-
-加新 runtime kind：
-1. `bash_route.go::runtimeDetectors` 加一行（kind + 正则）
-2. `bash_route.go::envBinDirsForKind` 加 case（如需 PATH 前置）
-3. `cmd/server/main.go::registerSandboxStack` 加匹配的 `MiseInstaller` 注册
+- **Sandbox**：提供物理环境支撑。
+- **Chat**：作为 Bash 工具的宿主。
+- **Permissions**：受 `allow/deny` 命令清单约束。
 
 ---
 
-## 4. 工具规约
+## 4. 错误字典 (Sentinels)
 
-### 4.1 Bash（`backend/internal/app/tool/shell/bash.go`）
-
-**Args**：
-
-| 字段 | 类型 | 必填 | 说明 |
+| Sentinel | HTTP | Wire Code | 场景 |
 |---|---|---|---|
-| `command` | string | ✅ | shell 命令（POSIX sh）|
-| `run_in_background` | bool | | 默认 false；true 时立即返 bash_id 不等待 |
-| `timeout` | number | | 前台超时（毫秒）；默认 120000；硬上限 600000 |
-
-> Phase C 删除原 `description` 字段——框架标准 `summary` 字段已覆盖 per-call 描述，多余字段让 LLM 混淆两个字段都填。
-
-**返回**（前台）：合并 stdout+stderr 正文 + 空行 + 可选 [note] + `[exit code: N]` 尾注。
-
-**返回**（后台）：`Started background command (bash_id=bsh_xxx): <cmd>\nUse BashOutput with this bash_id to poll new output, or KillShell to terminate.`
-
-**返回**（cd）：`Changed working directory to <abs>` / `cd: <error>`
-
-**前台 footer 示例**：
-- 正常：`[exit code: 0]`
-- 超时：`[command timed out after 200ms]\n[exit code: -1]`
-- **取消**：`[cancelled]\n[exit code: -1]` ← batch 1 修
-- 非零退出：`[exit code: 7]`
-- 启动失败：`[exec failed: fork/exec /bin/sh: ...]\n[exit code: -1]`
-
-**静态元数据**：`IsReadOnly=false` / `NeedsReadFirst=false` / `RequiresWorkspace=false`（**故意**——见 §6）
-
-**ValidateInput** sentinels：
-- `ErrEmptyCommand` — command 缺 / 空 / 仅空白
-- `ErrInvalidTimeout` — timeout < 0 或 > maxTimeoutMS
-
-### 4.2 BashOutput（`output.go`）
-
-**Args**：
-
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `bash_id` | string | ✅ | Bash run_in_background:true 返的 ID |
-| `filter` | string | | 正则；保留匹配行 |
-
-**返回**：自上次轮询新增字节 + 状态尾注。
-
-**返回**（特殊）：
-- 不存在 → `Background shell process not found: <id>`（**不报错，幂等**）
-- 无新增 → `(no new output since last poll)\n\n[status: running]`
-- 环形溢出 → 正文头加 `[note: N bytes dropped from buffer head before this poll due to ring overflow]`
-
-**状态尾注**：`[status: running]` / `[status: exited (code N)]` / `[status: killed]` / `[status: errored]` / `[status: unknown]`
-
-**静态元数据**：`IsReadOnly=true` / `NeedsReadFirst=false` / `RequiresWorkspace=false`
-
-**ValidateInput** sentinels：
-- `ErrEmptyBashID` — bash_id 缺 / 空 / 仅空白
-- filter regex 编译错 → `errors.New("BashOutput.ValidateInput: filter regex: <err>")`
-
-### 4.3 KillShell（`kill.go`）
-
-**Args**：
-
-| 字段 | 类型 | 必填 | 说明 |
-|---|---|---|---|
-| `bash_id` | string | ✅ | Bash run_in_background:true 返回的 bash_id（与 BashOutput 同名） |
-
-**返回**：
-- 存在且 running → `Killed background shell <id>.`
-- 存在但已 finished → `Background shell <id> already finished; removed from registry.`
-- 不存在 → `Background shell process not found: <id>`（**幂等**：杀两次返同结果）
-
-**静态元数据**：`IsReadOnly=false` / `NeedsReadFirst=false` / `RequiresWorkspace=false`
-
-**ValidateInput**：仅 bash_id 非空（无独立 sentinel）。
-
-### 4.4 ShellTools 工厂
-
-```go
-// app/tool/shell/shell.go
-type ShellTools struct {
-    Manager *ProcessManager
-    Tools   []toolapp.Tool
-}
-
-// NewShellTools wires ProcessManager + 3 tools. sandbox is optional —
-// pass *sandboxapp.Service to enable §3a auto-route, nil to disable
-// (runtime-bound commands will then return ErrSandboxNotWired to LLM).
-//
-// NewShellTools 装 ProcessManager + 3 tool。sandbox 可选——传 service 启用
-// auto-route，nil 则 runtime 命令报 ErrSandboxNotWired 给 LLM。
-func NewShellTools(sandbox *sandboxapp.Service) *ShellTools {
-    mgr := NewProcessManager()
-    return &ShellTools{
-        Manager: mgr,  // 暴露给 main.go 用 defer mgr.Stop() 优雅关停
-        Tools: []toolapp.Tool{
-            &Bash{mgr: mgr, sandbox: sandbox},
-            &BashOutput{mgr: mgr},
-            &KillShell{mgr: mgr},
-        },
-    }
-}
-```
-
-调用方按 §S13 嵌套子包别名规则导入为 `shelltool`。
-
-**main.go 装配**：
-
-```go
-shells := shelltool.NewShellTools(sandboxService)
-defer shells.Manager.Stop()  // SIGKILL 所有 running 子进程
-tools = append(tools, shells.Tools...)
-```
-
-`Bash` struct 持 `sandbox *sandboxapp.Service`（可 nil）；`BashOutput` / `KillShell` 不持 sandbox（不参与 auto-route）。
-
----
-
-## 5. 实现要点
-
-### 5.1 cd 状态机（`parseCDOnly` + `handleCD`）
-
-```go
-func parseCDOnly(cmd string) (target string, ok bool) {
-    trimmed := strings.TrimSpace(cmd)
-    if trimmed == "cd"           { return "", true }       // cd 单字 → home
-    if !strings.HasPrefix(trimmed, "cd ") &&
-       !strings.HasPrefix(trimmed, "cd\t") { return "", false }
-    rest := strings.TrimSpace(strings.TrimPrefix(trimmed, "cd"))
-    // 任何 shell 元字符（&|;<>$`）都说明这是链式 — 不当 cd-only 处理
-    if strings.ContainsAny(rest, "&|;<>`$") { return "", false }
-    // 一对包裹引号剥（手动写 mini-parser 太重）
-    if len(rest) >= 2 && (rest[0] == '"' || rest[0] == '\'') &&
-       rest[0] == rest[len(rest)-1] {
-        rest = rest[1 : len(rest)-1]
-    }
-    return rest, true
-}
-```
-
-**handleCD**：
-- target 空 → `os.UserHomeDir()`
-- 非绝对 → `filepath.Join(currentCwd, target)`
-- `filepath.Clean`
-- `os.Stat` 校验 `info.IsDir()`
-- `state.SetCwd(target)` ← AgentState 缺失时**软错**（让 LLM 看到 wiring bug 警告但不致命）
-
-**链式 `cd /tmp && ls`** 进入 `runForeground` 走 `/bin/sh -c "cd /tmp && ls"`——子 shell 内 cd 生效，pwd 输出 /tmp，但 AgentState.Cwd **不**变（与子 shell 退出后父 cwd 不变语义一致；这是有意决策）。
-
-### 5.2 ProcessManager（`manager.go`）
-
-**单一 mutex 守注册表**：
-
-```go
-type ProcessManager struct {
-    mu    sync.Mutex
-    procs map[string]*BgProcess
-}
-```
-
-**每个 BgProcess 自带 mutex** 守 output buffer + 读游标：
-
-```go
-type BgProcess struct {
-    ID, ConvID, Command string
-    Cmd        *exec.Cmd
-    StartedAt  time.Time
-
-    mu         sync.Mutex
-    buf        []byte    // 环形缓冲（cap bgBufferBytes = 256 KB）
-    dropped    int64     // 累计被丢字节（informational）
-    readCursor int       // BashOutput 已 drain 的位置
-    status     Status
-    exitCode   int
-    finishedAt time.Time
-    launchErr  error
-}
-```
-
-**两层锁设计**：mgr.mu 只在 Register/Get/Remove/Stop 时短时间持有；BgProcess.mu 在 appendOutput / drainNew / markFinished 时持有。**并发 BashOutput 轮询不互相阻塞**（不同进程不同锁）。
-
-### 5.3 环形输出缓冲（`appendOutput` / `drainNew`）
-
-```go
-func (p *BgProcess) appendOutput(b []byte) {
-    p.mu.Lock(); defer p.mu.Unlock()
-    p.buf = append(p.buf, b...)
-    if len(p.buf) <= bgBufferBytes { return }
-    overflow := len(p.buf) - bgBufferBytes
-    p.dropped += int64(overflow)
-    p.buf = p.buf[overflow:]      // 丢头
-    p.readCursor -= overflow      // 游标向前贴
-    if p.readCursor < 0 { p.readCursor = 0 }
-}
-
-func (p *BgProcess) drainNew() (newBytes []byte, dropped int64, status Status, exitCode int) {
-    p.mu.Lock(); defer p.mu.Unlock()
-    out := append([]byte(nil), p.buf[p.readCursor:]...)  // 拷贝（让调用方下游 regex 不持锁）
-    p.readCursor = len(p.buf)
-    return out, p.dropped, p.status, p.exitCode
-}
-```
-
-**关键**：环形溢出时 `readCursor` 按比例回退——原本指在被丢区域的游标贴齐到剩余缓冲头（保证 BashOutput 看到的"新字节"流不会跳过 / 重复）。
-
-### 5.4 Reaper goroutine（防 zombie）
-
-```go
-go func() {
-    pumpWG.Wait()           // 两个 pumpReader（stdout + stderr）排空
-    err := cmd.Wait()       // 真正 reap zombie + 拿 exit code
-    switch {
-    case err == nil:
-        proc.markFinished(StatusExited, 0)
-    case errors.As(err, &exitErr):
-        if exitErr.ProcessState != nil && exitErr.ProcessState.Exited() {
-            proc.markFinished(StatusExited, exitErr.ExitCode())
-        } else {
-            proc.markFinished(StatusKilled, -1)  // 信号杀
-        }
-    default:
-        proc.markErrored(err)
-    }
-}()
-```
-
-**先 pumpWG.Wait 再 cmd.Wait**：保证 pipe 排空后才 reap，否则可能丢尾部输出。
-
-### 5.5 graceful shutdown（`Manager.Stop`）
-
-```go
-func (m *ProcessManager) Stop() {
-    m.mu.Lock()
-    procs := make([]*BgProcess, 0, len(m.procs))
-    for _, p := range m.procs { procs = append(procs, p) }
-    m.mu.Unlock()
-    for _, p := range procs {
-        if p.Cmd != nil && p.Cmd.Process != nil {
-            _ = p.Cmd.Process.Kill()  // best-effort SIGKILL
-        }
-    }
-}
-```
-
-main.go 用 `defer shells.Manager.Stop()` 在 backend 关停时杀掉所有 running 后台子。**Best-effort**——失败 OS 会 reap 孤儿。
-
----
-
-## 6. 安全边界
-
-| 防线 | 覆盖 | 局限 |
-|---|---|---|
-| **故意不带 banned-command list** | n/a — 设计决策 | LLM 能跑用户身份允许的任何命令；包括 `cat ~/.ssh/id_rsa` |
-| **不走 PathGuard** | n/a — 一致 trade-off | 见 pathguard.go 包注释 |
-| **前台默认 / 硬上限 timeout** | 防失控命令卡 ReAct 循环 | 后台无 timeout（设计如此）|
-| **256 KB 输出 cap**（前台） | 防输出灌爆 LLM context | 截头保留尾（最近的输出更可能是错误信息）|
-| **256 KB 环形**（后台） | 防长跑命令耗尽内存 | 早期输出会丢；BashOutput 报 dropped 字节 |
-| **cd 状态机 in-process**（不改进程 cwd） | 多对话 / 多 worker 不互相影响 | LLM 跑 `cd ... && other` 不更新 AgentState.Cwd（与子 shell 语义一致，但可能让 LLM 困惑——文档已说明）|
-| **后台 ctx = Background**（不被 turn cancel 杀）| 让 build / test / dev server outlive 单次 turn | 长跑命令可能跨多个 turn 直到用户 KillShell；进程持续直到 backend shutdown |
-| **idgen.New("bsh")** | 64 bit 熵防 ID 碰撞 | 在 mgr 内部唯一，跨 backend 重启 ID 重算（注册表清空也无所谓）|
-| **Sandbox auto-route**（§3a）| runtime 包安装隔离到 per-conv mise env，不污染 host Python/Node | parser 看不到 `eval` / `source` / `$(<dynamic>)` 静态逃逸——LLM 必须避免（description 已警示）；非 runtime 命令仍裸跑 host shell |
-
----
-
-## 7. 测试覆盖
-
-| 层 | 文件 | 测试数 | 覆盖 |
-|---|---|---|---|
-| Bash | `backend/internal/app/tool/shell/bash_test.go` | 14 | identity / 静态 metadata / schema / Validate × 3 / parseCDOnly × 12 case 矩阵 / 整命令 cd 更新 AgentState / cd 拒不存在 / cd 拒文件 / cd 相对路径解析 / 前台 echo+exit code / 非零 exit / stderr 合并 / **timeout** / cwd 应用 / **父 ctx cancel 报 [cancelled]**（batch 1 加固）/ background 返 bash_id / background 输出捕获 / resolveCwd 优先级 / capOutput 边界 |
-| Bash auto-route | `bash_route_test.go` | 9 | AST detectRuntime 各种嵌套形式（`bash -c`、env 包装、路径前缀、cd 链、subshell、command sub）/ first-token regex fallback / `which python3` 自省路由 / envBinDirsForKind cross-platform / parser 拒绝畸形 shell |
-| BashOutput | `output_test.go` | 9 | identity / 静态 metadata / schema / Validate × 3 / unknown ID 友好 / 新字节 + 游标推进 / filter / 状态 footer × 2 / filterLines empty |
-| KillShell | `kill_test.go` | 6 | identity / 静态 metadata / schema / Validate / unknown 幂等 / 杀 running + reaper wait / 杀已结束 / 双调用幂等 |
-| ProcessManager | `manager_test.go` | 8 | Register 派 ID + 前缀 / Get unknown / Register-Get-Remove / appendOutput 不丢 / 环形溢出丢头 / drainNew 推进 / drain 溢出贴齐 / markFinished / Stop 空 + 多次 |
-| Pipeline | `backend/test/shell/` | 3 场景 | LLM ↔ tool 端到端：BashEchoForeground / CdStateMachinePersistsAcrossCalls / BashOutputAndKillShellHandleUnknownID（19s）|
-
-合计 **46 单测 + 3 pipeline 场景**。
-
----
-
-## 8. 与其他 domain 的关系
-
-| 关系 | 说明 |
-|---|---|
-| **agentstate** | Bash 读写 AgentState.Cwd；BashOutput / KillShell 不读 |
-| **chat** | chat/runner.go::processTask 注入 AgentState；ProcessManager 是独立长生命周期对象，main.go 装一次 |
-| **sandbox** | **Bash 持 `*sandboxapp.Service` 引用**——auto-route 调 `IsReady` / `BootstrapError` / `EnsureEnv` / `SandboxRoot`；nil 时 runtime 命令报错给 LLM（不静默降到 host shell）|
-| **filesystem / search** | **不共享 PathGuard**（Bash 故意 RequiresWorkspace=false）—— 设计 trade-off |
-| **forge** | 无直接耦合；但 LLM 通过 Bash 跑 `git` / `make` 等命令，某种意义补充 forge 沙箱跑用户函数 |
-| **eventlog** | auto-route 装包进度作 progress block 流式挂在 Bash tool_call 父下（`installprogresspkg.Run` 包 EnsureEnv，进度推流走 `pkg/eventlog.Emitter`）|
-| **events / SSE** | 输出通过 chat.message tool_result block 推流 + auto-route 装包阶段经 eventlog progress block |
-| **errmap** | 无登记 — 错误以友好字符串返 LLM |
-
----
-
-## 9. 演化方向
-
-- **进程组管理 + SIGTERM-then-SIGKILL 优雅终止**：当前 SIGKILL 单步杀；未来给子 shell 起 process group + 先 SIGTERM 等几秒再 SIGKILL，让 server 类命令有机会 cleanup
-- **stderr 分流（不与 stdout 合并）**：当前合并捕获；未来可分开返 / 提供选项
-- **Windows shell 适配**：当前 best-effort 走 cmd.exe；未来若桌面端发 Windows binary，正式适配 PowerShell（quoting / 命令行长度限制 / 进程模型差异）
-- **交互式命令**：当前不支持 stdin（vim / less / 等）—— 未来加 `:run-interactive` 路径走 PTY
-- **Per-conversation 后台进程清理**：当前 ProcessManager 全局；conversation 删除 / 5min idle GC 时**不**自动杀 bg child（设计如此，bg outlive turn）；未来若需要可加 hook
-- **Resource 限制**（cgroup / rlimit）：当前 OS 无限制；未来若多用户场景再加
+| `ErrCommandForbidden`| 403 | `PERM_DENIED` | 尝试运行 `rm -rf /` 等被拦截命令。 |
+| `ErrSpawnFailed` | 502 | `SHELL_EXEC_ERROR` | 操作系统资源耗尽，无法开新进程。 |
+| `ErrInteractiveRequired`| 422 | `SHELL_INPUT_REQUIRED`| 命令停在等待输入状态，被系统切断。 |
+| `ErrTimeout` | 504 | `SHELL_TIMEOUT` | 运行超过 30s。 |
+| `ErrInvalidCommand` | 400 | `INVALID_REQUEST` | 命令字符串语法错。 |
+| `ErrSandboxMissing` | 422 | `SANDBOX_MISSING` | 试图跑 python 但对话还没分配沙箱。 |

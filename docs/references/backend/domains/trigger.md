@@ -4,135 +4,108 @@ type: reference
 status: active
 owner: @weilin
 created: 2026-04-22
-reviewed: 2026-05-31
-review-due: 2026-06-30
+reviewed: 2026-06-02
+review-due: 2026-09-01
 audience: [human, ai]
 ---
-# Trigger
+# Trigger Domain — Durable Firing 信号接入与收件箱
 
-> Workflow 触发器域,Plan 05 三条腿之一。监听外部信号 (cron / fsnotify / webhook) 或被手动调 (manual) → 转 scheduler.StartRun。
-
-**Code 位置**:`backend/internal/{domain,infra/trigger,app/trigger}/`
-
-**联动文档**:
-- 完整 spec:[`archive/forge-redesign-2026-05/05-execution-plane.md`](../archive/forge-redesign-2026-05/05-execution-plane.md) §2 + §6.6 + §6.10-§6.13
-- FlowRun / Scheduler 兄弟域:[`flowrun.md`](flowrun.md) / [`scheduler.md`](scheduler.md)
+> **核心职责**：Trigger 负责将外部的不确定信号（Cron, Webhook, 文件变动）转化为可靠的、可审计的物理记录——**TriggerFiring**，并将其投入收件箱等待 Scheduler 认领。
 
 ---
 
-## 1. 定位
+## 1. 物理模型 (Data Anatomy)
 
-Trigger 是 workflow 执行的**信号入口**。监听 4 种触发源,fire 时调 `SchedulerStarter.StartRun(workflowID, kind, input)`。
-
-- **trigger** 不知道 workflow 长啥样,不执行任何节点
-- 持有 per-(workflowID, nodeID) listener 注册表,workflow accept/revert/delete 时同步 register/unregister
-- **lastFiredAt 持久化**：`TriggerSchedule` DB 表（`trigger_schedules`）存 per-(workflowID, nodeID) 的 `last_fired_at`；`onFire` 后 best-effort 更新；下次进程重启 `RegisterTrigger` 时从 DB 种值到 cron listener 的内存 `lastFire`，实现跨重启补漏刻度（详 §6.2）
-- runtime listener state（entries/lastFire map）完全 in-memory；`TriggerSchedule` 是唯一的持久化投影 — 经 HTTP `GET /workflows/{id}/triggers` 暴露 (§6.12)
-- **§20 multi-user**：`triggerdomain.Spec.UserID` 字段在 register 时填入 workflow owner；`onFire` 回调用 spec.UserID 构造 detached ctx，确保 User B 的 cron workflow fire 时 scheduler.StartRun 能找到 workflow。**2026-05-24 更新**：Spec.UserID 缺失 = wiring bug → log error + drop trigger（不再有 `DefaultLocalUserID` 兜底，避免静默把别人的 trigger 跑到默认用户名下）。
-
----
-
-## 2. 4 种 V1 listener (§2)
-
-| Kind | Library | config | 链路 |
-|---|---|---|---|
-| `cron` | `robfig/cron/v3` (v3.0.1,首次引入) | `expression: "0 */1 * * *"` | tick → onFire → scheduler.StartRun |
-| `fsnotify` | `fsnotify/fsnotify` v1.10 (升 direct) | `path / pattern / events: [create,modify,delete]` | match → onFire |
-| `webhook` | `net/http` (挂主 ServeMux 子路径) | `path / method / secret? / signatureAlgo? / signatureHeader?` | POST → onFire |
-| `manual` | 无 listener | — | HTTP `:trigger` / LLM `trigger_workflow` 直调 |
-
----
-
-## 3. 生产级要点 (Plan 05 §6)
-
-### §6.2 Cron 漏触发 — missedPolicy=runOnce
-
-`lastFire` per-key 内存表，**启动时从 `TriggerSchedule.last_fired_at`（DB）种值**（跨进程重启补漏刻度）；`RegisterTrigger` 调 `ScheduleStore.GetSchedule` 读 lastFiredAt → 种入 cron listener → Register 检查 `schedule.Next(last) < now` → 立刻 goroutine fire 一次（`runOnce` 默认，不补多次）。`onFire` 后 `ScheduleStore.UpdateLastFiredAt` best-effort 持久化。`runAll` / `skip` 留 V1.5。
-
-### §6.6 Webhook secret
-
-`secret` 字段可空 (不校验) 或非空 (POST 必带 `X-Webhook-Secret` header 或 `?token=` query 匹配)。不匹配返 401。
-
-### §6.10 Cron 时区锁本地
-
-`robfig/cron.New(WithLocation(time.Local))` — 桌面 app 跟用户笔记本时区一致。V1.5 加 per-trigger override。
-
-### §6.11 Fsnotify 路径不存在 fail-soft
-
-Register 时 `os.Stat(path)` 不存在 → 标 state=error + LastError + 返 `ErrPathNotExist`;**不阻塞 workflow 本身存在**。trigger Service 把 spec 仍记录便于 State() 暴露给用户。
-
-### §6.12 Trigger 状态可见
-
-`GET /api/v1/workflows/{id}/triggers` 返每 trigger 的 `{kind, status (active/idle/error), lastFiredAt, nextFireAt (cron only), lastError}`。
-
-### §6.13 Trigger panic recover
-
-每 listener 的 onFire goroutine 包 `defer recover()` (cron/fsnotify/webhook 一致)。panic → log + 标 state=error + 通知用户;不影响其他 listener。
-
----
-
-## 4. 域结构
-
-### 4.1 `domain/trigger`
-
-4 常量 (KindCron / KindFsnotify / KindWebhook / KindManual) + 3 state (active / idle / error) + Spec (WorkflowID/NodeID/Kind/Config/**LastFiredAt?** — 注册时由 app 层从 TriggerSchedule 种值) + State (含 LastFiredAt/NextFireAt/LastError) + 4 sentinels (ErrPathNotExist / ErrPathConflict / ErrWebhookSecretMismatch / ErrInvalidCronExpression)。
-
-**TriggerSchedule**（`infra/store/trigger`，`trigger_schedules` 表）：持久化 listener 注册状态，主键 `(workflow_id, trigger_node_id)`。关键字段：`last_fired_at DATETIME`（cron 跨重启补漏种子），`kind`, `spec`（JSON）。方法：`UpsertSchedule`（注册时插/更）/ `GetSchedule`（读 lastFiredAt）/ `UpdateLastFiredAt`（每次 fire 后 best-effort 更新）。
-
-**ScheduleStore port**（`app/trigger.ScheduleStore`）：`UpsertSchedule / GetSchedule / UpdateLastFiredAt`——由 `app/trigger.Service.SetScheduleStore` 注入（main.go 后置装配避免循环依赖）。
-
-### 4.2 `infra/trigger/{cron,fsnotify,webhook}`
-
-3 个独立 listener 实现:
-- **cron**:robfig/cron 包装 + per-key entries + lastFire 内存（启动由 ScheduleStore 种值 → 跨重启补漏）+ Start/Stop/Register/RegisterWithLastFire/Unregister/State
-- **fsnotify**:lazy watcher 创建 + per-key specs + dispatch fan-out + 模式过滤 (glob basename) + 事件 kind 过滤 (Create/Write/Remove/Rename/Chmod)
-- **webhook**:`http.ServeMux` 子路径 `/api/v1/webhooks/{wfId}/{path}` + path 冲突拒 + body 10MB cap + JSON auto-parse fallback bodyRaw + secret 校验（§12.4：plain `X-Webhook-Secret` / `?token=` 比对 **或** `signatureAlgo=hmac-sha256-hex` HMAC 验签，`signatureHeader` 缺省 `X-Hub-Signature-256`，自动剥 `sha256=` 前缀）
-
-### 4.3 `app/trigger`
-
-`Service` 整合 4 种,主要 API:
-- `New(mux *http.ServeMux, log)` — 构造;cron.Start() 立刻起;webhook 接 mux
-- `SetScheduler(SchedulerStarter)` — post-construction 接 scheduler (断 ctor cycle)
-- `RegisterTrigger(spec)` / `UnregisterByWorkflow(workflowID)` — 注册 / 撤
-- `State(workflowID)` — 返 trigger states
-- `FireManual(ctx, workflowID, input)` — HTTP / LLM 手动入口
-
-Service 即使 listener Register 失败也保留 spec (让 State() 暴露给用户,§6.11)。
-
----
-
-## 5. SchedulerStarter port (断 ctor cycle)
-
+### 1.1 `TriggerSchedule` — 监听器配置
 ```go
-type SchedulerStarter interface {
-    StartRun(ctx, workflowID, triggerKind string, input map[string]any) (runID, err)
+type TriggerSchedule struct {
+    ID              string         `gorm:"primaryKey;type:text" json:"id"` // ts_<16hex>
+    WorkflowID      string         `gorm:"not null;index;type:text" json:"workflowId"`
+    TriggerNodeID   string         `gorm:"not null;type:text" json:"triggerNodeId"`
+    
+    // 类型: cron | fsnotify | webhook | polling
+    Kind            string         `gorm:"not null;type:text" json:"kind"`
+    
+    // 配置负载: 如 cron 表达式 {"cron": "*/5 * * * *"}
+    Spec            any            `gorm:"serializer:json;type:text" json:"spec"`
+    
+    Enabled         bool           `gorm:"not null;default:true" json:"enabled"`
+    
+    // 连续失败计数 (ADR-022): 超过阈值自动 deactivate
+    ConsecutiveFailures int        `gorm:"not null;default:0" json:"consecutiveFailures"`
+    
+    LastFiredAt     *time.Time     `json:"lastFiredAt"`
 }
 ```
 
-main.go / harness 装配顺序:`triggerService := trigger.New(mux, log)` → `schedulerService := scheduler.NewService(repo, workflowReader, notif, log)` → `triggerService.SetScheduler(schedulerService)`。
+### 1.2 `TriggerFiring` — 信号收件箱 (Durable Inbox)
+```go
+type TriggerFiring struct {
+    ID              string         `gorm:"primaryKey;type:text" json:"id"` // tfi_<16hex>
+    WorkflowID      string         `gorm:"not null;index;type:text" json:"workflowId"`
+    TriggerNodeID   string         `gorm:"not null;type:text" json:"triggerNodeId"`
+    TriggerKind     string         `gorm:"not null;type:text" json:"triggerKind"`
+    
+    // 材化载荷: Webhook body 或 Cron 时间戳
+    Payload         any            `gorm:"serializer:json;type:text" json:"payload"`
+    
+    // 物理去重键: 防止同一 Cron 刻度重复入库
+    DedupKey        string         `gorm:"not null;uniqueIndex:idx_trf_dedup" json:"-"`
+    
+    // 状态: pending (待认领) | claimed (已在跑) | completed | shed (因并发丢弃) | failed
+    Status          string         `gorm:"not null;index;type:text" json:"status"`
+    
+    FlowrunID       string         `gorm:"type:text" json:"flowrunId"`
+    
+    EnqueuedAt      time.Time      `gorm:"not null" json:"enqueuedAt"`
+    ProcessedAt     *time.Time     `json:"processedAt"`
+}
+```
 
 ---
 
-## 6. 错误码 (4 sentinels)
+## 2. 核心原理 (Principles)
 
-详 [`../references/backend/error-codes.md`](../references/backend/error-codes.md):
-- `TRIGGER_PATH_NOT_EXIST` (422) — fsnotify path 不存在
-- `TRIGGER_PATH_CONFLICT` (409) — webhook 路径已注册
-- `TRIGGER_WEBHOOK_SECRET_MISMATCH` (401) — secret 校验失败 (webhook handler 直返 HTTP 401,不进 errmap;sentinel 仅用于 errors.Is)
-- `TRIGGER_INVALID_CRON_EXPRESSION` (400) — cron 表达式无效
+### 2.1 Persist-Before-Act (先持久化，后响应)
+为了保证信号绝对不丢，Trigger 遵循以下严苛流程：
+1. **捕获**：监听器监听到外部事件。
+2. **入库**：立即向 `trigger_firings` 插入记录。
+3. **响应**：只有在 DB Commit 成功后，才给 Webhook 返回 `202 Accepted` 或 Ack 消息。
+
+### 2.2 Single-Transaction Claim (单事务原子认领 - ADR-021)
+Scheduler 并不是通过内存队列消费，而是通过数据库事务：
+- **原子动作**：`UPDATE trigger_firings SET status='claimed', flowrun_id=? WHERE id=? AND status='pending'`。
+- **防止双花**：利用数据库的隔离性，确保一个 Firing 信号绝对不会触发两个 FlowRun 实例。
+
+### 2.3 Missed-tick Catch-up (重启补漏)
+针对 Cron 类型：
+- 系统重启后，监视器对比 `LastFiredAt` 与当前墙钟。
+- 若错过了原定的刻度，会补发一条 Firing，确保任务不因系统维护而跳过。
 
 ---
 
-## 7. 测试覆盖
+## 3. 生命周期 (Lifecycle)
 
-- 6 domain 单测 (枚举值 / sentinel / Spec+State JSON round-trip)
-- 6 cron listener 测试 (invalid expr / 注册-fire / unregister stops / state pre+post / register 替换 existing / panic recover)
-- 6 fsnotify listener 测试 (path-not-exist sentinel + state=error / empty path / 创建文件 fire / pattern 过滤 / unregister / pre-register idle)
-- 7 webhook listener 测试 (注册+fire / path conflict / empty path / header secret / query token alt / unregister-404 / method 405)
-- 6 Service 测试 (manual 无 listener / cron-invalid tracks-spec-but-errors / UnregisterByWorkflow cascades / FireManual forwards / no-scheduler returns sentinel / SetScheduler concurrent-safe)
+1. **注册 (Activation)**：用户调 `:activate`，Trigger 模块启动 goroutine (cron/fsnotify)。
+2. **触发 (Firing)**：监听到信号 -> 计算 `DedupKey` -> 执行 `Insert`。
+3. **调度 (Scheduling)**：Scheduler 轮询（或由 Trigger 唤醒）执行 **Claim** 动作。
+4. **终结 (Outcome)**：FlowRun 结束后，反向回写 Firing 的最终 `status` 为 `completed` 或 `failed`。
 
 ---
 
-## 8. 历史
+## 4. 跨域集成 (Interactions)
 
-- 2026-05-13 Plan 05 完成:E3 (domain) + E4 (infra + Service) 落地。robfig/cron v3.0.1 首次引入;fsnotify v1.10 升 direct。`Listener.Stop()` cron/fsnotify 各自 graceful shutdown。Service 内 `kindForNode` helper 让 onFire 拼正确 triggerKind 传给 scheduler。
+- **Workflow**：提供图结构定义中的 Trigger 节点配置。
+- **Scheduler**：消费信号的唯一方。
+- **Function**：`polling` 类型触发器会调用特定的 Forge 函数来获取新数据。
+
+---
+
+## 5. 错误字典 (Sentinels)
+
+| Sentinel | HTTP | Wire Code | 备注 |
+|---|---|---|---|
+| `ErrFiringNotPending` | 409 | `TRIGGER_FIRING_NOT_PENDING` | 竞争失败：该信号已被别人抢跑。 |
+| `ErrWebhookSecretMismatch` | 401 | `TRIGGER_WEBHOOK_SECRET_MISMATCH`| HMAC 验签失败。 |
+| `ErrInvalidCronExpression` | 400 | `TRIGGER_INVALID_CRON` | 表达式语法错。 |
+| `ErrPathNotExist` | 422 | `TRIGGER_PATH_NOT_EXIST` | fsnotify 监听路径无效。 |

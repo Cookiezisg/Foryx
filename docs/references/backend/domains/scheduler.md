@@ -4,277 +4,91 @@ type: reference
 status: active
 owner: @weilin
 created: 2026-04-22
-reviewed: 2026-05-31
-review-due: 2026-06-30
+reviewed: 2026-06-02
+review-due: 2026-09-01
 audience: [human, ai]
 ---
-# Scheduler
+# Scheduler Domain — Durable Interpreter 执行引擎原理
 
-> Workflow 执行编排器,Plan 05 三条腿之一。读 active version → 持 FlowRun → DAG dispatch → retry/onError/timeout → pause/resume → cleanup。
-
-> **🔧 限制优化（2026-05-31，limits-optimization）**：节点墙钟超时（`retry.go` `defaultTimeouts` 整表）**已删**——无人值守 workflow 靠 run-level ctx + 「stop run」+ 各 dispatcher 自身 bound；只留显式 `node.Timeout` 覆盖。agent 节点 `maxTurns` 默认/硬顶经 `limits.Current().Workflow` 可配（`0`=默认，**不放飞**无人值守 agent）。详 [`../archive/limits-optimization-2026-05/`](../archive/limits-optimization-2026-05/)。
-
-**Code 位置**:`backend/internal/app/scheduler/`
-
-**联动文档**:
-- 完整 spec:[`archive/forge-redesign-2026-05/05-execution-plane.md`](../archive/forge-redesign-2026-05/05-execution-plane.md) §3
-- D22 execution log:[`08-executions.md`](../archive/forge-redesign-2026-05/08-executions.md) §4.5
-- FlowRun / Trigger 兄弟域:[`flowrun.md`](flowrun.md) / [`trigger.md`](trigger.md)
-- 实施计划:[`plans/05-execution-plane.md`](../archive/forge-redesign-2026-05/plans/05-execution-plane.md)
+> **核心职责**：Scheduler 是 Forgify 的执行大脑。它负责将静态的 Workflow 图转化为动态的、具备容错能力的执行协程。核心基于 **Durable Interpreter (持久化解释器)** 架构实现。
 
 ---
 
-## 1. 定位
+## 1. 核心原理 (Principles)
 
-Scheduler 是 trigger→flowrun 中间编排层。StartRun 是唯一入口:
+### 1.1 Agenda-Driven 遍历 (ADR-016)
+传统的拓扑排序无法处理复杂的循环（回边）和条件分支。Scheduler 采用了 **Agenda (待办任务栈)** 驱动的结构化遍历算法：
+- **执行单元**：`(node, iteration_key)`。
+- **循环支持**：通过 `IterationKey` 区分同一节点在不同循环轮次中的执行实例。每经过一条回边，序数递增。
+- **动态决策**：解释器在运行时动态计算“下一跳”，而非预先固定顺序。
 
-```
-trigger.onFire (cron/fsnotify/webhook) ─┐
-HTTP POST /workflows/{id}:trigger      ─┼─→ scheduler.StartRun(workflowID, kind, input) → fr_xxx
-LLM trigger_workflow tool              ─┘
-```
+### 1.2 Copy-Hit 重放算法 (Deterministic Replay)
+这是 Scheduler 容错的核心。
+- **步骤**：解释器在执行每个 `(node, iter)` 前，先查 Journal。
+- **命中 (Hit)**：若 Journal 已有该步骤的成功记录，直接从 Journal 提取结果并推进 Agenda，**跳过物理派发**。
+- **瞬移恢复**：系统崩溃后，重启同一 FlowRun。解释器会通过一系列“Copy-Hits”迅速跳过已完成步，精准回到断点位置继续。
 
-单向依赖链 trigger → scheduler → flowrun (只写)。
-
----
-
-## 2. StartRun 7-gate (§3.1)
-
-```
-1. RequireUserID(ctx)
-2. workflowRead.GetWorkflow → ErrWorkflowNotFound (404)
-3. !wf.Enabled              → ErrWorkflowDisabled (422 §6.5)
-4. wf.NeedsAttention        → ErrWorkflowNeedsAttention (422)
-5. (Concurrency=serial && CountRunning ≥ 1) → ErrConcurrencyLimit (409 §6.3)
-6. workflowRead.GetActiveVersion → 透传 workflow.ErrNoActiveVersion
-7. flowrun.Create + 注 cancel func + go ExecuteFn (detached ctx + recover →
-   finalize failed/INTERNAL_PANIC)
-```
-
-返 `runID`,异步推进。
+### 1.3 Active-Branch Join (A-1 算法)
+解决 XOR 分支汇合时的死锁难题。
+- **Skip Token**：当 `case` 分支未被选中时，解释器向下游传播 `skipped` 标记。
+- **逻辑汇合**：Join 节点只需等待所有的入边全部变为 `active` 或 `skipped`。只要有一条 `active` 入边到达，且其余皆为 `skipped`，即可触发执行。
 
 ---
 
-## 3. executeRun / driveLoop 主循环 (§3.1)
+## 2. 物理模型与状态
 
-- `newExecutionContext` 初始化 ExecutionContext:Variables 含 reserved `trigger`(=run.TriggerInput),Outputs/Done/Failed/Attempts/NextPort 全 fresh map
-- `buildTopo` 算 in-degree map + downstream edges + nodes-by-id
-- `topo.initialReady()` 入度=0 的入口节点 (一般是 trigger 节点)
-- 主循环:
-  - 检查 `ctx.Done` → 终态 cancelled
-  - `dispatchBatch(ready)` 并发 dispatch 一批 — per-node goroutine + `defer recover` panic 兜底
-  - 串行 process results:`recordNode` 写 flowrun_nodes 终态 + 按 onError 决定 stop/continue/branch + `topo.advance` 推 next ready
-  - 抓 `ErrApprovalRequired` → `pauseRun` 持 PausedState + 翻 status=paused + return (不进 finalize)
-- 终态 → `finalizeRun` 写 status + output + ended_at + elapsed_ms + 应用保留策略剪 + publish notification
-
----
-
-## 4. Dispatcher Router (E6 + E7-E8 13 个)
-
-| Node Type | Dispatcher | 实现亮点 |
-|---|---|---|
-| `trigger` | TriggerDispatcher | no-op + 透传 run.TriggerInput 到 "out" port |
-| `function` | FunctionDispatcher | 调 functionapp.RunFunction (TriggeredBy=workflow);ExecutionResult.OK=false 翻 error |
-| `handler` | HandlerDispatcher | 调 handlerapp.Call;Owner{Kind=flowrun, ID=runID} 让 instance 跨节点共享 |
-| `mcp` | MCPDispatcher | 调 mcpapp.CallTool;args → json.RawMessage |
-| `skill` | SkillDispatcher | 调 skillapp.Activate;fork-mode 子 agent 留 Plan 06 |
-| `llm` | LLMDispatcher | LLMCaller interface 解耦;nil caller 测试 OK |
-| `http` | HTTPDispatcher | net/http GET/POST + SSRF 守卫(拒 loopback/link-local/private/.local/.internal)+ 10MB body cap + JSON auto-parse |
-| `condition` | ConditionDispatcher | 调 workflowapp.Compile/Execute 评估;truthy → NextPort="true" |
-| `loop` | LoopDispatcher | V1 minimal: items 数组 → "out" port + count;body subgraph 留 Plan 06 (返 ErrLoopBodyNotSupported) |
-| `parallel` | ParallelDispatcher | V1 pass-through (executeRun.dispatchBatch 已并发自然 parallel edges);branches subgraph 留 Plan 06 |
-| `approval` | ApprovalDispatcher | 返 ErrApprovalRequired → executeRun 走 pause 路径 |
-| `wait` | WaitDispatcher | `duration` ms 或 RFC3339 `until`;time.Timer + ctx.Done cancellable |
-| `variable` | VariableDispatcher | set/unset ExecCtx.Variables in-place |
-
-Router map[NodeType]Dispatcher;`Set()` 注册;`Dispatch()` 未注册返 `ErrNoDispatcherForType`。13 dispatcher 在 main.go / harness 装配。
-
----
-
-## 5. Retry + onError + Timeout (E9 §6.8)
-
-### 5.1 Retry (NodeSpec.Retry)
-
-`withRetry(ctx, node, execCtx, fn)`:
-- MaxAttempts ≤ 1 → 单次
-- Backoff:`fixed` / `linear (+DelayMs)` / `exponential (×2)`
-- ctx-cancel 短路
-- **Fatal sentinel 短路**:`ErrApprovalRequired` / `ErrLoopBodyNotSupported` / `ErrParallelBranchNotSupported`(retry 这些只是浪费 budget)
-
-execCtx.Attempts[node.ID] 跟踪 attempt 次数,写 `flowrun_nodes.attempts`。
-
-### 5.2 Per-node Timeout
-
-`nodeTimeoutDuration(node)`:NodeSpec.Timeout (ms) 优先,缺则 per-NodeType 默认:
-
-| NodeType | 默认 |
-|---|---|
-| function / handler / mcp / http | 30s |
-| skill / llm | 60s |
-| approval | 7d (§6.9) |
-| condition / loop / parallel / wait / variable / trigger | 0 (不 enforce) |
-
-`dispatchWithPolicies`:retry 套 per-attempt `context.WithTimeout`;`ctx.DeadlineExceeded` 翻成 `DispatchOutput.Error`。
-
-### 5.3 onError 策略 (NodeSpec.OnError)
-
-- `stop` (default):run.status=failed + ErrorCode=NODE_FAILED
-- `continue`:treat 为 completed,go to advance with NextPort=""
-- `branch`:advance with NextPort="error" (downstream `error` port 边走)
-
----
-
-## 6. Approval / Wait Pause + Resume (E10 §3.5 + §6.1)
-
-### 6.1 Pause path
-
-```
-ApprovalDispatcher 返 ErrApprovalRequired (carries prompt context)
-     ↓
-driveLoop 抓 sentinel + pauseRun
-     ↓
-repo.SetPausedState(PausedState{NodeID, Variables, Outputs, Position, PausedAt})
-+ repo.UpdateStatus → paused (无 ended_at)
-+ publish "paused" 通知
-+ goroutine return (释 dispatcher)
-```
-
-### 6.2 Resume path (`Service.ResumeApproval`)
-
-```
-HTTP POST /flowruns/{runID}/approvals/{nodeID} body {decision}
-     ↓
-ResumeApproval 校验 decision ∈ {approved, rejected} + status=paused + nodeID match
-     ↓
-load 冻结图 (run.VersionID) + 拷 PausedState + ClearPausedState
-     ↓
-detached ctx + 注 cancel + 翻 running + publish "resumed"
-     ↓
-go continueRun(ctx, run, graph, pausedNodeID, decision)
-```
-
-continueRun 重建 ExecutionContext:
-- Variables / Outputs 从 PausedState 取
-- Done 标完已 PausedState.Outputs 里的节点
-- Approval 节点视为 done + NextPort=decision
-- 重建 topo + 回放每完成节点的 in-degree decrement (跳过 approval 节点) + advance approval 节点拿新 ready
-- driveLoop 推剩余 DAG
-
-### 6.3 RehydrateOnBoot (§6.1)
-
-桌面 app 用户合盖 / 进程重启时,approval-paused run 不能丢。`Service.RehydrateOnBoot(ctx, userID)` 在启动后调:
-- ctx 经 `reqctxpkg.SetUserID` scope 到指定 user → 扫 `repo.ListPaused`
-- 每行预注 no-op cancel func (让 `Service.Cancel` 不返 `ErrNotCancellable`)
-- Run 保持 paused — 真 ctx 在 ResumeApproval 时新建
-
-**§20 multi-user**：main.go 启动期遍历所有 user 调 `RehydrateOnBoot(ctx, u.ID)`，让任意 user 的 paused flowrun 都能正确恢复 cancel 句柄。
-
----
-
-## 6.4 Sub-DAG 执行（§5.1 Loop body 子图）
-
-`runReadyLoop` 是从 `driveLoop` 抽出的 ready-set 主循环，**不调 finalizeRun**，让子图复用：
-
+### 2.1 调度器状态 (`Service`)
 ```go
-status, errCode, errMsg, paused := s.runReadyLoop(ctx, run, execCtx, topo, ready)
-```
-
-`Service.ExecuteSubDAG(req SubDAGRequest)` 给 LoopDispatcher 每迭代调一次：
-- 构造 sub-ExecutionContext（继承 Variables / parent Outputs；隔离 Done / Failed / NextPort；绑 `Loop *workflowapp.LoopContext{Item, Index}`）
-- `SubDAGFromBody(map)` 把 `loop.config.body` JSON map decode 为 `*workflowdomain.Graph`
-- 调 `runReadyLoop` 跑完
-- 收集每节点 outputs 给 LoopDispatcher 聚合
-
-**Approval 节点在 body 中被拒**（V1 不支持迭代中途暂停）— `ExecuteSubDAG` 入口检测 + 返 `ErrSubDAGContainsApproval`。
-
-**记录到 flowrun_nodes**：每迭代的 body 节点 record 时自动带 `parent_loop_node` + `iteration_index` 列（execCtx 携带）。
-
----
-
-## 6.5 Run-level timeout（§5.7）
-
-`Workflow.TimeoutSec int` >0 时，`StartRun` 改用 `context.WithTimeout(timeoutSec)` 替原 `WithCancel`。`runReadyLoop` 每轮 ready-set 前 `select { case <-ctx.Done(): }`：
-- `errors.Is(ctx.Err(), context.DeadlineExceeded)` → status=failed + errorCode=`RUN_TIMEOUT`
-- 否则（显式 Cancel）→ status=cancelled
-
----
-
-## 6.6 Dry-run 模式
-
-`FlowRun.DryRun bool` + `StartRunWithOptions(opts StartRunOptions{DryRun: true})`。`ExecutionContext.DryRun` propagate（含 sub-DAG）。`dispatchWithPolicies` 拦截 9 个 side-effect NodeType（function / handler / mcp / skill / llm / agent / http / approval / wait），返 mock：
-
-```go
-{Outputs: {"out": "[DRY RUN: <type>]", "_dryRun": true}}
-```
-
-`approval` 自动 `NextPort=approved` 让 DAG 越过审批关。纯逻辑节点（trigger / condition / variable / loop / parallel）正常跑——用户能看见 DAG 实际路径。
-
-HTTP 入口：`POST /api/v1/workflows/{id}:trigger?dryRun=true` 走 `scheduler.StartRunWithOptions` bypass trigger.FireManual。
-
----
-
-## 7. Cancellation (E5 §3.6 §6.14)
-
-`Service.Cancel(runID)`:cancels map 查 cancel func → 调 → ctx 一路串到 dispatcher → in-flight node 立刻 abort。`releaseCancel` 在 executeRun defer 释。
-
-未知 runID → `ErrNotCancellable`(已终态 / 从未存在)。
-
-cleanup:Handler instance 用 Owner{Kind=flowrun,ID=runID} 注册;run 终态时 main.go / harness 装的 Owner-end 钩子 (Plan 06 wire up) 调 `handlerService.DestroyOwner` 销 instance。V1 简化 — handler instance 死亡跟 run goroutine 退出绑定。
-
----
-
-## 8. WorkflowReader 接口 (port)
-
-```go
-type WorkflowReader interface {
-    GetActiveVersion(ctx, workflowID) (*Version, error)
-    GetWorkflow(ctx, workflowID) (*Workflow, error)
-    ListEnabled(ctx) ([]*Workflow, error)
+type Service struct {
+    repo          flowrundomain.Repository
+    interpreter   *Interpreter
+    runWG         sync.WaitGroup // 跟踪所有在途执行协程
+    shutdown      chan struct{}
 }
 ```
 
-Plan 04 workflowapp.Service 满足此接口;scheduler 经 interface 消费,解耦。
+### 2.2 执行上下文 (`ExecutionContext`)
+解释器持有的运行时内存：
+- `Variables`: 当前作用域下的命名变量。
+- `Outputs`: 历史上所有节点的输出结果集（用于 CEL 引用 `{{nodes.X.out}}`）。
+- `Agenda`: 待激活的节点队列。
 
 ---
 
-## 9. 错误码 (4 sentinels)
+## 3. 生命周期 (Lifecycle)
 
-详 [`../references/backend/error-codes.md`](../references/backend/error-codes.md):
-- `WORKFLOW_DISABLED` (422) — §6.5
-- `WORKFLOW_NEEDS_ATTENTION` (422)
-- `FLOWRUN_CONCURRENCY_LIMIT` (409) — §6.3 trigger 容忍 skip
-- `WORKFLOW_NOT_FOUND_FOR_TRIGGER` (404) — workflow id 查不到
+### 3.1 启动 (StartRun)
+- 验证 Workflow 状态（Enabled? Version Active?）。
+- **原子事务**：在一次事务中，`ClaimFiring` (标记信号已领) 并 `CreateFlowRun` (创建实例)。
+- **协程派发**：启动独立的 `driveLoop` 协程。
 
----
+### 3.2 节点派发 (Dispatching)
+解释器根据节点类型分发到不同的 **Dispatcher**:
+- `tool`: 调用 Function/Handler/MCP。
+- `agent`: 运行 ReAct 循环（支持 **Sub-step Replay** 内部子步持久化）。
+- `case`: 执行 CEL 表达式，选择 NextPort。
 
-## 10. 测试覆盖 (65 scheduler 单测)
-
-- 10 StartRun gate 测试 (missing-uid / not-found / disabled / needs-attention / concurrency-limit / happy + ExecuteFn 调 / stub finalize / Cancel unknown / Cancel cascades / panic recover)
-- 8 executeRun state machine 测试 (empty graph / single node / linear A→B→C / fan-out fan-in / onError=stop → failed / onError=continue 吸收 / 未注册 type → failed / flowrun row 写入)
-- 11 capability dispatcher 单测 (trigger 透传 + 5 config-parse 错误路径 + 4 LLM fake caller 路径)
-- 15 control dispatcher 单测 (HTTP SSRF + url 必填 + condition truthy/falsy + variable set/unset + wait duration + ctx-cancel + approval sentinel + loop items/body unsupported + parallel pass-through/branches unsupported)
-- 13 retry/timeout 测试 (single-attempt / MaxAttempts=3 / success on 2nd / fatal short-circuit / ctx-cancel / 3 backoff strategies / 5 nodeTimeoutDuration cases / dispatchWithPolicies timeout)
-- 8 pause/rehydrate 测试 (approval pauses run / invalid decision / not-paused / wrong nodeID / end-to-end approve → finishes / rehydrate registers cancel / rehydrate ignores running-completed)
-
-+ 7 pipeline 测试 (`test/scheduler/scheduler_test.go`,见 §11)
+### 3.3 优雅停机 (Graceful Shutdown)
+- 调用 `Drain()` 时，Scheduler 停止接收新信号。
+- 发送 `CANCEL` 给所有在途 FlowRun。
+- 等待协程退出，确保 Journal 终态写回。
 
 ---
 
-## 11. Pipeline 测试 (E2E)
+## 4. 跨域集成 (Interactions)
 
-`test/scheduler/scheduler_test.go` 7 场景:
-1. HTTP :trigger 创建 fr_xxx (happy path)
-2. HTTP :trigger 在 disabled workflow 返 422 WORKFLOW_DISABLED (§6.5)
-3. HTTP GET /flowruns/{id} 后取回 run
-4. HTTP DELETE /flowruns/{id} 取消 (204 in-flight 或 422 已终态,§6.14)
-5. HTTP GET /workflows/{id}/triggers 暴露 trigger states (§6.12)
-6. HTTP 第二次 :trigger 在 serial 模式撞并发限制 → 409 (§6.3)
-7. Plan 05 BootSmoke (Service 字段非 nil + Cancel unknown 返 sentinel)
-
-§6 其他 hardening item 由单测覆盖 (cron missed/fsnotify fail-soft/webhook secret/node timeout/panic recover/paused rehydrate/retention/cron TZ)。
+- **Trigger**：从 `trigger_firings` 表认领原始信号。
+- **FlowRun**：读取并维护 `flowrun_events` 日志。
+- **Agent/Tool**：作为 Activity 的实际执行方。
+- **Notifications**：在每个节点状态变化时发布 **Ephemeral Ticks**。
 
 ---
 
-## 12. 历史
+## 5. 错误字典 (Sentinels)
 
-- 2026-05-13 Plan 05 完成:9 commits W5-W10 + W14-W15 实施 scheduler 主体。E6 driveLoop 抽 executeRun + continueRun 共享主循环。E10 PausedState 重建 ExecutionContext + 回放 topo in-degree decrement。E15 main+harness 装配 13 dispatcher + RehydrateOnBoot。
+| Sentinel | HTTP | Wire Code | 备注 |
+|---|---|---|---|
+| `ErrWorkflowDisabled` | 422 | `WORKFLOW_DISABLED` | 尝试触发下线的工作流。 |
+| `ErrConcurrencyLimit`| 409 | `FLOWRUN_CONCURRENCY_LIMIT` | Serial 模式下排队已满。 |
+| `ErrSubDAGContainsApproval` | 422 | `SUBDAG_CONTAINS_APPROVAL` | 架构限制：循环体/子图中禁止再等审批。 |
+| `ErrNotReplayable` | 422 | `FLOWRUN_NOT_REPLAYABLE` | 状态不符。 |

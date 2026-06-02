@@ -42,9 +42,17 @@ audience: [human, ai]
 **当前依赖体系**:完全摆脱 Eino(chat 重构后)。新增 `robfig/cron/v3 v3.0.1`(Plan 05 首次引入);`fsnotify/fsnotify` 提 direct v1.10.1。
 **forge_redesign ✅ 全交付**(2026-05-13):Plan 01-06 全部 merge — function trinity + handler trinity + eventlog/forge 三流 + workflow authoring + execution plane(scheduler/trigger/flowrun + 14 hardening + 4 张新表 D22)+ subagent forger D21 + 主 agent multi-agent forging 教学 + trinity catalog 源 + approval lifecycle E2E。trinity architecture 完工。下一阶段:V1.2 桌面端 Wails 迁移 + Phase 5 智能化。
 
----
+### backend contract revamp ✅ (2026-06-02)
 
-## 2. 开发日志
+**全仓后端参考文档 Revamp**：根据 2026-05-31 架构大改向（Durable Execution），对 `docs/references/backend/` 下的 10+ 份文档进行了深度的“地基级”同步。确保文档不仅反映愿景，更准确描述已实现的“Durable 真相”。
+
+- **底座更新**：`api.md` (flowruns/trace/replay/approvals), `database.md` (flowrun_events journal, trigger_firings inbox), `error-codes.md` (durable sentinels), `events.md` (ephemeral ticks)
+- **域重写**：`workflow.md` (5-node model, CEL, durable authoring), `scheduler.md` (Durable Interpreter, Copy-hit, Join), `flowrun.md` (Journal truth, Pinned callables, Generation), `trigger.md` (Inbox claim, Missed-tick)
+- **Quadrinity 确立**：新建 `agent.md`，确立 Agent 作为四项全能成员的地位；更新 `chat.md` (Everything is a tool)
+- **全局同步**：`CLAUDE.md` (ID 前缀全集 `ag_`/`fr_`/`ts_`/`apv_` 等), `INDEX.md` (workflow-revamp 标为 landed)
+- **结果**：全仓文档与代码（scheduler/interpreter/workflow-app）重新对齐，解决了 20+ 处“愿景与实现”的描述漂移。
+
+---
 
 按时间顺序（旧 → 新）。每个时间块按 phase 或专题分组。
 

@@ -4,177 +4,127 @@ type: reference
 status: active
 owner: @weilin
 created: 2026-04-22
-reviewed: 2026-05-31
-review-due: 2026-06-30
+reviewed: 2026-06-02
+review-due: 2026-09-01
 audience: [human, ai]
 ---
-# FlowRun
+# FlowRun Domain — 执行实例与持久化流水账 (Durable Journal)
 
-> Workflow 执行记录簿域,Plan 05 三条腿之一(flowrun / trigger / scheduler 单向依赖链)。
-
-**Code 位置**:`backend/internal/{domain,infra/store}/flowrun/` + `backend/internal/transport/httpapi/handlers/flowrun.go`
-
-**联动文档**:
-- 完整 spec:[`archive/forge-redesign-2026-05/05-execution-plane.md`](../archive/forge-redesign-2026-05/05-execution-plane.md) §5
-- D22 execution log schema 模板:[`08-executions.md`](../archive/forge-redesign-2026-05/08-executions.md) §2 + §4.5
-- 实施计划:[`plans/05-execution-plane.md`](../archive/forge-redesign-2026-05/plans/05-execution-plane.md)
-- Trigger / Scheduler 兄弟域:[`trigger.md`](trigger.md) / [`scheduler.md`](scheduler.md)
+> **核心地位**：FlowRun 是 Workflow 的物理执行载体。它不仅记录运行结果，更通过 **Durable Journal** 存储执行轨迹，确保系统崩溃后能实现 100% 确定性的状态恢复与重放。
 
 ---
 
-## 1. 定位
+## 1. 物理模型 (Data Anatomy)
 
-FlowRun 是**一次 workflow execution 的记录**。每个 trigger fire (cron / fsnotify / webhook / manual) → scheduler.StartRun → 一行 FlowRun + 多行 FlowRunNode (per-dispatch)。
-
-- **FlowRun**:整 run (started_at / ended_at / status / output / error / paused_state)
-- **FlowRunNode**:per-node dispatch (每节点 dispatch 写一行 D22 终态)
-
-跟 function/handler/mcp/skill execution log 同 schema 模板 (spec 08 §2 通用 16 字段) + 自己 specific 字段。
-
----
-
-## 2. 实体
-
-### 2.1 FlowRun (`flowruns` 表)
-
-| 字段 | 说明 |
-|---|---|
-| `id` | `fr_<16hex>` PK |
-| `user_id` | 用户作用域 |
-| `workflow_id` | 索引;FK → workflows.id |
-| `version_id` | 锁起跑时的 Version (防 active 切换影响进行中的 run) |
-| `trigger_kind` | CHECK cron/fsnotify/webhook/manual |
-| `trigger_input` | JSON;触发输入 |
-| `status` | CHECK running/paused/completed/failed/cancelled (5 值,**无 V1 run-level timeout**) |
-| `started_at` / `ended_at` / `elapsed_ms` | 时序 |
-| `output` | JSON;终态产物 |
-| `error_code` / `error_message` | failed 时填 |
-| `paused_state` | JSON;approval/wait 节点暂停时持久化 ExecutionContext 快照 |
-
-软删 + 复合索引 `(workflow_id, status, started_at DESC)`。
-
-### 2.2 FlowRunNode (`flowrun_nodes` 表)
-
-通用 16 字段 (spec 08 §2) + flowrun-specific 4 字段 (`flowrun_id` 索引 / `node_id` / `node_type` / `attempts`)。每 dispatch 终态写一行 (cron/manual/webhook 等触发都同样)。
-
-**写入规则**:`scheduler/pause.go::driveLoop` 在每个非 approval 节点 dispatch 完成后调 `recordNode()` 写一行;approval 节点**不**写行(只是 pause gate,resume 后下游节点正常写)。所以一个 3-节点的 trigger → approval → function workflow 完成后 `flowrun_nodes` 表里有 2 行(t1 trigger + f1 function),`approval` 节点不在表里。
-
-**Cross-table linking** (spec 08 §4.5):capability 节点 (function/handler/mcp/skill) dispatch 时**同时写两条** — 一条到 `flowrun_nodes` (workflow 视角) + 一条到对应 entity 表 (function_executions / handler_calls / mcp_calls / skill_executions),经 `flowrun_node_id` 字段交叉引用。
-
-### 2.3 PausedState (JSON,持久化在 `flowruns.paused_state` 列)
-
+### 1.1 `FlowRun` 实体
 ```go
-type PausedState struct {
-    NodeID    string                    // 暂停在哪个节点
-    Variables map[string]any            // workflow-level vars
-    Outputs   map[string]map[string]any // 已完成节点 outputs (nodeID → port → value)
-    Position  []string                  // 当前 ready 节点 IDs
-    PausedAt  time.Time                 // 暂停时刻
+type FlowRun struct {
+    ID              string            `gorm:"primaryKey;type:text" json:"id"` // fr_<16hex>
+    UserID          string            `gorm:"not null;index:idx_flowruns_user_id;type:text" json:"userId"`
+    WorkflowID      string            `gorm:"not null;type:text;index:idx_flowruns_workflow,priority:1" json:"workflowId"`
+    VersionID       string            `gorm:"not null;type:text" json:"versionId"`
+    
+    // 版本闭包快照 (ADR-020): 固化起跑时引用的所有 Function/Handler/Agent 版本
+    PinnedCallables map[string]string `gorm:"serializer:json;type:text;default:'{}'" json:"pinnedCallables"`
+    
+    // 重放周期 (ADR-019): 每次 :replay 时递增，用于在 Journal 中隔离旧的失败记录
+    Generation      int               `gorm:"not null;default:0" json:"generation"`
+    
+    TriggerNodeID   string            `gorm:"type:text;default:''" json:"triggerNodeId"`
+    TriggerKind     string            `gorm:"type:text" json:"triggerKind"` // cron|fsnotify|webhook|manual|polling
+    TriggerInput    map[string]any    `gorm:"serializer:json;type:text;default:'{}'" json:"triggerInput"`
+    
+    Status          string            `gorm:"not null;index:idx_flowruns_workflow,priority:2;type:text" json:"status"`
+    
+    StartedAt       time.Time         `gorm:"not null;index:idx_flowruns_workflow,priority:3" json:"startedAt"`
+    EndedAt         *time.Time        `json:"endedAt"`
+    ElapsedMs       int64             `gorm:"not null;default:0" json:"elapsedMs"`
+    
+    Output          any               `gorm:"serializer:json;type:text" json:"output"`
+    ErrorCode       string            `gorm:"type:text;default:''" json:"errorCode"`
+    ErrorMessage    string            `gorm:"type:text;default:''" json:"errorMessage"`
+    
+    // 协程挂起快照: 存储当前 Agenda、变量作用域及 Activity 输出
+    PausedState     *PausedState      `gorm:"serializer:json;type:text" json:"pausedState"`
+    
+    DryRun          bool              `gorm:"not null;default:false" json:"dryRun"`
+    CreatedAt       time.Time         `json:"createdAt"`
+    UpdatedAt       time.Time         `json:"updatedAt"`
+    DeletedAt       gorm.DeletedAt    `gorm:"index" json:"-"`
 }
 ```
 
-Plan 05 §6.1 用此跨进程重启 rehydrate paused run。
-
----
-
-## 3. Repository (`flowrundomain.Repository`)
-
-11 方法:`Create / Get / List / UpdateStatus / SetPausedState / ClearPausedState / ListPaused / CountRunning / HardDeleteOldest / CreateNode / GetNode / ListNodes`。GORM 实现在 `infra/store/flowrun/`,别名 `flowrunstore`。
-
----
-
-## 4. 状态机 (Plan 05 §3.3)
-
-```
-running ←→ paused (approval/wait 长延时)
-   ↓
-{ completed | failed | cancelled }
-```
-
-- `running` → `paused`:approval/wait 节点写 PausedState + flip status
-- `paused` → `running`:ResumeApproval HTTP 唤醒
-- `running` → 终态:执行完 / cancelled / 节点 onError=stop 失败
-
-**无 run-level timeout 状态** (V1 §3.3) — 节点 timeout 致 run 终止时 `status=failed + error_code=NODE_TIMEOUT`。
-
-**run-level 通知**(durable):started / paused / resumed / replaying / completed / failed / cancelled,经 `notifications` 流(有 seq、可重放;见 events.md §11.2)。
-**per-node 运行时 tick**(ephemeral,M8):interpreter 每个 activity 节点状态变化(running/ok/failed)推一条 `{action:"tick", nodeId, status, iterationKey}`,经 `notifications` 流的 **ephemeral 投递**(Seq=0、不入 buffer、不背压引擎;丢了从 `/trace` 全量补;events.md §11.2a)。供编排 UI 画布实时动。
-
----
-
-## 5. HTTP API (读 6 + 改 3 + action 2 + webhook 子树)
-
-| Method | Path | 用途 |
-|---|---|---|
-| GET    | `/api/v1/flowruns` | 列表 (workflowId/status/triggerKind 过滤) |
-| GET    | `/api/v1/flowruns/{id}` | 单 FlowRun |
-| GET    | `/api/v1/flowruns/{id}/nodes` | per-node 执行记录 |
-| GET    | `/api/v1/flowruns/{id}/failures` | 节点失败列表 (journal node_failed;highest-generation;M6) |
-| GET    | `/api/v1/flowruns/{id}/trace` | journal 投影给编排 UI 节点诊断 (`?nodeId=X` 过滤;loop 多轮按 iterationKey 区分;只读、不碰运行引擎;M8 §08) |
-| GET    | `/api/v1/approvals` | 当前用户所有 parked approval inbox (17 §9;前端 banner 数据源) |
-| DELETE | `/api/v1/flowruns/{id}` | 取消 (scheduler.Cancel) |
-| POST   | `/api/v1/flowruns/{id}/approvals/{nodeId}` | approval 签收 (body: `{decision, reason?}`;decision ∈ `{approved, rejected}`) |
-| POST   | `/api/v1/flowruns/{id}:replay` | 重跑失败 run (generation++;202;非失败 422 `FLOWRUN_NOT_REPLAYABLE`;M6) |
-| POST   | `/api/v1/flowruns/{id}:triage` | 起 AI 调试对话（askai.Spawner）；返 `{conversationId}` |
-| POST   | `/api/v1/webhooks/{wfId}/{path}` | webhook trigger 入口 (由 trigger.webhook listener 直接挂 ServeMux) |
-
-`POST /api/v1/workflows/{id}:trigger` 手动触发 + `GET /api/v1/workflows/{id}/triggers` trigger 状态由 **WorkflowHandler** 持 (共享 `:revert` 的 `{idAction}` mux dispatcher,避 mux 冲突),委派 FlowRunHandler.FireManual / TriggerStates 薄 helper。
-
-### :triage — AI 调试对话
-
-`POST /api/v1/flowruns/{id}:triage` body `{"userHint": "..."}` (可选) → `askai.BuildTriageContext(ctx, id, repo, workflowSvc)` 拼 flowrun 状态 + workflow graph + node 失败详情 + user hint 做 system prompt → `askai.Spawner.Spawn(...)` → 返 `{data: {conversationId}}` (201)。
-
-spawner 为 nil 时返 503 `FEATURE_UNAVAILABLE`。用于 failed/paused run 的 AI 辅助排查——前端弹出 AI 对话，AI 持有完整现场信息。
-
----
-
-## 6. 保留策略 (§6.7)
-
-`HardDeleteOldest(workflowID, keep)` 按 `created_at DESC + id DESC` 排序保留 `keep` 个,其余物理删。默认 `keep=200`,在 `scheduler.finalizeRun` 后异步调。
-
----
-
-## 7. Approval 超时（durable timer，M4）
-
-approval 节点 config 可配 `timeoutSec: number`（秒）和 `timeoutBehavior: "approve" | "reject"（default: "reject"）`:
-- interpreter park 时用 `time.Now() + timeoutSec` 计算绝对 `deadline`，写入 `approvals.deadline`（DB 持久）
-- **到期检查器**（`scheduler.StartExpiryChecker`，每 30s 扫一次）查 `approvals WHERE status='parked' AND deadline < now`：
-  1. 先写 `signal_received(source=timeout)` 进 journal（durable truth，journal 写必先于投影）
-  2. 再 `approvals.Decide → status=timed_out`（best-effort 投影；即使失败 interpreter 也能恢复）
-  3. CAS `ClaimStatus(awaiting_signal → running)` → re-drive interpreter（与 ResumeApproval 同路径）
-- `timeoutBehavior="approve"` → journal decision="yes"；`"reject"` → decision="no"；`"fail"` → flowrun 标 failed
-- 双信号 first-wins：用户决策与 timeout 竞争时，先写 journal 的胜出（ADR-018 dedup_key）
-
-**Approval struct（domain/flowrun/approval.go，M4 新增字段）**：
-
+### 1.2 `FlowRunEvent` (Durable Journal)
+这是执行引擎的“唯一真相”，所有的非确定性决策必须记入此表。
 ```go
-Deadline        *time.Time // 非 nil = 到期检查器监控此行；nil = 无超时
-TimeoutBehavior string     // "approve" | "reject"（default）| "fail"
+type FlowRunEvent struct {
+    ID           string `gorm:"primaryKey;type:text" json:"id"` // fre_<16hex>
+    FlowrunID    string `gorm:"not null;type:text;uniqueIndex:idx_fre_seq,priority:1" json:"flowrunId"`
+    Seq          int64  `gorm:"not null;uniqueIndex:idx_fre_seq,priority:2" json:"seq"`
+    
+    Type         string `gorm:"not null;type:text" json:"type"` 
+    // 枚举: node_started, node_completed, node_failed, branch_taken, 
+    // signal_awaited, signal_received, timer_armed, timer_fired, 
+    // agent_step_started, agent_step_completed, flowrun_cancelled
+    
+    NodeID       string `gorm:"type:text;default:''" json:"nodeId"`
+    IterationKey int    `gorm:"not null;default:0" json:"iterationKey"` // 循环序数
+    Generation   int    `gorm:"not null;default:0" json:"generation"`   // 重放代号
+    
+    // 幂等去重键 (ADR-018): node|iter|type|gen
+    DedupKey     string `gorm:"not null;type:text;default:''" json:"-"`
+    
+    Result       any    `gorm:"serializer:json;type:text" json:"result,omitempty"`
+    CreatedAt    time.Time `json:"createdAt"`
+}
 ```
 
 ---
 
-## 8. 错误码 (7 sentinels)
+## 2. 核心原理 (Principles)
 
-详 [`../references/backend/error-codes.md`](../references/backend/error-codes.md):
-- `FLOWRUN_NOT_FOUND` (404)
-- `FLOWRUN_NOT_CANCELLABLE` (422) — Cancel/ResumeApproval 时已无 cancel 句柄
-- `FLOWRUN_NOT_PAUSED` (422) — ResumeApproval 时 status != awaiting_signal（durable）或 paused（旧）
-- `FLOWRUN_APPROVAL_NODE_NOT_FOUND` (404) — ResumeApproval 时 nodeID 不匹配 parked approval
-- `FLOWRUN_APPROVAL_DECISION_INVALID` (400) — decision ∉ {approved, rejected}
-- `FLOWRUN_NODE_NOT_FOUND` (404) — GetNode 未命中
-- `FLOWRUN_NOT_REPLAYABLE` (422) — :replay 时 run 非 failed 终态
+### 2.1 Record-Once (记录唯一性铁律)
+为了解决分布式或崩溃环境下的重执行问题，`flowrun_events` 拥有一个物理 UNIQUE 索引 `idx_fre_record_once`：
+- **Activity 事件**（如 `node_completed`, `branch_taken`）：通过 `DedupKey` 强制去重。
+- **副作用隔离**：解释器在执行任何可能产生副作用的操作前，先查 Journal。若命中，则直接“拷贝”结果（Copy-hit），不重复派发。
 
----
+### 2.2 Pinned Callables (闭包版本固化)
+- **挑战**：长达数周的工作流运行中，引用的 Function 可能已被用户修改。
+- **方案**：在 `StartRun` 瞬间，系统扫描图引用，将所有实体的 `active_version_id` 抓取并存入 `flowruns.pinned_callables`。
+- **效果**：执行实例在其生命周期内，即便外界环境翻天覆地，其运行的代码版本永远保持一致。
 
-## 8. 测试覆盖
-
-- 11 domain 单测 (status / trigger-kind / node-status 枚举值;retention 常量;sentinel distinct + errors.Is round-trip;PausedState JSON round-trip)
-- 12 store 集成测试 (Create+Get / cross-user / List 分页 + filter / UpdateStatus 终态 fields / PausedState round-trip + clear / ListPaused / CountRunning / HardDeleteOldest trim / Node CRUD + ListByFlowrun chronological)
-- 7 pipeline 测试 (test/scheduler/scheduler_test.go,见 §scheduler.md)
+### 2.3 Generation (重放代号)
+- 每次用户调 `:replay`，`Generation` 递增。
+- **影子覆盖**：新的执行步会携带更高的 Gen。解释器在“状态重构”时，只选取最高 Gen 的记录，从而优雅地覆盖掉旧的失败记录。
 
 ---
 
-## 9. 历史
+## 3. 生命周期 (Lifecycle)
 
-- 2026-05-13 Plan 05 完成:Plan 05 三条腿之一,E1 (domain) + E2 (store) 落地。FlowRun + FlowRunNode (16 通用 + 4 flowrun-specific) + PausedState + 6 sentinels + 11 Repository 方法 + 12 store 集成测试。E15 main+harness 装配。
+1. **材化 (Materialize)**：`Trigger` 收到信号，写 `trigger_firings` 表。
+2. **原子认领 (Atomic Claim)**：`Scheduler` 开启事务，认领 Firing 并创建 `FlowRun` 实例（Status: `running`）。
+3. **解释执行 (Interpreting)**：协程启动 `Interpreter.Run()`，按 `Agenda` 驱动遍历。
+4. **挂起 (Parking)**：遇到 `Approval` 或 `Timer`，协程退出，记录 `signal_awaited`，状态转为 `awaiting_signal`。
+5. **恢复 (Resuming)**：用户调 `:decide` 或 Timer 到期，写入 `signal_received`，重起协程。
+6. **终结 (Finalizing)**：图走完或出错，记录 `EndedAt`，计算 `ElapsedMs`。
+
+---
+
+## 4. 跨域集成 (Interactions)
+
+- **Workflow**：读取 `version_id` 对应的冻结图结构。
+- **Eventlog**：通过 `Notifications` SSE 实时推流。
+- **Sandbox**：执行过程中按需申请隔离的虚拟环境。
+- **Relation**：运行结束后，可能产生 `runs_in_conversation` 的动态边。
+
+---
+
+## 5. 错误字典 (Sentinels)
+
+| Sentinel | Wire Code | 物理起因 |
+|---|---|---|
+| `ErrNotFound` | `FLOWRUN_NOT_FOUND` | fr_ID 错误。 |
+| `ErrNotCancellable`| `FLOWRUN_NOT_CANCELLABLE` | 任务已在终态。 |
+| `ErrNotReplayable` | `FLOWRUN_NOT_REPLAYABLE` | 只有失败任务能重跑。 |
+| `ErrNodeNotFound` | `FLOWRUN_NODE_NOT_FOUND` | 画布尝试拉取不存在的节点明细。 |
+| `ErrApprovalDecisionInvalid` | `FLOWRUN_APPROVAL_DECISION_INVALID` | 提交了非 yes/no 的决策。 |

@@ -86,8 +86,8 @@
 
 **E1 三协议**（全部 per-user_id 订阅；**SSE 上限三条，永不再加**）：
 - **事件日志** `GET /api/v1/eventlog`：5 events × 7 block types（text/reasoning/tool_call/tool_result/progress/message/compaction）；payload 带 `conversationId` + `seq`
-- **通知** `GET /api/v1/notifications`：envelope `{type, id, data, conversationId?}`；data 只送轻字段（禁完整 entity）；开放词表
-- **锻造流** `GET /api/v1/forge`：4 events × 3 kinds（function/handler/workflow）；payload 嵌 `scope:{kind,id}`；封闭枚举
+- **通知** `GET /api/v1/notifications`：envelope `{type, id, data, conversationId?}`；durable（带 seq）与 ephemeral（tick，无 seq）两类投递；data 只送轻字段
+- **锻造流** `GET /api/v1/forge`：4 events × 6 kinds（function/handler/workflow/agent/document/skill）；payload 嵌 `scope:{kind,id}`；封闭枚举
 
 **E2 协议演进**：事件日志/锻造流新 type 先改对应协议文档再加 code（封闭枚举）；通知新 type 加字符串即可
 
@@ -103,7 +103,7 @@
 - **S12** 包结构 — 见 §S12
 - **S13** 包命名 — 见 §S13
 - **S14** 📌 文档同步纪律 — 见 §S14（**最高优先级**）
-- **S15** ID 格式：`<prefix>_<16hex>`（`crypto/rand` 8 字节，失败 panic）。前缀（trinity 后实测全集，按域分组）：`u_` user / `aki_` apikey / `mc_` model-config / `mco_` model-cap-override；`cv_` conv / `msg_` message / `blk_` block / `att_` attachment；`fn_` function / `fnv_` function-version / `fne_` function-exec / `fnenv_` fn-venv；`hd_` handler / `hdv_` handler-version / `hcl_` handler-call / `hdi_` handler-instance / `hdenv_` hd-venv；`wf_` workflow / `wfv_` workflow-version；`fr_` flowrun / `frn_` flowrun-node；`mcl_` mcp-call / `mch_` mcp-health / `ske_` skill-exec；`doc_` document / `mem_` memory / `rel_` relation / `td_` todo；`sr_` sandbox-runtime / `se_` sandbox-env / `bsh_` bash-shell。（skill / mcp 实体以 name 作主键、无实体前缀；`ske_`/`mcl_` 是其执行/调用子记录 ID）
+- **S15** ID 格式：`<prefix>_<16hex>`（`crypto/rand` 8 字节，失败 panic）。前缀：`u_` user / `aki_` apikey / `mc_` model-config / `mco_` model-cap-override；`cv_` conv / `msg_` message / `blk_` block / `att_` attachment；`fn_` function / `fnv_` function-version / `fne_` function-exec / `fnenv_` fn-venv；`hd_` handler / `hdv_` handler-version / `hcl_` handler-call / `hdi_` handler-instance / `hdenv_` hd-venv；`ag_` agent / `agv_` agent-version / `agx_` agent-exec；`wf_` workflow / `wfv_` workflow-version；`fr_` flowrun / `frn_` flowrun-node / `fre_` flowrun-event / `apv_` approval；`ts_` trigger-schedule / `tfi_` trigger-firing；`mcl_` mcp-call / `mch_` mcp-health / `ske_` skill-exec；`doc_` document / `mem_` memory / `rel_` relation / `td_` todo；`sr_` sandbox-runtime / `se_` sandbox-env / `bsh_` bash-shell。（skill / mcp 实体以 name 作主键、无实体前缀）
 - **S16** 错误包装：`fmt.Errorf("<pkg>.<Method>: %w", err)`；`errors.Is` 必须能从最外层 unwrap 到 sentinel
 - **S17** 每个到达 handler 的 sentinel 必须登记到 `errmap.go::errTable`
 - **S18** Tool 接口规约 — 见 §S18

@@ -4,430 +4,95 @@ type: reference
 status: active
 owner: @weilin
 created: 2026-04-22
-reviewed: 2026-05-31
-review-due: 2026-06-30
+reviewed: 2026-06-02
+review-due: 2026-09-01
 audience: [human, ai]
 ---
-# conversation domain — 详细设计文档
+# Conversation Domain — 线程管理与属性治理
 
-**所属 Phase**：Phase 2（基础对话能力，第 3 个完成的 domain）
-**状态**：✅ 已实现（2026-04-25 全部 7 步完成）
-**职责**：管理对话线程的元数据（创建、列表、改名、软删）。Conversation 是 chat 消息的容器，本身不含消息内容——消息历史由 `chat` domain 管理。
-**依赖**：
-- `infra/db`（GORM 底层）+ `pkg/reqctx`（userID ctx 读取）
-- **不依赖** `domain/apikey`、`domain/model`（conversation 是纯 CRUD）
-
-**被依赖**：`chat` domain 在发消息时需要传入 `conversationId` 锚定线程。
-
-**关联文档**：
-- [`../backend-design.md`](../backend-design.md) — 总规范
-- [`../references/backend/api.md`](../references/backend/api.md) — API 索引
-- [`../references/backend/database.md`](../references/backend/database.md) — 表索引
-- [`../references/backend/error-codes.md`](../references/backend/error-codes.md) — 错误码索引
+> **核心职责**：Conversation 域负责 Forgify 对话线程的 **“全生命周期管理”**。它不关心具体的消息内容（那是 Chat 域的事），而是作为容器，管理标题、摘要、归档状态以及该对话专属的模型覆盖设置。
 
 ---
 
-## 1. 为什么要这个 domain
+## 1. 物理模型 (Data Anatomy)
 
-chat 发消息时需要一个"线程 ID"表示"这条消息属于哪次对话"。Conversation domain 提供这个 ID，并管理对话的元数据（标题、创建时间等），让前端侧边栏能列出历史对话。
-
-**职责边界**：
-- Conversation domain 管：线程元数据（ID / 标题 / 时间戳）
-- Chat domain 管：消息发送、流式输出、消息历史存储
-
----
-
-## 2. 核心决策
-
-| 决策 | 选择 | 理由 |
-|---|---|---|
-| 消息是否存在本 domain | **不存** | 消息历史属于 chat domain，Conversation 只是容器 |
-| Title 是否必填 | **不必填** | 用户可建空标题对话；首轮对话完成后由 chat domain 异步 auto-titling goroutine 回写（已实现），并推 `conversation.title_updated` SSE |
-| 归档 vs 软删 | **软删统一** | 遵循 D1 规范，`deleted_at` 覆盖"归档"语义 |
-| 绑定工具/工作流 | **未做** | conversation 保持纯线程容器；entity binding 推迟到 Phase 4-5 真有跨 entity 切换需求时再讨论 |
-| 分页 | **cursor 分页** | 遵循 N4 规范，与 apikey.List 相同机制 |
-
----
-
-## 3. 多租户准备
-
-继承项目级约定（同 apikey / model）：
-- 表带 `user_id TEXT NOT NULL`
-- Phase 2 ctx 注入 `"local-user"`
-- 每个 store 方法首先 `reqctx.GetUserID(ctx)` 取值；缺失返接线 bug 错误
-
----
-
-## 4. 领域模型
-
-### Conversation struct（`internal/domain/conversation/conversation.go`）
-
+### 1.1 `Conversation` 实体
 ```go
 type Conversation struct {
-    ID                   string                            `gorm:"primaryKey;type:text" json:"id"`
-    UserID               string                            `gorm:"not null;index;type:text" json:"-"`
-    Title                string                            `gorm:"not null;type:text;default:''" json:"title"`
-    AutoTitled           bool                              `gorm:"not null;default:false" json:"autoTitled"`
-    SystemPrompt         string                            `gorm:"type:text;default:''" json:"systemPrompt,omitempty"`
-    Summary              string                            `gorm:"type:text;default:''" json:"summary,omitempty"`
-    SummaryCoversUpToSeq int64                             `gorm:"not null;default:0" json:"summaryCoversUpToSeq,omitempty"`
-    AttachedDocuments    []documentdomain.AttachedDocument `gorm:"serializer:json;type:text;default:'[]'" json:"attachedDocuments,omitempty"`
-    Archived             bool                              `gorm:"not null;default:false;index" json:"archived"` // §17.12
-    Pinned               bool                              `gorm:"not null;default:false" json:"pinned"`         // §15.6
-    ModelOverride        *modeldomain.ModelRef             `gorm:"serializer:json;type:text" json:"modelOverride,omitempty"` // §12.3
-    CreatedAt            time.Time                         `json:"createdAt"`
-    UpdatedAt            time.Time                         `json:"updatedAt"`
-    DeletedAt            gorm.DeletedAt                    `gorm:"index" json:"-"`
+    ID                   string    `gorm:"primaryKey;type:text" json:"id"` // cv_<16hex>
+    UserID               string    `gorm:"not null;index" json:"-"`
+    
+    // 语义属性
+    Title                string    `gorm:"not null;type:text;default:''" json:"title"`
+    AutoTitled           bool      `gorm:"not null;default:false" json:"autoTitled"`
+    
+    // 背景活与压缩属性
+    SystemPrompt         string    `gorm:"type:text;default:''" json:"systemPrompt,omitempty"`
+    Summary              string    `gorm:"type:text;default:''" json:"summary,omitempty"`
+    SummaryCoversUpToSeq int64     `gorm:"not null;default:0" json:"summaryCoversUpToSeq,omitempty"`
+    
+    // 挂载资源
+    AttachedDocuments    []AttachedDocument `gorm:"serializer:json" json:"attachedDocuments,omitempty"`
+    
+    // 交互状态
+    Archived             bool      `gorm:"not null;default:false;index" json:"archived"`
+    Pinned               bool      `gorm:"not null;default:false" json:"pinned"`
+    
+    // 局部模型路由: 覆盖全局 Settings
+    ModelOverride        *ModelRef `gorm:"serializer:json;type:text" json:"modelOverride,omitempty"`
+    
+    CreatedAt            time.Time `json:"createdAt"`
+    UpdatedAt            time.Time `json:"updatedAt"`
+    DeletedAt            gorm.DeletedAt `gorm:"index" json:"-"`
 }
-
-func (Conversation) TableName() string { return "conversations" }
-```
-
-**字段说明**：
-
-| 字段 | 说明 |
-|---|---|
-| `ID` | `cv_<16hex>` 格式（8 字节 crypto/rand）|
-| `UserID` | JSON `"-"`，前端不可见 |
-| `Title` | 用户改名后填入；初始可为空；auto-titling goroutine 首轮完成后回写 |
-| `AutoTitled` | `true` = AI 自动生成；用户手动改名后置 `false` |
-| `SystemPrompt` | 对话级自定义系统提示词；空则只用全局基础提示词；chat.Service 读取后注入 MessageModifier |
-| `Summary` / `SummaryCoversUpToSeq` | V1.2 §1 compaction anchored-append 摘要 + 已覆盖的 block seq |
-| `AttachedDocuments` | Phase 5 §14.5c 挂载文档库；GORM serializer:json，跟 workflow llm/agent 节点共享 struct |
-| `Archived` | §17.12 归档标志；默认 false；列表默认排除 archived，UI toggle 展示 |
-| `Pinned` | §15.6 置顶标志；默认 false；List ORDER BY 内 `pinned DESC` 优先，testend sidebar 客户端同 sort |
-| `ModelOverride` | §12.3 对话级 (apiKeyId, modelId) override；nil = 用全局 dialogue scenario；`llmclient.ResolveDialogueWithOverride` 走 override-first。Update F1 校验 `keys.ResolveCredentialsByID(ctx, override.APIKeyID)` 存在 + 跨用户隔离，否则 404 API_KEY_NOT_FOUND；缺 `apiKeyId`/`modelId` 任一 → 400 API_KEY_ID_REQUIRED / MODEL_ID_REQUIRED。**override 自动传播到 subagent**：chat runner 在 agentCtx 上 stash 此 override，`SubagentTool.Execute` 读出来作 parentModelOverride 传给 `subagent.Spawn`——subagent 跑同一 (apiKeyId, modelId) |
-| `DeletedAt` | 软删，GORM 内置 |
-
-### 错误 sentinel
-
-```go
-var ErrNotFound = errors.New("conversation: not found")
-```
-
-映射：`404 CONVERSATION_NOT_FOUND`（见 `errmap.go`）。
-
----
-
-## 5. Repository 接口
-
-```go
-type Repository interface {
-    Save(ctx context.Context, c *Conversation) error
-    Get(ctx context.Context, id string) (*Conversation, error)
-    List(ctx context.Context, filter ListFilter) ([]*Conversation, string, error)
-    Delete(ctx context.Context, id string) error
-}
-
-type ListFilter struct {
-    Cursor string
-    Limit  int
-}
-```
-
-### Store 实现（`infra/store/conversation/conversation.go`）
-
-- `Save` = GORM `Save()`（INSERT on new PK / UPDATE on existing PK）
-- `Get` = `WHERE id=? AND user_id=?` + GORM 自动 `AND deleted_at IS NULL`
-- `List` = `(created_at, id)` 元组 cursor 稳定分页，`ORDER BY created_at DESC, id DESC`
-- `Delete` = GORM 软删 + `RowsAffected == 0` 返 `ErrNotFound`
-
----
-
-## 6. Service 层（`app/conversation/conversation.go`）
-
-### Struct + 构造
-
-```go
-type Service struct {
-    repo convdomain.Repository
-    log  *zap.Logger
-}
-
-func NewService(repo convdomain.Repository, log *zap.Logger) *Service {
-    if log == nil { panic("conversation.NewService: logger is nil") }
-    return &Service{repo: repo, log: log}
-}
-```
-
-### 方法签名
-
-```go
-func (s *Service) Create(ctx context.Context, title string) (*Conversation, error)
-func (s *Service) CreateWithSystemPrompt(ctx context.Context, title, systemPrompt string) (*Conversation, error)
-func (s *Service) List(ctx context.Context, filter ListFilter) ([]*Conversation, string, error)
-func (s *Service) Rename(ctx context.Context, id, title string) (*Conversation, error)
-func (s *Service) Delete(ctx context.Context, id string) error
-```
-
-`CreateWithSystemPrompt` 是 `Create` 的变体：额外写 `system_prompt` 字段（直接存入 DB），用于 `app/askai` 包创建 AI 辅助对话（`:iterate` / `:triage`）时预设上下文。调用方从不通过公开 HTTP API，仅 askai.Spawner 内部使用。
-
-### Create 流程
-
-```
-1. reqctx.GetUserID(ctx) → uid（缺失 = 接线 bug，上抛）
-2. 构造 Conversation{ID: newID(), UserID: uid, Title: TrimSpace(title), ...}
-3. repo.Save(ctx, c)
-4. log.Info("conversation created", conversation_id, user_id)
-```
-
-### Rename 流程
-
-```
-1. repo.Get(ctx, id) → c（未命中 → ErrNotFound → 404）
-2. c.Title = TrimSpace(title)
-3. c.UpdatedAt = time.Now().UTC()
-4. repo.Save(ctx, c)
-```
-
-### ID 生成
-
-```go
-func newID() string  // "cv_" + 16 hex（8 字节 crypto/rand）
 ```
 
 ---
 
-## 7. HTTP API 详细
+## 2. 核心原理 (Principles)
 
-### 通用约定
+### 2.1 The "Bubble" Indexing (置顶气泡索引)
+对话列表采用 **“混合排序”** 策略实现：
+- **物理 SQL**：`ORDER BY pinned DESC, created_at DESC`。
+- **效果**：置顶（Pinned）的对话永远停留在左侧列表最上方，其余按时间倒序。这避免了因单个长对话频繁交互导致的 UI 列表大幅度抖动。
 
-- 前缀：`/api/v1/conversations`
-- 中间件链：同 apikey（Recover → RequestLogger → CORS → InjectLocale → InjectUserID）
-- 响应走 envelope（N1）
+### 2.2 Auto-Titling Lifecycle (自动命名周期)
+对话标题不是用户手动填写的（虽然支持手动改）：
+1. **触发**：第一轮 Assistant 回复结束后，系统识别 `AutoTitled == false`。
+2. **异步执行**：后台开启 goroutine 调用 Utility 模型。
+3. **静默更新**：标题生成后直接更新 DB，并通过 **Notifications SSE** 通知前端。前端无感自动刷新侧边栏。
 
-### 端点清单（4 个）
-
-#### 7.1 `POST /api/v1/conversations` — 创建（201）
-
-**Request**：
-```json
-{ "title": "My Chat" }
-```
-`title` 可为空字符串或省略。
-
-**Response 201**：完整 Conversation 对象（无 `userId` 字段）。
-
-#### 7.2 `GET /api/v1/conversations` — 列表（200）
-
-**Query**：`?cursor=&limit=50&search=&archived=`（默认 50，最大 200）
-
-- `search`：可选 title LIKE 模糊匹配
-- `archived`：可选 `true` / `false` —— 缺省排除归档（仅返 active），`true` 仅归档，`false` 仅 active（§17.12）
-
-**Response 200**：
-```json
-{
-  "data": [ {...}, {...} ],
-  "nextCursor": "<opaque>",
-  "hasMore": true
-}
-```
-
-空列表返 `{"data": [], "hasMore": false}`。
-
-#### 7.3 `PATCH /api/v1/conversations/{id}` — 部分更新（200）
-
-**Request**（指针字段，缺省跳过；`modelOverride` 三态：absent=不变 / null=清除 / object=设置）：
-```json
-{
-  "title": "New Name",
-  "systemPrompt": "Custom prompt...",
-  "attachedDocuments": [{"documentId": "doc_xxx", "includeSubtree": true}],
-  "archived": true,
-  "pinned": true,
-  "modelOverride": {"apiKeyId": "aki_xxx", "modelId": "deepseek-reasoner"}
-}
-```
-
-**Response 200**：更新后的 Conversation。`updatedAt` 推进。归档/置顶/override 切换发 slim notification `{action: archived|unarchived|pinned|unpinned|model_override, title, archived, pinned}`（§17.12 + §15.6 + §12.3）。
-
-**404 `API_KEY_NOT_FOUND`**：`modelOverride.apiKeyId` 不存在 / 不属当前 user（F1 走 `keys.ResolveCredentialsByID`）。
-**400 `API_KEY_ID_REQUIRED`** / **`MODEL_ID_REQUIRED`**：modelOverride 字段缺失。
-
-**404 `CONVERSATION_NOT_FOUND`**：id 不存在。
-
-#### 7.4 `DELETE /api/v1/conversations/{id}` — 软删（204）
-
-无 body 响应。再次 DELETE 返 404。
+### 2.3 Per-Conversation Overrides (隔离重载)
+每个对话可以拥有完全独立的“智力水平”：
+- **原理**：`ModelOverride` 字段。
+- **联动**：如果该字段非空，`chat.Service` 在解析模型时会优先忽略 `/api/v1/model-configs` 中的全局默认值。
+- **用处**：用户可以在对话 A 用 GPT-4o 进行重度代码编写，而在对话 B 用 Haiku 进行快速问答，互不干扰。
 
 ---
 
-## 8. 数据库表
+## 3. 生命周期 (Lifecycle)
 
-```sql
-CREATE TABLE conversations (
-    id                       TEXT PRIMARY KEY,
-    user_id                  TEXT NOT NULL,
-    title                    TEXT NOT NULL DEFAULT '',
-    auto_titled              BOOLEAN NOT NULL DEFAULT 0,
-    system_prompt            TEXT NOT NULL DEFAULT '',
-    summary                  TEXT NOT NULL DEFAULT '',
-    summary_covers_up_to_seq INTEGER NOT NULL DEFAULT 0,
-    attached_documents       TEXT NOT NULL DEFAULT '[]',
-    archived                 BOOLEAN NOT NULL DEFAULT 0,
-    pinned                   BOOLEAN NOT NULL DEFAULT 0,
-    model_override           TEXT,
-    created_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at               DATETIME
-);
-
-CREATE INDEX idx_conversations_user_id    ON conversations(user_id);
-CREATE INDEX idx_conversations_archived   ON conversations(archived);
-CREATE INDEX idx_conversations_deleted_at ON conversations(deleted_at);
-```
-
-**索引理由**：
-- `user_id` 单索引：List 查询最常用（当前用户的所有对话）
-- `archived` 单索引：List 默认 `WHERE archived = false`，归档切换面板用 `archived = true`（§17.12）
-- `pinned`：仅 ORDER BY 前缀（§15.6），单用户 pinned 数远小于 limit，无需独立索引
-- `deleted_at` 单索引：GORM 软删 filter
+1. **新建 (Creating)**：`POST /conversations` 创建物理容器。
+2. **活跃 (Interacting)**：Chat 域不断向此 ID 挂载消息。
+3. **命名 (Titling)**：第一回合后自动赋予语义标题。
+4. **归档 (Archiving)**：用户点击归档。对话在默认列表中隐藏，但不物理删除。
+5. **销毁 (Purging)**：调 DELETE。系统执行级联操作，彻底清理所属的所有 `messages`, `blocks` 和 `attachments`。
 
 ---
 
-## 9. 事件
+## 4. 跨域集成 (Interactions)
 
-**Phase 6 重构（2026-05-02）**：conversation domain 用 **1 个 SSE 事件 `conversation`**——载荷 = 完整 Conversation 实体的 GET 形状（entity-state 模型）。详见 [`../references/backend/events.md`](../references/backend/events.md)。
-
-```go
-type Conversation struct {
-    *convdomain.Conversation
-}
-
-func (Conversation) EventName() string { return "conversation" }
-
-// MarshalJSON 委托给嵌入 Conversation——wire shape = GET /api/v1/conversations/{id}。
-func (e Conversation) MarshalJSON() ([]byte, error) {
-    if e.Conversation == nil { return []byte("null"), nil }
-    return json.Marshal(e.Conversation)
-}
-```
-
-**当前触发点**：
-- auto-titling 完成后（chat domain 的 `autoTitle` goroutine 调 `bridge.Publish(ctx, conv.ID, eventsdomain.Conversation{...})`），让前端侧边栏即时更新标题。
-
-**未来扩展**（Phase 5+）：归档 / 系统 prompt 更新 / pin 等任何 conversation entity 变化都走同一事件。前端按 `id` 替换本地拷贝即可，无需区分子类型。
-
-旧事件 `conversation.title_updated`（仅含 `{title, autoTitled}` 增量）已删除。
+- **Chat**：作为消息的根容器。
+- **Document**：解析 `AttachedDocuments` 列表。
+- **Model**：提供 `ModelRef` 校验支持。
+- **Relation**：作为 RelGraph 的节点，记录 `forged_in` 关系。
 
 ---
 
-## 10. 错误码（1 个）
+## 5. 错误字典 (Sentinels)
 
-| Code | HTTP | Sentinel | 场景 |
+| Sentinel | HTTP | Wire Code | 备注 |
 |---|---|---|---|
-| `CONVERSATION_NOT_FOUND` | 404 | `conversation.ErrNotFound` | Get/Rename/Delete id 不存在 |
-
----
-
-## 11. 完整调用链
-
-### 11.1 POST /api/v1/conversations（创建）
-
-```
-前端 POST /api/v1/conversations  body={title}
-  → middleware 链（Recover / Logger / CORS / InjectLocale / InjectUserID）
-  → ConversationHandler.Create
-      → decodeJSON → createConvRequest{Title}
-      → svc.Create(ctx, title)
-          → reqctx.GetUserID(ctx) → uid
-          → newID() → "cv_<16hex>"
-          → repo.Save(ctx, c)             [infra/store/conversation]
-          → log.Info("conversation created")
-      → response.Created(w, c) → 201
-```
-
-### 11.2 GET /api/v1/conversations（列表）
-
-```
-前端 GET /api/v1/conversations?cursor=&limit=
-  → ConversationHandler.List
-      → pagination.Parse(r) → {Cursor, Limit}
-      → svc.List(ctx, filter)
-          → repo.List(ctx, filter)        [infra/store/conversation]
-              cursor 解码 → WHERE (created_at, id) < (?, ?)
-              ORDER BY created_at DESC, id DESC LIMIT limit+1
-      → response.Paged(w, items, next, hasMore)
-```
-
-### 11.3 PATCH /api/v1/conversations/{id}（改名）
-
-```
-前端 PATCH /api/v1/conversations/cv_xxx  body={title}
-  → ConversationHandler.Rename
-      → r.PathValue("id") → "cv_xxx"
-      → decodeJSON → renameConvRequest{Title}
-      → svc.Rename(ctx, id, title)
-          → repo.Get(ctx, id)             [infra/store/conversation]
-              未命中 → ErrNotFound → 404 CONVERSATION_NOT_FOUND
-          → c.Title = TrimSpace(title)
-          → c.UpdatedAt = now
-          → repo.Save(ctx, c)
-      → response.Success(200, c)
-```
-
----
-
-## 12. 与其他 domain 的协作图
-
-```
-         ┌───────────────────────────┐
-         │  chat domain（Phase 2）   │  ← 发消息时携带 conversationId
-         └──────────┬────────────────┘
-                    │ conversationId 作锚点
-                    ↓
-         ┌──────────────────────────┐
-         │  conversation.Service    │
-         └──────────────────────────┘
-                    │
-                    ↓
-         ┌──────────────────────────┐
-         │  infra/store/conversation │
-         └──────────────────────────┘
-
-conversation 不依赖 apikey / model，后两者也不依赖 conversation。
-```
-
----
-
-## 13. 实现清单（✅ 已全部完成，2026-04-25）
-
-### domain 层 ✅
-- [x] `internal/domain/conversation/conversation.go` — Conversation struct + TableName + ListFilter + ErrNotFound + Repository
-
-### infra 层 ✅
-- [x] `internal/infra/store/conversation/conversation.go` — Store（Save / Get / List cursor 分页 / Delete 软删）
-- [x] `internal/infra/store/conversation/conversation_test.go` — 11 个集成测试
-
-### app 层 ✅
-- [x] `internal/app/conversation/conversation.go` — Service（Create / List / Rename / Delete + nil logger 守护）
-- [x] `internal/app/conversation/conversation_test.go` — 11 个单测（fake repo）
-
-### transport 层 ✅
-- [x] `internal/transport/httpapi/handlers/conversation.go` — ConversationHandler + 4 端点 + Register
-- [x] `internal/transport/httpapi/handlers/conversation_test.go` — 6 个 E2E 契约测试
-
-### 配套基础设施 ✅
-- [x] `internal/transport/httpapi/response/errmap.go` — 1 条 conversation sentinel 映射
-- [x] `internal/transport/httpapi/router/deps.go` — `ConversationService *convapp.Service` 字段
-- [x] `internal/transport/httpapi/router/router.go` — 条件注册
-- [x] `cmd/server/main.go` — `convstore.New(gdb)` → `convapp.NewService(...)` → `router.Deps`；`db.Migrate` 追加 `&convdomain.Conversation{}`
-
-### 验收 ✅
-- [x] 全仓 `go test -count=1 -race ./...` 零失败
-- [x] `go build ./...` 通过
-
----
-
-## Relations Integration（2026-05-19）
-
-conversation 在 relgraph 中**仅当有边相关时**才作为节点出现（避免 chat 历史污染图，per spec §9.3）。
-
-| 方法 | 触发的 relation 操作 |
-|---|---|
-| `Service.Delete` | `PurgeEntity("conversation", id)` 级联删该 conv 所有出/入边（forged_entity / edited_entity / document_links_entity 入边等） |
-
-conversation 不直接写出向边；它的"作者权"通过 trinity 域 `forged_in_conversation_id` 字段被动派生（详 function.md / handler.md / workflow.md Relations Integration 节）。conversation reader 实现 `GetMetaBatch` 给 relgraph 拉 label/sub（label = Title → Summary[:30] → "(未命名对话)"）。
-
-详 [`./relation.md`](./relation.md) §6.3 + §9.3。
+| `ErrNotFound` | 404 | `CONVERSATION_NOT_FOUND` | ID 拼错或属于另一个用户。 |
+| `ErrTitleTooLong` | 400 | `INVALID_REQUEST` | 标题超过 100 字符限制。 |
+| `ErrDeleteFailed` | 500 | `INTERNAL_ERROR` | 数据库级联删除超时。 |

@@ -34,6 +34,6 @@
 
 | Topic | Status | Started |
 |---|---|---|
-| workflow-revamp | active | 2026-05-20 |
+| workflow-revamp | landed (Durable Engine shipped) | 2026-05-20 |
 | llm-providers | landed (R1-R5 shipped) | 2026-05-25 |
 | testend | landed (V3 shipped) | 2026-05-27 |

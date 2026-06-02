@@ -4,1014 +4,135 @@ type: reference
 status: active
 owner: @weilin
 created: 2026-04-22
-reviewed: 2026-05-31
-review-due: 2026-06-30
+reviewed: 2026-06-02
+review-due: 2026-09-01
 audience: [human, ai]
 ---
-# apikey domain — 详细设计文档
+# APIKey Domain — 凭证管理与加解密原理
 
-**所属 Phase**：Phase 2（基础对话能力，第 1 个完成的 domain）
-**状态**：✅ 已实现（2026-04-24 全部 7 步完成 + 100+ 测试全绿 + curl 冒烟通过；2026-05-30：`Credentials.APIFormat`、3 bug fix、`CapabilityService`）
-**职责**：管理用户的 provider API Key 凭证（存储、加密、测试连通性、按 provider 解析）。包含 LLM provider（11 个生产 + 1 个 dev mock）+ **搜索 provider 4 个**（屎山拯救计划 #4 引入：brave / serper / tavily / bocha）。两类共用同一套加密 + 存储 + UI；通过 ProviderMeta.Category 字段（CategoryLLM / CategorySearch）区分
-**依赖**：
-- `domain/crypto`（加密接口）+ `infra/crypto.AESGCMEncryptor`（AES-GCM 实现，`v1:` 前缀密文）
-- `infra/db`（GORM 底层）+ `pkg/reqctx`（userID ctx 读取）
-- `net/http`（tester 发探测请求；hand-rolled HTTP，理由见 §9 设计说明）
-
-**被依赖**：`chat` / `model` / 工作流 LLM 节点 / 知识库 embedding 等所有需要调 LLM 的地方，**全部通过 `apikeydomain.KeyProvider` 接口**，不直接接触 Service struct 或 Repository。
-
-**关联文档**：
-- [`../backend-design.md`](../backend-design.md) — 总规范
-- [`../references/backend/api.md`](../references/backend/api.md) — API 索引
-- [`../references/backend/database.md`](../references/backend/database.md) — 表索引
-- [`../references/backend/error-codes.md`](../references/backend/error-codes.md) — 错误码索引
+> **核心地位**：APIKey 是 Forgify 与外部世界（LLM, Search Providers）的通信令牌底座。通过**物理加密与内存脱敏**实现本地安全的凭证管理，同时提供**BYOK (Bring Your Own Key) 健康探测**机制。
 
 ---
 
-## 1. 为什么要这个 domain
+## 1. 物理模型 (Data Anatomy)
 
-所有 LLM 调用都需要凭证。用户使用 Forgify 前必须配一个或多个 API Key（OpenAI / Anthropic / DeepSeek / Ollama / ...）。
-
-本 domain 负责：
-
-1. **安全存储** Key（加密 + `v1:` 前缀 + `key_masked` 冗余展示值）
-2. **列出** Key 给用户（分页，带展示掩码）
-3. **测试** Key 能不能用（连通性测试，4 种 HTTP 模式 + custom 按 APIFormat 二选一）
-4. **提供** Key 给其他 domain 消费（跨 domain 接口 `KeyProvider`；消费方看不到密文/Repository/Service struct）
-
----
-
-## 2. 核心决策（已敲定）
-
-| 决策 | 选择 | 理由 |
-|---|---|---|
-| apikey vs model 是否分 domain | **分离** | apikey 管凭证、model 管"哪个场景用哪个模型"策略，职责清晰 |
-| 多租户 user_id | **从 V1 就引入** | 每表带 `user_id`，Phase 2 暂时硬编码 `local-user`；未来加 auth 只需改 middleware |
-| Provider 列表 | **硬编码白名单** | 11 LLM 生产 + 1 LLM dev mock + 4 搜索（共 16）；新 provider 需要代码改动（适配 base_url / 测试逻辑） |
-| Category 字段 | LLM / Search 二选一 | 屎山拯救计划 #4 加：让前端"API Keys"页能分组展示；后端 WebSearch 按 SearchProviderPriority 找 BYOK 时只关心 Search 类（不会误把 LLM key 当搜索 key）|
-| base_url 校验 | **app 层（Service）** | 不在 DB 层 CHECK（scenario 白名单同理，保灵活性）|
-| Key 失效反馈 | **`test_status=error` 标记**（Phase 2）+ 未来可加事件 | 现阶段足够；chat 时流式响应可推 `chat.error` |
-| Tester 实现方式 | **hand-rolled HTTP**（`net/http`）| 探测要最便宜（不付 LLM token 费用）；要区分 401/网络/5xx 等错误；Anthropic 1-token ping / Google query-string key / Ollama 无 auth 各有特殊性，单一抽象会丢信息 |
-| 加密算法 | **AES-GCM + 机器指纹派生密钥**；密文 `v1:` 前缀 | 未来换 KMS 信封加密时可共存 |
-
----
-
-## 3. 多租户准备（跨 domain 约定）
-
-> ⚠️ **项目级约定**，不只 apikey。其他 domain 照此办理。
-
-### 设计
-
-- 每张业务表都有 `user_id TEXT NOT NULL`
-- Phase 2 单用户阶段：middleware `InjectUserID` 把 `reqctx.DefaultLocalUserID = "local-user"` 塞入 ctx
-- 未来加 auth：替换 middleware 解析 JWT / session，业务代码零改
-
-### 实现位置
-
-| 层 | 文件 | 做什么 |
-|---|---|---|
-| middleware | `internal/transport/httpapi/middleware/auth.go` | `InjectUserID(next)` 把 `local-user` 塞 ctx |
-| 共享包 | `internal/pkg/reqctx/reqctx.go` | `SetUserID(ctx, id)` / `GetUserID(ctx) (string, bool)` / `RequireUserID(ctx) (string, error)` |
-| store | `internal/infra/store/apikey/apikey.go` | 每个方法 `reqctxpkg.RequireUserID(ctx)` 取值；缺失 = 接线 bug，包装 `ErrMissingUserID` |
-
----
-
-## 4. Provider 白名单（11 LLM + 1 mock + 4 搜索）
-
-代码位置：`internal/app/apikey/providers.go`（ProviderMeta 表 + Category 字段）；`internal/domain/apikey/apikey.go`（SearchProviderPriority）
-
-### LLM providers（Category: CategoryLLM）
-
-| Provider | 分类 | base_url 必填 | 默认 base_url | TestMethod 枚举 |
-|---|---|---|---|---|
-| `openai` | 国际 | 否 | `https://api.openai.com/v1` | `TestMethodGetModels` |
-| `anthropic` | 国际 | 否 | `https://api.anthropic.com` | `TestMethodAnthropicPing` |
-| `google` | 国际 | 否 | `https://generativelanguage.googleapis.com/v1beta` | `TestMethodGoogleListModels` |
-| `deepseek` | 国产/OpenAI 兼容 | 否 | `https://api.deepseek.com` | `TestMethodGetModels` |
-| `openrouter` | 国际聚合 | 否 | `https://openrouter.ai/api/v1` | `TestMethodGetModels` |
-| `qwen` | 国产（阿里）| 否 | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `TestMethodGetModels` |
-| `zhipu` | 国产（智谱）| 否 | `https://open.bigmodel.cn/api/paas/v4` | `TestMethodGetModels` |
-| `moonshot` | 国产（Kimi）| 否 | `https://api.moonshot.cn/v1` | `TestMethodGetModels` |
-| `doubao` | 国产（字节）| 否 | `https://ark.cn-beijing.volces.com/api/v3` | `TestMethodGetModels` |
-| `ollama` | 本地 | **✅ 必填** | — | `TestMethodOllamaTags` |
-| `custom` | 兜底 | **✅ 必填** | — | `TestMethodCustom`（测试时按 APIFormat 二选一）|
-| `mock` | dev | 否 | — | `TestMethodAlwaysOK`（dev-only，testend Mock LLM tab 用）|
-
-### Search providers（Category: CategorySearch）
-
-WebSearch 先检查 `KeyProvider.DefaultSearchProvider(ctx)`：若用户标了 is_default=true 的搜索 key，把该 provider 提到顺序首位；其余按 `SearchProviderPriority = [brave, serper, tavily, bocha]` 补全；第一个配了 key 且调用返非空的胜出。所有 4 个共用 `TestMethodSearchPing`，tester.go 内按 provider 名分派到各自轻量 1-result 探测。
-
-| Provider | 分类 | base_url 必填 | 默认 base_url | 认证方式 | 免费档 |
-|---|---|---|---|---|---|
-| `brave` | 国际 | 否 | `https://api.search.brave.com/res/v1` | `X-Subscription-Token` 头 | 2000 次/月 |
-| `serper` | 国际（Google 结果代理）| 否 | `https://google.serper.dev` | `X-API-KEY` 头 | 2500 次免费 |
-| `tavily` | 国际（AI agent 调优）| 否 | `https://api.tavily.com` | `api_key` 在 JSON body | 1000 次/月 |
-| `bocha` | 国产（博查）| 否 | `https://api.bochaai.com/v1` | `Authorization: Bearer` 头 | 国内免 VPN，海外慢 |
-
-### ProviderMeta（实际代码）
-
-```go
-// app/apikey/providers.go
-
-type ProviderCategory string
-
-const (
-    CategoryLLM    ProviderCategory = "llm"
-    CategorySearch ProviderCategory = "search"
-)
-
-type TestMethod string
-
-const (
-    TestMethodGetModels        TestMethod = "get_models"          // GET {baseURL}/models, Bearer auth
-    TestMethodAnthropicPing    TestMethod = "anthropic_ping"      // POST {baseURL}/v1/messages, 1-token
-    TestMethodGoogleListModels TestMethod = "google_list_models"  // GET {baseURL}/v1beta/models?key=
-    TestMethodOllamaTags       TestMethod = "ollama_tags"         // GET {baseURL}/api/tags, no auth
-    TestMethodCustom           TestMethod = "custom"              // dispatch by APIFormat at test time
-    TestMethodAlwaysOK         TestMethod = "always_ok"           // dev mock — no real connectivity, always reports OK
-    TestMethodSearchPing       TestMethod = "search_ping"         // dispatch by provider name to a 1-result search probe
-)
-
-type ProviderMeta struct {
-    Name            string
-    DisplayName     string
-    DefaultBaseURL  string
-    BaseURLRequired bool
-    TestMethod      TestMethod
-    Category        ProviderCategory
-}
-
-// 外部用的工具函数
-func GetProviderMeta(name string) (ProviderMeta, bool)
-func IsValidProvider(name string) bool
-func ListProviders() []string
-```
-
-### `custom` provider 补充规则
-
-`provider='custom'` 时必填：
-- `base_url`
-- `api_format`：`openai-compatible` / `anthropic-compatible`
-
-测试时 HTTPTester 按 `api_format` 分派：`anthropic-compatible` → anthropic_ping；其他（含空）→ get_models。
-
----
-
-## 5. 领域模型
-
-### APIKey struct（`internal/domain/apikey/apikey.go`，实际代码）
-
+### 1.1 `APIKey` 实体结构
 ```go
 type APIKey struct {
     ID           string         `gorm:"primaryKey;type:text" json:"id"`
     UserID       string         `gorm:"not null;index:idx_api_keys_user_id;index:idx_api_keys_user_provider,priority:1;type:text" json:"userId"`
+    
     Provider     string         `gorm:"not null;index:idx_api_keys_user_provider,priority:2;type:text" json:"provider"`
     DisplayName  string         `gorm:"not null;type:text;default:''" json:"displayName"`
-    KeyEncrypted string         `gorm:"not null;type:text" json:"-"`              // 线上永不出现
+    
+    // 物理层密文与脱敏明文
+    KeyEncrypted string         `gorm:"not null;type:text" json:"-"`
     KeyMasked    string         `gorm:"not null;type:text" json:"keyMasked"`
+    
+    // 自定义接入参数
     BaseURL      string         `gorm:"type:text;default:''" json:"baseUrl"`
     APIFormat    string         `gorm:"type:text;default:''" json:"apiFormat"`
-    TestStatus   string         `gorm:"type:text;default:'pending'" json:"testStatus"`
+    
+    // 健康探测状态
+    TestStatus   string         `gorm:"type:text;default:'pending'" json:"testStatus"` // 'pending' | 'ok' | 'error'
     TestError    string         `gorm:"type:text;default:''" json:"testError"`
     LastTestedAt *time.Time     `json:"lastTestedAt"`
-    ModelsFound  []string       `gorm:"type:text;serializer:json" json:"modelsFound"`  // 测试成功时记录 provider 返回的模型列表
+    ModelsFound  []string       `gorm:"serializer:json;type:text;default:'[]'" json:"modelsFound"`
+    
+    // Provider 类别内的默认选择
     IsDefault    bool           `gorm:"not null;default:false" json:"isDefault"`
+    
     CreatedAt    time.Time      `json:"createdAt"`
     UpdatedAt    time.Time      `json:"updatedAt"`
     DeletedAt    gorm.DeletedAt `gorm:"index" json:"-"`
 }
-
-func (APIKey) TableName() string { return "api_keys" }
 ```
 
-**字段说明**：
-
-| 字段 | 说明 |
-|---|---|
-| `ID` | `aki_<16hex>` 格式（8 字节 crypto/rand） |
-| `UserID` | Phase 2 固定 `"local-user"`；未来真 auth 时替换 |
-| `Provider` | 11 白名单之一 |
-| `DisplayName` | 用户自定义别名；app 层 `strings.TrimSpace` |
-| `KeyEncrypted` | `v1:` 前缀 + base64(AES-GCM seal)；线上响应有 `json:"-"` tag，永不泄漏 |
-| `KeyMasked` | 如 `sk-proj...abc4`；列表查询不必解密 |
-| `BaseURL` | 空 = 用 provider 默认；app 层 `strings.TrimSpace` |
-| `APIFormat` | 仅 custom 必填（`openai-compatible` / `anthropic-compatible`）|
-| `TestStatus` | `pending` / `ok` / `error`，由 Service.Test 或 MarkInvalid 写 |
-| `TestError` | 测试失败时的 human-readable 原因；成功时清空 |
-| `LastTestedAt` | UTC；`UpdateTestResult` 每次调用都写 |
-| `ModelsFound` | `[]string`，GORM `serializer:json` 存为 JSON 字符串；测试成功时写入 provider 返回的模型列表，测试失败或 MarkInvalid 时保持不变（传 nil 跳过更新）；API 响应序列化为 JSON 数组 |
-| `IsDefault` | 每 category 单选默认标志；`true` 表示 WebSearch / 其他消费方优先用此 provider；PATCH `isDefault=true` 时 app 层先 `ClearDefaultForCategory` 清同类 key，再设本 key |
-
-### 常量（`internal/domain/apikey/apikey.go`，与 entity 同文件）
-
-```go
-const (
-    TestStatusPending = "pending"
-    TestStatusOK      = "ok"
-    TestStatusError   = "error"
-
-    APIFormatOpenAICompatible    = "openai-compatible"
-    APIFormatAnthropicCompatible = "anthropic-compatible"
-)
-```
-
-### Sentinel 错误（**8 个**，2026-05-28 model selection redesign 加 `ErrInUse`）
-
-```go
-// domain/apikey/apikey.go
-var (
-    ErrNotFound            = errors.New("apikey: not found")
-    ErrNotFoundForProvider = errors.New("apikey: no key for provider")
-    ErrInvalidProvider     = errors.New("apikey: invalid provider")
-    ErrBaseURLRequired     = errors.New("apikey: base_url required for this provider")
-    ErrAPIFormatRequired   = errors.New("apikey: api_format required for custom provider")
-    ErrKeyRequired         = errors.New("apikey: key value is required")
-    ErrDisplayNameConflict = errors.New("apikey: display name already in use")
-
-    // ErrInUse: model_config / conv override / node override still reference this key.
-    // 删 api_key 时被 model_configs / conversations.model_override / workflow_versions.graph
-    // 节点 modelOverride 引用 → 拒删（RESTRICT）→ 422 API_KEY_IN_USE。
-    ErrInUse = errors.New("apikey: in use by model_configs or model overrides")
-)
-// Service.Test never returns ErrTestFailed — failed probes return *TestResult{OK:false}
-// instead, with the HTTP handler synthesising 422 inline. Same for MarkInvalid (returns
-// nil on success; 401/403 from upstream LLM surfaces as llminfra.ErrAuthFailed).
-```
-
-各 sentinel → HTTP 映射见 §14 错误码 + `references/backend/error-codes.md`。
+### 1.2 Provider 注册表 (The Registry)
+Forgify 内部维护了一张硬编码的提供商注册表 (`providers.go`)，将提供商分为 `CategoryLLM` 和 `CategorySearch`。
+- **LLM**: `openai`, `anthropic`, `google`, `deepseek`, `openrouter`, `qwen`, `zhipu`, `moonshot`, `doubao`, `ollama`, `custom`, `mock`.
+- **Search**: `brave`, `serper`, `tavily`, `bocha`.
 
 ---
 
-## 6. 对外 API vs 对内函数（速查表）
+## 2. 加解密原理 (Encryption & Masking)
 
-### 6.1 对外两类消费者
+为了防止 SQLite 数据库被拷贝导致明文密钥泄漏，Forgify 实现了 `crypto.Encryptor` 接口。
 
-| 消费者 | 接口 | 位置 | 方法数 |
-|---|---|---|---|
-| 🌐 **前端 / curl** | HTTP REST API | `/api/v1/api-keys/*` | **5 个端点** |
-| 🧩 **其他 domain**（chat / workflow / knowledge / embedding）| `apikeydomain.KeyProvider` 接口 | `internal/domain/apikey/apikey.go` | **2 个方法** |
+### 2.1 物理加密 (`infra/crypto/AESGCMEncryptor`)
+- **算法**：AES-256-GCM (IND-CPA 安全，自带认证标签)。
+- **密钥推导**：基于宿主机硬件指纹 (`fingerprint`) + 固定 Salt (`forgify:aesgcm:v1:...`)，通过 SHA-256 哈希拉伸出 32 字节的主密钥 (Master Key)。
+- **线缆格式**：`v1:<base64(nonce || ciphertext || tag)>`。
+- **持久化约束**：`KeyEncrypted` 落库；JSON 序列化时通过 `json:"-"` 强制过滤，**永不传给前端**。
 
-### 6.2 HTTP REST（详见 §10）
+### 2.2 内存脱敏 (Masking)
+在创建或更新密钥时，系统会计算 `KeyMasked` 字段并落库，前端仅展示此字段：
+- `< 8 字符`：`****`
+- `≤ 20 字符`：保留前 3 后 4，中间掩码（如 `sk-...abcd`）。
+- `> 20 字符`：保留前 7 后 4。
 
-```
-POST   /api/v1/api-keys              创建（201）
-GET    /api/v1/api-keys              列表（200，分页 + ?provider= 过滤）
-PATCH  /api/v1/api-keys/{id}         更新 displayName / baseUrl（200）
-DELETE /api/v1/api-keys/{id}         软删（204）
-POST   /api/v1/api-keys/{id}:test    连通性测试（200 或 422）
-```
+---
 
-响应**绝不**含解密后的明文 key（`json:"-"` 守护）。
+## 3. BYOK 路由与解析机制 (Key Resolution)
 
-### 6.3 `KeyProvider` 接口（跨 domain 唯一入口；2026-05-28 redesign 加 `ResolveCredentialsByID` + `Credentials.Provider`）
+LLM 或 Search 工具在需要发起网络请求时，**绝不直接访问 Repository**，而是通过跨域端口 `KeyProvider.ResolveCredentials`。
 
+### 3.1 `Credentials` DTO (单次通话凭证)
 ```go
-// domain/apikey/apikey.go
-
-type KeyProvider interface {
-    ResolveCredentials(ctx context.Context, provider string) (Credentials, error)
-
-    // ResolveCredentialsByID resolves by api_key id; cross-user lookups surface ErrNotFound.
-    // 用于 model_configs.api_key_id / conv.ModelOverride.APIKeyID /
-    // workflow NodeSpec.ModelOverride.APIKeyID 的 runtime 解析 + F1 校验。
-    ResolveCredentialsByID(ctx context.Context, apiKeyID string) (Credentials, error)
-
-    MarkInvalid(ctx context.Context, provider string, reason string) error
-
-    // Deprecated 但保留：测试便利 + 个别老 callsite。新代码用 ResolveCredentialsByID。
-    HasKeyForProvider(ctx context.Context, provider string) (bool, error)
-
-    DefaultSearchProvider(ctx context.Context) string
-}
-
 type Credentials struct {
-    // Provider lets ByID callers re-derive display/transport hints from a key id.
-    // 让按 id 解析的调用方仍能拿到 provider 名（供 llmclient.Bundle.Provider 派生用）。
     Provider  string
-    Key       string // 明文；调用方禁止 log、禁止传跨请求 goroutine
-    BaseURL   string // 已合并 provider 默认
-    APIFormat string // 2026-05-30：custom provider 的格式（"openai-compatible"|"anthropic-compatible"）；非 custom 时为 ""
+    Key       string // 解密后的明文！
+    BaseURL   string // 若用户未填，自动补全 Provider 注册表中的 DefaultBaseURL
+    APIFormat string // 仅 custom key 有用
 }
 ```
 
-实现：`app/apikey.Service`（`var _ apikeydomain.KeyProvider = (*Service)(nil)` 编译期守护；`ResolveCredentials` / `ResolveCredentialsByID` / `MarkInvalid` 同文件）。`ResolveCredentialsByID` 内部：`repo.Get(ctx, apiKeyID)` → 跨用户不命中走 `ErrNotFound`（与 same-user 不存在同一码）→ Decrypt → 拼 BaseURL → 返 Credentials{Provider, Key, BaseURL}。
+### 3.2 WebSearch 路由优先级
+WebSearch 工具通过 `DefaultSearchProvider()` 查找。如果没有设置 `is_default`，则按照固定优先级遍历探测：
+**顺序**：`brave` -> `serper` -> `tavily` -> `bocha`。
+只要发现其中一个有配置，即提取 Credentials 发起搜索。
 
-### 6.4 对内类型速查
+### 3.3 失效联动 (`MarkInvalid`)
+当外部调用（如 LLM 网关或 Search API）返回 **401/403** 错误时，调用方会触发 `KeyProvider.MarkInvalid(ctx, provider, reason)`。
+- **机制**：通过 `reqctxpkg.SetUserID(context.Background(), uid)` 创建 **Detached Context** 更新数据库的 `test_status = 'error'`。
+- **目的**：确保即便原始请求被 Cancel，数据库状态依然更新，前端 UI 能立刻将该 Key 的角标翻红。
 
-| 类别 | 名字 | 位置 | 谁用 |
+---
+
+## 4. 健康探测逻辑 (Connectivity Tester)
+
+用户在前端点击“Test Connection”时触发 `POST /api/v1/api-keys/{id}:test`。
+
+### 4.1 异步写回 (Detached Persist)
+测试请求本身可能需要几秒甚至十几秒。为了防止用户刷新页面导致 `context.Canceled` 丢弃测试结果，测试完成后的落库动作使用 **Detached Context**。
+
+### 4.2 探测模式 (Test Methods)
+`Service.Test` 会根据 Provider 的种类分发不同的探测 HTTP 请求：
+- `get_models`: 调 `/v1/models`，既验证 Auth 又填充 `ModelsFound` 下拉列表（OpenAI/DeepSeek 等）。
+- `anthropic_ping`: 发送一个带 `max_tokens=1` 的极小生成请求。
+- `search_ping`: 向搜索 API 的探测接口发一个探针 Query。
+
+---
+
+## 5. 删除保护 (Reference Scanner)
+
+APIKey 是系统的底层资源。`Service.Delete` 在执行前会遍历已注入的 `RefScanner`：
+- `modelConfigScan`：是否被 `/api/v1/model-configs` 关联。
+- `convOverrideScan`：是否有对话线程正强制绑定该 Key (`conversations.model_override`)。
+- `nodeOverrideScan`：是否有 Workflow 节点锁定了该 Key。
+若命中任意引用，抛出 `ErrInUse`，拒绝删除。这是为了防止级联崩溃。
+
+---
+
+## 6. 错误字典 (Clinical Sentinels)
+
+| Sentinel | HTTP | Wire Code | 场景及处理建议 |
 |---|---|---|---|
-| Repository 接口 | `Repository` | `domain/apikey/apikey.go` | Service 调；其他 domain **不许** import |
-| Repository 实现 | `Store` | `infra/store/apikey/apikey.go`（包名 apikey，调用方别名 apikeystore）| main.go DI |
-| Service（CRUD + Test 编排）+ KeyProvider 实现 | `Service` | `app/apikey/apikey.go`（别名 apikeyapp；S12 主文件，含 `var _ KeyProvider = (*Service)(nil)` + `ResolveCredentials` + `MarkInvalid` + `MaskKey`）| handler + main.go + 其他 domain（通过接口）|
-| ConnectivityTester 接口 | `ConnectivityTester` | `app/apikey/tester.go` | Service.Test 内部 |
-| ConnectivityTester 实现 | `HTTPTester` | `app/apikey/tester.go`（同文件）| main.go DI |
-| MaskKey | `MaskKey(string) string` | `app/apikey/apikey.go:298-308` | Service.Create 生成展示值 |
-| ProviderMeta | `ProviderMeta`, `GetProviderMeta`, `IsValidProvider`, `ListProviders`, `Category`, `TestMethod` 枚举（7 个）| `app/apikey/providers.go` | Service 校验 + Tester 分派 |
-
-**关键界线**：
-- `Repository` 是 **apikey 内部**契约（Service ↔ DB）—— 其他 domain 不该 import
-- `KeyProvider` 是 **apikey 对外**契约（给 chat / workflow 等）—— 这才是跨 domain 入口
-- 两个接口**都在 `domain/apikey/apikey.go`**，通过包级 godoc 区分用途
-
----
-
-## 7. Repository 接口（实际代码）
-
-```go
-// domain/apikey/apikey.go
-type Repository interface {
-    // Get fetches a single APIKey by id, scoped to userID in ctx.
-    // Returns ErrNotFound if no live row matches.
-    Get(ctx context.Context, id string) (*APIKey, error)
-
-    // List returns a page of caller's keys. Returns (rows, nextCursor, err).
-    List(ctx context.Context, filter ListFilter) ([]*APIKey, string, error)
-
-    // GetByProvider picks the most suitable live APIKey for (user, provider).
-    // Ordering: test_status=ok 优先 → last_tested_at DESC → created_at DESC.
-    // Returns ErrNotFoundForProvider if none.
-    GetByProvider(ctx context.Context, provider string) (*APIKey, error)
-
-    // Save upserts on primary key. Caller must have set k.UserID before calling.
-    Save(ctx context.Context, k *APIKey) error
-
-    // Delete soft-deletes by id, scoped to caller.
-    Delete(ctx context.Context, id string) error
-
-    // UpdateTestResult writes test_status / test_error / last_tested_at / models_found.
-    // Pass nil for models when no model list is available (e.g. MarkInvalid).
-    UpdateTestResult(ctx context.Context, id, status, errMsg string, models []string) error
-
-    // ClearDefaultForCategory unsets is_default on all of the user's keys whose
-    // provider is in the given list (keeps "default" single-choice per category).
-    ClearDefaultForCategory(ctx context.Context, providers []string) error
-
-    // DefaultProvider returns the provider name of the user's is_default key among
-    // the given providers, or "" if none.
-    DefaultProvider(ctx context.Context, providers []string) (string, error)
-}
-
-type ListFilter struct {
-    Cursor   string
-    Limit    int
-    Provider string  // 可选 provider 过滤
-}
-```
-
-### Store 实现（`infra/store/apikey/apikey.go`）
-
-- GORM 实现，每个方法前 `reqctxpkg.RequireUserID(ctx)` 取 userID，缺失返包装的 `reqctxpkg.ErrMissingUserID`（接线 bug，不是 401）
-- `List` 用 `(created_at, id)` 元组 cursor 做稳定分页（时间戳相同也稳定）
-- `GetByProvider` 排序 SQL：`CASE WHEN test_status = 'ok' THEN 0 ELSE 1 END` + `last_tested_at DESC` + `created_at DESC`
-- 软删走 GORM 内置的 `DeletedAt` 字段
-- `UpdateTestResult` 只写 4 列（`test_status` / `test_error` / `last_tested_at` / `models_found`），避免全表往返；`models_found` 用 `json.Marshal(models)` 序列化后存字符串
-
----
-
-## 8. Service 层（`app/apikey/apikey.go`，实际代码）
-
-### Struct
-
-```go
-type Service struct {
-    repo      apikeydomain.Repository
-    encryptor cryptodomain.Encryptor  // domain/crypto 接口
-    tester    ConnectivityTester      // apikeyapp 内部接口
-    log       *zap.Logger
-
-    // 2026-05-28 redesign：RefScanner ports for Delete RESTRICT
-    modelConfigScan  RefScanner
-    convOverrideScan RefScanner
-    nodeOverrideScan RefScanner
-}
-
-// RefScanner probes whether some entity still references a given api_key id.
-// 3 个 store 各实现一个：model_configs.api_key_id / conversations.model_override JSON /
-// workflow_versions.graph 节点 modelOverride JSON。
-type RefScanner interface {
-    AnyReferencesApiKey(ctx context.Context, apiKeyID string) (bool, error)
-}
-
-func NewService(repo apikeydomain.Repository, enc cryptodomain.Encryptor, tester ConnectivityTester, log *zap.Logger) *Service {
-    if log == nil {
-        panic("apikey.NewService: logger is nil")
-    }
-    return &Service{repo: repo, encryptor: enc, tester: tester, log: log}
-}
-
-// 装配阶段后置注入；main.go 在 3 个 store 构造完后调一遍。
-func (s *Service) SetModelConfigRefScanner(rs RefScanner)  { s.modelConfigScan = rs }
-func (s *Service) SetConvOverrideRefScanner(rs RefScanner) { s.convOverrideScan = rs }
-func (s *Service) SetNodeOverrideRefScanner(rs RefScanner) { s.nodeOverrideScan = rs }
-```
-
-**nil logger 立刻 panic** —— 接线 bug 不应在生产 log 处才炸，有 `TestNewService_NilLogger_Panics` 守护单测。
-
-**`Delete` 走 RESTRICT（2026-05-28 redesign）**：删 key 前先调 3 个 RefScanner 任一非空（即跨 store 串行扫；扫到引用立刻短路）→ 返 `ErrInUse`（422 `API_KEY_IN_USE`），由用户先去 model_configs / conv override / node override 改完引用再删。3 个 scanner 缺一不查（测试便利）；生产 main.go 必装配。详 spec [`docs/superpowers/specs/2026-05-28-model-selection-redesign-design.md`](../../../docs/superpowers/specs/2026-05-28-model-selection-redesign-design.md) §8。
-
-### Inputs
-
-```go
-type CreateInput struct {
-    Provider    string
-    DisplayName string
-    Key         string
-    BaseURL     string
-    APIFormat   string
-}
-
-// UpdateInput: nil 字段不改；非 nil 指向 "" 则清空该值。
-// IsDefault=true 先 ClearDefaultForCategory 清同 category 其他 key，再设本 key。
-type UpdateInput struct {
-    DisplayName *string
-    BaseURL     *string
-    Key         *string  // 非空时旋转密钥，重置 test_status=pending
-    IsDefault   *bool
-}
-```
-
-### 方法签名（6 个公开 + 3 个 KeyProvider 实现，全在 `app/apikey/apikey.go`）
-
-```go
-func (s *Service) Create(ctx, in CreateInput)           (*apikeydomain.APIKey, error)
-func (s *Service) Update(ctx, id string, in UpdateInput) (*apikeydomain.APIKey, error)
-func (s *Service) Delete(ctx, id string)                 error  // 2026-05-28: 走 RefScanner RESTRICT
-func (s *Service) Get(ctx, id string)                   (*apikeydomain.APIKey, error)
-func (s *Service) List(ctx, filter apikeydomain.ListFilter) ([]*apikeydomain.APIKey, string, error)
-func (s *Service) Test(ctx, id string)                  (*TestResult, error)
-
-// KeyProvider 接口实现（同文件）
-func (s *Service) ResolveCredentials(ctx, provider string)       (apikeydomain.Credentials, error)
-func (s *Service) ResolveCredentialsByID(ctx, apiKeyID string)   (apikeydomain.Credentials, error)  // 2026-05-28: 按 id 解析
-func (s *Service) MarkInvalid(ctx, provider, reason string)      error
-```
-
-### Create 流程
-
-```
-1. validateCreate(in):
-   - apikeydomain.IsValidProvider(provider) → ErrInvalidProvider
-   - strings.TrimSpace(Key) == "" → ErrKeyRequired
-   - meta.BaseURLRequired && BaseURL == "" → ErrBaseURLRequired
-   - provider == "custom" && APIFormat == "" → ErrAPIFormatRequired
-2. reqctxpkg.RequireUserID(ctx) → uid（缺失 = 接线 bug，包装 ErrMissingUserID 上抛）
-3. encryptor.Encrypt(Key) → ciphertext "v1:..."
-4. newID() → "aki_<16hex>"
-5. 拼 APIKey（TestStatus=pending）
-6. repo.Save
-7. log.Info("apikey created", key_id, user_id, provider)
-```
-
-### Test 流程（最复杂的方法）
-
-```
-0. reqctxpkg.RequireUserID(ctx) → uid（**先于 repo.Get 校验**——终态写需要 uid 跨 detached ctx 也可识别用户；缺失立刻包装上抛）
-1. repo.Get(id) → APIKey (含密文)
-   未命中 → ErrNotFound → 404
-2. encryptor.Decrypt(KeyEncrypted) → 明文
-   密文损坏 → 包装 err 直接上抛 500（**不写 test_status**，留原值；与 tester 错路径不同）
-3. tester.Test(Provider, 明文, BaseURL, APIFormat) → TestResult 或 err
-4. detached := reqctxpkg.SetUserID(context.Background(), uid)
-   //（§S9 终态写模式：上游 cancel 不能让 test_status 终态写丢失）
-4a. err != nil（程序 bug 路径）:
-    repo.UpdateTestResult(detached, id, TestStatusError, err.Error(), nil)
-    上抛包装过的 err
-4b. err == nil:
-    status = TestStatusError; errMsg = result.Message; models = nil
-    if result.OK: status = TestStatusOK; errMsg = ""; models = result.ModelsFound
-    repo.UpdateTestResult(detached, id, status, errMsg, models)
-5. log.Info("apikey tested", key_id, provider, ok, latency_ms)
-6. return result
-```
-
-**关键**：DB 写是 Service 的职责、不是 Tester 的。Tester 是无状态探针。`MarkInvalid` 同样用 detached ctx 写终态——chat 流断时不能让"key 已坏"标记丢失。
-
-### ID 生成
-
-```go
-func newID() string {
-    var b [8]byte
-    if _, err := rand.Read(b[:]); err != nil {
-        panic(fmt.Sprintf("apikey: crypto/rand failed: %v", err))
-    }
-    return "aki_" + hex.EncodeToString(b[:])
-}
-```
-
-`crypto/rand` 失败意味着 OS RNG 坏 → panic 比拿不可信的 ID 继续跑更安全。
-
-### MaskKey（`app/apikey/apikey.go:298-308`）
-
-```go
-func MaskKey(key string) string
-```
-
-规则：
-- 长度 < 8 → `"****"`（完全隐藏）
-- 长度 8-20 → `前 3 + "..." + 后 4`
-- 长度 > 20 → `前 7 + "..." + 后 4`
-
-示例：
-- `"sk-proj-abcdefg1234567890xyz"` → `"sk-proj...0xyz"`
-- `"AKIA1234567890ABCDEF"` → `"AKI...CDEF"`
-- `"short"` → `"****"`
-
-回归守卫测试 `TestMaskKey_NeverLeaksMiddle` 确保掩码不含中间字节。
-
----
-
-## 9. ConnectivityTester（`app/apikey/tester.go`）
-
-### 接口 + TestResult
-
-```go
-type TestResult struct {
-    OK          bool
-    Message     string    // UI 可直接展示
-    LatencyMs   int64     // 挂钟往返时间
-    ModelsFound []string  // 仅 get_models / google_list_models / ollama_tags 填充
-}
-
-type ConnectivityTester interface {
-    Test(ctx context.Context, provider, key, baseURL, apiFormat string) (*TestResult, error)
-}
-```
-
-### 错误 vs TestResult 的约定（很重要）
-
-| 情况 | 表现 |
-|---|---|
-| 网络不通 / DNS 失败 / ctx 取消 / 401 / 5xx / 上游返回格式错 | `*TestResult{OK:false, Message:...}`，err = nil |
-| 未知 provider / 必填 baseURL 缺失（Service 应预先校验） | `nil, error`（包装 `ErrInvalidProvider` / `ErrBaseURLRequired`）|
-
-**Service 端**看 err 决定是否上抛 500；看 `result.OK` 决定 `test_status = ok/error`。
-
-### HTTPTester 实现
-
-```go
-type HTTPTester struct {
-    client *http.Client  // 传 nil 装默认 10s Timeout
-}
-
-func NewHTTPTester(client *http.Client) *HTTPTester
-
-var _ ConnectivityTester = (*HTTPTester)(nil)
-```
-
-`Test` 主分派按 `ProviderMeta.TestMethod` 走：
-
-| TestMethod | 私有方法 | HTTP |
-|---|---|---|
-| `TestMethodGetModels` | `testGetModels` | `GET {baseURL}/models`，`Authorization: Bearer {key}` |
-| `TestMethodAnthropicPing` | `testAnthropicPing` | `POST {baseURL}/v1/messages`，`x-api-key: {key}` + `anthropic-version: 2023-06-01`，body `{"model":"claude-3-5-haiku-latest","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}`，**约 $0.0001/次** |
-| `TestMethodGoogleListModels` | `testGoogleListModels` | `GET {baseURL}/v1beta/models?key={key}`，query 认证 |
-| `TestMethodOllamaTags` | `testOllamaTags` | `GET {baseURL}/api/tags`，**无认证**（本地）|
-| `TestMethodCustom` | - | `APIFormat == anthropic-compatible` → `testAnthropicPing`；其他（含空）→ `testGetModels` |
-| `TestMethodAlwaysOK` | `testAlwaysOK` | dev mock（`mock` provider 用）；不发任何 HTTP，直接返 `OK` + 空 modelsFound；testend Mock LLM tab 专用 |
-| `TestMethodSearchPing` | `testSearchPing` | 4 search provider 共用；按 provider 名分派到对应 1-result 探测（brave/serper/tavily/bocha 各自 endpoint + auth）|
-
-### baseURL 规范化
-
-Tester 在分派前：`effective = strings.TrimRight(baseURL, "/")`；空则用 `meta.DefaultBaseURL`；仍空（ollama / custom）则返 `ErrBaseURLRequired`。用户传 `"http://foo.com/"` 不会造成 `//models`。**例外**：`mock` provider 用 `TestMethodAlwaysOK`，无 baseURL 也直接返成功（meta.BaseURLRequired=false + TestMethod 走 always_ok 分支跳过空 base 判断）。
-
-### 响应体读取
-
-`do()` 共用 helper：`io.LimitReader(resp.Body, 64*1024)`，防止 provider 返回巨大 HTML 吃爆内存。
-
-错误消息用 `formatHTTPError(status, body)`：`"HTTP {status}: {body 前 200 字节 trimmed}"`，UI 安全展示。
-
-### 模型列表解析
-
-| Provider | 解析形状 |
-|---|---|
-| OpenAI 兼容 | `{"data":[{"id":"..."}]}` |
-| Google | `{"models":[{"name":"..."}]}` |
-| Ollama | `{"models":[{"name":"..."}]}` |
-
-JSON 畸形时 `parseXxx` 返 `nil`，**连通性仍报告成功**（只是不返模型列表）——因为 200 = provider 接受了 key，body 格式问题不影响"可用"判断。
-
-### 3 个 Bug fix（2026-05-30）
-
-在 LLM provider 重构过程中实测发现并修复：
-
-| Bug | 修复 |
-|---|---|
-| Gemini base-url：早期 google 的 `DefaultBaseURL` 缺路径段导致 chat 404 | **R4 切原生 generateContent 后定型**：base = `https://generativelanguage.googleapis.com/v1beta`（model 在请求路径，非 chat/completions）；`testGoogleListModels` 把 base 归约到 API 根再拼 `/v1beta/models`（同时兼容旧的 `/v1beta/openai` compat base，两种后缀都 strip）|
-| Ollama base-path：Tester `testOllamaTags` 调 `{baseURL}/api/tags` 时若 baseURL 末尾已含 `/v1` 会二次追加路径 | Tester 在探测前 `TrimSuffix(baseURL, "/v1")` 再拼 `/api/tags` |
-| custom anthropic-compat：`Credentials.APIFormat` 未传给 `llmclient.finishResolve`，导致 `custom` provider 配 `api_format=anthropic-compatible` 实际走了 OpenAI compat wire | `ResolveCredentialsByID` 返 `Credentials.APIFormat`；`llmclient.finishResolve` 把 `APIFormat` 传入 `factory.Build(cfg.APIFormat)`；`factory.Build` 按 `APIFormat == "anthropic-compatible"` 路由到 `anthropicProvider` |
-
-### 为什么 Tester 不复用通用 LLM 客户端
-
-`infra/llm` 是给 chat 调真实推理用的 LLM 流式客户端，会真发推理请求产生 token 费用。Tester 的目的是**最便宜**地验证"key 能用"：
-- OpenAI 兼容：打 `GET /models`，0 token 成本
-- Anthropic：1-token `messages` ping（不能避免，但成本最小）
-- Google / Ollama：用各自的列表端点，认证语义都不同
-- 错误分类：401（key 错）/ 网络错 / 5xx（provider 故障）/ 4xx（请求格式）必须区分清楚，给出有信息量的诊断；通用 LLM 客户端的错误抽象会丢这些差别
-
-所以 Tester 走 `net/http` hand-rolled，与 `infra/llm` 是平行能力，互不依赖。
-
----
-
-## 9.5 CapabilityService（`internal/app/apikey/capability.go`）
-
-`CapabilityService` 是 **apikeyapp 包内的独立 service 结构**（非 `apikey.Service` 方法），消费 `pkg/modelcatalog` 的静态模型目录，给 context manager 提供窗口/输出上限能力。
-
-- `ResolveCapabilities(ctx, provider, modelID) modelcatalog.Capability` — 返回 `ContextWindow` / `MaxOutput`，未知模型使用保守 fallback。
-
-**消费方**：
-- `contextmgr.Manager`：注入 resolver，用于获取真实 per-model 上下文窗口（彻底消除 hardcoded 4K fallback 的 bug，详 `compaction.md`）
-- 前端：不再通过 apikey service 做 override；前端通过 `GET /api/v1/model-capabilities` 读取 `modelcatalog` 暴露的模型目录和 option descriptors。
-
-**详细设计**：见 [`model.md`](model.md) 的 `modelcatalog` 章节。
-
-## 10. HTTP API 详细
-
-### 通用约定
-
-- 前缀：`/api/v1/api-keys`
-- 中间件链：`Recover → RequestLogger → CORS → InjectLocale → InjectUserID → mux`
-- 响应走 envelope（N1）
-- 错误走 `response.FromDomainError(w, log, err)` 经 errmap.go 翻译；`:test` 非 OK 时 handler 直接 synthesize 422 envelope
-
-### 端点清单（5 个）
-
-#### 10.1 `POST /api/v1/api-keys` — 创建（201）
-
-**Request**：
-```json
-{
-  "provider": "openai",
-  "displayName": "My OpenAI Main",
-  "key": "sk-proj-xxxxxxxxxxxxxxxx",
-  "baseUrl": "",
-  "apiFormat": ""
-}
-```
-
-**校验错误**（Service 层）：
-- 400 `INVALID_PROVIDER` / `KEY_REQUIRED` / `BASE_URL_REQUIRED` / `API_FORMAT_REQUIRED`
-- 400 `INVALID_REQUEST`（JSON 畸形，含未知字段 `DisallowUnknownFields`）
-
-**Response 201**：完整的 APIKey 对象（**无 `keyEncrypted` 字段**，`json:"-"` 守护）
-
-#### 10.2 `GET /api/v1/api-keys` — 列表（200）
-
-**Query**：`?cursor=&limit=50&provider=openai`（`limit` 默认 50 最大 200）
-
-**Response 200**：
-```json
-{
-  "data": [ {...}, {...} ],
-  "nextCursor": "<opaque base64url>",
-  "hasMore": true
-}
-```
-
-空列表返 `{"data": [], "hasMore": false}`（不是 null）。
-
-#### 10.3 `PATCH /api/v1/api-keys/{id}` — 更新（200）
-
-**Request**（nil 字段不改；非 nil 指向 `""` 清空）：
-```json
-{ "displayName": "...", "baseUrl": "...", "isDefault": true }
-```
-
-**`isDefault` 语义**：设为 `true` 时，app 层先 `ClearDefaultForCategory`（清除同 category 所有 key 的 is_default），再把本 key 设为 true，保证 category 内单选。设为 `false` 直接清除本 key 的 default 标志。
-
-**注意**：不支持改 provider / apiFormat（要改就 delete + recreate）；key 字段非空时触发密钥旋转（重新加密 + mask + 重置 test_status=pending）。
-
-**Response 200**：更新后的 APIKey。`updatedAt` 自动推进。
-
-**404 `API_KEY_NOT_FOUND`**：id 不存在。
-
-#### 10.4 `DELETE /api/v1/api-keys/{id}` — 软删（204）
-
-无 body 响应。`deleted_at` 写入当前时间。再次 DELETE 返 404。
-
-#### 10.5 `POST /api/v1/api-keys/{id}:test` — 连通性测试（200 / 422）
-
-> 实现方式：路由注册 `POST /api/v1/api-keys/{idAction}` 通配符，handler `postOnID` 用 `strings.Cut(":", idAction)` 拆出 id 和 action，switch 到 `test`。未来加 `:rotate` 或 `:archive` 只改 switch case。
-
-**Request**：无 body（从 DB 读已加密 key，解密后 test）。
-
-**Response 200**（`result.OK == true`）：
-```json
-{
-  "data": {
-    "ok": true,
-    "message": "connected, 45 models available",
-    "latencyMs": 1203,
-    "modelsFound": ["gpt-4o", "gpt-4-turbo", ...]
-  }
-}
-```
-
-`modelsFound` 永远非 nil（handler `if models == nil { models = []string{} }`）。
-
-**Response 422**（`result.OK == false`，网络/401/5xx/ctx 取消）：
-```json
-{
-  "error": {
-    "code": "API_KEY_TEST_FAILED",
-    "message": "HTTP 401: {...}",
-    "details": { "latencyMs": 80 }
-  }
-}
-```
-
-**副作用**（Service.Test 负责）：
-- `result.OK == true` → `test_status=ok`, `last_tested_at=now`, `test_error=''`
-- `result.OK == false` → `test_status=error`, `test_error=result.Message`
-- tester 返程序 bug err（未知 provider 等）→ `test_status=error`, `test_error=err.Error()`，上抛 500（理论不发生，Service 预先校验）
-
-**404 `API_KEY_NOT_FOUND`**：id 不存在。
-
----
-
-## 11. 数据库表
-
-```sql
-CREATE TABLE api_keys (
-    id               TEXT PRIMARY KEY,
-    user_id          TEXT NOT NULL,
-    provider         TEXT NOT NULL,           -- CHECK 约束由 schema_extras 补
-    display_name     TEXT NOT NULL DEFAULT '',
-    key_encrypted    TEXT NOT NULL,
-    key_masked       TEXT NOT NULL,
-    base_url         TEXT NOT NULL DEFAULT '',
-    api_format       TEXT NOT NULL DEFAULT '',
-    test_status      TEXT NOT NULL DEFAULT 'pending',
-    test_error       TEXT NOT NULL DEFAULT '',
-    last_tested_at   DATETIME,
-    is_default       BOOLEAN NOT NULL DEFAULT false,
-    created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at       DATETIME
-);
-
-CREATE INDEX idx_api_keys_user_id       ON api_keys(user_id);
-CREATE INDEX idx_api_keys_user_provider ON api_keys(user_id, provider);
-CREATE INDEX idx_api_keys_deleted_at    ON api_keys(deleted_at);
-```
-
-**索引理由**：
-- `user_id` 单索引：列表查询最常用（"当前用户的所有 key"）
-- `(user_id, provider)` 复合：chat 调 `GetByProvider` 时用
-- `deleted_at` 单索引：GORM 软删 filter 用
-
-**CHECK 约束**：Phase 2 目前**没有**给 `provider` 列加 CHECK 约束（应由 `schema_extras.go` 补；当前是通过 app 层 `IsValidProvider` 校验）。同样 `test_status` 的 CHECK 约束也在 app 层。若未来要加 DB 层保险，写入 `schema_extras.go` 的 raw SQL。
-
-**迁移**：`db.Migrate(gdb, &apikeydomain.APIKey{})`（`cmd/server/main.go` 已接）。
-
-**类型策略**：domain struct 直接带 GORM tag（一份到底），store 层不做 entity↔row 转换。
-
----
-
-## 12. 事件
-
-**Phase 2 不推送事件**。
-
-未来可能加（Phase 3+，未决定）：
-- `apikey.test_failed`：主动推测试失败给前端（不用刷新列表）
-- `apikey.invalidated`：chat 调 key 返 401 时 push（UI 标红）
-
-现阶段通过 `test_status=error` 列 + 下次拉取时前端显示即可；暂不加事件复杂度。
-
----
-
-## 13. 错误码（8 个 sentinel，全已实现 ✅；2026-05-28 model selection redesign 加 `API_KEY_IN_USE`）
-
-| Code | HTTP | Sentinel | 场景 |
-|---|---|---|---|
-| `API_KEY_NOT_FOUND` | 404 | `apikey.ErrNotFound` | Get/Delete/Update/Test id 不存在；**`ResolveCredentialsByID` 跨用户隔离也走此码**（model_config Upsert F1 / conv override F1 / node override F1 / runtime 解析共用）|
-| `API_KEY_PROVIDER_NOT_FOUND` | 404 | `apikey.ErrNotFoundForProvider` | `ResolveCredentials(ctx, provider)` 当前用户无活跃 key（pre-redesign 老路径仍在用）|
-| `API_KEY_IN_USE` | 422 | `apikey.ErrInUse` | DELETE /api-keys/{id} 时还被 model_configs / conv.modelOverride / node.modelOverride 引用 → RESTRICT |
-| `API_KEY_NAME_CONFLICT` | 409 | `apikey.ErrDisplayNameConflict` | 同用户下 displayName 重复 |
-| `INVALID_PROVIDER` | 400 | `apikey.ErrInvalidProvider` | 创建时 provider 不在 11 白名单 |
-| `BASE_URL_REQUIRED` | 400 | `apikey.ErrBaseURLRequired` | ollama / custom 没填 baseURL |
-| `API_FORMAT_REQUIRED` | 400 | `apikey.ErrAPIFormatRequired` | custom 没填 apiFormat |
-| `KEY_REQUIRED` | 400 | `apikey.ErrKeyRequired` | 创建时 key 空 |
-
-> 历史 `API_KEY_TEST_FAILED` / `API_KEY_INVALID` sentinels 已删（永不返回——Service.Test 失败仍返 200 + `{ok:false}`；MarkInvalid 成功返 nil；上游 401/403 走 `llminfra.ErrAuthFailed`）。
-
-映射位置：`internal/transport/httpapi/response/errmap.go` 的 `errTable`。
-
----
-
-## 14. 消费方如何用（跨 domain 示例）
-
-### chat domain 调 LLM 时（2026-05-28 redesign 后通过 `pkg/llmclient` 三件套）
-
-```go
-// internal/app/chat/runner.go
-import llmclientpkg "github.com/sunweilin/forgify/backend/internal/pkg/llmclient"
-
-func (s *Service) processTask(ctx context.Context, conv *convdomain.Conversation, ...) {
-    // 1. 三件套一站式解析（dialogue scenario + 接 conv override）
-    bundle, err := llmclientpkg.ResolveDialogueWithOverride(
-        ctx, conv.ModelOverride,
-        s.modelPicker, s.keyProvider, s.llmFactory,
-    )
-    if err != nil {
-        // 失败映射 ErrPickModel → MODEL_NOT_CONFIGURED
-        //         ErrResolveCreds → API_KEY_NOT_FOUND（按 id 解析 + 跨用户隔离）
-        //         其他 → LLM_PROVIDER_ERROR
-    }
-    // bundle.{Client, APIKeyID, Provider(派生), ModelID, Key, BaseURL}
-
-    // 2. ReAct loop 消费 bundle.Client
-    // ...
-
-    // 3. 401 → 回报失效（仍走 provider 维度 —— MarkInvalid 沿用老路径）
-    if isAuthError(streamErr) {
-        _ = s.keyProvider.MarkInvalid(ctx, bundle.Provider, streamErr.Error())
-    }
-}
-```
-
-**关键约定**：chat 只 import `apikeydomain`（**domain 层接口**）+ `llmclientpkg` 解析函数，**不** import `apikeyapp`。main.go 把 `*apikeyapp.Service` 作为 `apikeydomain.KeyProvider` 接口传进 chat 的构造函数。chat 看不到 Service struct 也看不到 Repository。
-
-**utility / agent scenario callsites**（工具内部 + workflow 节点）走同一三件套：
-- `llmclientpkg.ResolveUtility(ctx, picker, keys, factory)` —— autoTitle / compaction / WebFetch summary / search rerank / env-fix 共 11 处
-- `llmclientpkg.ResolveAgentWithOverride(ctx, node.ModelOverride, picker, keys, factory)` —— scheduler dispatch_agent / dispatch_llm
-
----
-
-## 15. 完整调用链（S5 "端到端推演先行"）
-
-### 15.1 POST /api/v1/api-keys（创建）
-
-```
-前端 fetch POST /api/v1/api-keys
-  → Recover / RequestLogger / CORS / InjectLocale / InjectUserID middleware
-      → reqctxpkg.SetUserID(ctx, "local-user")
-  → mux 匹配 "POST /api/v1/api-keys"
-  → APIKeyHandler.Create
-      → decodeJSON(body, &createRequest)
-          畸形 → response.FromDomainError(derrors.ErrInvalidRequest) → 400
-      → svc.Create(ctx, CreateInput{...})
-          → validateCreate：白名单 / 非空 / baseURL / apiFormat
-              任一失败 → 400（errmap 翻译）
-          → reqctxpkg.RequireUserID(ctx) → uid
-          → encryptor.Encrypt(key) → "v1:base64(nonce+ct+tag)"
-          → newID() → "aki_<16hex>"
-          → repo.Save(ctx, k)                              [infra/store/apikey]
-          → log.Info("apikey created")
-      → response.Created(w, k) → 201 envelope
-```
-
-### 15.2 POST /api/v1/api-keys/{id}:test（连通性测试）
-
-```
-前端 POST /api/v1/api-keys/aki_xxx:test
-  → middleware 链（同上）
-  → mux 匹配 "POST /api/v1/api-keys/{idAction}"
-  → APIKeyHandler.postOnID
-      → strings.Cut(idAction, ":") → (id="aki_xxx", action="test", found=true)
-      → switch action {"test": h.test(...)}
-  → APIKeyHandler.test
-      → svc.Test(ctx, id)
-          → reqctxpkg.RequireUserID(ctx) → uid（**先校验**——为终态写做准备）
-          → repo.Get(ctx, id)                              [infra/store/apikey]
-              未命中 → ErrNotFound → 404 API_KEY_NOT_FOUND
-          → encryptor.Decrypt(KeyEncrypted) → 明文
-              密文损坏 → 包装上抛 500（**不写 test_status**，留原值）
-          → tester.Test(provider, 明文, baseURL, apiFormat)  [app/apikey.HTTPTester]
-              按 ProviderMeta.TestMethod 分派（§9）
-              → HTTP 打上游 provider
-                  成功 200 → TestResult{OK:true, Message, LatencyMs, ModelsFound}
-                  失败 / 401 / 5xx / 网络错 → TestResult{OK:false, Message, LatencyMs}
-                  未知 provider（不该发生）→ error
-          → detached := reqctxpkg.SetUserID(context.Background(), uid)
-              //（§S9 终态写：上游 cancel 时仍要落 test_status）
-          → 根据 result.OK 决定 status
-          → repo.UpdateTestResult(detached, id, status, errMsg, models)  // models=ModelsFound(成功) | nil(失败)
-          → log.Info("apikey tested")
-      → handler 看 result.OK：
-          true  → response.Success(200, {ok, message, latencyMs, modelsFound})
-          false → response.Error(422, "API_KEY_TEST_FAILED", message, {latencyMs})
-```
-
-### 15.3 其他 domain 调 apikey（chat 的真实路径）
-
-```
-chat.Service.processTask
-  → modelPicker.PickForChat(ctx)             → (provider, modelID)
-  → keyProvider.ResolveCredentials(ctx, provider) 【本 domain 的对外入口】
-      → repo.GetByProvider(ctx, provider)
-          排序：test_status=ok 优先 → last_tested_at DESC → created_at DESC
-          无 → ErrNotFoundForProvider → SSE chat.error API_KEY_PROVIDER_NOT_FOUND
-      → encryptor.Decrypt(KeyEncrypted)
-      → 合并 baseURL（用户填的 | meta.DefaultBaseURL）
-      → 返回 Credentials{Key, BaseURL}
-  → llmFactory.Build(llminfra.Config{...})  → llminfra.Client
-  → client.Stream(ctx, req) 消费 iter.Seq[StreamEvent]
-  → 401 分支：
-      → keyProvider.MarkInvalid(ctx, provider, reason)
-          → reqctxpkg.RequireUserID(ctx) → uid（先校验）
-          → repo.GetByProvider(ctx, provider)
-          → detached := reqctxpkg.SetUserID(context.Background(), uid)
-          → repo.UpdateTestResult(detached, k.ID, TestStatusError, reason, nil)
-              //（终态写——chat 流可能已 cancel，用 detached 保住 invalid 标记）
-          → log.Warn("apikey marked invalid")
-      → SSE chat.error LLM_PROVIDER_ERROR
-```
-
----
-
-## 16. 安全考虑
-
-| 点 | 设计 |
-|---|---|
-| 加密 | AES-GCM + 机器指纹派生密钥（`infra/crypto.MachineFingerprint → DeriveKey → AESGCMEncryptor`）|
-| 密文版本 | `v1:` 前缀；未来 KMS 用 `v2:`，新旧共存 |
-| 明文 Key 不落日志 | Service/handler/store 绝不 log key 内容；`log.Info` 只记 key_id / provider / user_id |
-| 明文 Key 不落响应 | `KeyEncrypted` 带 `json:"-"`；契约回归测试 `TestAPIKeyHandler_Create_Success` 断言 `keyEncrypted` 字段**不存在**于响应 |
-| 明文 Key 生命周期短 | 只在 Service.Test / ResolveCredentials 瞬间出现在内存，函数返回即 GC |
-| DB 丢失 | `key_masked` 冗余展示值保底；key 本身不可恢复，用户需重填 |
-| 软删保留审计 | 30 天物理清理**未实现**（见 §遗留 backlog）|
-| nil logger 守护 | `NewService(..., nil)` 立刻 panic；有单测锁 |
-
----
-
-## 17. 实现清单（全部完成 ✅）
-
-> 文件布局遵循 `backend-design.md` S12（domain 平铺按概念拆文件）+ S13（三层同名包 + 调用方 `<name><role>` 别名）。
-> 三个 apikey 包都声明 `package apikey`；调用方 import 别名为 `apikeydomain` / `apikeyapp` / `apikeystore`。
-
-### domain 层 ✅
-- [x] `internal/domain/apikey/apikey.go` — APIKey + TableName + 常量 + Credentials + ListFilter + **8 个** sentinel + Repository + KeyProvider 接口 + `SearchProviderPriority` 顺序（**合并在同一文件**）
-
-### infra 层 ✅
-- [x] `internal/infra/db/{db,migrate,schema_extras}.go` — 通用 GORM 底层（Phase 1 已就绪）
-- [x] `internal/infra/store/apikey/apikey.go` — Store 实现 Repository（含 cursor 分页 + GetByProvider 排序）
-- [x] `internal/infra/store/apikey/apikey_test.go` — 18 个集成测试（CRUD + 跨用户隔离 + 分页 + GetByProvider 排序）
-
-### app 层 ✅（S12 主文件 rename：`apikey.go` 收编 Service + KeyProvider 实现 + MaskKey + ID 生成）
-- [x] `internal/app/apikey/apikey.go` — Service（Create/Update/Delete/Get/List/Test + 校验 + ID 生成 + 加密编排 + nil logger 守护）+ `var _ apikeydomain.KeyProvider = (*Service)(nil)` 守护 + `ResolveCredentials` + `MarkInvalid`（detached ctx 终态写）+ `MaskKey` + `newID()`
-- [x] `internal/app/apikey/providers.go` — `ProviderCategory` + `TestMethod` 枚举（**7 个**：get_models / anthropic_ping / google_list_models / ollama_tags / custom / always_ok / search_ping）+ ProviderMeta + **16 个** providers 白名单（11 LLM 生产 + 1 LLM dev mock + 4 search）+ `GetProviderMeta` / `IsValidProvider` / `ListProviders`
-- [x] `internal/app/apikey/providers_test.go` — 白名单完整性 / Category 一致性 / TestMethod 分派覆盖测试
-- [x] `internal/app/apikey/tester.go` — ConnectivityTester 接口 + HTTPTester + 7 TestMethod 分派（含 `testAlwaysOK` mock 与 `testSearchPing` 4 search provider 子分派）+ custom APIFormat 二选一
-- [x] `internal/app/apikey/tester_test.go` — httptest 用例（成功/401/5xx/网络错/ctx 取消/malformed JSON/trailing slash/query escape/默认 baseURL/AlwaysOK/SearchPing 4 子路径）
-- [x] `internal/app/apikey/apikey_test.go` — 单测（真 AES-GCM + fake repo + fake tester + nil logger panic 守护）
-
-### transport 层 ✅
-- [x] `internal/transport/httpapi/handlers/apikey.go` — 5 端点 + `POST /{idAction}` + `strings.Cut(":")` 拆分
-- [x] `internal/transport/httpapi/handlers/apikey_test.go` — 15 个 E2E 契约测试（真 SQLite + 真 AES-GCM + fake tester + InjectUserID）
-
-### 配套基础设施 ✅
-- [x] `internal/transport/httpapi/middleware/auth.go` — InjectUserID（Phase 1）
-- [x] `internal/pkg/reqctx/reqctx.go` — `SetUserID` / `GetUserID` / `RequireUserID` + `ErrMissingUserID`（Phase 1）
-- [x] `internal/transport/httpapi/response/errmap.go` — 8 apikey sentinel 映射
-- [x] `internal/transport/httpapi/router/router.go` + `deps.go` — 条件注册 + nil-tolerant
-- [x] `cmd/server/main.go` — `MachineFingerprint → DeriveKey → AES-GCM → Store → HTTPTester → Service` 装配；`db.Migrate(gdb, &apikeydomain.APIKey{})`
-
-### 验收 ✅
-- [x] 全仓 `go test ./...` 零失败（apikey 相关 61 测试 + 其他 40+）
-- [x] `go vet ./...` 零警告
-- [x] `go build ./...` 通过
-- [x] `-race` 检测通过
-- [x] 4/5 端点 curl 冒烟通过（Create 201 / List paged / Patch 200 / Delete 204 / GET after delete = `[]`）
-- [ ] `:test` 端点真实 provider 验证（留给用户用真 key 跑，目前 httptest 全覆盖）
-
----
-
-## 18. 遗留 / 未来可能补的东西
-
-已解决（立项时的待确认，现在已定）：
-- ✅ Provider 默认 base_url 全部按官方文档核对，httptest 覆盖 5 种 TestMethod 模式
-- ✅ Anthropic 测试费用约 $0.0001/次接受；无真实调用不产生
-- ✅ GetByProvider 排序：`test_status=ok 优先 → last_tested_at DESC → created_at DESC`（store + 集成测试守护）
-
-backlog（未来按需做）：
-- **软删 30 天物理清理**：单用户场景不急；多租户后加定时任务
-- **单用户 Key 数量上限**：目前无限制；真出现恶意场景可加 100 条 soft limit + 告警
-- **provider 列 DB 层 CHECK 约束**：app 层已校验；补 DB 层是防御深度，需写 `schema_extras.go`
-- **Events push**：`apikey.test_failed` / `apikey.invalidated` —— 用到再加
-- **CHECK(test_status IN ('pending', 'ok', 'error'))**：同上，app 层已保
-
----
-
-## 19. 与其他 domain 的协作图
-
-```
-     ┌─────────────────────────────┐
-     │  chat / workflow / knowledge │   ← 消费方（通过 KeyProvider 接口）
-     │  Phase 2-5 陆续实现           │
-     └──────────┬──────────────────┘
-                │ ResolveCredentials(provider) → Credentials
-                │ MarkInvalid(provider, reason)  on 401
-                ↓
-        ┌──────────────────┐
-        │  apikey.Service   │ ← KeyProvider 的唯一实现（app/apikey/apikey.go）
-        └───┬──────────────┘
-            │ Encrypt / Decrypt
-            ↓
-        ┌──────────────────┐
-        │  crypto.Encryptor │ ← domain 接口（infra/crypto.AESGCMEncryptor 实现）
-        └──────────────────┘
-
-        ┌──────────────────┐
-        │  Repository 实现  │ ← infra/store/apikey.Store（内部使用，其他 domain 不 import）
-        └──────────────────┘
-```
+| `ErrNotFound` | 404 | `API_KEY_NOT_FOUND` | ID 错误。 |
+| `ErrNotFoundForProvider` | 404 | `API_KEY_PROVIDER_NOT_FOUND` | 该提供商下没有任何活跃秘钥。 |
+| `ErrInvalidProvider` | 400 | `INVALID_PROVIDER` | 尝试创建不在硬编码注册表中的 Provider。 |
+| `ErrBaseURLRequired` | 400 | `BASE_URL_REQUIRED` | Ollama/Custom 等私有部署必须指定 BaseURL。 |
+| `ErrAPIFormatRequired` | 400 | `API_FORMAT_REQUIRED` | Custom 必须指定 `openai-compatible` 等协议族。 |
+| `ErrKeyRequired` | 400 | `KEY_REQUIRED` | 空秘钥（对于不需要鉴权的 Mock/Ollama 允许填 Dummy 字符）。 |
+| `ErrDisplayNameConflict` | 409 | `API_KEY_NAME_CONFLICT` | 同一用户下 `DisplayName` 唯一性冲突。 |
+| `ErrInUse` | 422 | `API_KEY_IN_USE` | 被 ModelConfig 等锁定，请用户先去解绑。 |
