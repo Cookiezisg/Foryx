@@ -15,3 +15,4 @@
 | 0011 | 2026-06-03 | 波次0 · M0.3 | crypto 切片(domain port + infra adapter) | ✅ AES-GCM + 机器指纹，原样保留，13 测试绿；port-adapter 范本。**M0.3 完成** |
 | 0012 | 2026-06-03 | 波次0 · M0.4 | domain/errors 结构化强化 | ✅ Error{Kind,Code,Details,cause}+Is by Code；根除 errmap 293 行+27 import 巨耦合；6 测试绿；契约 UNAUTH_NO_WORKSPACE |
 | 0013 | 2026-06-03 | 波次0 · M0.4 | SSE 三流统一协议 domain（改名 + 流式树重构） | ✅ 单一 domain/stream：信封+四动词Frame+**通用 Node{Type,Content}**+Bridge/ListReader；id 升信封层、frame 可丢性分级、close 带快照；**node 词表下放业务、砍三流 domain 包**；5 源 3 测试绿 |
+| 0014 | 2026-06-04 | 波次0 · M0.5 | infra/stream 单一 Bus（三流底座） | ✅ per-workspace seq + frame 分级 buffer（durable 入环/ephemeral seq0 不入不卡）+ replay/ErrSeqTooOld + List；旧三抄 Bridge 收敛成 1 份、实例化三次=三流；D2 全量推；3 源 3 测试 -race 绿；infra/chat 移交 M5.2 |

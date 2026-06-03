@@ -27,7 +27,7 @@
 | M0.2 | `pkg/orm` + `infra/db` | **去 GORM**：自研链式 ORM（R0008 ✅）+ `infra/db` 用 database/sql + glebarez/go-sqlite | 边界：schema 可激进重定；手写 DDL 对齐 database.md（取代 AutoMigrate）；domain 全部去 GORM 化 |
 | M0.3 | `infra/logger` `infra/crypto` | zap + AES-GCM | |
 | M0.4 | `domain/errors` · `domain/stream`(协议核心) · `domain/messages` `domain/entities` `domain/notifications` | 横切契约；SSE 三流**统一流式树协议**：stream 定 Envelope/Frame/Node/Bridge，三流各挂 Node 词表（见 `stream-protocol.md`） | eventlog→messages · forge→entities |
-| M0.5 | `infra/stream`(单一 `Bus`×3 实例) · `infra/chat` | SSE 三流底座：单一 `Bus` 实现(seq + frame 分级 buffer + fanout + scope)实例化三次 = messages/entities/notifications + chat 流式底座 | frame 分级：delta/tick=ephemeral 不入 buffer；close 带快照 |
+| M0.5 | `infra/stream`(单一 `Bus`) | SSE 三流底座：单一 `Bus`(seq + frame 分级 buffer + fanout)实例化三次 = messages/entities/notifications。`infra/chat`(extractor) 依赖 chat domain → **移交 M5.2** | frame 分级：delta/tick=ephemeral 不入 buffer；close 带快照；D2=workspace 全量推 |
 | M0.6 | `infra/llm` | 自有 provider 客户端（18 文件）+ factory | 边界：provider wire 格式冻结；`mock.go` 留给测试 |
 | M0.7 | transport 框架：`httpapi/response`(envelope N1) `middleware` `router` + pagination `Parse`/limit 策略 | — | **从波次 7 上移**：所有业务域 handler 的地基 |
 

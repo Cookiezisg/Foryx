@@ -69,3 +69,11 @@
 | 各 app 模块 emit 改造 | loop·chat·scheduler·subagent·contextmgr·tool/{workflow,handler,function,agent}·workflow·handler·function·mcp·skill·ask·todo·sandbox·memory·document·conversation（~20） | 各自波次 | 旧 `eventlog.Emitter`/`forge.Publisher`/`notif.Publish` 调用 → 新 `streamemit` + 统一 `Event{scope,id,frame}` |
 | installprogress→notif | `pkg/installprogress`（依赖旧 notifications） | M0.5 / 相关波次 | 判定 installprogress 去留 + 改用 streamemit signal |
 | 对外契约重写 | `events.md`（旧三流全量事件表） | 覆盖阶段 | 按新协议重写 events.md；端点改名；前端/testend 改（见 contract-changes #2） |
+
+## 来自波次 0 · M0.5（infra/stream R0014）
+
+| 待办 | 原位置 | 去向 | 备注 |
+|---|---|---|---|
+| infra/chat extractor | `infra/chat/extractor.go`（import chatdomain） | chat（M5.2） | 依赖 chat domain，M0.5 做不了；随 chat 那轮重写 |
+| 三流 Bus 实例化 + 注入 | — | M0.7 / cmd | messages/entities 按 `stream.Bridge` 注入、notif 按 `stream.ListReader`；buffer 大小 wiring 定（旧 messages 4096 / entities·notif 1024）|
+| SSE 线缆 marshal | — | M0.7 | handler 把 `stream.Envelope` marshal 成 SSE（frame kind + node type 判别字段注入；ephemeral seq0 省 `id:` 行）；线缆形状见 stream-protocol §1-3 |

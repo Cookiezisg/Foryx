@@ -25,7 +25,7 @@
 状态：⬜ pending ｜ 🔧 doing ｜ ✅ done ｜ ⏭️ 判定删除/合并
 
 - **Phase 1 骨架** ✅：`backend-new/` + 空 go.mod + health server + smoke。
-- **波次0 地基**：M0.1 pkg ✅（**reqctx/idgen/pagination ✅** R0001；**tokencount ✅** R0002；**pathguard ✅** R0003；**userpath ⏭️删** R0004；**wikilink ✅** R0005；**jsonrepair ✅** R0006；**limits ✅** R0007；modelcaps/modelcatalog 移交 M1.3）· M0.2 数据库层 ✅（**pkg/orm R0008 · db 网关 R0009**；业务表 DDL 分散各模块）· M0.3 ✅（**logger R0010 · crypto R0011**）· M0.4 ✅：**errors R0012** · **stream 统一协议 R0013**（单一 domain/stream：信封+四动词Frame+通用 Node{Type,Content}+Bridge/ListReader；词表下放业务）· M0.5 infra **stream bus（单一 Bus×3 实例）+ chat 流底座** ⬜ · M0.6 llm ⬜ · M0.7 transport 框架 ⬜
+- **波次0 地基**：M0.1 pkg ✅（**reqctx/idgen/pagination ✅** R0001；**tokencount ✅** R0002；**pathguard ✅** R0003；**userpath ⏭️删** R0004；**wikilink ✅** R0005；**jsonrepair ✅** R0006；**limits ✅** R0007；modelcaps/modelcatalog 移交 M1.3）· M0.2 数据库层 ✅（**pkg/orm R0008 · db 网关 R0009**；业务表 DDL 分散各模块）· M0.3 ✅（**logger R0010 · crypto R0011**）· M0.4 ✅：**errors R0012** · **stream 统一协议 R0013**（单一 domain/stream：信封+四动词Frame+通用 Node{Type,Content}+Bridge/ListReader；词表下放业务）· M0.5 ✅ infra **stream bus（单一 Bus）R0014**（实例化三次=三流；frame 分级；D2 全量推；infra/chat extractor 移交 M5.2）· M0.6 llm ⬜ · M0.7 transport 框架 ⬜
 - **波次1 叶子域**：M1.1 workspace(原 user) ⬜ · M1.2 apikey ⬜ · M1.3 model ⬜ · M1.4 relation ⬜ · M1.5 catalog ⬜ · M1.6 mention ⬜ · M1.7 memory ⬜ · M1.8 sandbox ⬜ · M1.9 permissions/hooks ⬜ · M1.10 document ⬜ · M1.11 todo ⬜(待判定)
 - **波次2 tool+原语**：tool ⬜ · loop ⬜ · tool/filesystem·search·web·toolset ⬜
 - **波次3 Quadrinity**：function·handler·subagent·agent·skill·mcp + tool 适配器组 ⬜
@@ -36,4 +36,4 @@
 
 ## 下一步
 
-- **M0.5（下一轮）**：`infra/stream` 单一 `Bus`（per-workspace seq + frame 分级 buffer：durable 入环形 / ephemeral 实时丢 + 扇出 + scope）实例化三次 = messages/entities/notifications 三 Bridge；+ `infra/chat` 流式底座。按 `stream-protocol.md` §5。`modelcaps`/`modelcatalog` 移交 M1.3。
+- **M0.6（下一轮）**：`infra/llm` 自有 provider 客户端（18 文件）+ factory（provider wire 格式冻结；`mock.go` 留测试）。`modelcaps`/`modelcatalog` 移交 M1.3。
