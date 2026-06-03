@@ -83,6 +83,6 @@
 | 待办 | 原位置 | 去向 | 备注 |
 |---|---|---|---|
 | trace（LLM 调用跟踪） | `infra/llm/trace.go`（`recordingClient` 依赖 `reqctx.GetConversationID`） | chat/loop（M5.2）+ dev（M7.2） | conv ctx 随 chat 重建后才能搬；dev tracing 去留 M7.2 判；factory 已去 tracer 钩子 |
-| 其余 8 provider | `infra/llm/{deepseek,qwen,zhipu,moonshot,doubao,openrouter,ollama,custom}.go`（anthropic ✅ · gemini ✅） | R0016 | **每家完整自包含 wire（不共享基座）**；8 家 OpenAI-compat 各自完整（各自的 oai* wire 类型 + thinking 编码 + 流内错误信封）；逐家加 registry；`deepseekMapEffort` 等各家 helper 随各家 |
+| 其余 7 provider | `infra/llm/{qwen,zhipu,moonshot,doubao,openrouter,ollama,custom}.go`（anthropic ✅ · gemini ✅ · deepseek ✅ = OpenAI-compat 模板） | R0016 | **每家完整自包含 wire（不共享基座）**；7 家 OpenAI-compat 各自完整（各自 wire 类型 + thinking 编码 + 流内错误信封）；逐家加 registry；各家 helper 随各家 |
 | `Request.MaxTokens` 由 caller 填 | provider 不读 catalog | caller（app/loop/chat 接线时） | anthropic `max_tokens` 用；caller 从 model catalog（M1.5）查 MaxOutput 填 `Request.MaxTokens`；0 → provider 默认。去除了 infra/llm → modelcatalog 依赖 |
 | pkg llmclient/llmcost/llmparse | `pkg/{llmclient,llmcost,llmparse}` | 随 llm 完成 / 相关业务轮 | llmclient(解析 client 配置)·llmcost(费用估算)·llmparse(抽 JSON)；判保留 + 改用 backend-new llm |

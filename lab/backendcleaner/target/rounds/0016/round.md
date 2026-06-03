@@ -6,7 +6,8 @@
 - ✅ **openai**（R0015）
 - ✅ **anthropic** — 原生方言：`/v1/messages`、x-api-key、**命名事件 SSE**（不能用 scanSSELines，自己 bufio 扫 `event:`+`data:`）、thinking budget + **signature round-trip**、cache_control 断点、block-form messages。去 `modelcatalog` 依赖（max_tokens 改 `Request.MaxTokens`，caller 从 catalog 填）；去 `slog`（malformed 历史 args 静默 fallback `{}`）；strip TE-25/03 §4 历史。
 - ✅ **gemini** — 原生 generateContent：model-in-path、x-goog-api-key、**thought parts + thoughtSignature round-trip**、functionCall/Response（按 name 配对，从前序 tool_call 反查名）、thinkingConfig（budget/-1 动态/level）。去 modelcatalog（maxOutputTokens → `Request.MaxTokens`）；**内联自己的 data-URL 处理**（不依赖 anthropic 的 helper）；去 slog；strip TE-25/03 §5。
-- ⬜ **deepseek / qwen / zhipu / moonshot / doubao / openrouter / ollama / custom**（8 家 OpenAI-compat，各自完整）
+- ✅ **deepseek** — OpenAI-compat **完整自包含模板**：自己的 `ds*` wire 类型 + msg 编码 + `dsToolState`（不借 openai 的 oaiRequest/toOpenAIMsgs/toolCallState）；reasoning_content round-trip（纯文字 turn 剥 / tool-call turn 留）+ thinking enabled+effort/disabled（`deepseekMapEffort`）；strip 旧 readerAdapter hack（非流式改 io.Reader）。
+- ⬜ **qwen / zhipu / moonshot / doubao / openrouter / ollama / custom**（7 家 OpenAI-compat，各自完整、同 deepseek 模式）
 
 每家通用动作：strip 历史叙述、error 内聚 `domain/errors` sentinel、各家 wire 类型/msg 编码/chunk 解析自包含、注册 registry、单元/golden 测试。
 
