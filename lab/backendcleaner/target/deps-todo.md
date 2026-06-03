@@ -47,3 +47,11 @@
 | 待办 | 位置 | 去向 | 备注 |
 |---|---|---|---|
 | encryptor 构造 | `main.go` | cmd/server（M7） | 用 `crypto.NewAESGCMEncryptor(crypto.DeriveKey(crypto.MachineFingerprint()))` 现场派生；判定旧 `~/.forgify/encryption-key` 文件是否残留（机器指纹方案无需存 key 文件） |
+
+## 来自波次 0 · M0.4（errors 强化 R0012）
+
+| 待办 | 位置 | 去向 | 备注 |
+|---|---|---|---|
+| errTable 集中映射（293 行 + 27 import） | `transport/errmap.go` | transport（M0.7） | 塌缩成 `statusForKind(Kind)` + `errors.As(*Error)`；零 domain import；`context.Canceled`/`DeadlineExceeded` 等 stdlib 特例单列 |
+| 各 domain error 改造 | 各 domain（M1.x+） | 各模块轮 | `errors.New(msg)` → `New(kind, code, msg)`；保留原 wire code（对齐 error-codes.md） |
+| 错误码对账测试 | 待建 | M0.7 / 覆盖阶段 | 扫所有 `Error{Code}` 校验唯一 + 对齐 error-codes.md（取代人肉维护 293 行大表） |

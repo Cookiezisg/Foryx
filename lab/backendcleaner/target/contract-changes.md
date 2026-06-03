@@ -10,7 +10,7 @@
 
 | # | 模块/波次 | 类型 | 原契约 | 新契约 | 为什么 | 前端/testend 受影响点 |
 |---|---|---|---|---|---|---|
-| — | （逐轮追加） | | | | | |
+| 1 | errors（M0.4 R0012） | error code + auth header | code `UNAUTH_NO_USER`；header `X-Forgify-User-ID` | code `UNAUTH_NO_WORKSPACE`；header `X-Forgify-Workspace-ID` | user→workspace 全局正名 | 前端 401 拦截/重选逻辑判的 code；`localStorage.activeUserId`→`activeWorkspaceId`；请求头改名（header 实际在 M0.7 middleware 落地，code 已在 errors 定型） |
 
 ## 覆盖后兼容清单（从上表自动汇总）
 

@@ -13,3 +13,4 @@
 | 0009 | 2026-06-03 | 波次0 · M0.2 | infra/db 网关 GORM→database/sql | ✅ glebarez/go-sqlite + 单连接 + DDL 迁移机制；schema_extras 删（分散各模块）；orm 补 Exec/Close。**M0.2 完成** |
 | 0010 | 2026-06-03 | 波次0 · M0.3 | infra/logger | ✅ zap.go 保留+简化(去 extras)；broadcast.go 删(日志 SSE 违反 E1)；2 测试绿 |
 | 0011 | 2026-06-03 | 波次0 · M0.3 | crypto 切片(domain port + infra adapter) | ✅ AES-GCM + 机器指纹，原样保留，13 测试绿；port-adapter 范本。**M0.3 完成** |
+| 0012 | 2026-06-03 | 波次0 · M0.4 | domain/errors 结构化强化 | ✅ Error{Kind,Code,Details,cause}+Is by Code；根除 errmap 293 行+27 import 巨耦合；6 测试绿；契约 UNAUTH_NO_WORKSPACE |
