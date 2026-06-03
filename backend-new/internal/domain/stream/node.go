@@ -1,14 +1,20 @@
 package stream
 
-// Node is one member of a stream's semantic vocabulary — a discriminated-union
-// payload. NodeType is the on-wire "type" discriminant; concrete nodes live in each
-// stream's domain package (messages / entities / notifications). Because Node is an
-// interface, a node defined for one stream can be carried on another with no import
-// between the stream packages — this is what makes dual-output free.
+import "encoding/json"
+
+// Node is a stream node's payload: a Type discriminant + an opaque Content JSON. The
+// protocol deliberately does NOT enumerate node types or their fields — that vocabulary
+// belongs to each producing business module (chat defines its message-node types,
+// entities producers define theirs). Type is a free string that may encode hierarchy
+// (e.g. "tool_call" or "tool_call/read_file"); Content is whatever JSON that type
+// carries. domain stays out of the semantics and never inspects Content (#6 反校验剧场).
 //
-// Node 是某条流语义词表的一个成员——判别联合 payload。NodeType 是线缆上的 "type"
-// 判别字段；具体 node 定义在各流 domain 包。因为 Node 是 interface，某条流定义的 node
-// 可被另一条流携带、流包之间无需 import——这正是双输出免费的根由。
-type Node interface {
-	NodeType() string
+// Node 是流节点的 payload：一个 Type 判别 + 一坨不透明的 Content JSON。协议**刻意不**
+// 枚举 node 类型或其字段——那套词表归属各 producer 业务模块（chat 定义它的 message
+// 节点类型，entities 的 producer 定义它们的）。Type 是自由字符串、可编码层级（如
+// "tool_call" 或 "tool_call/read_file"）；Content 是该 type 携带的任意 JSON。domain
+// 不碰语义、从不检查 Content（#6 反校验剧场）。
+type Node struct {
+	Type    string          `json:"type"`
+	Content json.RawMessage `json:"content,omitempty"`
 }

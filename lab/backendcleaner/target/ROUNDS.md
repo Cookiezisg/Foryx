@@ -14,4 +14,4 @@
 | 0010 | 2026-06-03 | 波次0 · M0.3 | infra/logger | ✅ zap.go 保留+简化(去 extras)；broadcast.go 删(日志 SSE 违反 E1)；2 测试绿 |
 | 0011 | 2026-06-03 | 波次0 · M0.3 | crypto 切片(domain port + infra adapter) | ✅ AES-GCM + 机器指纹，原样保留，13 测试绿；port-adapter 范本。**M0.3 完成** |
 | 0012 | 2026-06-03 | 波次0 · M0.4 | domain/errors 结构化强化 | ✅ Error{Kind,Code,Details,cause}+Is by Code；根除 errmap 293 行+27 import 巨耦合；6 测试绿；契约 UNAUTH_NO_WORKSPACE |
-| 0013 | 2026-06-03 | 波次0 · M0.4 | SSE 三流统一协议 domain（改名 + 流式树重构） | ✅ stream 核心(信封+四动词Frame+Node判别联合) + messages/entities/notifications 三词表+thin Bridge；id 升信封层、frame 可丢性分级、close 带快照；4 包 12 源 6 测试绿 |
+| 0013 | 2026-06-03 | 波次0 · M0.4 | SSE 三流统一协议 domain（改名 + 流式树重构） | ✅ 单一 domain/stream：信封+四动词Frame+**通用 Node{Type,Content}**+Bridge/ListReader；id 升信封层、frame 可丢性分级、close 带快照；**node 词表下放业务、砍三流 domain 包**；6 源 3 测试绿 |

@@ -33,4 +33,5 @@ const (
 	KindGatewayTimeout               // 504 Gateway Timeout
 	KindAccepted                     // 202 Accepted (async; e.g. approval required)
 	KindClientClosed                 // 499 Client Closed Request
+	KindGone                         // 410 Gone (resource existed but was evicted; e.g. SSE replay seq too old)
 )

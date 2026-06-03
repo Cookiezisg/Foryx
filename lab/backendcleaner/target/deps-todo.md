@@ -63,6 +63,7 @@
 | 待办 | 原位置 | 去向 | 备注 |
 |---|---|---|---|
 | producer 辅助统一 | `pkg/{eventlog,forge,notifications}`（Emitter/Publisher 三套） | `pkg/streamemit`（含 `EmitBoth` 双输出） | forge/notif producer 薄，随 M0.5；messages 的 chat 双写依赖随 chat（M5.2） |
+| type 常量下沉 | 旧三流 node 词表常量（text/tool_call/forge/run/entity_changed/...） | 各 producer 业务模块 | Node 通用化连带：domain 不持词表，由发它的业务定义登记；前端契约靠 events.md（覆盖阶段）+ TS 类型 |
 | messages DB 落盘 + History | `pkg/eventlog.Emitter` 双写 chat blocks；`GET /conversations/{id}/eventlog` | chat（M5.2） | 落盘只 messages 有；端点改 `/conversations/{id}/messages`；供 410 后全量重放 |
 | scope 级订阅判定 | infra bus 订阅模式 | M0.5 | `?scope=agent:ag_x` 精准订阅 vs workspace 全量推前端过滤；v1 倾向全量推、buffer 留 scope 过滤扩展点 |
 | 各 app 模块 emit 改造 | loop·chat·scheduler·subagent·contextmgr·tool/{workflow,handler,function,agent}·workflow·handler·function·mcp·skill·ask·todo·sandbox·memory·document·conversation（~20） | 各自波次 | 旧 `eventlog.Emitter`/`forge.Publisher`/`notif.Publish` 调用 → 新 `streamemit` + 统一 `Event{scope,id,frame}` |

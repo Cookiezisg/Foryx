@@ -53,15 +53,16 @@ type Delta struct {
 	Chunk string `json:"chunk"`
 }
 
-// Close terminates a node; Result carries the node's final snapshot — the reconnect
-// source of truth, not optional decoration (deltas are lossy, so the durable Close
-// must be able to rebuild the node's content). Error is set only on StatusError.
+// Close terminates a node. Result, when present, carries the node's final content
+// snapshot — the reconnect source of truth for streamed nodes (deltas are lossy, so
+// the durable Close must be able to rebuild the content); nil for nodes that stream
+// nothing. Error is set only on StatusError.
 //
-// Close 结束节点；Result 携带节点最终快照——重连真相，非可选装饰（delta 可丢，所以
-// durable 的 Close 必须能重建节点内容）。Error 仅 StatusError 时非空。
+// Close 结束节点。Result 非 nil 时携带节点最终内容快照——流式节点的重连真相（delta
+// 可丢，durable 的 Close 须能重建内容）；无流式内容的节点为 nil。Error 仅 StatusError 时非空。
 type Close struct {
 	Status string `json:"status"`
-	Result Node   `json:"result,omitempty"`
+	Result *Node  `json:"result,omitempty"`
 	Error  string `json:"error,omitempty"`
 }
 
