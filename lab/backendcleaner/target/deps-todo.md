@@ -8,7 +8,7 @@
 |---|---|---|---|
 | model override ctx | `reqctx/modeloverride.go`（🔴 曾让 reqctx → `domain/model` 反向依赖） | model（M1.3） | `WithModelOverride`/`GetModelOverride`；在 model 模块重建其 ctx 透传 |
 | agent state ctx | `reqctx/agentstate.go` | agent/loop（M2.2/M3.4） | `WithAgentState`/`GetAgentState` + `pkg/agentstate` 去留判定 |
-| 对话/执行标识 ctx | `reqctx/agentrun.go` | chat/loop/eventlog（M2.2/M5.2） | conversationID·messageID·toolCallID·parentBlockID·subagentDepth；判定是否仍走 ctx 透传、放哪一层 |
+| 对话/执行标识 ctx | `reqctx/agentrun.go` | chat/loop/messages（M2.2/M5.2） | conversationID·messageID·toolCallID·parentBlockID·subagentDepth；服务 messages 流递归(`Open.ParentID` 嵌套)；判定是否仍走 ctx 透传、放哪一层 |
 | ID 前缀 → 实体类型 | `idgen/prefix.go` | **仅 relation（M1.4）** | `KindByPrefix`/`KindForID`；值 = `relationdomain.EntityKind*`。wikilink 已剥离 Kind（R0005），不再是消费者 |
 | HTTP 分页解析 | `pagination`（曾 import `net/http` + `domain/errors`） | transport 框架（M0.7） | `Parse(*http.Request)` + `DefaultLimit`/`MaxLimit`；把 `pagination.ErrMalformedCursor` 映射到 `domain/errors.ErrInvalidRequest` |
 
@@ -55,3 +55,16 @@
 | errTable 集中映射（293 行 + 27 import） | `transport/errmap.go` | transport（M0.7） | 塌缩成 `statusForKind(Kind)` + `errors.As(*Error)`；零 domain import；`context.Canceled`/`DeadlineExceeded` 等 stdlib 特例单列 |
 | 各 domain error 改造 | 各 domain（M1.x+） | 各模块轮 | `errors.New(msg)` → `New(kind, code, msg)`；保留原 wire code（对齐 error-codes.md） |
 | 错误码对账测试 | 待建 | M0.7 / 覆盖阶段 | 扫所有 `Error{Code}` 校验唯一 + 对齐 error-codes.md（取代人肉维护 293 行大表） |
+
+## 来自波次 0 · M0.4（SSE 三流统一协议 R0013）
+
+三流改名 + 统一「流式树」协议（见 `stream-protocol.md`），下游 ~20 目录全 app 层按新协议重写：
+
+| 待办 | 原位置 | 去向 | 备注 |
+|---|---|---|---|
+| producer 辅助统一 | `pkg/{eventlog,forge,notifications}`（Emitter/Publisher 三套） | `pkg/streamemit`（含 `EmitBoth` 双输出） | forge/notif producer 薄，随 M0.5；messages 的 chat 双写依赖随 chat（M5.2） |
+| messages DB 落盘 + History | `pkg/eventlog.Emitter` 双写 chat blocks；`GET /conversations/{id}/eventlog` | chat（M5.2） | 落盘只 messages 有；端点改 `/conversations/{id}/messages`；供 410 后全量重放 |
+| scope 级订阅判定 | infra bus 订阅模式 | M0.5 | `?scope=agent:ag_x` 精准订阅 vs workspace 全量推前端过滤；v1 倾向全量推、buffer 留 scope 过滤扩展点 |
+| 各 app 模块 emit 改造 | loop·chat·scheduler·subagent·contextmgr·tool/{workflow,handler,function,agent}·workflow·handler·function·mcp·skill·ask·todo·sandbox·memory·document·conversation（~20） | 各自波次 | 旧 `eventlog.Emitter`/`forge.Publisher`/`notif.Publish` 调用 → 新 `streamemit` + 统一 `Event{scope,id,frame}` |
+| installprogress→notif | `pkg/installprogress`（依赖旧 notifications） | M0.5 / 相关波次 | 判定 installprogress 去留 + 改用 streamemit signal |
+| 对外契约重写 | `events.md`（旧三流全量事件表） | 覆盖阶段 | 按新协议重写 events.md；端点改名；前端/testend 改（见 contract-changes #2） |

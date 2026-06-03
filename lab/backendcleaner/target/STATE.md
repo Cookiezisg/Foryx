@@ -18,13 +18,14 @@
 - **去 GORM**：自研 `pkg/orm`（链式、类型安全、自动 workspace 双向隔离 + 软删 + 时间戳）+ `glebarez/go-sqlite`（database/sql driver）。R0008 ✅。
 - **domain 去 GORM 化（贯穿所有业务模块）**：domain 实体剥 `import gorm` + gorm tag + `TableName` + `gorm.DeletedAt` → 纯 struct + 轻量 `db:"col,..."` tag（无 import）；store 基于 `pkg/orm` 重写。
 - **错误体系强化（贯穿所有模块）**：domain 错误升级为结构化 `Error{Kind,Code,Message,Details,cause}`（Is by Code）；错误码契约内聚 domain；各 domain `errors.New(msg)`→`New(kind,code,msg)`；transport errmap 塌缩成 `statusForKind`（M0.7，零 domain import）。R0012 ✅。
+- **SSE 三流统一协议（流式树）**：`eventlog/forge/notifications` → `messages`/`entities`(全实体流式总线)/`notifications`；统一信封 `Envelope{seq,scope,id,frame}` + 四动词 frame(open/delta/close/signal) + node 判别联合；**id 升信封层**；frame 按可丢性分级(delta/tick=ephemeral 不入 buffer，open/close/signal=durable，close 带快照)；infra **单一 `Bus`×3 实例**。设计蓝本 = `stream-protocol.md`（已拍板 2026-06-03）。
 
 ## 模块进度（编号见 order.md）
 
 状态：⬜ pending ｜ 🔧 doing ｜ ✅ done ｜ ⏭️ 判定删除/合并
 
 - **Phase 1 骨架** ✅：`backend-new/` + 空 go.mod + health server + smoke。
-- **波次0 地基**：M0.1 pkg ✅（**reqctx/idgen/pagination ✅** R0001；**tokencount ✅** R0002；**pathguard ✅** R0003；**userpath ⏭️删** R0004；**wikilink ✅** R0005；**jsonrepair ✅** R0006；**limits ✅** R0007；modelcaps/modelcatalog 移交 M1.3）· M0.2 数据库层 ✅（**pkg/orm R0008 · db 网关 R0009**；业务表 DDL 分散各模块）· M0.3 ✅（**logger R0010 · crypto R0011**）· M0.4：**errors ✅ R0012** · eventlog/notif/forge ⬜（SSE 三流 domain Bridge）· M0.5 infra eventlog/notif/forge/chat ⬜ · M0.6 llm ⬜ · M0.7 transport 框架 ⬜
+- **波次0 地基**：M0.1 pkg ✅（**reqctx/idgen/pagination ✅** R0001；**tokencount ✅** R0002；**pathguard ✅** R0003；**userpath ⏭️删** R0004；**wikilink ✅** R0005；**jsonrepair ✅** R0006；**limits ✅** R0007；modelcaps/modelcatalog 移交 M1.3）· M0.2 数据库层 ✅（**pkg/orm R0008 · db 网关 R0009**；业务表 DDL 分散各模块）· M0.3 ✅（**logger R0010 · crypto R0011**）· M0.4：**errors ✅ R0012** · **stream 协议核心 + messages/entities/notifications 三词表+Bridge ⬜**（统一流式树，见 stream-protocol.md）· M0.5 infra **stream bus（单一 Bus×3 实例）+ chat 流底座** ⬜ · M0.6 llm ⬜ · M0.7 transport 框架 ⬜
 - **波次1 叶子域**：M1.1 workspace(原 user) ⬜ · M1.2 apikey ⬜ · M1.3 model ⬜ · M1.4 relation ⬜ · M1.5 catalog ⬜ · M1.6 mention ⬜ · M1.7 memory ⬜ · M1.8 sandbox ⬜ · M1.9 permissions/hooks ⬜ · M1.10 document ⬜ · M1.11 todo ⬜(待判定)
 - **波次2 tool+原语**：tool ⬜ · loop ⬜ · tool/filesystem·search·web·toolset ⬜
 - **波次3 Quadrinity**：function·handler·subagent·agent·skill·mcp + tool 适配器组 ⬜
@@ -35,4 +36,4 @@
 
 ## 下一步
 
-- **M0.4 续**：`domain/eventlog` + `domain/notifications` + `domain/forge`（SSE 三流的 domain Bridge port）。`modelcaps`/`modelcatalog` 移交 M1.3。
+- **M0.4 续（R0013）**：建 `domain/stream`（协议核心：Envelope/Scope/Frame/Node/Bridge/ValidateEvent）+ `domain/messages`·`domain/entities`·`domain/notifications`（各 Node 词表 + thin Bridge）。严格按 `stream-protocol.md`。`modelcaps`/`modelcatalog` 移交 M1.3。

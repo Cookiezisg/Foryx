@@ -41,7 +41,7 @@
 | 候选 | 嫌疑 | 判定那一轮 |
 |---|---|---|
 | `app/ask` vs `app/askai` | ask 疑似 askai 旧版残留 | M6 |
-| `domain/forge` + `infra/forge` + `pkg/forge` | ✅ 已判定：SSE **三流之一**（E1 forge 流 = 锻造 :iterate/:triage 实时反馈），保留 | M0.4 domain · M0.5 infra · pkg(随) · M6 askai |
+| SSE 三流（旧 eventlog/forge/notifications） | ✅ 已判定：三流**统一为「流式树」协议并改名** → `messages`/`entities`(全实体流式总线)/`notifications`；保留。见 `stream-protocol.md` | M0.4 domain(stream+三词表) · M0.5 infra bus |
 | `domain/todo` + `app/todo` + `tool/todo` | agent TodoWrite 后端，还是旧概念 | M1.11 |
 | `infra/store/mcpcalls` + `mcphealth` | mcp 调用记录/健康，5-node 是否需要 | M3.6 |
 | `dev_*` handlers（5 个） | dev-only 边界 vs 该删 | M7.2 |
