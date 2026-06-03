@@ -1,37 +1,34 @@
 # backendcleaner
 
-后端 clean-room 全量清理计划。目标是把 Forgify 后端从历史迭代累积态，整理成当前产品契约驱动的干净实现、干净单元测试、模块集成测试和全链路集成测试。
+后端 clean-room 全量重写计划。把 Forgify 后端从历史迭代累积态，在 **`backend-new/` 平行重建**成当前产品契约驱动的干净实现 + 干净测试，全部完成后覆盖回 `backend/`，再调前端 / testend 兼容。
 
-这里的“干净”指：实现清晰、逻辑简单、职责直接、分支少、命名准确、错误路径明确。不是增加抽象层，不是为了显得架构化而拆文件，也不是把旧复杂度换一种形式藏起来。
+"干净" = 实现清晰、逻辑简单、职责直接、分支少、命名准确、错误路径明确、**无任何历史包袱**。不是增加抽象层，不是为显得架构化而拆文件，不是把旧复杂度换种形式藏起来。
 
-## 最新结论
+## 核心决策
 
-1. 在 `main` 上只保留计划，正式清理必须开新分支。
-2. 新分支建议：`codex/backend-cleanroom`。
-3. 清理分支第一步：删除全部后端旧测试，包括单元测试、pipeline、integration、e2e 和旧 harness。
-4. 删除旧测试后，不在仓库 active tree 内归档旧测试；需要参考时从 git 历史查。
-5. 后端代码按主文件 clean-room：每轮以一个主文件为提交粒度，但必须先扫描上下游依赖。
-6. 如果脏逻辑跨文件互相调用，允许把本轮升级为“小职责切片”，但必须记录原因和边界。
-7. 一个模块内所有文件清理完成后，再写该模块集成测试。
-8. 所有模块完成后，再按当前产品旅程写全链路集成测试。
-9. 每轮必须记录、验证、提交，避免无追踪的大改。
-10. workflow / scheduler / chat / loop 等核心模块，必须先写模块级契约，再进入逐文件清理。
-11. 清理分支长期保留一个最小启动 smoke：后端可启动、health 可过、用户初始化可过。
-12. 最终完成以三张清单闭环为准：文件清单、模块清单、产品旅程清单；coverage 数字只做辅助。
+1. **backend-new 平行重写**，不在原 backend 上修补；现有 backend 全程可跑、仅作只读考古。
+2. **不开分支**：backend-new 是新增目录，重写期全程在 `main` commit+push；只有最后"覆盖"是破坏性操作。
+3. **不删测试步骤**：旧测试随旧 backend 在覆盖时消失；backend-new 从零按新标准写测试。
+4. **判据 = 目标架构符合性**：不在白名单的概念/能力即死代码，无论是否被注册调用（见 `criteria.md`）。
+5. **垂直切片**逐模块重写，严格按依赖拓扑（基础→复杂，见 `order.md`）。
+6. 契约可改，每改 take note；完成定义 = 文件/模块/产品旅程三清单闭环，coverage 只做辅助。
 
 ## 目录
 
 | 文件 | 作用 |
 |---|---|
-| `SPEC.md` | 执行阶段、验收闸门、顺序 |
-| `PLAYBOOK.md` | AI 每轮执行手册 |
-| `target/STATE.md` | 当前状态 |
-| `target/CONCLUSIONS.md` | 已确认结论 |
-| `target/ROUNDS.md` | 未来执行轮次索引 |
-| `target/backlog.json` | 下一步任务 |
-| `target/contracts/` | 未来模块契约 |
-| `target/rounds/` | 未来每轮执行记录 |
+| `SPEC.md` | 执行阶段、验收闸门、禁止事项 |
+| `PLAYBOOK.md` | AI 每轮（每模块）四步循环手册 |
+| `target/criteria.md` | 目标架构判据白名单 = 删除/保留标准 |
+| `target/order.md` | 依赖拓扑 + 7 波次重写顺序（不重不漏） |
+| `target/module-template.md` | canonical clean-arch 模块骨架（按需取层） |
+| `target/capability-ledger.md` | 能力对账全集（覆盖前逐项闭环） |
+| `target/contract-changes.md` | 契约变更日志（驱动覆盖后前端/testend 兼容） |
+| `target/STATE.md` | **单一状态源**：阶段 + 模块进度 + 下一步 |
+| `target/ROUNDS.md` | 已执行轮次索引 |
+| `target/contracts/<m>.md` | 每模块契约（逐模块写） |
+| `target/rounds/NNNN/` | 每轮执行记录 |
 
 ## 当前状态
 
-只做计划审查，不删除测试，不修改后端代码。
+**Phase 0 计划** — lab 已定稿。等确认后进 Phase 1（建 backend-new 骨架 + 波次0 地基）。在此之前不写 backend-new 代码、不动现有 backend。

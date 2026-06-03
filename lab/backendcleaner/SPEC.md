@@ -1,245 +1,54 @@
 # backendcleaner — SPEC
 
-本文定义 Forgify 后端 clean-room 清理工程的执行契约。
-
-## 1. 目标
-
-清理目标不是修补旧测试，而是重建后端质量体系：
-
-- 先删除全部旧后端测试，解除旧实现约束。
-- 再按主文件清理生产代码，每轮必须先扫描上下游依赖。
-- 每个主文件或小职责切片清理后写对应单元测试。
-- 每个模块完成后写模块集成测试。
-- 所有模块完成后写全链路集成测试。
-
-旧测试和旧实现都只是历史材料，不是权威。权威来自当前产品契约、清理后的模块职责和新写测试。
-
-“干净实现”的定义：
-
-- 读代码能直接看出业务意图。
-- 一个函数只做一件主要事情。
-- 分支和特殊情况少，且每个分支都有产品理由。
-- 错误路径明确，不吞错，不用隐式 fallback 掩盖问题。
-- 命名表达领域含义，不靠注释解释含混命名。
-- 依赖方向清楚，跨层调用少。
-- 没有为了旧测试、旧 harness、旧执行模型保留的绕路。
-- 不用额外抽象掩盖复杂度；只有在能减少真实重复或明确边界时才抽象。
-
-## 2. 阶段
-
-### Phase 0：计划审查
-
-位置：`main`
-
-只允许：
-
-- 维护 `lab/backendcleaner` 计划。
-- 审核执行顺序和原则。
-
-禁止：
-
-- 删除后端测试。
-- 修改后端生产代码。
-- 开始实际 clean-room。
-
-### Phase 1：新建清理分支
-
-从最新 `main` 创建：
-
-```bash
-git switch -c codex/backend-cleanroom
-```
-
-所有破坏性清理都在该分支执行。每个阶段或轮次必须提交。
-
-### Phase 2：删除全部后端旧测试
-
-删除范围：
-
-- `backend/**/*_test.go`
-- `backend/test/**`
-- 后端旧 test harness、fake server、pipeline/e2e 测试资料
-
-规则：
-
-- 不在仓库 active tree 内归档旧测试。
-- 需要参考旧测试时，从 git 历史查看。
-- 删除完成后先提交一次，作为 clean-room 起点。
-
-### Phase 3：主文件 clean-room + 依赖扫描 + 单元测试
-
-默认粒度：一个主文件一轮。这里的“文件”是提交和主改动粒度，不是分析边界。
-
-每轮必须先做依赖扫描：
-
-- 谁调用主文件中的公开类型、函数、方法。
-- 主文件调用了哪些 domain / app / repo / pkg / infra。
-- 同包其他文件是否共享状态、helper、接口、错误、常量。
-- 是否存在循环依赖、隐性耦合、跨层调用。
-- 是否存在“为了旧测试或旧路径”留下的兼容分支。
-
-如果问题跨多个文件互相调用，允许升级为“小职责切片”。升级条件：
-
-- 不一起改会把脏逻辑推到邻居文件。
-- 主文件的职责边界必须通过相邻文件调整才能成立。
-- 需要移动 helper / interface / error / type 才能消除反向依赖。
-
-升级要求：
-
-- 在本轮记录中写明为什么不能保持单文件粒度。
-- 明确本轮切片边界。
-- 不得借此同时清理多个无关职责。
-
-单轮流程：
-
-1. 选择一个文件。
-2. 扫描上下游依赖。
-3. 写或更新模块契约。
-4. 阅读旧实现，记录历史包袱和跨文件耦合。
-5. 清理或重写该文件逻辑；必要时升级为小职责切片。
-6. 为该文件或职责切片写单元测试。
-7. 跑目标包和直接依赖包验证。
-8. 记录本轮。
-9. 提交。
-
-每轮必须自证“更干净”：
-
-- 分支是否减少，或每个保留分支是否有当前产品理由。
-- fallback / alias / legacy / best-effort 是否减少。
-- 职责是否更直接。
-- 调用关系是否更清楚。
-- 是否新增了不必要抽象；如果新增抽象，必须说明减少了什么真实复杂度。
-- 如果主文件清不干净，必须记录前置依赖，或升级为小职责切片，不得局部粉饰。
-
-建议顺序：
-
-1. `backend/internal/domain/*`
-2. `backend/internal/pkg/*`
-3. `backend/internal/infra/store/*`
-4. 叶子 app service：apikey、model、memory、document、agent、skill、mcp
-5. tool adapters
-6. HTTP handlers / response / router / SSE
-7. workflow / scheduler / trigger
-8. chat / loop / agent orchestration
-9. server wiring / boot / dev-only endpoints
-
-核心模块额外规则：
-
-- workflow / scheduler / chat / loop / server wiring 在清理具体文件前，必须先写模块级契约。
-- 模块级契约必须说明新模型是什么、旧模型哪些路径要删除、哪些路径暂时保留在边界。
-- 如果模块契约无法写清楚，停止执行，不进入代码清理。
-
-长期 smoke：
-
-- 从 Phase 3 开始，清理分支应保留最小启动 smoke。
-- smoke 只验证系统没有跑偏：后端可启动、`/api/v1/health` 可过、用户初始化路径可过。
-- smoke 不是全链路 e2e，不承担覆盖职责。
-
-### Phase 4：模块集成测试
-
-一个模块所有文件完成 clean-room 和单元测试后，再写模块集成测试。
-
-模块集成测试覆盖：
-
-- store + service 协作
-- HTTP contract
-- 数据库 schema / 事务 / 约束
-- SSE / eventlog / notification
-- sandbox / permissions / LLM provider 边界
-
-### Phase 5：全链路集成测试
-
-所有模块完成后，按当前产品旅程写全链路集成测试。
-
-首批旅程：
-
-- 启动和用户初始化
-- 配置 API key / model
-- 基础对话
-- function / handler / workflow 创建和执行
-- agent 节点执行
-- document attach
-- memory 注入
-- MCP server 注册和调用
-- SSE / notification / eventlog
-- permissions / sandbox
-
-### Phase 6：覆盖闭环
-
-最后不以 coverage 数字作为唯一标准，而以三张清单闭环作为完成定义。
-
-#### 6.1 文件清单闭环
-
-每个后端生产文件必须有状态：
-
-- `cleaned`：已 clean-room。
-- `deleted`：已删除。
-- `generated`：生成代码或资源，不需要手工清理。
-- `boundary-kept`：作为明确边界保留，例如 provider wire compatibility、migration boundary。
-
-每个 `cleaned` 文件必须对应：
-
-- dependency scan 记录。
-- clean-room 轮次记录。
-- 单元测试或“不适合单元测试”的明确理由。
-
-#### 6.2 模块清单闭环
-
-每个模块必须有状态：
-
-- 模块契约已写。
-- 模块内文件状态全部闭环。
-- 模块集成测试已写，或明确说明该模块只需要 unit。
-- 直接依赖模块验证通过。
-
-#### 6.3 产品旅程闭环
-
-全链路测试必须覆盖当前产品首批旅程：
-
-- 启动和用户初始化。
-- 配置 API key / model。
-- 基础对话。
-- function / handler / workflow 创建和执行。
-- agent 节点执行。
-- document attach。
-- memory 注入。
-- MCP server 注册和调用。
-- SSE / notification / eventlog。
-- permissions / sandbox。
-
-#### 6.4 数字覆盖只做辅助
-
-可以跑 Go coverage，但只用于发现明显盲区。coverage 数字不能替代文件清单、模块清单和产品旅程清单。
-
-## 3. 验收闸门
-
-单轮最低要求：
-
-- `gofmt`
-- `go test <target package>`
-- 无反向依赖
-- 新测试描述当前产品行为，不描述旧实现细节
-- 清理结果必须更简单清楚；禁止用更多抽象掩盖复杂度
-- 本轮记录完整
-
-阶段要求：
-
-- Phase 2 后，后端至少能完成编译扫描。
-- Phase 3 中，每个主文件或职责切片清理后有新单元测试。
-- Phase 3 中，每轮记录必须包含 dependency scan 摘要。
-- Phase 4 中，每个模块完成后有模块集成测试。
-- Phase 5 后，跑全链路集成测试和全量 backend verification。
-- Phase 6 后，文件清单、模块清单、产品旅程清单全部闭环。
-
-## 4. 禁止事项
-
-- 禁止为了旧测试保留旧逻辑。
-- 禁止恢复旧测试体系。
-- 禁止让旧 harness 成为新测试基础设施。
-- 禁止用 coverage 数字替代产品旅程验证。
-- 禁止一次清理多个高耦合核心模块。
-- 禁止只看主文件、不看调用方和被调用方。
-- 禁止把 dry-run/mock 当真实执行行为。
-- 禁止把 legacy migration 无限期留在核心路径。
-- 禁止把“干净”误解为增加 interface、helper、manager、adapter；抽象必须证明能减少真实复杂度。
-- 禁止用“go test 通过”替代覆盖闭环。
+> 执行契约：阶段、闸门、禁止事项。判据见 `target/criteria.md`，顺序见 `target/order.md`，骨架见 `target/module-template.md`，每轮手册见 `PLAYBOOK.md`，当前进度见 `target/STATE.md`。
+
+## 0. 一句话
+
+不在原 `backend/` 上修补，在 **`backend-new/`** 按当前产品契约平行重建一套干净后端；全部完成后覆盖回去，再调前端 / testend 兼容。
+
+## 1. "干净"的定义
+
+- 读实现直接看出业务意图；一个函数只做一件主要事。
+- 分支少，每个分支都有当前产品理由；错误路径明确，不靠 silent fallback / best-effort / 兼容 alias 掩盖。
+- 命名表达领域含义，不靠注释解释含混命名；少用 Manager/Helper/Util/Adapter。
+- 依赖方向清楚，跨层调用少；没有为旧测试/旧 harness/旧执行模型保留的绕路。
+- 抽象只在减少真实重复、切明确边界、稳定外部契约时用——不把旧复杂度换个形式藏进新 helper。
+- **第一准则：没有任何历史包袱。** 近乎重写；"一半新一半旧"的实现合并成一个干净的。
+
+## 2. 策略：backend-new 平行重写
+
+- 新建 `backend-new/`，`go.mod` 用**最终** module path `github.com/sunweilin/forgify/backend`（覆盖时 `mv` 即可，import 与 Makefile 零改动）。
+- 现有 `backend/` 全程不动、可编译可跑（前端/testend 继续连），仅作**只读考古材料**。
+- **不需要"删测试"步骤**：旧测试随旧 backend 在覆盖时一并消失；backend-new 从零按新标准写测试。需要参考旧测试断言的行为时，从现有 backend / git 历史查。
+- **不需要开分支**：backend-new 是新增目录、不破坏 backend，重写期全程在 `main` 上 commit + push（符合 main-only + auto-push、投资人可见）。只有"覆盖"那一步是破坏性的，单独谨慎处理。
+- 旧实现与旧测试都不是权威。权威 = 当前产品契约（`criteria.md`）+ 模块契约 + 新写测试。
+
+## 3. 阶段
+
+| Phase | 内容 | 位置 |
+|---|---|---|
+| **0 计划** | lab 定稿（本目录）。不写 backend-new 代码。 | main |
+| **1 骨架** | 建 `backend-new/go.mod` + 波次 0 地基；立最小 smoke（启动 / `/api/v1/health` / 用户初始化）。 | main，新增 backend-new/ |
+| **2 逐模块** | 按 `order.md` 波次，每模块走 PLAYBOOK 四步循环。每波次收尾 `backend-new` 全仓 `go build ./...` + smoke 绿。 | main |
+| **3 覆盖** | `rm -rf backend && mv backend-new backend`。 | main（破坏性，单独 commit） |
+| **4 兼容** | 按 `contract-changes.md` 逐条调前端 + testend。 | main |
+| **5 全链路** | 产品旅程 e2e + 全量 verification（≈ `make verify`）。 | main |
+| **6 闭环** | 文件清单 / 模块清单 / 产品旅程清单（`capability-ledger.md`）三表全绿。 | main |
+
+## 4. 验收闸门
+
+- **每模块**：`gofmt` + `backend-new` `go build` + 该模块及直接依赖包 `go test` + 无反向依赖 + 干净自证 + `rounds/NNNN/round.md` 记录 +（若契约变）`contract-changes.md` 追加。
+- **每波次**：`backend-new` `go build ./...` + 最小 smoke。
+- **覆盖前**：全平台 `go build` + 全部新测试绿 + `capability-ledger.md` 全勾。
+- **Phase 5 后**：全链路 e2e + 全量 verification。
+
+## 5. 禁止
+
+- 把旧实现 / 旧测试当权威（它们是考古，不是规格）。
+- 为旧测试 / 旧路径 / 旧执行模型留绕路或兼容 alias。
+- **grep 式表面替换**——必须理解后重构（整模块删掉重写，不是逐行 patch）。
+- 强行套层（违背 `module-template.md` 按需取层）。
+- 一轮混多个高耦合核心模块（workflow / scheduler / chat / loop / wiring 各自独立轮）。
+- 只看主文件、不看上下游。
+- 改了对外契约却不 take note 到 `contract-changes.md`。
+- 用 coverage 数字替代产品旅程闭环。
