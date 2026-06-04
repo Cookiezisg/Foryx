@@ -68,11 +68,29 @@ func TestParse_MalformedSkipped(t *testing.T) {
 	}
 }
 
-func TestParse_SkillMcpNotMatched(t *testing.T) {
-	// skill / mcp use name-based keys, so [[csv_parse]] doesn't match our regex
+func TestParse_NonIDShapedNotMatched(t *testing.T) {
+	// Only <prefix>_<16hex> tokens match. A human-readable name (a skill's display
+	// name, an mcp server name) is not ID-shaped, so it is not a wikilink — to tag
+	// such an entity you reference its id; see TestParse_SkillMcpIDsMatched.
+	//
+	// 只有 <前缀>_<16hex> 形态匹配。人类可读名字（skill 显示名、mcp server 名）非 ID 形态，
+	// 故不是 wikilink——要 tag 这种实体得引用其 id；见 TestParse_SkillMcpIDsMatched。
 	body := "[[csv_parse]] is a skill; [[postgres]] is an mcp server."
+	if got := Parse(body); got != nil {
+		t.Errorf("expected no matches for name-shaped refs, got %+v", got)
+	}
+}
+
+func TestParse_SkillMcpIDsMatched(t *testing.T) {
+	// skill/mcp ids use the sk_/mcp_ prefixes (fixed as the rule for the coming
+	// unified id system); they are ID-shaped and ARE extracted, so a document can
+	// [[tag]] a skill or mcp by id.
+	//
+	// skill/mcp 的 id 用 sk_/mcp_ 前缀（为即将统一的 id 体系定下的规矩）；它们是 ID 形态、
+	// 会被抽取，故 document 可按 id [[tag]] 一个 skill 或 mcp。
+	body := "[[sk_a1b2c3d4e5f6a7b8]] and [[mcp_aabbccdd11223344]]"
 	got := Parse(body)
-	if got != nil {
-		t.Errorf("expected no matches for name-based refs, got %+v", got)
+	if len(got) != 2 {
+		t.Fatalf("expected 2 refs, got %d: %+v", len(got), got)
 	}
 }

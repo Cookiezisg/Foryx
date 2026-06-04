@@ -211,11 +211,11 @@ audience: [human, ai]
 | `workspacedomain.ErrNameConflict` | `WORKSPACE_NAME_CONFLICT` | 409 | |
 | `workspacedomain.ErrCannotDeleteLast` | `CANNOT_DELETE_LAST_WORKSPACE` | 422 | |
 | `workspacedomain.ErrLanguageInvalid` | `WORKSPACE_LANGUAGE_INVALID` | 400 | |
-| `relationdomain.ErrInvalidEntityRef` | `INVALID_ENTITY_REF` | 400 | |
-| `relationdomain.ErrInvalidKind` | `INVALID_RELATION_KIND` | 400 | |
-| `relationdomain.ErrDepthOutOfRange` | `DEPTH_OUT_OF_RANGE` | 400 | |
-| `relationdomain.ErrIncompleteFilter` | `INCOMPLETE_FILTER` | 400 | |
-| `relationdomain.ErrSelfLoop` | `INTERNAL_ERROR` | 500 | [未映射] 禁止自环 |
+| `relationdomain.ErrInvalidRef` | `REL_INVALID_REF` | 400 | 源/目标 ref 空 id 或未知实体类型 |
+| `relationdomain.ErrInvalidKind` | `REL_INVALID_KIND` | 400 | 边类型非 create/edit/equip/link |
+| `relationdomain.ErrSelfLoop` | `REL_SELF_LOOP` | 400 | 禁止自环（from == to）|
+| `relationdomain.ErrDepthOutOfRange` | `REL_DEPTH_LIMIT` | 400 | neighborhood 深度超 [1,3] |
+| `relationdomain.ErrIncompleteFilter` | `REL_INCOMPLETE_FILTER` | 400 | filter 的 kind/id 未成对 |
 | `tododomain.ErrNotFound` | `TODO_NOT_FOUND` | 404 | |
 | `tododomain.ErrSubjectRequired` | `TODO_SUBJECT_REQUIRED` | 400 | |
 | `tododomain.ErrInvalidStatus` | `TODO_INVALID_STATUS` | 400 | |
@@ -242,7 +242,6 @@ audience: [human, ai]
 - `reqctxpkg.ErrMissingUserID`
 - `reqctxpkg.ErrMissingConversationID`
 - `cryptoinfra.ErrUnsupportedVersion`
-- `relationdomain.ErrSelfLoop`
 - `triggerdomain.ErrFiringNotPending`
 - `chatdomain.ErrBlockNotFound`
 - `skilldomain.ErrExecutionNotFound`

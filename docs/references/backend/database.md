@@ -273,15 +273,25 @@ type Document struct {
 ```
 
 ### 4.2 Relation (Topology)
+跨实体有向边。**无 name 列**（显示名读时内存查、不入库）、**无 deleted_at**（边随实体硬删）。
+4 个边动词 `create/edit/equip/link`；两端类型在 from_kind/to_kind，故 kind 只需动词。详见 `domains/relation.md`。
+
 ```go
 type Relation struct {
-    FromKind string `gorm:"not null;index" json:"fromKind"`
-    FromID   string `gorm:"not null;index" json:"fromId"`
-    ToKind   string `gorm:"not null;index" json:"toKind"`
-    ToID     string `gorm:"not null;index" json:"toId"`
-    Kind     string `gorm:"not null;uniqueIndex:uq_rel" json:"kind"`
+    ID          string         `db:"id,pk"`              // rel_<16hex>
+    WorkspaceID string         `db:"workspace_id,ws"`
+    Kind        string         `db:"kind"`               // CHECK IN ('create','edit','equip','link')
+    FromKind    string         `db:"from_kind"`
+    FromID      string         `db:"from_id"`
+    ToKind      string         `db:"to_kind"`
+    ToID        string         `db:"to_id"`
+    Attrs       map[string]any `db:"attrs,json"`
+    CreatedAt   time.Time      `db:"created_at,created"`
+    UpdatedAt   time.Time      `db:"updated_at,updated"`
 }
 ```
+- `idx_rel_dedup` UNIQUE(workspace_id, from_id, to_id, kind) — 幂等重同步。
+- `idx_rel_from` / `idx_rel_to` (workspace_id, from_id|to_id) — 方向性邻域遍历。
 
 ### 4.3 Trigger
 ```go
@@ -304,4 +314,5 @@ type TriggerFiring struct {
 
 - **Partial Unique**: `idx_fre_record_once` -> `UNIQUE(flowrun_id, dedup_key) WHERE type NOT IN ('node_started','node_failed')`.
 - **Soft Delete**: `DeletedAt` 字段在全量业务表中存在，查询需强制过滤。
-- **ID 前缀**: `u_, aki_, cv_, msg_, blk_, att_, fn_, fnv_, fne_, hd_, hdv_, hcl_, wf_, wfv_, ag_, agv_, agx_, fr_, fre_, frn_, apv_, ts_, tfi_, doc_, mem_, rel_, se_, sr_, mch_, mcl_, ske_, td_`.
+- **ID 前缀**: `u_, aki_, cv_, msg_, blk_, att_, fn_, fnv_, fne_, hd_, hdv_, hcl_, wf_, wfv_, ag_, agv_, agx_, fr_, fre_, frn_, apv_, ts_, tfi_, doc_, mem_, rel_, se_, sr_, mch_, mcl_, ske_, td_, sk_, mcp_`.
+- **保留前缀**: `sk_`(skill) / `mcp_`(mcp server) 为实体保留——规矩已定，`relation.KindForID` 已识别（故 document 可经 wikilink `[[tag]]`）；`skills`/`mcps` 表与生成器接入是**波次 3** 工作。注意区分既有的执行流水前缀 `ske_`(skill_executions) / `mcl_`(mcp_calls) / `mch_`(mcp_health_history)。

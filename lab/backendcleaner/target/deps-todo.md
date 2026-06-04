@@ -9,7 +9,7 @@
 | model override ctx | `reqctx/modeloverride.go`（🔴 曾让 reqctx → `domain/model` 反向依赖） | model（M1.3） | `WithModelOverride`/`GetModelOverride`；在 model 模块重建其 ctx 透传 |
 | agent state ctx | `reqctx/agentstate.go` | agent/loop（M2.2/M3.4） | `WithAgentState`/`GetAgentState` + `pkg/agentstate` 去留判定 |
 | 对话/执行标识 ctx | `reqctx/agentrun.go` | chat/loop/messages（M2.2/M5.2） | conversationID·messageID·toolCallID·parentBlockID·subagentDepth；服务 messages 流递归(`Open.ParentID` 嵌套)；判定是否仍走 ctx 透传、放哪一层 |
-| ID 前缀 → 实体类型 | `idgen/prefix.go` | **仅 relation（M1.4）** | `KindByPrefix`/`KindForID`；值 = `relationdomain.EntityKind*`。wikilink 已剥离 Kind（R0005），不再是消费者 |
+| ID 前缀 → 实体类型 ✅ R0021 | `idgen/prefix.go` | relation（M1.4，已落地） | `relation.KindForID` 8 条前缀(补 agent + 定 sk_/mcp_ 规矩)；值 = `relationdomain.EntityKind*` |
 | HTTP 分页解析 | `pagination`（曾 import `net/http` + `domain/errors`） | transport 框架（M0.7） | `Parse(*http.Request)` + `DefaultLimit`/`MaxLimit`；把 `pagination.ErrMalformedCursor` 映射到 `domain/errors.ErrInvalidRequest` |
 
 ## 来自波次 0 · M0.1（userpath 判定删除 R0004）
@@ -28,9 +28,20 @@
 
 | 移出内容 | 原位置 | 去向 | 备注 |
 |---|---|---|---|
-| 前缀 → EntityKind 映射 + `KindForID` | wikilink（曾经经 idgen.KindByPrefix） | relation domain（M1.4） | relation 持 `EntityKind` 常量 + 前缀映射 + `KindForID(id)(EntityKind,bool)` |
+| 前缀 → EntityKind 映射 + `KindForID` ✅ R0021 | wikilink | relation domain（M1.4，已落地） | `entitykind.go` 持 8 EntityKind + prefixKind 8 条 + `KindForID` |
 | 未知前缀过滤 + Kind 解析 | `wikilink.Parse` | document（M1.10） | document 拿 wikilink 的 ID → `relation.KindForID` 解析 Kind + 过滤 + 跳过自链，再建 `SyncEdge` |
-| Kind 映射测试用例 | wikilink_test（`DropsUnknownPrefix` / `AllSupportedPrefixes`） | relation（M1.4）测试 | 验前缀→EntityKind 全集；wikilink 侧已用 `ReturnsAllIdShapedTokens` 固定「不过滤」新语义 |
+| Kind 映射测试用例 ✅ R0021 | wikilink_test | relation（M1.4，已落地）测试 | `entitykind_test.go` 验 8 前缀 + 未知/执行流水/名字形态返 false |
+
+## 来自波次 1 · M1.4（relation 建立 R0021）
+
+relation 本体（domain/store/app/handler + KindForID + 读时 hydrate）已建。消费侧与未来归一登记：
+
+| 关注点 | 去向 | 备注 |
+|---|---|---|
+| skill/mcp 归一 id 体系 | 波次 3（建 `skills`/`mcps` 实体） | 前缀 `sk_`/`mcp_` 规矩已定、`relation.KindForID` 已识别、wikilink 可抓；届时建表 + 生成器发 id + 各自实现 `Namer`，**零改动**接入 hydrate/前缀映射 |
+| `Namer.NamesByIDs` 实现 + 注入 | 各实体域（波次 2/3/5）+ M7 装配 | function/handler/workflow/agent/document/conversation 各实现一句 `WHERE id IN … 取 name`，装配时注入 relation Service；某 kind 缺 namer 则其边显示 id |
+| 各实体 sync 胶水 | 波次 2/3/5 | workflow/agent 锻造后 `SyncOutgoing`(equip)+`SyncIncoming`(create/edit)、删除 `PurgeEntity`；document 解析 wikilink → `SyncOutgoing`(link) |
+| relation handler 路由装配 | M7 | `NewRelationHandler(...).Register(mux)` 接入总 router（同其他 handler）|
 
 ## 来自波次 0 · M0.3（logger broadcast 删除 R0010）
 
