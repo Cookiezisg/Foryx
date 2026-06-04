@@ -143,6 +143,8 @@ func (s *Store) ListProbed(ctx context.Context) ([]apikeydomain.ProbedKey, error
 	out := make([]apikeydomain.ProbedKey, 0, len(rows))
 	for _, k := range rows {
 		out = append(out, apikeydomain.ProbedKey{
+			ID:           k.ID,
+			DisplayName:  k.DisplayName,
 			Provider:     k.Provider,
 			TestStatus:   k.TestStatus,
 			TestResponse: k.TestResponse,

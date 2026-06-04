@@ -20,7 +20,6 @@ audience: [human, ai]
 |---|---|---|---|
 | **Identity** | `workspaces` | `ws_` | `Workspace` |
 | | `api_keys` | `aki_` | `APIKey` |
-| | `model_configs` | `mc_` | `ModelConfig` |
 | **Messaging**| `conversations` | `cv_` | `Conversation` |
 | | `messages` | `msg_` | `Message` |
 | | `message_blocks` | `blk_` | `Block` |
@@ -61,15 +60,20 @@ audience: [human, ai]
 ```go
 // workspaces — the isolation root: the one business table with NO workspace_id.
 // backend-new style: plain struct + lightweight db tags (GORM removed).
+// default_dialogue/utility/agent — per-scenario default model selection (ModelRef
+// JSON, nullable); selection lives here as workspace preferences, not in a table.
 type Workspace struct {
-    ID          string     `db:"id,pk" json:"id"`
-    Name        string     `db:"name" json:"name"`                          // free-form display label; UNIQUE(name) WHERE deleted_at IS NULL
-    AvatarColor string     `db:"avatar_color" json:"avatarColor,omitempty"`
-    Language    string     `db:"language" json:"language"`                  // CHECK IN ('zh-CN','en'), default 'zh-CN'
-    LastUsedAt  *time.Time `db:"last_used_at" json:"lastUsedAt,omitempty"`
-    CreatedAt   time.Time  `db:"created_at,created" json:"createdAt"`
-    UpdatedAt   time.Time  `db:"updated_at,updated" json:"updatedAt"`
-    DeletedAt   *time.Time `db:"deleted_at,deleted" json:"-"`
+    ID              string                `db:"id,pk" json:"id"`
+    Name            string                `db:"name" json:"name"`                          // free-form display label; UNIQUE(name) WHERE deleted_at IS NULL
+    AvatarColor     string                `db:"avatar_color" json:"avatarColor,omitempty"`
+    Language        string                `db:"language" json:"language"`                  // CHECK IN ('zh-CN','en'), default 'zh-CN'
+    DefaultDialogue *modeldomain.ModelRef `db:"default_dialogue,json" json:"defaultDialogue,omitempty"` // TEXT, JSON ModelRef, nullable
+    DefaultUtility  *modeldomain.ModelRef `db:"default_utility,json" json:"defaultUtility,omitempty"`   // TEXT, JSON ModelRef, nullable
+    DefaultAgent    *modeldomain.ModelRef `db:"default_agent,json" json:"defaultAgent,omitempty"`       // TEXT, JSON ModelRef, nullable
+    LastUsedAt      *time.Time            `db:"last_used_at" json:"lastUsedAt,omitempty"`
+    CreatedAt       time.Time             `db:"created_at,created" json:"createdAt"`
+    UpdatedAt       time.Time             `db:"updated_at,updated" json:"updatedAt"`
+    DeletedAt       *time.Time            `db:"deleted_at,deleted" json:"-"`
 }
 // api_keys — workspace-scoped credentials. The probe archives the upstream's raw
 // response verbatim (test_response, parsed downstream by model/search); no
@@ -90,14 +94,6 @@ type APIKey struct {
     CreatedAt    time.Time  `db:"created_at,created" json:"createdAt"`
     UpdatedAt    time.Time  `db:"updated_at,updated" json:"updatedAt"`
     DeletedAt    *time.Time `db:"deleted_at,deleted" json:"-"`
-}
-type ModelConfig struct {
-    ID        string       `gorm:"primaryKey;type:text" json:"id"`
-    UserID    string       `gorm:"not null;uniqueIndex:idx_mc_user_scenario" json:"-"`
-    Scenario  string       `gorm:"not null;uniqueIndex:idx_mc_user_scenario" json:"scenario"`
-    APIKeyID  string       `gorm:"not null" json:"apiKeyId"`
-    ModelID   string       `gorm:"not null" json:"modelId"`
-    Options   ModelOptions `gorm:"serializer:json" json:"options"`
 }
 ```
 
@@ -308,4 +304,4 @@ type TriggerFiring struct {
 
 - **Partial Unique**: `idx_fre_record_once` -> `UNIQUE(flowrun_id, dedup_key) WHERE type NOT IN ('node_started','node_failed')`.
 - **Soft Delete**: `DeletedAt` 字段在全量业务表中存在，查询需强制过滤。
-- **ID 前缀**: `u_, aki_, mc_, cv_, msg_, blk_, att_, fn_, fnv_, fne_, hd_, hdv_, hcl_, wf_, wfv_, ag_, agv_, agx_, fr_, fre_, frn_, apv_, ts_, tfi_, doc_, mem_, rel_, se_, sr_, mch_, mcl_, ske_, td_`.
+- **ID 前缀**: `u_, aki_, cv_, msg_, blk_, att_, fn_, fnv_, fne_, hd_, hdv_, hcl_, wf_, wfv_, ag_, agv_, agx_, fr_, fre_, frn_, apv_, ts_, tfi_, doc_, mem_, rel_, se_, sr_, mch_, mcl_, ske_, td_`.

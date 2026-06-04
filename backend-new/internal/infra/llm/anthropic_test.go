@@ -78,32 +78,62 @@ func TestAnthropicMaxTokensDefault(t *testing.T) {
 	}
 }
 
-func TestAnthropicThinkingModes(t *testing.T) {
+// TestAnthropicThinkingKnobs drives the two orthogonal native knobs from Options:
+// thinking (adaptive/enabled/disabled → thinking.type) and effort (→ output_config.effort).
+// Values pass through verbatim with no normalization.
+//
+// TestAnthropicThinkingKnobs 用 Options 驱动两个正交原生旋钮：thinking（adaptive/enabled/disabled
+// → thinking.type）与 effort（→ output_config.effort）。原生值直接透传、无归一化。
+func TestAnthropicThinkingKnobs(t *testing.T) {
 	base := Request{ModelID: "m", MaxTokens: 8000, Messages: []LLMMessage{{Role: RoleUser, Content: "x"}}}
 
-	base.Thinking = nil
-	if ar := anthropicBody(t, base); ar.Thinking != nil {
-		t.Errorf("auto → thinking should be omitted, got %+v", ar.Thinking)
+	// absent → thinking + output_config both omitted.
+	// 不设 → thinking 与 output_config 均省略。
+	if ar := anthropicBody(t, base); ar.Thinking != nil || ar.OutputConfig != nil {
+		t.Errorf("absent → thinking=%+v output_config=%+v, want both omitted", ar.Thinking, ar.OutputConfig)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "off"}
+
+	base.Options = map[string]string{"thinking": "adaptive"}
+	if ar := anthropicBody(t, base); ar.Thinking == nil || ar.Thinking.Type != "adaptive" {
+		t.Errorf("adaptive → %+v, want type adaptive", ar.Thinking)
+	}
+
+	base.Options = map[string]string{"thinking": "disabled"}
 	if ar := anthropicBody(t, base); ar.Thinking == nil || ar.Thinking.Type != "disabled" {
-		t.Errorf("off → %+v, want disabled", ar.Thinking)
+		t.Errorf("disabled → %+v, want type disabled", ar.Thinking)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "on", Budget: 2000}
-	if ar := anthropicBody(t, base); ar.Thinking == nil || ar.Thinking.Type != "enabled" || ar.Thinking.BudgetTokens != 2000 {
-		t.Errorf("on → %+v, want enabled budget 2000", ar.Thinking)
+
+	// enabled → type enabled with a derived budget (≥1024, < max_tokens).
+	// enabled → type enabled + 派生 budget（≥1024 且 < max_tokens）。
+	base.Options = map[string]string{"thinking": "enabled"}
+	if ar := anthropicBody(t, base); ar.Thinking == nil || ar.Thinking.Type != "enabled" || ar.Thinking.BudgetTokens < 1024 {
+		t.Errorf("enabled → %+v, want type enabled with budget ≥1024", ar.Thinking)
+	}
+
+	// effort passes through verbatim into output_config.effort.
+	// effort 原样透传进 output_config.effort。
+	base.Options = map[string]string{"effort": "xhigh"}
+	if ar := anthropicBody(t, base); ar.OutputConfig == nil || ar.OutputConfig.Effort != "xhigh" {
+		t.Errorf("effort → %+v, want output_config.effort xhigh", ar.OutputConfig)
 	}
 }
 
-func TestAnthropicThinkingBudgetBumpsMaxTokens(t *testing.T) {
-	// budget >= max_tokens must bump max_tokens above budget (Anthropic 400s otherwise).
+// TestAnthropicEnabledThinkingBumpsMaxTokens verifies "enabled" with a tiny max_tokens
+// bumps max_tokens above the derived budget (Anthropic 400s when budget ≥ max_tokens).
+//
+// TestAnthropicEnabledThinkingBumpsMaxTokens 验 max_tokens 很小时 "enabled" 把 max_tokens
+// 上调到派生 budget 之上（budget ≥ max_tokens 时 Anthropic 会 400）。
+func TestAnthropicEnabledThinkingBumpsMaxTokens(t *testing.T) {
 	ar := anthropicBody(t, Request{
 		ModelID:   "m",
-		MaxTokens: 1500,
+		MaxTokens: 1024,
 		Messages:  []LLMMessage{{Role: RoleUser, Content: "x"}},
-		Thinking:  &ThinkingSpec{Mode: "on", Budget: 4000},
+		Options:   map[string]string{"thinking": "enabled"},
 	})
-	if ar.Thinking.BudgetTokens != 4000 || ar.MaxTokens <= 4000 {
+	if ar.Thinking == nil || ar.Thinking.Type != "enabled" {
+		t.Fatalf("enabled → %+v, want type enabled", ar.Thinking)
+	}
+	if ar.MaxTokens <= ar.Thinking.BudgetTokens {
 		t.Errorf("budget=%d max_tokens=%d; max_tokens must exceed budget", ar.Thinking.BudgetTokens, ar.MaxTokens)
 	}
 }

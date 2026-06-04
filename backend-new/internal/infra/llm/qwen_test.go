@@ -48,9 +48,16 @@ func TestQwenBuildRequest(t *testing.T) {
 	}
 }
 
-func TestQwenBuildRequestThinkingModes(t *testing.T) {
+// TestQwenBuildRequestThinkingKnobs drives Qwen's native knobs from Options:
+// enable_thinking ("true"/"false" → *bool) and thinking_budget (digit string → int).
+// Values pass through verbatim with no normalization.
+//
+// TestQwenBuildRequestThinkingKnobs 用 Options 驱动 Qwen 原生旋钮：enable_thinking
+// （"true"/"false" → *bool）与 thinking_budget（数字串 → int）。原生值直接透传、无归一化。
+func TestQwenBuildRequestThinkingKnobs(t *testing.T) {
 	p := newQwenProvider()
-	thinkingOf := func(req Request) qwenRequest {
+	thinkingOf := func(opts map[string]string) qwenRequest {
+		req := Request{ModelID: "qwen3-max", Key: "k", BaseURL: "https://x", Options: opts}
 		httpReq, err := p.BuildRequest(context.Background(), req)
 		if err != nil {
 			t.Fatal(err)
@@ -61,56 +68,55 @@ func TestQwenBuildRequestThinkingModes(t *testing.T) {
 		return qr
 	}
 
-	// auto (nil) → enable_thinking omitted entirely.
-	// auto（nil）→ 完全省略 enable_thinking。
-	if qr := thinkingOf(Request{ModelID: "qwen3-max", Key: "k", BaseURL: "https://x"}); qr.EnableThinking != nil {
-		t.Errorf("auto → enable_thinking = %v, want nil", *qr.EnableThinking)
+	// absent → enable_thinking omitted entirely.
+	// 不设 → 完全省略 enable_thinking。
+	if qr := thinkingOf(nil); qr.EnableThinking != nil {
+		t.Errorf("absent → enable_thinking = %v, want nil", *qr.EnableThinking)
 	}
 
-	// off → enable_thinking=false, no budget.
-	// off → enable_thinking=false，无 budget。
-	qr := thinkingOf(Request{ModelID: "qwen3-max", Key: "k", BaseURL: "https://x", Thinking: &ThinkingSpec{Mode: "off"}})
+	// "false" → enable_thinking=false (explicit, reaches the wire via *bool).
+	// "false" → enable_thinking=false（显式，经 *bool 上线）。
+	qr := thinkingOf(map[string]string{"enable_thinking": "false"})
 	if qr.EnableThinking == nil || *qr.EnableThinking {
-		t.Errorf("off → enable_thinking = %v, want false", qr.EnableThinking)
+		t.Errorf("false → enable_thinking = %v, want false", qr.EnableThinking)
 	}
 	if qr.ThinkingBudget != 0 {
-		t.Errorf("off → thinking_budget = %d, want 0", qr.ThinkingBudget)
+		t.Errorf("false → thinking_budget = %d, want 0", qr.ThinkingBudget)
 	}
 
-	// on + budget → enable_thinking=true + thinking_budget.
-	// on + budget → enable_thinking=true + thinking_budget。
-	qr = thinkingOf(Request{ModelID: "qwen3-max", Key: "k", BaseURL: "https://x", Thinking: &ThinkingSpec{Mode: "on", Budget: 4096}})
+	// "true" + budget → enable_thinking=true + thinking_budget passed through.
+	// "true" + budget → enable_thinking=true + thinking_budget 透传。
+	qr = thinkingOf(map[string]string{"enable_thinking": "true", "thinking_budget": "4096"})
 	if qr.EnableThinking == nil || !*qr.EnableThinking {
-		t.Errorf("on → enable_thinking = %v, want true", qr.EnableThinking)
+		t.Errorf("true → enable_thinking = %v, want true", qr.EnableThinking)
 	}
 	if qr.ThinkingBudget != 4096 {
-		t.Errorf("on → thinking_budget = %d, want 4096", qr.ThinkingBudget)
+		t.Errorf("true → thinking_budget = %d, want 4096", qr.ThinkingBudget)
 	}
 
-	// on without budget → enable_thinking=true, budget omitted.
-	// on 无 budget → enable_thinking=true，省略 budget。
-	qr = thinkingOf(Request{ModelID: "qwen3-max", Key: "k", BaseURL: "https://x", Thinking: &ThinkingSpec{Mode: "on"}})
+	// "true" without budget → enable_thinking=true, budget omitted.
+	// "true" 无 budget → enable_thinking=true，省略 budget。
+	qr = thinkingOf(map[string]string{"enable_thinking": "true"})
 	if qr.EnableThinking == nil || !*qr.EnableThinking {
-		t.Errorf("on/no-budget → enable_thinking = %v, want true", qr.EnableThinking)
+		t.Errorf("true/no-budget → enable_thinking = %v, want true", qr.EnableThinking)
 	}
 	if qr.ThinkingBudget != 0 {
-		t.Errorf("on/no-budget → thinking_budget = %d, want 0", qr.ThinkingBudget)
+		t.Errorf("true/no-budget → thinking_budget = %d, want 0", qr.ThinkingBudget)
 	}
 }
 
-// TestQwenBuildRequestStreamGuard verifies enable_thinking=true is suppressed on a
-// non-streaming request — Qwen 400s on the conflicting parameter.
+// TestQwenBuildRequestStreamFlag verifies DisableStream flips stream=false (and drops
+// stream_options); the native thinking knob is independent of streaming.
 //
-// TestQwenBuildRequestStreamGuard 验非流式请求时 enable_thinking=true 被抑制——Qwen
-// 会因冲突参数返 400。
-func TestQwenBuildRequestStreamGuard(t *testing.T) {
+// TestQwenBuildRequestStreamFlag 验 DisableStream 使 stream=false（并去掉 stream_options）；
+// 原生 thinking 旋钮与流式无关。
+func TestQwenBuildRequestStreamFlag(t *testing.T) {
 	p := newQwenProvider()
 	req := Request{
 		ModelID:       "qwen3-max",
 		Key:           "k",
 		BaseURL:       "https://x",
 		DisableStream: true,
-		Thinking:      &ThinkingSpec{Mode: "on", Budget: 4096},
 	}
 	httpReq, err := p.BuildRequest(context.Background(), req)
 	if err != nil {
@@ -122,11 +128,8 @@ func TestQwenBuildRequestStreamGuard(t *testing.T) {
 	if qr.Stream {
 		t.Errorf("stream = true, want false on DisableStream")
 	}
-	if qr.EnableThinking != nil {
-		t.Errorf("on + DisableStream → enable_thinking = %v, want omitted (stream guard)", *qr.EnableThinking)
-	}
-	if qr.ThinkingBudget != 0 {
-		t.Errorf("on + DisableStream → thinking_budget = %d, want 0", qr.ThinkingBudget)
+	if qr.StreamOptions != nil {
+		t.Errorf("stream_options = %+v, want omitted on DisableStream", qr.StreamOptions)
 	}
 }
 

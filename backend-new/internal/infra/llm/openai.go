@@ -8,7 +8,6 @@ import (
 	"io"
 	"iter"
 	"net/http"
-	"slices"
 )
 
 // openaiProvider speaks OpenAI's /chat/completions wire directly and self-contained:
@@ -27,12 +26,12 @@ func newOpenAIProvider() *openaiProvider { return &openaiProvider{} }
 func (p *openaiProvider) Name() string           { return "openai" }
 func (p *openaiProvider) DefaultBaseURL() string { return "https://api.openai.com/v1" }
 
-// BuildRequest encodes a Request into an OpenAI /chat/completions HTTP request. Auth:
-// Bearer token. Reasoning models (o-series) accept reasoning_effort; standard models
-// ignore it (on→clamped effort, default medium; off→"none"; auto→omitted).
+// BuildRequest encodes a Request into an OpenAI /chat/completions HTTP request. Auth: Bearer.
+// Reasoning/verbosity knobs come straight from Options by their native keys (reasoning_effort,
+// verbosity); max_completion_tokens is sent only when MaxTokens is set.
 //
-// BuildRequest 把 Request 编码为 OpenAI /chat/completions HTTP 请求。Auth：Bearer。
-// 推理模型（o 系列）接受 reasoning_effort（on→clamp effort，默认 medium；off→"none"；auto→省略）。
+// BuildRequest 把 Request 编码为 OpenAI /chat/completions 请求。Auth：Bearer。推理/verbosity
+// 旋钮按原生 key（reasoning_effort、verbosity）直接取自 Options；MaxTokens 非零才发 max_completion_tokens。
 func (p *openaiProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	req.Messages = SanitizeMessages(req.Messages)
 	msgs, err := toOpenAIMsgs(req.Messages, req.System)
@@ -50,14 +49,18 @@ func (p *openaiProvider) BuildRequest(ctx context.Context, req Request) (*http.R
 	if len(req.Tools) > 0 {
 		body.Tools = toOpenAITools(req.Tools)
 	}
-	if req.Thinking != nil && req.Thinking.Mode != "auto" {
-		allowed := []string{"none", "minimal", "low", "medium", "high", "xhigh"}
-		switch req.Thinking.Mode {
-		case "on":
-			body.ReasoningEffort = clampEffort(req.Thinking.Effort, allowed, "medium")
-		case "off":
-			body.ReasoningEffort = "none"
-		}
+	if req.MaxTokens > 0 {
+		body.MaxCompletionTokens = req.MaxTokens
+	}
+	// Native knobs straight from Options — no neutral abstraction, no clamping. The UI only
+	// offers values from Knobs(modelID); a non-reasoning model simply carries none of these keys.
+	// 原生旋钮直接取自 Options——无中立抽象、不 clamp。UI 只给 Knobs(modelID) 声明的值；
+	// 非推理模型自然不带这些 key。
+	if v := req.Options["reasoning_effort"]; v != "" {
+		body.ReasoningEffort = v
+	}
+	if v := req.Options["verbosity"]; v != "" {
+		body.Verbosity = v
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -189,19 +192,6 @@ func toOpenAITools(defs []ToolDef) []oaiTool {
 func jsonString(s string) json.RawMessage {
 	b, _ := json.Marshal(s)
 	return b
-}
-
-// clampEffort returns effort if it appears in allowed, else fallback (also for empty).
-//
-// clampEffort 若 effort 在 allowed 列表则返回它，否则（含空）返 fallback。
-func clampEffort(effort string, allowed []string, fallback string) string {
-	if effort == "" {
-		return fallback
-	}
-	if slices.Contains(allowed, effort) {
-		return effort
-	}
-	return fallback
 }
 
 // ── SSE chunk parsing ─────────────────────────────────────────────────────────
@@ -356,8 +346,10 @@ type oaiRequest struct {
 	Tools         []oaiTool         `json:"tools,omitempty"`
 	Stream        bool              `json:"stream"`
 	StreamOptions *oaiStreamOptions `json:"stream_options,omitempty"`
-	// reasoning_effort for o-series reasoning models.
-	ReasoningEffort string `json:"reasoning_effort,omitempty"`
+	// Native knobs (reasoning models only); each omitted when empty.
+	ReasoningEffort     string `json:"reasoning_effort,omitempty"`
+	Verbosity           string `json:"verbosity,omitempty"`
+	MaxCompletionTokens int    `json:"max_completion_tokens,omitempty"`
 }
 
 type oaiStreamOptions struct {
@@ -462,4 +454,44 @@ type oaiNonStreamMessage struct {
 type oaiUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
+}
+
+// ── model catalog (static; OpenAI /v1/models returns ids only) ──────────────────
+
+// oaiKnobs builds the reasoning_effort + verbosity descriptors for a GPT-5-era model with the
+// given native effort set and default. o-series models get effort only (see openaiSpecs).
+//
+// oaiKnobs 为 GPT-5 代模型构造 reasoning_effort + verbosity 描述符（给定原生 effort 集与默认）。
+// o 系列只有 effort（见 openaiSpecs）。
+func oaiKnobs(effortDefault string, efforts ...string) []Knob {
+	return []Knob{
+		enumKnob("reasoning_effort", "Reasoning effort", efforts, effortDefault),
+		enumKnob("verbosity", "Verbosity", []string{"low", "medium", "high"}, "medium"),
+	}
+}
+
+// openaiSpecs is OpenAI's static catalog (capability numbers + native knobs), most-specific prefix
+// first. GET /v1/models returns ids only, so these live here, maintained by software update.
+// Numbers per OpenAI model pages, 2026-06.
+//
+// openaiSpecs 是 OpenAI 静态目录（能力数字 + 原生旋钮），最具体前缀在前。/v1/models 仅返回 id，
+// 故规格在此、随软件更新维护。数值据 OpenAI model 页 2026-06。
+var openaiSpecs = []modelSpec{
+	{"gpt-5.5", 1_050_000, 128_000, oaiKnobs("medium", "none", "low", "medium", "high", "xhigh")},
+	{"gpt-5.4-mini", 400_000, 128_000, oaiKnobs("none", "none", "low", "medium", "high", "xhigh")},
+	{"gpt-5.4", 1_050_000, 128_000, oaiKnobs("none", "none", "low", "medium", "high", "xhigh")},
+	{"gpt-5.1", 400_000, 128_000, oaiKnobs("none", "none", "low", "medium", "high")},
+	{"gpt-5", 400_000, 128_000, oaiKnobs("medium", "minimal", "low", "medium", "high")},
+	{"o3", 200_000, 100_000, []Knob{enumKnob("reasoning_effort", "Reasoning effort", []string{"low", "medium", "high"}, "medium")}},
+	{"o4", 200_000, 100_000, []Knob{enumKnob("reasoning_effort", "Reasoning effort", []string{"low", "medium", "high"}, "medium")}},
+	{"gpt-4.1", 1_047_576, 32_768, nil},
+	{"gpt-4o", 128_000, 16_384, nil},
+}
+
+// DescribeModels parses OpenAI's id-only /v1/models body and resolves each id against the static
+// catalog; ids absent from the catalog are skipped.
+//
+// DescribeModels 解析 OpenAI 仅含 id 的 /v1/models 返回，对每个 id 查静态目录；目录外 id 跳过。
+func (p *openaiProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	return describeFromSpecs(openaiSpecs, raw), nil
 }

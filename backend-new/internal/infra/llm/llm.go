@@ -130,17 +130,6 @@ type ToolDef struct {
 	Parameters  json.RawMessage
 }
 
-// ThinkingSpec carries provider-specific reasoning params; provider adapters read it in
-// BuildRequest and translate to each wire format. nil = auto (send no thinking param).
-//
-// ThinkingSpec 携带 provider 特有的推理参数；adapter 在 BuildRequest 读它翻译为各自
-// 线上格式。nil = auto（不发 thinking 参数）。
-type ThinkingSpec struct {
-	Mode   string // "auto" | "off" | "on"
-	Effort string // "minimal|low|medium|high|xhigh|max" — effort-shape providers
-	Budget int    // reasoning token budget — budget-shape providers
-}
-
 // Request specifies one LLM call.
 //
 // Request 是一次 LLM 调用规格。
@@ -152,24 +141,21 @@ type Request struct {
 	Messages []LLMMessage
 	Tools    []ToolDef
 
-	// MaxTokens caps output tokens for providers that require it (e.g. anthropic);
-	// 0 → provider default. The caller derives it from model capability (catalog) —
-	// the provider never looks it up itself (keeps infra/llm free of model deps).
+	// MaxTokens optionally overrides the model's max output cap; 0 → the provider fills it
+	// from its own static spec. Each provider owns its model knowledge; infra/llm holds no
+	// cross-provider catalog.
 	//
-	// MaxTokens 限制输出 token，供需要它的 provider（如 anthropic）用；0 → provider 默认。
-	// 由 caller 从 model 能力（catalog）派生——provider 自己绝不查（保持 infra/llm 无 model 依赖）。
+	// MaxTokens 可选覆盖模型输出上限；0 → provider 用自身静态规格自填。每家 provider 自持
+	// 模型知识，infra/llm 不持跨家目录。
 	MaxTokens int
 
-	// Thinking carries the resolved reasoning intent; adapters encode it per wire format.
-	// nil = auto (send no thinking param).
+	// Options is the sole carrier of user-selected reasoning/config knobs, keyed by each
+	// provider's native parameter name with native values (e.g. {"reasoning_effort":"high"},
+	// {"thinking":"enabled"}, {"thinkingLevel":"high"}, {"effort":"max"}). Each adapter reads
+	// only the keys it recognises — no neutral abstraction across providers.
 	//
-	// Thinking 携带本次请求的推理意图，adapter 编码为各自线上格式。nil = auto。
-	Thinking *ThinkingSpec
-
-	// Options are provider/model-native config values the user selected; adapters read
-	// them for knobs not captured by ThinkingSpec (e.g. Anthropic context tier).
-	//
-	// Options 是用户选择的 provider/model 原生配置；adapter 读取 ThinkingSpec 未覆盖的旋钮。
+	// Options 是用户所选推理/配置旋钮的唯一载体，按各家原生参数名 + 原生取值（如
+	// {"reasoning_effort":"high"}）。每个 adapter 只读自己认识的 key——跨家零中立抽象。
 	Options map[string]string
 
 	// DisableStream forces non-streaming wire mode (Ollama+tools workaround).

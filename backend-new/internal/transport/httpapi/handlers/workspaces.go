@@ -6,6 +6,7 @@ import (
 	"go.uber.org/zap"
 
 	workspaceapp "github.com/sunweilin/forgify/backend/internal/app/workspace"
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
@@ -33,6 +34,9 @@ func (h *WorkspacesHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/workspaces/{id}", h.Get)
 	mux.HandleFunc("PATCH /api/v1/workspaces/{id}", h.Update)
 	mux.HandleFunc("DELETE /api/v1/workspaces/{id}", h.Delete)
+	// Per-scenario default model selection — a workspace-scoped preference (alongside language).
+	// 按 scenario 的默认模型选择——workspace 级偏好（与 language 并列）。
+	mux.HandleFunc("PUT /api/v1/workspaces/{id}/default-models/{scenario}", h.SetDefaultModel)
 	// Go 1.22+ ServeMux disallows a literal `{id}:action` segment — capture the
 	// whole `{idAction}` and split in postOnWorkspace.
 	// Go 1.22+ ServeMux 禁止字面 `{id}:action` 分段——整体捕获 {idAction}，在 postOnWorkspace 拆分。
@@ -49,6 +53,12 @@ type updateWorkspaceRequest struct {
 	Name        *string `json:"name,omitempty"`
 	AvatarColor *string `json:"avatarColor,omitempty"`
 	Language    *string `json:"language,omitempty"`
+}
+
+type setDefaultModelRequest struct {
+	APIKeyID string            `json:"apiKeyId"`
+	ModelID  string            `json:"modelId"`
+	Options  map[string]string `json:"options,omitempty"`
 }
 
 func (h *WorkspacesHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -139,6 +149,26 @@ func (h *WorkspacesHandler) activate(w http.ResponseWriter, r *http.Request, id 
 		return
 	}
 	ws, err := h.svc.Get(r.Context(), id)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, ws)
+}
+
+// SetDefaultModel sets a workspace's default model for one scenario (dialogue/utility/agent). The
+// body is a ModelRef ({apiKeyId, modelId, options}); both ids are required (validated downstream).
+//
+// SetDefaultModel 设置 workspace 某 scenario（dialogue/utility/agent）的默认模型。body 是 ModelRef
+// （{apiKeyId, modelId, options}）；两个 id 必填（下游校验）。
+func (h *WorkspacesHandler) SetDefaultModel(w http.ResponseWriter, r *http.Request) {
+	var req setDefaultModelRequest
+	if err := decodeJSON(r, &req); err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	ref := &modeldomain.ModelRef{APIKeyID: req.APIKeyID, ModelID: req.ModelID, Options: req.Options}
+	ws, err := h.svc.SetDefault(r.Context(), r.PathValue("id"), r.PathValue("scenario"), ref)
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

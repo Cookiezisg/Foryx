@@ -34,7 +34,7 @@ func TestOpenAIBuildRequest(t *testing.T) {
 		System:   "you are helpful",
 		Messages: []LLMMessage{{Role: RoleUser, Content: "hi"}},
 		Tools:    []ToolDef{{Name: "get_weather", Description: "d", Parameters: json.RawMessage(`{"type":"object"}`)}},
-		Thinking: &ThinkingSpec{Mode: "on", Effort: "high"},
+		Options:  map[string]string{"reasoning_effort": "high"},
 	}
 	httpReq, err := p.BuildRequest(context.Background(), req)
 	if err != nil {
@@ -68,10 +68,14 @@ func TestOpenAIBuildRequest(t *testing.T) {
 	}
 }
 
-func TestOpenAIBuildRequestThinkingModes(t *testing.T) {
+// TestOpenAIBuildRequestNativeKnobs verifies reasoning_effort + verbosity pass through from
+// Options verbatim (no normalization/clamping), and are omitted when Options carries them not.
+//
+// 验证 reasoning_effort + verbosity 从 Options 原样透传（不归一/不 clamp），缺省时整字段省略。
+func TestOpenAIBuildRequestNativeKnobs(t *testing.T) {
 	p := newOpenAIProvider()
 	base := Request{ModelID: "o3", Key: "k", BaseURL: "https://x"}
-	effortOf := func(req Request) string {
+	encode := func(req Request) oaiRequest {
 		httpReq, err := p.BuildRequest(context.Background(), req)
 		if err != nil {
 			t.Fatal(err)
@@ -79,18 +83,18 @@ func TestOpenAIBuildRequestThinkingModes(t *testing.T) {
 		body, _ := io.ReadAll(httpReq.Body)
 		var oa oaiRequest
 		_ = json.Unmarshal(body, &oa)
-		return oa.ReasoningEffort
+		return oa
 	}
-	if got := effortOf(base); got != "" {
-		t.Errorf("auto (nil) → %q, want omitted", got)
+	// No Options → both fields omitted.
+	// 无 Options → 两字段省略。
+	if oa := encode(base); oa.ReasoningEffort != "" || oa.Verbosity != "" {
+		t.Errorf("no options → effort=%q verbosity=%q, want both omitted", oa.ReasoningEffort, oa.Verbosity)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "off"}
-	if got := effortOf(base); got != "none" {
-		t.Errorf("off → %q, want none", got)
-	}
-	base.Thinking = &ThinkingSpec{Mode: "on", Effort: "bogus"}
-	if got := effortOf(base); got != "medium" {
-		t.Errorf("on+bogus → %q, want clamped medium", got)
+	// Native values pass through verbatim.
+	// 原生值原样透传。
+	base.Options = map[string]string{"reasoning_effort": "xhigh", "verbosity": "low"}
+	if oa := encode(base); oa.ReasoningEffort != "xhigh" || oa.Verbosity != "low" {
+		t.Errorf("effort=%q verbosity=%q, want xhigh/low", oa.ReasoningEffort, oa.Verbosity)
 	}
 }
 

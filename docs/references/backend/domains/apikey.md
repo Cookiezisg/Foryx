@@ -67,11 +67,11 @@ type APIKey struct {
 ### 3.1 怎么探（留 apikey）
 按 provider 的 `TestMethod` 选**最轻能验证 key 的端点**发请求，各家认证不同：
 - `get_models`：GET `/models`，`Authorization: Bearer`（OpenAI 系）。
-- `anthropic_ping`：发 1-token `/v1/messages`（Anthropic **无 /models 端点**），`x-api-key` + `anthropic-version`。
+- `anthropic_models`：GET `/v1/models`，`x-api-key` + `anthropic-version`。既测连通，又把 Anthropic 的模型目录原样存档供 model 解析。
 - `google_list_models`：GET `/v1beta/models?key=`（key 在 query）。
 - `ollama_tags`：GET `/api/tags`。
 - `search_ping`：1 条结果的探测搜索（brave `X-Subscription-Token` / serper `X-API-KEY` / tavily key 在 body / bocha `Bearer`）。
-- `custom`：按 `apiFormat` 走 anthropic_ping 或 get_models。
+- `custom`：按 `apiFormat` 走 anthropic_models 或 get_models。
 
 ### 3.2 怎么判 + 怎么存
 - **连通判断**：统一看 **HTTP 200** = 活；非 200 / 传输错误 = 失败。
@@ -99,16 +99,16 @@ type KeyProvider interface {
 ### 4.2 `ProbeReader`（给 model 解析）
 ```go
 type ProbeReader interface {
-    ListProbed(ctx) ([]ProbedKey, error) // ProbedKey{Provider, TestStatus, TestResponse}，不含密钥
+    ListProbed(ctx) ([]ProbedKey, error) // ProbedKey{ID, DisplayName, Provider, TestStatus, TestResponse}，不含密钥
 }
 ```
-model 模块通过它取**探测档案**（原始返回）→ 自己解析可用模型 + 静态目录兜底。**apikey 持原始数据，model 持解读。**
+model 模块通过它取**探测档案**（原始返回）→ 自己解析可用模型 + 静态目录兜底。`ID` + `DisplayName` 让 model 把每个解析出的模型归属到提供它的 key（capabilities 面用）。**apikey 持原始数据，model 持解读。**
 
 ---
 
 ## 5. 删除保护 (Reference Scanner)
 
-`Service.Delete` 执行前遍历已注入的 `RefScanner`（DIP 端口）；任一报告「仍被引用」即抛 `ErrInUse` 拒删，防级联崩溃。引用方（model_config / 对话 override / workflow 节点 override）的具体实现住在各自模块，**装配时注入**——apikey 只持端口、不依赖它们。
+`Service.Delete` 执行前遍历已注入的 `RefScanner`（DIP 端口）；任一报告「仍被引用」即抛 `ErrInUse` 拒删，防级联崩溃。引用方（workspace 默认模型列 / 对话 override / workflow 节点 override）的具体实现住在各自模块，**装配时注入**——apikey 只持端口、不依赖它们。
 
 ---
 
@@ -116,9 +116,9 @@ model 模块通过它取**探测档案**（原始返回）→ 自己解析可用
 
 | 不做 | 归谁 |
 |---|---|
-| 选哪把 key（LLM）| **model 模块**（per-scenario api_key_id + 对话 / 节点 override）|
+| 选哪把 key（LLM）| **model 模块**（workspace per-scenario 默认 + 对话 / 节点 override，均为 `ModelRef.apiKeyId`）|
 | 选哪把 key（搜索）| **未来搜索配置模块**（显式配 api_key_id，不启发式，防乱烧钱）|
-| 模型理解（有哪些 / 上下文 / effort / option）| **model 模块**（解析 `TestResponse` + 静态目录兜底）|
+| 模型理解（有哪些 / 上下文 / 旋钮）| **model 模块**（解析 `TestResponse` + 各家 provider 静态目录兜底）|
 | 搜索返回理解 | 搜索模块 |
 
 ---

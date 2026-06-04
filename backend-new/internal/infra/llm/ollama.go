@@ -8,7 +8,7 @@ import (
 	"io"
 	"iter"
 	"net/http"
-	"slices"
+	"strconv"
 )
 
 // ollamaProvider speaks Ollama's /v1/chat/completions OpenAI-compat API, fully
@@ -39,12 +39,18 @@ func (p *ollamaProvider) DefaultBaseURL() string { return "" }
 // Stream disable: forces non-streaming when tools are present — Ollama drops tool_calls
 // in streaming mode, so the only reliable way to read them is a single JSON response.
 //
-// thinking: on → reasoning_effort (clamp to {high,medium,low,none}, default "medium");
-// off → reasoning_effort:"none"; nil/auto → omit.
+// Native knobs from Options (verbatim, no normalization): top-level "think" carries the
+// thinking switch — most models take a bool ("true"/"false"), GPT-OSS takes an effort
+// string ("low"/"medium"/"high"), hence the wire field is `any`. options.num_ctx is the
+// per-request context window — a local-runtime feature absent from cloud APIs (the client
+// decides how much KV cache to allocate). MaxTokens maps to options.num_predict.
 //
-// BuildRequest 把 Request 编码为 Ollama /v1/chat/completions 请求。
-// 流式强制：有 tools 时走非流式——Ollama streaming 模式会吞 tool_calls，单条 JSON 响应才能
-// 可靠读到。thinking：on→reasoning_effort（clamp，默认 medium）；off→"none"；nil/auto→省略。
+// BuildRequest 把 Request 编码为 Ollama /v1/chat/completions 请求。流式强制：有 tools 时走
+// 非流式——Ollama streaming 模式会吞 tool_calls，单条 JSON 响应才能可靠读到。原生旋钮取自
+// Options（原样不归一）：顶层 "think" 是思考开关——多数 model 收 bool（"true"/"false"），
+// GPT-OSS 收 effort 串（"low"/"medium"/"high"），故 wire 字段用 any。options.num_ctx 是每请求
+// 上下文窗口——本地 runtime 特性、云 API 没有（客户端自决分配多少 KV cache）。MaxTokens 映射
+// options.num_predict。
 func (p *ollamaProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	if len(req.Tools) > 0 {
 		req.DisableStream = true
@@ -66,13 +72,20 @@ func (p *ollamaProvider) BuildRequest(ctx context.Context, req Request) (*http.R
 	if len(req.Tools) > 0 {
 		body.Tools = toOllamaTools(req.Tools)
 	}
-	if req.Thinking != nil && req.Thinking.Mode != "auto" {
-		switch req.Thinking.Mode {
-		case "on":
-			body.ReasoningEffort = ollamaClampEffort(req.Thinking.Effort)
-		case "off":
-			body.ReasoningEffort = "none"
+	if v := req.Options["think"]; v != "" {
+		if v == "true" || v == "false" {
+			body.Think = v == "true"
+		} else {
+			body.Think = v // GPT-OSS effort: low/medium/high
 		}
+	}
+	if v := req.Options["num_ctx"]; v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			body.setOption("num_ctx", n)
+		}
+	}
+	if req.MaxTokens > 0 {
+		body.setOption("num_predict", req.MaxTokens)
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -86,17 +99,6 @@ func (p *ollamaProvider) BuildRequest(ctx context.Context, req Request) (*http.R
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+req.Key)
 	return httpReq, nil
-}
-
-// ollamaClampEffort clamps the generic effort onto Ollama's {high,medium,low,none} set,
-// defaulting to "medium" for empty or out-of-set values.
-//
-// ollamaClampEffort 把通用 effort 收敛到 Ollama 的 {high,medium,low,none}，空值/越界回退 medium。
-func ollamaClampEffort(effort string) string {
-	if effort != "" && slices.Contains([]string{"high", "medium", "low", "none"}, effort) {
-		return effort
-	}
-	return "medium"
 }
 
 // ParseStream reads Ollama /v1 SSE chunks and yields StreamEvents. When tools are present
@@ -341,12 +343,32 @@ func (s *ollamaToolState) resolveIndex(tc ollamaToolCallDelta) int {
 // delta 与非流式 message 皆然——区别于用 "reasoning_content" 的 provider。
 
 type ollamaRequest struct {
-	Model           string               `json:"model"`
-	Messages        []ollamaMessage      `json:"messages"`
-	Tools           []ollamaTool         `json:"tools,omitempty"`
-	Stream          bool                 `json:"stream"`
-	StreamOptions   *ollamaStreamOptions `json:"stream_options,omitempty"`
-	ReasoningEffort string               `json:"reasoning_effort,omitempty"`
+	Model         string               `json:"model"`
+	Messages      []ollamaMessage      `json:"messages"`
+	Tools         []ollamaTool         `json:"tools,omitempty"`
+	Stream        bool                 `json:"stream"`
+	StreamOptions *ollamaStreamOptions `json:"stream_options,omitempty"`
+	// Think is top-level (not under options): bool for most models, effort string
+	// ("low"/"medium"/"high") for GPT-OSS — hence any.
+	//
+	// Think 是顶层（不在 options 下）：多数 model 用 bool，GPT-OSS 用 effort 串——故 any。
+	Think any `json:"think,omitempty"`
+	// Options holds Ollama's per-request runtime knobs (num_ctx, num_predict, …) — these
+	// are nested under "options", distinct from the top-level OpenAI-compat fields.
+	//
+	// Options 装 Ollama 每请求运行时旋钮（num_ctx、num_predict…）——嵌在 "options" 下，区别于
+	// 顶层 OpenAI-compat 字段。
+	Options map[string]any `json:"options,omitempty"`
+}
+
+// setOption lazily allocates the options map and sets one native runtime knob.
+//
+// setOption 惰性建 options map 并填一个原生运行时旋钮。
+func (r *ollamaRequest) setOption(key string, val any) {
+	if r.Options == nil {
+		r.Options = map[string]any{}
+	}
+	r.Options[key] = val
 }
 
 type ollamaStreamOptions struct {
@@ -442,4 +464,42 @@ type ollamaNonStreamMessage struct {
 	// Reasoning 是 Ollama /v1 的思考字段名（无下划线）。
 	Reasoning string                `json:"reasoning"`
 	ToolCalls []ollamaToolCallDelta `json:"tool_calls"`
+}
+
+// ── model catalog (dynamic; /api/tags lists installed models, no caps/knobs) ────
+
+// DescribeModels parses Ollama's GET /api/tags body ({"models":[{"name":...}]}) — its native
+// discovery shape, unlike the OpenAI {"data":[{"id"}]} the chat path mimics. /api/tags carries
+// neither capabilities nor context window (those live behind /api/show, which the probe doesn't
+// fetch), so every installed model gets the generic local-runtime knobs and an unset window.
+//
+// DescribeModels 解析 Ollama 的 GET /api/tags 返回（{"models":[{"name":...}]}）——其原生发现形状，
+// 区别于 chat 路径模仿的 OpenAI {"data":[{"id"}]}。/api/tags 既不带能力也不带上下文窗口（那在
+// /api/show 后面、探针没取），故每个已装模型都给通用本地 runtime 旋钮、窗口留空。
+func (p *ollamaProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	var resp struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return nil, nil
+	}
+	out := make([]ModelInfo, 0, len(resp.Models))
+	for _, m := range resp.Models {
+		if m.Name == "" {
+			continue
+		}
+		out = append(out, ModelInfo{
+			ID:          m.Name,
+			DisplayName: m.Name,
+			// Local model: context window is client-set per request via num_ctx, not a fixed spec.
+			// 本地模型：上下文窗口由客户端每请求 num_ctx 设定，无固定规格。
+			Knobs: []Knob{
+				boolKnob("think", "Thinking", "false"),
+				intKnob("num_ctx", "Context window", ""),
+			},
+		})
+	}
+	return out, nil
 }

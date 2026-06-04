@@ -8,9 +8,9 @@ reviewed: 2026-06-02
 review-due: 2026-09-01
 audience: [human, ai]
 ---
-# API Design — 全量物理路由契约 (169/169 Routes)
+# API Design — 全量物理路由契约 (167/167 Routes)
 
-> **法律级声明**：本文档通过物理扫描 `backend/internal/transport/httpapi/handlers/` 下所有 41 个 Go 文件生成。包含 100% 的注册端点。
+> **法律级声明**：本文档通过物理扫描 `backend/internal/transport/httpapi/handlers/` 下所有 39 个 Go 文件生成。包含 100% 的注册端点。
 
 ---
 
@@ -220,23 +220,50 @@ audience: [human, ai]
 | PATCH | `/api/v1/workspaces/{id}` | `workspaces.go` |
 | DELETE | `/api/v1/workspaces/{id}` | `workspaces.go` |
 | POST | `/api/v1/workspaces/{idAction}` | `workspaces.go` | (:activate) |
+| PUT | `/api/v1/workspaces/{id}/default-models/{scenario}` | `workspaces.go` |
 
 ### 6.2 Utility & Metrics
 | Method | Path | 文件源 |
 |---|---|---|
 | GET | `/api/v1/health` | `health.go` |
 | GET | `/api/v1/providers` | `apikey.go` |
-| GET | `/api/v1/scenarios` | `scenarios.go` |
-| GET | `/api/v1/model-capabilities` | `capabilities.go` |
-| GET | `/api/v1/model-configs` | `model.go` |
-| GET | `/api/v1/model-configs/{scenario}` | `model.go` |
-| PUT | `/api/v1/model-configs/{scenario}` | `model.go` |
+| GET | `/api/v1/scenarios` | `model.go` |
+| GET | `/api/v1/model-capabilities` | `model.go` |
 | GET | `/api/v1/usage` | `usage.go` |
 | GET | `/api/v1/catalog` | `catalog.go` |
 | GET | `/api/v1/metrics/tools` | `metrics.go` |
 | GET | `/api/v1/eventlog` | `eventlog.go` (SSE) |
 | GET | `/api/v1/notifications` | `notifications.go` (SSE) |
 | GET | `/api/v1/forge` | `forge.go` (SSE) |
+
+### 6.3 模型面契约 (Model Surface)
+
+模型选择不再有独立 store：默认选择是 workspace 行的列、override 是各实体字段（详见 `domains/model.md`）。
+
+**`GET /api/v1/scenarios`** — 固定 scenario 白名单（豁免 `RequireWorkspace`，onboarding 前可读）。
+```jsonc
+{ "data": [{ "name": "dialogue" }, { "name": "utility" }, { "name": "agent" }] }
+```
+
+**`GET /api/v1/model-capabilities`** — 当前 workspace 每个可用的 `(key, model)` 对，由 model 模块聚合各 key 探测档案（`test_response`）经各家 provider 自描述解析而成。探测失败 / 解析不出的 key 不贡献。
+```jsonc
+{ "data": [{
+  "apiKeyId": "aki_…", "keyName": "我的 Claude", "provider": "anthropic",
+  "modelId": "claude-opus-4-8", "displayName": "claude-opus-4-8",
+  "contextWindow": 1000000, "maxOutput": 128000,
+  "knobs": [{ "key": "thinking", "label": "Thinking", "type": "enum",
+              "values": ["adaptive", "disabled"], "default": "adaptive" }]
+}] }
+```
+- `knobs[]` 是「容器统一、内容全原生」的可渲染描述符：`type ∈ enum|bool|int`；`key`/`values` 是各家 wire 词表，绝不归一。各家原生旋钮：openai `reasoning_effort`+`verbosity`；anthropic `thinking`(adaptive/disabled…)+`effort`(low..max,xhigh)；gemini `thinkingLevel`(Gemini-3 枚举) 或 `thinkingBudget`(Gemini-2.5 整数)；deepseek `thinking`+`reasoning_effort`(high/max)；qwen `enable_thinking`+`thinking_budget`；ollama `think`+`num_ctx`。
+
+**`PUT /api/v1/workspaces/{id}/default-models/{scenario}`** — 设 workspace 某 scenario（`dialogue`/`utility`/`agent`）默认模型；body 是 ModelRef，`options` 为原生旋钮 k-v。返回更新后的 workspace。
+```jsonc
+// request
+{ "apiKeyId": "aki_…", "modelId": "claude-opus-4-8", "options": { "thinking": "adaptive" } }
+// response: 完整 Workspace 实体，含 defaultDialogue/defaultUtility/defaultAgent（ModelRef 或 null）
+```
+- 错误：scenario 非白名单 → `MODEL_SCENARIO_INVALID`(400)；ModelRef 缺 `apiKeyId`/`modelId` → `MODEL_REF_INVALID`(400)。
 
 ---
 

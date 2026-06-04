@@ -32,8 +32,8 @@ type AgentLimits struct {
 }
 
 type OutputLimits struct {
-	// UnknownModelMaxTokens is the output cap for models absent from modelcatalog.
-	// UnknownModelMaxTokens 是 modelcatalog 未知模型的输出兜底。
+	// UnknownModelMaxTokens is a conservative output cap for a model with no known catalog spec.
+	// UnknownModelMaxTokens 是无已知目录规格的模型的保守输出兜底。
 	UnknownModelMaxTokens int `json:"unknownModelMaxTokens"`
 	// PerScenarioOverride is optional; empty = use the model's real max.
 	// PerScenarioOverride 可选；空 = 用模型真值。

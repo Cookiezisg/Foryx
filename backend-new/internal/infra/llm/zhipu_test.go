@@ -83,22 +83,20 @@ func TestZhipuBuildRequestThinkingModes(t *testing.T) {
 		_ = json.Unmarshal(body, &zr)
 		return zr.Thinking
 	}
-	// auto (nil) → thinking field omitted.
-	// auto (nil) → thinking 字段省略。
+	// No Options → thinking field omitted.
+	// 无 Options → thinking 字段省略。
 	if got := thinkingOf(base); got != nil {
-		t.Errorf("auto (nil) → %+v, want omitted", got)
+		t.Errorf("no options → %+v, want omitted", got)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "on"}
+	// Native thinking value passes through verbatim into thinking:{type}.
+	// 原生 thinking 值原样进 thinking:{type}。
+	base.Options = map[string]string{"thinking": "enabled"}
 	if got := thinkingOf(base); got == nil || got.Type != "enabled" {
-		t.Errorf("on → %+v, want {type:enabled}", got)
+		t.Errorf("enabled → %+v, want {type:enabled}", got)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "off"}
+	base.Options = map[string]string{"thinking": "disabled"}
 	if got := thinkingOf(base); got == nil || got.Type != "disabled" {
-		t.Errorf("off → %+v, want {type:disabled}", got)
-	}
-	base.Thinking = &ThinkingSpec{Mode: "auto"}
-	if got := thinkingOf(base); got != nil {
-		t.Errorf("auto (explicit) → %+v, want omitted", got)
+		t.Errorf("disabled → %+v, want {type:disabled}", got)
 	}
 }
 

@@ -10,7 +10,7 @@ audience: [human, ai]
 ---
 # Error Codes — 100% 物理对账契约
 
-> **法律级声明**：本文档通过物理扫描 `errmap.go` 与全仓 181 个 Domain Sentinel 错误生成。严禁任何摘要或省略。
+> **法律级声明**：本文档通过物理扫描 `errmap.go` 与全仓 180 个 Domain Sentinel 错误生成。严禁任何摘要或省略。
 
 ---
 
@@ -200,10 +200,9 @@ audience: [human, ai]
 ### 2.11 Other Domains (Model/Perms/User/Rel)
 | Go Sentinel | Wire Code | HTTP | 场景 |
 |---|---|---|---|
-| `modeldomain.ErrNotConfigured` | `MODEL_NOT_CONFIGURED` | 422 | |
-| `modeldomain.ErrInvalidScenario` | `INVALID_SCENARIO` | 400 | |
-| `modeldomain.ErrAPIKeyIDRequired` | `API_KEY_ID_REQUIRED` | 400 | |
-| `modeldomain.ErrModelIDRequired` | `MODEL_ID_REQUIRED` | 400 | |
+| `modeldomain.ErrScenarioInvalid` | `MODEL_SCENARIO_INVALID` | 400 | 非 dialogue/utility/agent |
+| `modeldomain.ErrNotConfigured` | `MODEL_NOT_CONFIGURED` | 422 | 该 scenario 无默认模型，提示去配置 |
+| `modeldomain.ErrRefInvalid` | `MODEL_REF_INVALID` | 400 | ModelRef 缺 apiKeyId 或 modelId |
 | `permdomain.ErrInvalidSettings` | `INVALID_SETTINGS` | 400 | |
 | `permdomain.ErrBlockedByRule` | `BLOCKED_BY_RULE` | 422 | 安全拦截 |
 | `workspacedomain.ErrNotFound` | `WORKSPACE_NOT_FOUND` | 404 | |

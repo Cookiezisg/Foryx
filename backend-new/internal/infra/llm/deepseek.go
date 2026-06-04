@@ -32,11 +32,11 @@ func (p *deepseekProvider) DefaultBaseURL() string { return "https://api.deepsee
 // reasoning_content (DeepSeek rejects it on a continuation that carries no tool response);
 // tool-call turns preserve it (V3.2+ reconstructs the chain-of-thought from it).
 //
-// thinking: on → thinking:{type:enabled} + reasoning_effort; off → thinking:{type:disabled};
-// nil/auto → omit both.
+// Native knobs from Options: thinking ("enabled"/"disabled") + reasoning_effort ("high"/"max",
+// DeepSeek's only two native levels).
 //
 // BuildRequest 把 Request 编码为 DeepSeek 请求。reasoning_content round-trip 规则：纯文字
-// turn 剥、含 tool_calls turn 保留（V3.2+）。thinking：on→enabled+effort；off→disabled；nil/auto→省略。
+// turn 剥、含 tool_calls turn 保留（V4）。原生旋钮取自 Options：thinking + reasoning_effort（仅 high/max）。
 func (p *deepseekProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	for i := range req.Messages {
 		m := &req.Messages[i]
@@ -61,14 +61,14 @@ func (p *deepseekProvider) BuildRequest(ctx context.Context, req Request) (*http
 	if len(req.Tools) > 0 {
 		body.Tools = toDeepSeekTools(req.Tools)
 	}
-	if req.Thinking != nil && req.Thinking.Mode != "auto" {
-		switch req.Thinking.Mode {
-		case "on":
-			body.Thinking = &dsThinking{Type: "enabled"}
-			body.ReasoningEffort = deepseekMapEffort(req.Thinking.Effort)
-		case "off":
-			body.Thinking = &dsThinking{Type: "disabled"}
-		}
+	if req.MaxTokens > 0 {
+		body.MaxTokens = req.MaxTokens
+	}
+	if v := req.Options["thinking"]; v != "" {
+		body.Thinking = &dsThinking{Type: v}
+	}
+	if v := req.Options["reasoning_effort"]; v != "" {
+		body.ReasoningEffort = v
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -82,16 +82,6 @@ func (p *deepseekProvider) BuildRequest(ctx context.Context, req Request) (*http
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+req.Key)
 	return httpReq, nil
-}
-
-// deepseekMapEffort maps the generic effort onto DeepSeek's {high, max} set.
-//
-// deepseekMapEffort 把通用 effort 映射到 DeepSeek 的 {high, max}。
-func deepseekMapEffort(effort string) string {
-	if effort == "max" || effort == "xhigh" {
-		return "max"
-	}
-	return "high" // low / medium / high / empty → high
 }
 
 func (p *deepseekProvider) ParseStream(ctx context.Context, resp *http.Response, req Request) iter.Seq[StreamEvent] {
@@ -318,6 +308,7 @@ type dsRequest struct {
 	Tools           []dsTool         `json:"tools,omitempty"`
 	Stream          bool             `json:"stream"`
 	StreamOptions   *dsStreamOptions `json:"stream_options,omitempty"`
+	MaxTokens       int              `json:"max_tokens,omitempty"`
 	Thinking        *dsThinking      `json:"thinking,omitempty"`
 	ReasoningEffort string           `json:"reasoning_effort,omitempty"`
 }
@@ -413,4 +404,35 @@ type dsNonStreamMessage struct {
 	Content          string            `json:"content"`
 	ReasoningContent string            `json:"reasoning_content"`
 	ToolCalls        []dsToolCallDelta `json:"tool_calls"`
+}
+
+// ── model catalog (static; DeepSeek /models returns ids only) ───────────────────
+
+func dsKnobs() []Knob {
+	return []Knob{
+		enumKnob("thinking", "Thinking", []string{"enabled", "disabled"}, "enabled"),
+		enumKnob("reasoning_effort", "Reasoning effort", []string{"high", "max"}, "high"),
+	}
+}
+
+// deepseekSpecs is DeepSeek's static catalog, most-specific prefix first. The V4 line (1M ctx /
+// 384K out) controls thinking by request params; deepseek-chat/reasoner are compat aliases onto
+// deepseek-v4-flash. Numbers per DeepSeek pricing, 2026-06.
+//
+// deepseekSpecs 是 DeepSeek 静态目录，最具体前缀在前。V4 线（1M/384K）靠请求参数控思考；
+// deepseek-chat/reasoner 是指向 deepseek-v4-flash 的兼容别名。数值据 DeepSeek 定价 2026-06。
+var deepseekSpecs = []modelSpec{
+	{"deepseek-v4-pro", 1_000_000, 384_000, dsKnobs()},
+	{"deepseek-v4-flash", 1_000_000, 384_000, dsKnobs()},
+	{"deepseek-v4", 1_000_000, 384_000, dsKnobs()},
+	{"deepseek-reasoner", 1_000_000, 384_000, dsKnobs()},
+	{"deepseek-chat", 1_000_000, 384_000, dsKnobs()},
+	{"deepseek", 128_000, 64_000, dsKnobs()},
+}
+
+// DescribeModels parses DeepSeek's id-only /models body against the static catalog.
+//
+// DescribeModels 解析 DeepSeek 仅含 id 的 /models 返回，查静态目录。
+func (p *deepseekProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	return describeFromSpecs(deepseekSpecs, raw), nil
 }

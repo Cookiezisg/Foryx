@@ -17,7 +17,7 @@ func TestOllamaBuildRequest(t *testing.T) {
 		BaseURL:  "http://localhost:11434/v1",
 		System:   "you are helpful",
 		Messages: []LLMMessage{{Role: RoleUser, Content: "hi"}},
-		Thinking: &ThinkingSpec{Mode: "on", Effort: "high"},
+		Options:  map[string]string{"think": "high"},
 	}
 	httpReq, err := p.BuildRequest(context.Background(), req)
 	if err != nil {
@@ -40,18 +40,27 @@ func TestOllamaBuildRequest(t *testing.T) {
 	if ol.Model != "qwen3" || !ol.Stream {
 		t.Errorf("model=%s stream=%v", ol.Model, ol.Stream)
 	}
-	if ol.ReasoningEffort != "high" {
-		t.Errorf("reasoning_effort = %q, want high", ol.ReasoningEffort)
+	// GPT-OSS effort string passes through verbatim into the top-level "think" field.
+	// GPT-OSS effort 串原样进顶层 "think" 字段。
+	if ol.Think != "high" {
+		t.Errorf("think = %v, want high", ol.Think)
 	}
 	if len(ol.Messages) != 2 || ol.Messages[0].Role != "system" || ol.Messages[1].Role != "user" {
 		t.Errorf("messages = %+v", ol.Messages)
 	}
 }
 
-func TestOllamaBuildRequestThinkingModes(t *testing.T) {
+// TestOllamaBuildRequestThinkAndOptions verifies the native knobs: top-level "think" is a
+// bool for most models ("true"/"false") and an effort string for GPT-OSS ("low"/.../"high"),
+// num_ctx lands under options.num_ctx, and MaxTokens maps to options.num_predict. Missing keys
+// are omitted entirely.
+//
+// 验证原生旋钮：顶层 "think" 多数 model 是 bool（"true"/"false"），GPT-OSS 是 effort 串；
+// num_ctx 落 options.num_ctx，MaxTokens 映射 options.num_predict。缺省 key 整字段省略。
+func TestOllamaBuildRequestThinkAndOptions(t *testing.T) {
 	p := newOllamaProvider()
 	base := Request{ModelID: "qwen3", Key: "k", BaseURL: "http://x"}
-	effortOf := func(req Request) string {
+	encode := func(req Request) ollamaRequest {
 		httpReq, err := p.BuildRequest(context.Background(), req)
 		if err != nil {
 			t.Fatal(err)
@@ -59,26 +68,50 @@ func TestOllamaBuildRequestThinkingModes(t *testing.T) {
 		body, _ := io.ReadAll(httpReq.Body)
 		var ol ollamaRequest
 		_ = json.Unmarshal(body, &ol)
-		return ol.ReasoningEffort
+		return ol
 	}
-	if got := effortOf(base); got != "" {
-		t.Errorf("auto (nil) → %q, want omitted", got)
+
+	// No Options, no MaxTokens → think omitted, options omitted.
+	// 无 Options、无 MaxTokens → think 省略、options 省略。
+	if ol := encode(base); ol.Think != nil || ol.Options != nil {
+		t.Errorf("no knobs → think=%v options=%v, want both omitted", ol.Think, ol.Options)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "auto"}
-	if got := effortOf(base); got != "" {
-		t.Errorf("auto → %q, want omitted", got)
+
+	// think:"true" → top-level bool true.
+	// think:"true" → 顶层 bool true。
+	base.Options = map[string]string{"think": "true"}
+	if ol := encode(base); ol.Think != true {
+		t.Errorf("think:true → %v (%T), want bool true", ol.Think, ol.Think)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "off"}
-	if got := effortOf(base); got != "none" {
-		t.Errorf("off → %q, want none", got)
+
+	// think:"false" → top-level bool false (present, not omitted: omitempty drops false, so it
+	// will be absent on the wire; decoding yields nil). We assert it is not the string "false".
+	// think:"false" → 顶层 bool false（omitempty 会丢 false，线缆缺省、解码得 nil）；断言不是字符串。
+	base.Options = map[string]string{"think": "false"}
+	if ol := encode(base); ol.Think == "false" {
+		t.Errorf("think:false → %v, want bool false (not string)", ol.Think)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "on", Effort: "bogus"}
-	if got := effortOf(base); got != "medium" {
-		t.Errorf("on+bogus → %q, want clamped medium", got)
+
+	// think GPT-OSS effort string → passes through verbatim.
+	// think GPT-OSS effort 串 → 原样透传。
+	base.Options = map[string]string{"think": "medium"}
+	if ol := encode(base); ol.Think != "medium" {
+		t.Errorf("think:medium → %v, want medium", ol.Think)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "on", Effort: "low"}
-	if got := effortOf(base); got != "low" {
-		t.Errorf("on+low → %q, want low", got)
+
+	// num_ctx → options.num_ctx (JSON number decodes into any as float64).
+	// num_ctx → options.num_ctx（JSON 数字解码进 any 为 float64）。
+	base.Options = map[string]string{"num_ctx": "8192"}
+	if ol := encode(base); ol.Options == nil || ol.Options["num_ctx"] != float64(8192) {
+		t.Errorf("num_ctx → options=%v, want num_ctx=8192", ol.Options)
+	}
+
+	// MaxTokens → options.num_predict.
+	// MaxTokens → options.num_predict。
+	base.Options = nil
+	base.MaxTokens = 512
+	if ol := encode(base); ol.Options == nil || ol.Options["num_predict"] != float64(512) {
+		t.Errorf("MaxTokens → options=%v, want num_predict=512", ol.Options)
 	}
 }
 

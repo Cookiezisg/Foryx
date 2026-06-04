@@ -21,7 +21,7 @@ type TestMethod string
 
 const (
 	TestMethodGetModels        TestMethod = "get_models"
-	TestMethodAnthropicPing    TestMethod = "anthropic_ping"
+	TestMethodAnthropicModels  TestMethod = "anthropic_models"
 	TestMethodGoogleListModels TestMethod = "google_list_models"
 	TestMethodOllamaTags       TestMethod = "ollama_tags"
 	TestMethodCustom           TestMethod = "custom"
@@ -44,7 +44,7 @@ type ProviderMeta struct {
 
 var providers = map[string]ProviderMeta{
 	"openai":     {Name: "openai", DisplayName: "OpenAI", DefaultBaseURL: "https://api.openai.com/v1", TestMethod: TestMethodGetModels, Category: CategoryLLM},
-	"anthropic":  {Name: "anthropic", DisplayName: "Anthropic", DefaultBaseURL: "https://api.anthropic.com", TestMethod: TestMethodAnthropicPing, Category: CategoryLLM},
+	"anthropic":  {Name: "anthropic", DisplayName: "Anthropic", DefaultBaseURL: "https://api.anthropic.com", TestMethod: TestMethodAnthropicModels, Category: CategoryLLM},
 	"google":     {Name: "google", DisplayName: "Google Gemini", DefaultBaseURL: "https://generativelanguage.googleapis.com/v1beta", TestMethod: TestMethodGoogleListModels, Category: CategoryLLM},
 	"deepseek":   {Name: "deepseek", DisplayName: "DeepSeek", DefaultBaseURL: "https://api.deepseek.com", TestMethod: TestMethodGetModels, Category: CategoryLLM},
 	"openrouter": {Name: "openrouter", DisplayName: "OpenRouter", DefaultBaseURL: "https://openrouter.ai/api/v1", TestMethod: TestMethodGetModels, Category: CategoryLLM},

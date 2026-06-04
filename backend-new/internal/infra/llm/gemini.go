@@ -8,6 +8,7 @@ import (
 	"io"
 	"iter"
 	"net/http"
+	"strconv"
 	"strings"
 )
 
@@ -49,18 +50,17 @@ func (p *geminiProvider) BuildRequest(ctx context.Context, req Request) (*http.R
 	if len(req.Tools) > 0 {
 		body.Tools = []geminiTool{{FunctionDeclarations: toGeminiFunctionDeclarations(req.Tools)}}
 	}
-	// maxOutputTokens = the model's real cap (from Request.MaxTokens; caller derives it).
-	// Gemini's default (~8192, shared with the thinking budget) silently truncates long
-	// output, so omitting it caps generations.
+	// maxOutputTokens from Request.MaxTokens when set; Gemini's default (~8192, shared with the
+	// thinking budget) silently truncates long output, so a caller wanting long output sets it.
 	//
-	// maxOutputTokens = 模型真实上限（取 Request.MaxTokens，caller 派生）。Gemini 默认
-	// ~8192（且与 thinking 预算共享）会静默截断长输出，省略即被腰斩。
+	// maxOutputTokens 取 Request.MaxTokens（非零时）；Gemini 默认 ~8192（且与 thinking 预算共享）
+	// 会静默截断长输出，要长输出的 caller 自行设定。
 	gc := &geminiGenerationConfig{}
 	if req.MaxTokens > 0 {
 		mt := req.MaxTokens
 		gc.MaxOutputTokens = &mt
 	}
-	gc.ThinkingConfig = encodeGeminiThinking(req.Thinking, req.Options)
+	gc.ThinkingConfig = encodeGeminiThinking(req.Options)
 	if gc.MaxOutputTokens != nil || gc.ThinkingConfig != nil {
 		body.GenerationConfig = gc
 	}
@@ -363,29 +363,28 @@ func toGeminiFunctionDeclarations(defs []ToolDef) []geminiFunctionDeclaration {
 	return out
 }
 
-// encodeGeminiThinking maps the neutral ThinkingSpec to thinkingConfig: on → budget
-// (default -1 = dynamic), includeThoughts; off → budget 0; nil/auto → omit. Options
-// ["thinking"] (minimal/low/medium/high) selects the newer thinkingLevel form.
+// encodeGeminiThinking reads native thinking knobs from Options: thinkingLevel (Gemini-3 enum:
+// minimal/low/medium/high) OR thinkingBudget (Gemini-2.5 int: -1 dynamic / 0 off / model range).
+// They are mutually exclusive on the wire (sending both 400s); a model's Knobs only ever offers
+// one form, so reading whichever is present is safe. Nothing set → omit (provider default).
 //
-// encodeGeminiThinking 把中立 ThinkingSpec 映射为 thinkingConfig：on→budget（默认 -1 动态）
-// + includeThoughts；off→budget 0；nil/auto→省略。Options["thinking"] 选 thinkingLevel 形式。
-func encodeGeminiThinking(spec *ThinkingSpec, options map[string]string) *geminiThinkingConfig {
-	if level := options["thinking"]; level == "minimal" || level == "low" || level == "medium" || level == "high" {
-		return &geminiThinkingConfig{ThinkingLevel: level, IncludeThoughts: true}
+// encodeGeminiThinking 从 Options 读原生 thinking 旋钮：thinkingLevel（Gemini-3 枚举）或
+// thinkingBudget（Gemini-2.5 整数：-1 动态 / 0 关 / 模型范围）。二者 wire 上互斥（同发 400）；
+// 模型 Knobs 只给其一，故读到哪个用哪个安全。都没设 → 省略（取 provider 默认）。
+func encodeGeminiThinking(options map[string]string) *geminiThinkingConfig {
+	if v := options["thinkingLevel"]; v != "" {
+		return &geminiThinkingConfig{ThinkingLevel: v, IncludeThoughts: true}
 	}
-	if spec == nil || spec.Mode == "auto" {
-		return nil
-	}
-	switch spec.Mode {
-	case "on":
-		budget := spec.Budget
-		if budget == 0 {
-			budget = -1 // dynamic: let Gemini self-pace, vs a flat budget that can starve the visible answer
+	if v := options["thinkingBudget"]; v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil
 		}
-		return &geminiThinkingConfig{ThinkingBudget: &budget, IncludeThoughts: true}
-	case "off":
-		zero := 0
-		return &geminiThinkingConfig{ThinkingBudget: &zero}
+		tc := &geminiThinkingConfig{ThinkingBudget: &n}
+		if n != 0 {
+			tc.IncludeThoughts = true // surface thought summaries unless thinking is off
+		}
+		return tc
 	}
 	return nil
 }
@@ -487,4 +486,63 @@ type geminiUsageMetadata struct {
 	PromptTokenCount     int `json:"promptTokenCount"`
 	CandidatesTokenCount int `json:"candidatesTokenCount"`
 	ThoughtsTokenCount   int `json:"thoughtsTokenCount"`
+}
+
+// ── model catalog (Gemini ListModels is rich — it carries inputTokenLimit/outputTokenLimit per
+// model — but the thinking knob shape (2.5 budget int vs 3.x level enum) is NOT in the payload, so
+// windows come from /models and knobs are filled statically by generation) ─────────────────────
+
+// geminiKnobsFor returns the native thinking knob by model generation: Gemini-3 → thinkingLevel
+// enum (cannot be disabled); Gemini-2.5 → thinkingBudget int (-1 dynamic / 0 off / model range).
+//
+// geminiKnobsFor 按模型代际返回原生 thinking 旋钮：Gemini-3 → thinkingLevel 枚举（不可关）；
+// Gemini-2.5 → thinkingBudget 整数（-1 动态 / 0 关 / 模型范围）。
+func geminiKnobsFor(modelID string) []Knob {
+	id := strings.ToLower(modelID)
+	switch {
+	case strings.HasPrefix(id, "gemini-3"):
+		return []Knob{enumKnob("thinkingLevel", "Thinking level", []string{"minimal", "low", "medium", "high"}, "high")}
+	case strings.HasPrefix(id, "gemini-2.5"):
+		return []Knob{intKnob("thinkingBudget", "Thinking budget", "-1")}
+	default:
+		return nil
+	}
+}
+
+// DescribeModels parses Gemini's ListModels body ({"models":[{"name","baseModelId",
+// "inputTokenLimit","outputTokenLimit"}]}). Windows come straight from the payload (rich); the
+// thinking knob is filled per generation since the payload omits the level enum / budget range.
+//
+// DescribeModels 解析 Gemini ListModels 返回。窗口直接取自载荷（富）；thinking 旋钮按代际补
+// （载荷不含 level 枚举 / budget 范围）。
+func (p *geminiProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	var resp struct {
+		Models []struct {
+			Name             string `json:"name"`
+			BaseModelID      string `json:"baseModelId"`
+			InputTokenLimit  int    `json:"inputTokenLimit"`
+			OutputTokenLimit int    `json:"outputTokenLimit"`
+		} `json:"models"`
+	}
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return nil, nil
+	}
+	out := make([]ModelInfo, 0, len(resp.Models))
+	for _, m := range resp.Models {
+		id := m.BaseModelID
+		if id == "" {
+			id = strings.TrimPrefix(m.Name, "models/")
+		}
+		if id == "" {
+			continue
+		}
+		out = append(out, ModelInfo{
+			ID:            id,
+			DisplayName:   id,
+			ContextWindow: m.InputTokenLimit,
+			MaxOutput:     m.OutputTokenLimit,
+			Knobs:         geminiKnobsFor(id),
+		})
+	}
+	return out, nil
 }

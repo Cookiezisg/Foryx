@@ -23,6 +23,15 @@ type Provider interface {
 	DefaultBaseURL() string
 	BuildRequest(ctx context.Context, req Request) (*http.Request, error)
 	ParseStream(ctx context.Context, resp *http.Response, req Request) iter.Seq[StreamEvent]
+
+	// DescribeModels parses this provider's raw /models probe body (archived by apikey) into
+	// ModelInfo, each carrying its native configurable knobs. Rich providers (gemini/moonshot/
+	// openrouter) read specs+knobs from the payload; lean ones (openai/deepseek/...) read ids and
+	// fill specs+knobs from their own static table. Pure parsing, no network.
+	//
+	// DescribeModels 解析本家 /models 探测原始返回（apikey 存档）为 ModelInfo，每个带原生可调旋钮。
+	// 富家（gemini/moonshot/openrouter）从载荷读规格+旋钮，贫家读 id 并用自家静态表补。纯解析、不联网。
+	DescribeModels(rawProbe string) ([]ModelInfo, error)
 }
 
 // providerClient adapts a Provider to Client by running the shared transport iron-law
@@ -123,4 +132,40 @@ func lookupProvider(cfg Config) Provider {
 		return p
 	}
 	return providerRegistry["openai"]
+}
+
+// ModelInfo is one usable model with its capability specs and configurable knobs, assembled by
+// a Provider from its /models payload (+ static fallback). The model module aggregates these
+// across a workspace's keys for the capabilities surface.
+//
+// ModelInfo 是一个可用模型及其能力规格与可调旋钮，由 Provider 从 /models 载荷(+静态兜底)装配。
+// model 模块跨 workspace 的 key 聚合它们供 capabilities 面用。
+type ModelInfo struct {
+	ID            string `json:"id"`
+	DisplayName   string `json:"displayName"`
+	ContextWindow int    `json:"contextWindow"`
+	MaxOutput     int    `json:"maxOutput"`
+	Knobs         []Knob `json:"knobs"`
+}
+
+// Knob describes one configurable parameter as a render-ready descriptor: a uniform container
+// whose content is entirely native — key and values are each provider's own wire vocabulary,
+// never translated or normalised. The frontend renders generically from it.
+//
+// Knob 把一个可配置参数描述成可渲染描述符：统一「容器」，内容全原生——key 与取值是各家自己的
+// wire 词表，绝不翻译或归一。前端据此通用渲染。
+type Knob struct {
+	Key     string   `json:"key"`              // native param name, e.g. "reasoning_effort"
+	Label   string   `json:"label"`            // display label
+	Type    string   `json:"type"`             // control: "enum" | "int" | "bool"
+	Values  []string `json:"values,omitempty"` // native enum values, e.g. ["high","max"]
+	Default string   `json:"default,omitempty"`
+}
+
+// DescribeModels resolves the Provider for name and parses its raw probe body; unknown names
+// fall back to the OpenAI-compat dialect (see lookupProvider).
+//
+// DescribeModels 按 name 解析 Provider 并解析其探测原始返回；未知 name 回落 OpenAI-compat。
+func DescribeModels(provider, rawProbe string) ([]ModelInfo, error) {
+	return lookupProvider(Config{Provider: provider}).DescribeModels(rawProbe)
 }

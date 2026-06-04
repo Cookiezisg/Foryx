@@ -13,12 +13,12 @@ import (
 // doubaoProvider speaks Doubao (Volcengine Ark)'s /chat/completions API, fully self-contained:
 // its own wire types, message encoding, and SSE chunk parsing — no sharing with the openai
 // provider even though the wire is OpenAI-shaped. Doubao specifics: the top-level
-// thinking:{type:enabled|disabled} (+ optional budget_tokens) request object, and
+// thinking:{type:enabled|disabled|auto} request object + reasoning_effort tier, and
 // reasoning_content arriving before content in the stream.
 //
 // doubaoProvider 完整自包含地讲豆包（Volcengine Ark）/chat/completions：自己的 wire 类型、消息编码、
 // SSE 解析——即使 wire 是 OpenAI 形状也不与 openai 共享。豆包特有：请求中的顶层
-// thinking:{type:enabled|disabled}（+可选 budget_tokens）对象、流中 reasoning_content 先于 content。
+// thinking:{type:enabled|disabled|auto} 对象 + reasoning_effort 力度档、流中 reasoning_content 先于 content。
 type doubaoProvider struct{}
 
 func newDoubaoProvider() *doubaoProvider { return &doubaoProvider{} }
@@ -28,11 +28,12 @@ func (p *doubaoProvider) DefaultBaseURL() string { return "https://ark.cn-beijin
 
 // BuildRequest encodes a Request into a Doubao /chat/completions HTTP request.
 //
-// thinking: on → thinking:{type:enabled} (+ budget_tokens when Budget>0); off →
-// thinking:{type:disabled}; nil/auto → omit the object entirely (provider default).
+// Native knobs from Options (verbatim, no normalization): thinking ({type: enabled|disabled|auto})
+// + reasoning_effort (minimal|low|medium|high|max — effort tiers, not a token budget; Ark's Chat
+// API has no budget_tokens field).
 //
-// BuildRequest 把 Request 编码为豆包 /chat/completions HTTP 请求。thinking：on→{type:enabled}
-// （Budget>0 时带 budget_tokens）；off→{type:disabled}；nil/auto→整个对象省略（取 provider 默认）。
+// BuildRequest 把 Request 编码为豆包 /chat/completions HTTP 请求。原生旋钮取自 Options（原样不归一）：
+// thinking（{type:enabled|disabled|auto}）+ reasoning_effort（力度档，非 token 预算；方舟 Chat API 无 budget_tokens）。
 func (p *doubaoProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	req.Messages = SanitizeMessages(req.Messages)
 	msgs, err := todoubaoMsgs(req.Messages, req.System)
@@ -50,17 +51,14 @@ func (p *doubaoProvider) BuildRequest(ctx context.Context, req Request) (*http.R
 	if len(req.Tools) > 0 {
 		body.Tools = todoubaoTools(req.Tools)
 	}
-	if req.Thinking != nil && req.Thinking.Mode != "auto" {
-		switch req.Thinking.Mode {
-		case "on":
-			tf := &doubaoThinking{Type: "enabled"}
-			if req.Thinking.Budget > 0 {
-				tf.BudgetTokens = req.Thinking.Budget
-			}
-			body.Thinking = tf
-		case "off":
-			body.Thinking = &doubaoThinking{Type: "disabled"}
-		}
+	if req.MaxTokens > 0 {
+		body.MaxTokens = req.MaxTokens
+	}
+	if v := req.Options["thinking"]; v != "" {
+		body.Thinking = &doubaoThinking{Type: v}
+	}
+	if v := req.Options["reasoning_effort"]; v != "" {
+		body.ReasoningEffort = v
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -298,14 +296,14 @@ func (s *doubaoToolState) resolveIndex(tc doubaoToolCallDelta) int {
 // ── Doubao wire types ─────────────────────────────────────────────────────────
 
 type doubaoRequest struct {
-	Model         string               `json:"model"`
-	Messages      []doubaoMessage      `json:"messages"`
-	Tools         []doubaoTool         `json:"tools,omitempty"`
-	Stream        bool                 `json:"stream"`
-	StreamOptions *doubaoStreamOptions `json:"stream_options,omitempty"`
-	// Doubao thinking object: top-level, type:enabled|disabled (+ optional budget_tokens).
-	// 豆包 thinking 对象：顶层，type:enabled|disabled（+可选 budget_tokens）。
-	Thinking *doubaoThinking `json:"thinking,omitempty"`
+	Model           string               `json:"model"`
+	Messages        []doubaoMessage      `json:"messages"`
+	Tools           []doubaoTool         `json:"tools,omitempty"`
+	Stream          bool                 `json:"stream"`
+	StreamOptions   *doubaoStreamOptions `json:"stream_options,omitempty"`
+	MaxTokens       int                  `json:"max_tokens,omitempty"`
+	Thinking        *doubaoThinking      `json:"thinking,omitempty"`
+	ReasoningEffort string               `json:"reasoning_effort,omitempty"`
 }
 
 type doubaoStreamOptions struct {
@@ -313,8 +311,7 @@ type doubaoStreamOptions struct {
 }
 
 type doubaoThinking struct {
-	Type         string `json:"type"`
-	BudgetTokens int    `json:"budget_tokens,omitempty"`
+	Type string `json:"type"`
 }
 
 type doubaoMessage struct {
@@ -399,4 +396,39 @@ type doubaoNonStreamMessage struct {
 	Content          string                `json:"content"`
 	ReasoningContent string                `json:"reasoning_content"`
 	ToolCalls        []doubaoToolCallDelta `json:"tool_calls"`
+}
+
+// ── model catalog (static; Ark has no /models endpoint) ─────────────────────────
+
+// doubaoKnobs builds the two native knobs; thinkingValues varies per family (only seed-1-6
+// offers "auto"), so it's passed in rather than hardcoded.
+//
+// doubaoKnobs 构造两个原生旋钮；thinking 取值各族不同（仅 seed-1-6 提供 "auto"）故由外部传入。
+func doubaoKnobs(thinkingValues []string) []Knob {
+	return []Knob{
+		enumKnob("thinking", "Thinking", thinkingValues, "enabled"),
+		enumKnob("reasoning_effort", "Reasoning effort", []string{"minimal", "low", "medium", "high", "max"}, "medium"),
+	}
+}
+
+// doubaoSpecs is the static catalog (most-specific prefix first). Ark exposes no /models endpoint,
+// so DescribeModels has nothing to enumerate against — the catalog itself is the source of truth.
+// Seed family: 256K context; only doubao-seed-1-6 supports thinking "auto". Numbers per Volcengine
+// Ark docs, 2026-06-04.
+//
+// doubaoSpecs 是静态目录（最具体前缀在前）。方舟无 /models 端点，DescribeModels 无可枚举对象——目录
+// 本身即事实源。seed 族：256K context；仅 doubao-seed-1-6 支持 thinking "auto"。数值据火山方舟文档 2026-06-04。
+var doubaoSpecs = []modelSpec{
+	{"doubao-seed-1-6", 256000, 32000, doubaoKnobs([]string{"enabled", "disabled", "auto"})},
+	{"doubao-seed-1-8", 256000, 64000, doubaoKnobs([]string{"enabled", "disabled"})},
+	{"doubao-seed-2-0", 256000, 128000, doubaoKnobs([]string{"enabled", "disabled"})},
+	{"doubao-seed-character", 128000, 32000, nil},
+	{"doubao-seed", 256000, 32000, doubaoKnobs([]string{"enabled", "disabled"})},
+}
+
+// DescribeModels returns the static catalog; raw is ignored since Ark has no /models endpoint.
+//
+// DescribeModels 返回静态目录；方舟无 /models 端点故忽略 raw。
+func (p *doubaoProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	return describeFromSpecs(doubaoSpecs, raw), nil
 }

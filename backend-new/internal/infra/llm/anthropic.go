@@ -34,11 +34,12 @@ func newAnthropicProvider() *anthropicProvider { return &anthropicProvider{} }
 func (p *anthropicProvider) Name() string           { return "anthropic" }
 func (p *anthropicProvider) DefaultBaseURL() string { return anthropicDefaultBaseURL }
 
-// BuildRequest encodes a Request into an Anthropic /v1/messages HTTP request. Auth:
-// x-api-key header. The 1m context beta is opt-in via Options["context"]=="1m".
+// BuildRequest encodes a Request into an Anthropic /v1/messages HTTP request. Auth: x-api-key.
+// Two orthogonal native knobs from Options: thinking ("adaptive"/"enabled"/"disabled") and effort
+// (output_config.effort). 1M context is GA on current models — no beta header.
 //
-// BuildRequest 把 Request 编码为 Anthropic /v1/messages 请求。Auth：x-api-key。
-// 1m context beta 经 Options["context"]=="1m" 开启。
+// BuildRequest 把 Request 编码为 Anthropic /v1/messages 请求。Auth：x-api-key。两个正交原生旋钮
+// 取自 Options：thinking（adaptive/enabled/disabled）与 effort（output_config.effort）。当前模型 1M 已 GA，无需 beta header。
 func (p *anthropicProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	body, err := buildAnthropicBody(req)
 	if err != nil {
@@ -52,9 +53,6 @@ func (p *anthropicProvider) BuildRequest(ctx context.Context, req Request) (*htt
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("x-api-key", req.Key)
 	httpReq.Header.Set("anthropic-version", anthropicVersion)
-	if req.Options["context"] == "1m" {
-		httpReq.Header.Set("anthropic-beta", "context-1m-2025-08-07")
-	}
 	return httpReq, nil
 }
 
@@ -209,27 +207,29 @@ func buildAnthropicBody(req Request) ([]byte, error) {
 		Stream:    true,
 	}
 
-	// thinking: on → budget_tokens (≥1024, < max_tokens; bump max_tokens if needed);
-	// off → disabled; nil/auto → omit. (anthropicRequest has no temperature/top_p, so
-	// there is nothing to guard off when thinking is on.)
+	// thinking + effort are two orthogonal Anthropic knobs, both from Options with native values.
+	// thinking.type ∈ adaptive | enabled | disabled (per model; flagships take only adaptive).
+	// "enabled" needs a budget_tokens (≥1024, < max_tokens; bump max_tokens if needed). "effort"
+	// lives in output_config and scales total token spend.
 	//
-	// thinking：on → budget_tokens（≥1024 且 < max_tokens，必要时上调 max_tokens）；
-	// off → disabled；nil/auto → 省略。（anthropicRequest 无 temperature/top_p，无需 guard。）
-	if req.Thinking != nil && req.Thinking.Mode == "on" {
-		budget := req.Thinking.Budget
-		if budget == 0 {
-			budget = min(max(maxTok/2, 1024), 8192)
-		}
-		if budget < 1024 {
-			budget = 1024
-		}
+	// thinking 与 effort 是 Anthropic 两个正交旋钮，均从 Options 取原生值。thinking.type ∈
+	// adaptive | enabled | disabled（按模型；旗舰只收 adaptive）；"enabled" 需 budget_tokens
+	// （≥1024 且 < max_tokens，必要时上调 max_tokens）；"effort" 在 output_config，缩放总 token 花费。
+	switch req.Options["thinking"] {
+	case "adaptive":
+		body.Thinking = &anthropicThinking{Type: "adaptive"}
+	case "enabled":
+		budget := min(max(maxTok/2, 1024), 8192)
 		if budget >= maxTok {
 			maxTok = budget + 1024
 			body.MaxTokens = maxTok
 		}
 		body.Thinking = &anthropicThinking{Type: "enabled", BudgetTokens: budget}
-	} else if req.Thinking != nil && req.Thinking.Mode == "off" {
+	case "disabled":
 		body.Thinking = &anthropicThinking{Type: "disabled"}
+	}
+	if v := req.Options["effort"]; v != "" {
+		body.OutputConfig = &anthropicOutputConfig{Effort: v}
 	}
 
 	if req.System != "" {
@@ -375,22 +375,33 @@ func extractBase64Data(dataURL string) string {
 // ── wire types ────────────────────────────────────────────────────────────────
 
 type anthropicRequest struct {
-	Model     string             `json:"model"`
-	MaxTokens int                `json:"max_tokens"`
-	System    json.RawMessage    `json:"system,omitempty"`
-	Messages  []anthropicMessage `json:"messages"`
-	Tools     []anthropicTool    `json:"tools,omitempty"`
-	Stream    bool               `json:"stream"`
-	Thinking  *anthropicThinking `json:"thinking,omitempty"`
+	Model        string                 `json:"model"`
+	MaxTokens    int                    `json:"max_tokens"`
+	System       json.RawMessage        `json:"system,omitempty"`
+	Messages     []anthropicMessage     `json:"messages"`
+	Tools        []anthropicTool        `json:"tools,omitempty"`
+	Stream       bool                   `json:"stream"`
+	Thinking     *anthropicThinking     `json:"thinking,omitempty"`
+	OutputConfig *anthropicOutputConfig `json:"output_config,omitempty"`
 }
 
-// anthropicThinking is the wire form of the thinking param; type "enabled" requires
-// budget_tokens ≥ 1024 and < max_tokens.
+// anthropicThinking is the wire form of the thinking param. type "adaptive" lets Claude decide
+// (no budget); "enabled" requires budget_tokens ≥ 1024 and < max_tokens; "disabled" turns it off.
 //
-// anthropicThinking 是 thinking 参数 wire 形式；type "enabled" 要求 budget_tokens ≥ 1024 且 < max_tokens。
+// anthropicThinking 是 thinking 参数 wire 形式。type "adaptive" 由 Claude 自决（无 budget）；
+// "enabled" 要求 budget_tokens ≥ 1024 且 < max_tokens；"disabled" 关闭。
 type anthropicThinking struct {
 	Type         string `json:"type"`
 	BudgetTokens int    `json:"budget_tokens,omitempty"`
+}
+
+// anthropicOutputConfig carries the effort knob (low|medium|high|xhigh|max), a soft signal scaling
+// total output token spend; sibling of thinking in the request body.
+//
+// anthropicOutputConfig 携带 effort 旋钮（low|medium|high|xhigh|max），缩放总输出 token 花费的
+// 软信号；请求体里与 thinking 平级。
+type anthropicOutputConfig struct {
+	Effort string `json:"effort,omitempty"`
 }
 
 type anthropicMessage struct {
@@ -472,4 +483,52 @@ type anthropicMsgDelta struct {
 	Usage *struct {
 		OutputTokens int `json:"output_tokens"`
 	} `json:"usage"`
+}
+
+// ── model catalog (static; Anthropic /v1/models lists ids but its numeric specs are doc
+// placeholders, so window/output/knobs live here, maintained by software update) ───────────────
+
+// anthropicKnobs builds the thinking knob (per-model native type set) plus, when supported, the
+// effort knob. thinkingValues[0] is the default.
+//
+// anthropicKnobs 构造 thinking 旋钮（按模型的原生 type 集）+（若支持）effort 旋钮。
+// thinkingValues[0] 为默认值。
+func anthropicKnobs(thinkingValues, effortValues []string) []Knob {
+	ks := []Knob{enumKnob("thinking", "Thinking", thinkingValues, thinkingValues[0])}
+	if len(effortValues) > 0 {
+		ks = append(ks, enumKnob("effort", "Effort", effortValues, "high"))
+	}
+	return ks
+}
+
+// anthropicSpecs is Anthropic's static catalog, most-specific prefix first. Flagships (Opus
+// 4.8/4.7) take only thinking:adaptive (+ effort incl. xhigh); 4.6 / Sonnet-4.6 add enabled; older
+// models take enabled/disabled with no effort. Numbers per Anthropic model overview, 2026-06.
+//
+// anthropicSpecs 是 Anthropic 静态目录，最具体前缀在前。旗舰（Opus 4.8/4.7）只收 thinking:adaptive
+// （+ effort 含 xhigh）；4.6 / Sonnet-4.6 增 enabled；更老的模型 enabled/disabled 无 effort。数值据
+// Anthropic model overview 2026-06。
+var anthropicSpecs = []modelSpec{
+	{"claude-opus-4-8", 1000000, 128000, anthropicKnobs([]string{"adaptive", "disabled"}, []string{"low", "medium", "high", "xhigh", "max"})},
+	{"claude-opus-4-7", 1000000, 128000, anthropicKnobs([]string{"adaptive", "disabled"}, []string{"low", "medium", "high", "xhigh", "max"})},
+	{"claude-opus-4-6", 1000000, 128000, anthropicKnobs([]string{"adaptive", "enabled", "disabled"}, []string{"low", "medium", "high", "max"})},
+	{"claude-sonnet-4-6", 1000000, 64000, anthropicKnobs([]string{"adaptive", "enabled", "disabled"}, []string{"low", "medium", "high", "max"})},
+	{"claude-haiku-4-5", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
+	{"claude-opus-4-5", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
+	{"claude-sonnet-4-5", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
+	{"claude-opus-4-1", 200000, 32000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
+	{"claude-opus-4", 200000, 32000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
+	{"claude-sonnet-4", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
+	{"claude-haiku-4", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
+	{"claude", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
+}
+
+// DescribeModels parses Anthropic's /v1/models id list ({"data":[{"id":...}]}) against the static
+// catalog. The payload also carries capability fields, but its numeric specs are doc placeholders,
+// so the static table stays authoritative for window/output/knobs.
+//
+// DescribeModels 解析 Anthropic /v1/models 的 id 列表（{"data":[{"id":...}]}）查静态目录。载荷虽带
+// 能力字段，但数值是文档占位，故窗口/输出/旋钮以静态表为准。
+func (p *anthropicProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	return describeFromSpecs(anthropicSpecs, raw), nil
 }

@@ -15,8 +15,10 @@ import (
 
 	"go.uber.org/zap"
 
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	workspacedomain "github.com/sunweilin/forgify/backend/internal/domain/workspace"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
+	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
 // Service orchestrates Workspace CRUD.
@@ -160,6 +162,62 @@ func (s *Service) Validate(ctx context.Context, id string) error {
 	_, err := s.repo.Get(ctx, id)
 	return err
 }
+
+// Pick implements modeldomain.ModelPicker: it returns the current workspace's default ModelRef for
+// a scenario (workspace id from ctx). ErrNotConfigured when that scenario has no default, so the
+// caller surfaces a "configure a model" prompt rather than failing opaquely.
+//
+// Pick 实现 modeldomain.ModelPicker：返回当前 workspace（id 取自 ctx）某 scenario 的默认 ModelRef。
+// 该 scenario 无默认时返 ErrNotConfigured——caller 提示"去配置模型"而非晦涩报错。
+func (s *Service) Pick(ctx context.Context, scenario string) (modeldomain.ModelRef, error) {
+	if !modeldomain.IsValidScenario(scenario) {
+		return modeldomain.ModelRef{}, modeldomain.ErrScenarioInvalid
+	}
+	wsID, err := reqctxpkg.RequireWorkspaceID(ctx)
+	if err != nil {
+		return modeldomain.ModelRef{}, err
+	}
+	w, err := s.repo.Get(ctx, wsID)
+	if err != nil {
+		return modeldomain.ModelRef{}, err
+	}
+	ref := w.DefaultFor(scenario)
+	if ref == nil || ref.IsZero() {
+		return modeldomain.ModelRef{}, modeldomain.ErrNotConfigured
+	}
+	return *ref, nil
+}
+
+// SetDefault sets (or clears, with a nil ref) the default model for one scenario of a workspace; a
+// non-nil ref must carry both apiKeyId and modelId.
+//
+// SetDefault 设置（nil ref 则清除）某 workspace 某 scenario 的默认模型；非 nil ref 须带 apiKeyId+modelId。
+func (s *Service) SetDefault(ctx context.Context, id, scenario string, ref *modeldomain.ModelRef) (*workspacedomain.Workspace, error) {
+	if !modeldomain.IsValidScenario(scenario) {
+		return nil, modeldomain.ErrScenarioInvalid
+	}
+	if ref != nil {
+		if err := ref.Validate(); err != nil {
+			return nil, err
+		}
+	}
+	w, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	w.SetDefaultFor(scenario, ref)
+	w.UpdatedAt = time.Now().UTC()
+	if err := s.repo.Save(ctx, w); err != nil {
+		return nil, err
+	}
+	s.log.Info("workspace default model set", zap.String("workspace_id", id), zap.String("scenario", scenario))
+	return w, nil
+}
+
+// Service implements ModelPicker — the LLM-using callers (波次 2/3/5) depend on this port.
+//
+// Service 实现 ModelPicker——用 LLM 的 caller（波次 2/3/5）依赖此端口。
+var _ modeldomain.ModelPicker = (*Service)(nil)
 
 // cleanName trims, requires non-empty, and bounds the length of a workspace name.
 //

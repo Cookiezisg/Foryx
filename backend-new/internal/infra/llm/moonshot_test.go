@@ -47,7 +47,7 @@ func TestMoonshotBuildRequest(t *testing.T) {
 		t.Errorf("stream_options = %+v, want include_usage", ms.StreamOptions)
 	}
 	if ms.Thinking != nil {
-		t.Errorf("thinking = %+v, want omitted when ThinkingSpec nil", ms.Thinking)
+		t.Errorf("thinking = %+v, want omitted when Options carries no thinking", ms.Thinking)
 	}
 	if len(ms.Tools) != 1 || ms.Tools[0].Function.Name != "get_weather" {
 		t.Errorf("tools = %+v", ms.Tools)
@@ -75,22 +75,20 @@ func TestMoonshotBuildRequestThinkingModes(t *testing.T) {
 		}
 		return ms.Thinking.Type
 	}
-	// nil ThinkingSpec → auto → field omitted.
-	// nil ThinkingSpec → auto → 字段省略。
+	// No thinking in Options → field omitted.
+	// Options 无 thinking → 字段省略。
 	if got := thinkingOf(base); got != "<nil>" {
-		t.Errorf("auto (nil) → %q, want omitted", got)
+		t.Errorf("no options → %q, want omitted", got)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "auto"}
-	if got := thinkingOf(base); got != "<nil>" {
-		t.Errorf("auto → %q, want omitted", got)
-	}
-	base.Thinking = &ThinkingSpec{Mode: "on"}
+	// Native thinking value passes through verbatim into thinking:{type}.
+	// 原生 thinking 值原样进 thinking:{type}。
+	base.Options = map[string]string{"thinking": "enabled"}
 	if got := thinkingOf(base); got != "enabled" {
-		t.Errorf("on → %q, want enabled", got)
+		t.Errorf("enabled → %q, want enabled", got)
 	}
-	base.Thinking = &ThinkingSpec{Mode: "off"}
+	base.Options = map[string]string{"thinking": "disabled"}
 	if got := thinkingOf(base); got != "disabled" {
-		t.Errorf("off → %q, want disabled", got)
+		t.Errorf("disabled → %q, want disabled", got)
 	}
 }
 

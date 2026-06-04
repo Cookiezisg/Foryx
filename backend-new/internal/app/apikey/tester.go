@@ -75,15 +75,15 @@ func (t *HTTPTester) Test(ctx context.Context, provider, key, baseURL, apiFormat
 		return &TestResult{OK: true, Message: "mock provider — always ok"}, nil
 	case TestMethodGetModels:
 		return t.probeGet(ctx, effective+"/models", bearer(key)), nil
-	case TestMethodAnthropicPing:
-		return t.probeAnthropicPing(ctx, effective, key), nil
+	case TestMethodAnthropicModels:
+		return t.probeAnthropicModels(ctx, effective, key), nil
 	case TestMethodGoogleListModels:
 		return t.probeGoogleListModels(ctx, effective, key), nil
 	case TestMethodOllamaTags:
 		return t.probeGet(ctx, strings.TrimSuffix(effective, "/v1")+"/api/tags", nil), nil
 	case TestMethodCustom:
 		if apiFormat == apikeydomain.APIFormatAnthropicCompatible {
-			return t.probeAnthropicPing(ctx, effective, key), nil
+			return t.probeAnthropicModels(ctx, effective, key), nil
 		}
 		return t.probeGet(ctx, effective+"/models", bearer(key)), nil
 	case TestMethodSearchPing:
@@ -115,18 +115,18 @@ func (t *HTTPTester) probeGet(ctx context.Context, fullURL string, headers http.
 	return t.send(req)
 }
 
-// probeAnthropicPing sends a 1-token /v1/messages call — Anthropic has no /models.
+// probeAnthropicModels hits GET /v1/models with x-api-key — Anthropic's models endpoint both
+// proves connectivity and returns the model catalog, archived verbatim for the model module to parse.
 //
-// probeAnthropicPing 发 1-token /v1/messages —— Anthropic 无 /models 端点。
-func (t *HTTPTester) probeAnthropicPing(ctx context.Context, baseURL, key string) *TestResult {
-	payload := []byte(`{"model":"claude-3-5-haiku-latest","max_tokens":1,"messages":[{"role":"user","content":"hi"}]}`)
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL+"/v1/messages", bytes.NewReader(payload))
+// probeAnthropicModels 打 GET /v1/models（x-api-key）——Anthropic 的 models 端点既证连通又返回
+// 模型目录，原样存档供 model 模块解析。
+func (t *HTTPTester) probeAnthropicModels(ctx context.Context, baseURL, key string) *TestResult {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/v1/models", nil)
 	if err != nil {
 		return &TestResult{OK: false, Message: "build request: " + err.Error()}
 	}
 	req.Header.Set("x-api-key", key)
 	req.Header.Set("anthropic-version", "2023-06-01")
-	req.Header.Set("content-type", "application/json")
 	return t.send(req)
 }
 

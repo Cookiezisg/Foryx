@@ -7,19 +7,22 @@ import (
 	"fmt"
 	"iter"
 	"net/http"
+	"slices"
 )
 
 // openrouterProvider speaks OpenRouter's /chat/completions API, fully self-contained: its
 // own wire types, message encoding, and SSE chunk parsing — no sharing with the openai
 // provider even though OpenRouter is an OpenAI-compat aggregator. OpenRouter specifics: a
-// top-level reasoning:{effort|max_tokens} object that routes thinking across upstream
-// providers (effort and max_tokens are mutually exclusive), a reasoning_content delta
-// alias alongside the primary reasoning field, and mid-stream error objects.
+// top-level reasoning:{effort} object that routes thinking across whichever upstream the
+// model resolves to, a reasoning_content delta alias alongside the primary reasoning field,
+// mid-stream error objects, and the industry's richest /models payload (per-model
+// supported_parameters, parsed live by DescribeModels rather than a static catalog).
 //
 // openrouterProvider 完整自包含地讲 OpenRouter /chat/completions：自己的 wire 类型、消息
 // 编码、SSE 解析——即使它是 OpenAI-compat 聚合器也不与 openai 共享。OpenRouter 特有：顶层
-// reasoning:{effort|max_tokens} 对象（effort 与 max_tokens 互斥），delta 里 reasoning_content
-// 别名与主 reasoning 字段并存，以及流中 error 对象。
+// reasoning:{effort} 对象（按模型解析到的上游路由思考），delta 里 reasoning_content 别名与主
+// reasoning 字段并存，流中 error 对象，以及全行业最富的 /models 载荷（每模型 supported_parameters，
+// 由 DescribeModels 实时解析而非静态目录）。
 type openrouterProvider struct{}
 
 func newOpenRouterProvider() *openrouterProvider { return &openrouterProvider{} }
@@ -29,14 +32,12 @@ func (p *openrouterProvider) DefaultBaseURL() string { return "https://openroute
 
 // BuildRequest encodes a Request into an OpenRouter /chat/completions HTTP request.
 //
-// Thinking: on + Effort → reasoning:{effort}; on + Budget>0 (no Effort) →
-// reasoning:{max_tokens} (effort and max_tokens are mutually exclusive, so Effort wins);
-// on + neither → reasoning:{effort:"medium"}; off/nil/auto → omit reasoning (OpenRouter
-// has no documented clean disable form, so suppression beats a guessed-at off knob).
+// Native knob from Options: reasoning_effort, surfaced per-model by DescribeModels and fed
+// straight into reasoning:{effort} (OpenRouter routes that effort across whichever upstream
+// the model resolves to). max_tokens caps output; absent (0) lets the upstream decide.
 //
-// BuildRequest 把 Request 编码为 OpenRouter 请求。thinking：on+Effort→{effort}；
-// on+Budget→{max_tokens}（与 effort 互斥，Effort 优先）；on 无参→{effort:medium}；
-// off/nil/auto→省略 reasoning（无干净的关闭形式，故宁可不发也不猜）。
+// BuildRequest 把 Request 编码为 OpenRouter 请求。原生旋钮取自 Options：reasoning_effort
+// （由 DescribeModels 按模型暴露），直接塞进 reasoning:{effort}。max_tokens 限输出，缺省（0）由上游定。
 func (p *openrouterProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	req.Messages = SanitizeMessages(req.Messages)
 	msgs, err := toOpenRouterMsgs(req.Messages, req.System)
@@ -54,17 +55,11 @@ func (p *openrouterProvider) BuildRequest(ctx context.Context, req Request) (*ht
 	if len(req.Tools) > 0 {
 		body.Tools = toOpenRouterTools(req.Tools)
 	}
-	if req.Thinking != nil && req.Thinking.Mode == "on" {
-		r := &orReasoningField{}
-		switch {
-		case req.Thinking.Effort != "":
-			r.Effort = req.Thinking.Effort
-		case req.Thinking.Budget > 0:
-			r.MaxTokens = req.Thinking.Budget
-		default:
-			r.Effort = "medium"
-		}
-		body.Reasoning = r
+	if req.MaxTokens > 0 {
+		body.MaxTokens = req.MaxTokens
+	}
+	if v := req.Options["reasoning_effort"]; v != "" {
+		body.Reasoning = &orReasoning{Effort: v}
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -279,25 +274,26 @@ func (s *orToolState) resolveIndex(tc orToolCallDelta) int {
 // ── OpenRouter wire types ─────────────────────────────────────────────────────────
 
 type orRequest struct {
-	Model         string            `json:"model"`
-	Messages      []orMessage       `json:"messages"`
-	Tools         []orTool          `json:"tools,omitempty"`
-	Stream        bool              `json:"stream"`
-	StreamOptions *orStreamOptions  `json:"stream_options,omitempty"`
-	Reasoning     *orReasoningField `json:"reasoning,omitempty"`
+	Model         string           `json:"model"`
+	Messages      []orMessage      `json:"messages"`
+	Tools         []orTool         `json:"tools,omitempty"`
+	Stream        bool             `json:"stream"`
+	StreamOptions *orStreamOptions `json:"stream_options,omitempty"`
+	MaxTokens     int              `json:"max_tokens,omitempty"`
+	Reasoning     *orReasoning     `json:"reasoning,omitempty"`
 }
 
 type orStreamOptions struct {
 	IncludeUsage bool `json:"include_usage"`
 }
 
-// orReasoningField is OpenRouter's thinking control: effort and max_tokens are mutually
-// exclusive, so only one is ever set.
+// orReasoning carries OpenRouter's reasoning:{effort} control. effort and max_tokens are
+// mutually exclusive on the wire; this build drives reasoning purely by effort.
 //
-// orReasoningField 是 OpenRouter 的 thinking 控制：effort 与 max_tokens 互斥，永远只设其一。
-type orReasoningField struct {
-	Effort    string `json:"effort,omitempty"`
-	MaxTokens int    `json:"max_tokens,omitempty"`
+// orReasoning 承载 OpenRouter 的 reasoning:{effort} 控制。effort 与 max_tokens 在 wire 上互斥；
+// 本版只用 effort 驱动 reasoning。
+type orReasoning struct {
+	Effort string `json:"effort,omitempty"`
 }
 
 type orMessage struct {
@@ -367,4 +363,51 @@ type orFuncDelta struct {
 type orUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
+}
+
+// ── model catalog (dynamic; OpenRouter /models is the richest in the industry) ──
+
+// DescribeModels parses OpenRouter's GET /api/v1/models body. As an aggregator of hundreds of
+// upstream models it cannot use a static catalog: each entry carries its own context_length,
+// top_provider.max_completion_tokens, and supported_parameters, so the whole catalog is derived
+// from the live payload rather than a hand-maintained spec table.
+//
+// DescribeModels 解析 OpenRouter 的 GET /api/v1/models。它聚合上百上游模型，无法用静态目录：
+// 每条自带 context_length、top_provider.max_completion_tokens、supported_parameters，故整份目录
+// 由实时载荷推导，而非手维护的 spec 表。
+func (p *openrouterProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	var resp struct {
+		Data []struct {
+			ID            string `json:"id"`
+			Name          string `json:"name"`
+			ContextLength int    `json:"context_length"`
+			TopProvider   struct {
+				MaxCompletionTokens int `json:"max_completion_tokens"`
+			} `json:"top_provider"`
+			SupportedParameters []string `json:"supported_parameters"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal([]byte(raw), &resp); err != nil {
+		return nil, nil
+	}
+	out := make([]ModelInfo, 0, len(resp.Data))
+	for _, m := range resp.Data {
+		if m.ID == "" {
+			continue
+		}
+		mi := ModelInfo{
+			ID:            m.ID,
+			DisplayName:   m.Name,
+			ContextWindow: m.ContextLength,
+			MaxOutput:     m.TopProvider.MaxCompletionTokens,
+		}
+		// OpenRouter publishes per-model knob support; surface reasoning effort when offered.
+		// OpenRouter 公布每模型旋钮支持；该模型支持时暴露 reasoning effort 旋钮。
+		if slices.Contains(m.SupportedParameters, "reasoning") {
+			mi.Knobs = []Knob{enumKnob("reasoning_effort", "Reasoning effort",
+				[]string{"minimal", "low", "medium", "high", "xhigh"}, "medium")}
+		}
+		out = append(out, mi)
+	}
+	return out, nil
 }

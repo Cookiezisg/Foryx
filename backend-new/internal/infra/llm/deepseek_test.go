@@ -29,7 +29,7 @@ func TestDeepSeekBuildRequest(t *testing.T) {
 		Key:      "sk-ds",
 		BaseURL:  "https://api.deepseek.com",
 		Messages: []LLMMessage{{Role: RoleUser, Content: "hi"}},
-		Thinking: &ThinkingSpec{Mode: "on", Effort: "low"},
+		Options:  map[string]string{"thinking": "enabled", "reasoning_effort": "high"},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -46,17 +46,10 @@ func TestDeepSeekBuildRequest(t *testing.T) {
 	if dr.Thinking == nil || dr.Thinking.Type != "enabled" {
 		t.Errorf("thinking = %+v, want enabled", dr.Thinking)
 	}
-	if dr.ReasoningEffort != "high" { // low maps to high
-		t.Errorf("reasoning_effort = %q, want high (low→high)", dr.ReasoningEffort)
-	}
-}
-
-func TestDeepSeekMapEffort(t *testing.T) {
-	cases := map[string]string{"": "high", "low": "high", "medium": "high", "high": "high", "xhigh": "max", "max": "max"}
-	for in, want := range cases {
-		if got := deepseekMapEffort(in); got != want {
-			t.Errorf("deepseekMapEffort(%q) = %q, want %q", in, got, want)
-		}
+	// Native value passes through verbatim — no normalization map.
+	// 原生值原样透传——无归一化映射。
+	if dr.ReasoningEffort != "high" {
+		t.Errorf("reasoning_effort = %q, want high", dr.ReasoningEffort)
 	}
 }
 

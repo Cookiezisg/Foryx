@@ -24,12 +24,18 @@ type Workspace struct {
     Name        string     `db:"name" json:"name"`                          // 自由展示名，全机唯一
     AvatarColor string     `db:"avatar_color" json:"avatarColor,omitempty"` // 前端色点，纯展示
     Language    string     `db:"language" json:"language"`                  // workspace 级 UI 偏好
-    LastUsedAt  *time.Time `db:"last_used_at" json:"lastUsedAt,omitempty"`  // 切换时刷，前端 picker 排序
-    CreatedAt   time.Time  `db:"created_at,created" json:"createdAt"`
-    UpdatedAt   time.Time  `db:"updated_at,updated" json:"updatedAt"`
-    DeletedAt   *time.Time `db:"deleted_at,deleted" json:"-"`               // 软删
+    // 按 scenario 的默认模型选择——与 Language 并列的 workspace 级偏好，JSON 存 ModelRef；nil = 该 scenario 未配置。
+    DefaultDialogue *modeldomain.ModelRef `db:"default_dialogue,json" json:"defaultDialogue,omitempty"`
+    DefaultUtility  *modeldomain.ModelRef `db:"default_utility,json" json:"defaultUtility,omitempty"`
+    DefaultAgent    *modeldomain.ModelRef `db:"default_agent,json" json:"defaultAgent,omitempty"`
+    LastUsedAt      *time.Time `db:"last_used_at" json:"lastUsedAt,omitempty"`  // 切换时刷，前端 picker 排序
+    CreatedAt       time.Time  `db:"created_at,created" json:"createdAt"`
+    UpdatedAt       time.Time  `db:"updated_at,updated" json:"updatedAt"`
+    DeletedAt       *time.Time `db:"deleted_at,deleted" json:"-"`               // 软删
 }
 ```
+
+- **`DefaultDialogue/Utility/Agent` 是 workspace 级模型偏好**：每个是一个 `modeldomain.ModelRef`（`apiKeyId`+`modelId`+原生 `options`），JSON 序列化进 `TEXT` 列，`nil` = 该 scenario 未配置。模型选择不再有独立表——它就是跟着 workspace 走的偏好（见 §5）。`DefaultFor(scenario)` / `SetDefaultFor(scenario, ref)` 在三列上做 scenario→列的开关。
 
 - **`Name` 是自由展示名，不是 slug**：允许中文、空格、大小写，`TrimSpace` 后非空、长度 ≤ 64 rune。全机唯一（大小写敏感），由物理 `UNIQUE INDEX idx_workspaces_name ... WHERE deleted_at IS NULL` 保证——partial index 使软删掉的名字可被重用。重名冲突由 `pkg/orm` 把 SQLite UNIQUE 违例翻译成 `ErrConflict`，store 再翻成 `ErrNameConflict`。
 - **`Language` 是 workspace 级偏好**：物理 CHECK 约束限制集合 `{'zh-CN','en'}`，默认 `'zh-CN'`。它是 workspace 一组未来偏好里的**第一个**（见 §5）。
@@ -85,6 +91,11 @@ Forgify 采用 **「无状态声明 + 状态校验」** 模式，后端不持 Se
 - `POST /api/v1/workspaces/{id}:activate` → `TouchLastUsed` 刷墙钟，返回最新 `Workspace`。
 - 前端切换 workspace 时调用，以此为信号刷新整个 app 的隔离上下文。
 
+### 4.3 设默认模型 (`default-models`)
+- `PUT /api/v1/workspaces/{id}/default-models/{scenario}`（`scenario ∈ dialogue/utility/agent`）→ body 是 `ModelRef`（`apiKeyId`+`modelId`+原生 `options`），写进对应的 `default_*` 列，返回更新后的 `Workspace`。
+- 校验：scenario 非白名单 → `modeldomain.ErrScenarioInvalid`(`MODEL_SCENARIO_INVALID`)；ModelRef 缺 `apiKeyId`/`modelId` → `modeldomain.ErrRefInvalid`(`MODEL_REF_INVALID`)。
+- 前端在 Settings 的模型配置页为三个 scenario 分别选模型，每选一次打一发。
+
 ### 4.3 终极保护 (The Last Guardian)
 - `Service.Delete` 内部先 `Count()`，若 `count <= 1` 拒删（`ErrCannotDeleteLast`）。
 - **原理**：隔离根必须存在，防止误删到 0 个 workspace 导致系统失去数据边界。
@@ -93,12 +104,12 @@ Forgify 采用 **「无状态声明 + 状态校验」** 模式，后端不持 Se
 
 ## 5. 偏好归属 (Preference Ownership)
 
-`Language` 是落到 workspace 行的**第一个**偏好，未来可能有更多 workspace 级 UI 偏好（主题、默认 model…）。划界原则：
+workspace 行承载**跟着 workspace 走的偏好**：当前是 `Language` 与三个 scenario 的默认模型（`default_dialogue/utility/agent`）。划界原则：
 
-- **进 workspace 行**：跟着 workspace 走的偏好（language、主题…）。
+- **进 workspace 行**：随 workspace 切换的偏好（language、默认模型选择…）。模型选择**刻意不另立表**——它就是 workspace 的偏好，落列即可。
 - **留全局，不进 workspace**：应用 / 机器级配置（`limits` 运营上限、遥测开关、机器指纹…），跨 workspace 共享。
 
-> `settings.json`（`settingsinfra`）文件存储与 workspace 行偏好的边界，留待 **settings 模块那一轮**判定哪些字段归 workspace 行、哪些留文件。本轮只确立 `Language` 一个，遵循 YAGNI——不预建空的 `preferences` 容器。
+> 模型默认值的形状（`ModelRef`）与分派规则归 **model 域**（见 `domains/model.md`）；workspace 只持有这三列、并实现 `ModelPicker` 把它们喂给 model 的 `Resolve`（见 §6.3）。`settings.json`（`settingsinfra`）文件存储与 workspace 行偏好的边界，留待 **settings 模块那一轮**判定哪些字段归 workspace 行、哪些留文件。
 
 ---
 
@@ -110,6 +121,10 @@ Forgify 采用 **「无状态声明 + 状态校验」** 模式，后端不持 Se
 ### 6.2 触发器所有权 (Trigger Owner)
 - **Cron 场景**：即便当前坐在电脑前的是 workspace A，后台正在跑的 workspace B 的 Cron 任务仍须以 B 的身份执行。
 - **实现**：`trigger_schedules` 表固化 `workspace_id`；调度器 Firing 时从配置读取 owner，注入 ctx workspace 模拟上下文。
+
+### 6.3 默认模型分派 (ModelPicker 实现)
+- workspace 域**实现 model 域的 `ModelPicker` 端口**（装配时注入 model 的 `Resolve`）：`Pick(ctx, scenario)` 读当前 workspace 的 `DefaultFor(scenario)`——已配则返回该 `ModelRef`，未配则返 `modeldomain.ErrNotConfigured`。
+- **职责切分**：workspace 只回答「这个 workspace 在该 scenario 选了谁」（存储侧）；override-then-default 规则、`ModelRef` 形状、能力聚合都归 model 域。这样 model 不依赖 workspace，workspace 也不懂分派规则。
 
 ---
 

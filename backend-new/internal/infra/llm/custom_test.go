@@ -48,17 +48,19 @@ func TestCustomBuildRequest(t *testing.T) {
 	}
 }
 
-// TestCustomNoThinking asserts the defining quirk: a custom endpoint is generic, so
-// NO thinking knob is ever emitted regardless of req.Thinking (on / off / auto all
-// produce the same plain body — a stray field could 400 an endpoint that lacks it).
+// TestCustomNoThinking asserts the defining quirk: a custom endpoint is generic, so it
+// ignores req.Options entirely and NO thinking/reasoning knob is ever emitted — even when
+// Options carries native knobs from other providers (a stray field could 400 an endpoint
+// that lacks it).
 //
-// TestCustomNoThinking 验本家特点：通用端点永不发 thinking 旋钮，on/off/auto 三态 body 一致。
+// TestCustomNoThinking 验本家特点：通用端点彻底忽略 req.Options，永不发 thinking/reasoning 旋钮——
+// 即便 Options 携带其他家原生旋钮也不发（多余字段可能让不支持的端点 400）。
 func TestCustomNoThinking(t *testing.T) {
 	p := newCustomProvider()
 	base := Request{ModelID: "m", Key: "k", BaseURL: "https://x"}
 
 	// rawFieldsOf decodes the body into a generic map so we can assert no thinking
-	// knob is present under any spelling (no reasoning_effort, no thinking).
+	// knob is present under any spelling (no reasoning_effort, no thinking, no reasoning).
 	// rawFieldsOf 解到通用 map，断言任何拼写的 thinking 旋钮都不存在。
 	rawFieldsOf := func(req Request) map[string]json.RawMessage {
 		httpReq, err := p.BuildRequest(context.Background(), req)
@@ -73,20 +75,19 @@ func TestCustomNoThinking(t *testing.T) {
 		return m
 	}
 
-	for _, spec := range []*ThinkingSpec{
-		nil,                          // auto
-		{Mode: "off"},                // off
-		{Mode: "on", Effort: "high"}, // on
-		{Mode: "auto"},               // explicit auto
+	for _, opts := range []map[string]string{
+		nil,                          // no knobs
+		{"reasoning_effort": "high"}, // OpenRouter-style knob
+		{"thinking": "enabled", "effort": "high"},           // Anthropic-style knobs
+		{"thinkingBudget": "-1", "enable_thinking": "true"}, // Gemini/Qwen-style knobs
 	} {
 		req := base
-		req.Thinking = spec
+		req.Options = opts
 		fields := rawFieldsOf(req)
-		if _, ok := fields["reasoning_effort"]; ok {
-			t.Errorf("thinking=%+v emitted reasoning_effort, want none", spec)
-		}
-		if _, ok := fields["thinking"]; ok {
-			t.Errorf("thinking=%+v emitted thinking field, want none", spec)
+		for _, key := range []string{"reasoning_effort", "thinking", "reasoning", "effort", "thinkingBudget", "enable_thinking"} {
+			if _, ok := fields[key]; ok {
+				t.Errorf("options=%+v emitted %q field, want none", opts, key)
+			}
 		}
 	}
 }

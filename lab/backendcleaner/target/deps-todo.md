@@ -114,10 +114,21 @@
 
 | 待办 | 去向 | 备注 |
 |---|---|---|
-| 模型解析器 `parseOpenAIModels`/`parseModelsByName` | model（M1.3）| 吃 apikey 的 `(provider, test_response)` 解析模型 id |
-| `modelcatalog`（去 pkg，本就 import modeldomain）| model（M1.3）| **静态模型目录 = 模型列表基线来源**（Claude 等无 list-models 端点的家的唯一来源；动态解析 `test_response` 是增量红利，非"兜底"）；**目录应可更新推送**（数据驱动、非硬编码 → 新模型不必等 app 发版，跟厂商节奏）；含能力规则 + option + compile（effort/上下文/thinking → ThinkingSpec）|
-| `capabilities.go`(CapabilityService) + capabilities handler + `GET /model-capabilities` | model（M1.3）| 拼可用模型列表 = 动态(解析 test_response) ∪ 静态目录 |
+| ✅ R0020 模型解析 | 各家 `infra/llm` provider `DescribeModels` | 落地为**各家 provider 自解析自家 /models**（非共享 parseOpenAIModels）；apikey 探针存 `test_response`，model 经 `llm.DescribeModels(provider, raw)` 取 |
+| ✅ R0020 模型目录 | 各家 provider 静态目录 + 富 /models 解析 | `modelcatalog` **弃用不迁**；知识(窗口/上限/旋钮)下沉各家 provider 自包含；删 `ThinkingSpec`/compile、各家原生 `Options`（静态数值随软件更新人工对账）|
+| ✅ R0020 capabilities | `app/model.CapabilityService` + handler | `GET /model-capabilities` 聚合各 key `DescribeModels`（去 modelsFound、返原生 knobs）|
 | 选搜索 key：`IsDefault`/`DefaultProvider`/`SearchProviderPriority`/`GetByProvider` 启发式 | **未来搜索配置模块** | 像 model 一样让用户显式配 api_key_id，**不启发式**（防乱烧钱）；随 WebSearch（波次 2）配套建 |
-| `RefScanner` 注入（model_config/conv/node override 引用检查）| model/conversation/workflow 各轮 + M7 | Delete → ErrInUse；DIP 端口 apikey 这轮留，实现注入留下游 |
+| `RefScanner` 注入（各实体 override 引用检查）| conversation/workflow/agent 各轮（波次 2/3/5）+ M7 | model_config 已废（默认搬 workspace 列）；各持 `*ModelRef` override 的实体各自实现 scanner 扫自身列/字段；Delete → ErrInUse；DIP 端口 apikey 这轮留 |
 | `KeyProvider` 注入 | M7 | 28 模块按 id 取钥匙（`ResolveCredentialsByID`/`MarkInvalidByID`）|
-| `pkg/modelcatalog` import `modeldomain` 的错位 | model（M1.3）| 它非纯工具（依赖 model domain），随模型领域归 model 模块，不留 pkg |
+| ✅ R0020 `pkg/modelcatalog` 错位 | 弃用不迁 | 知识下沉各家 `infra/llm` provider，无跨家 pkg 目录、无 model domain 依赖错位 |
+
+## 来自波次 1 · M1.3（model 重写 R0020）
+
+> model 退化为聚合薄层；override 消费、静态目录维护、连带 doc-fix 移走如下。
+
+| 待办 | 去向 | 备注 |
+|---|---|---|
+| override 消费者 | chat / agent / workflow-node 各轮（波次 2/3/5）+ M7 | 各自读自身 `*ModelRef` override 列/字段 + 调 `model.Resolve(scenario, override, picker)`（override 优先否则默认）；各自实现 apikey `RefScanner` 扫自身 override 列/字段（弱引用，key 没了运行时 `MODEL_NOT_CONFIGURED`，不做删除时保护）|
+| 静态模型目录数值对账 | 随软件更新人工 | 各家 `infra/llm/<家>.go` 静态目录（窗口/上限/旋钮）随厂商迭代**人工对账**，OpenAI 迭代尤快；非自动同步 |
+| `pkg/limits/limits.go` modelcatalog 注释 | ✅ 已 doc-fix R0020 | 注释提已弃用的 `modelcatalog` → 改述（无遗留）|
+| M1.2 apikey anthropic 探针 | ✅ 已改 R0020 | 探针从 `anthropic_ping` 改打 `/v1/models`（`anthropic_models`）；envelope 不变（doc-fix 历史断言"无 list-models 端点"）|

@@ -85,7 +85,7 @@ Forgify 采用 **“显式写入”** 而非“动态扫描”来维护关系。
 
 - **Workflow/Agent**：锻造成功后的“第一读者”。
 - **Document**：解析 Wikilink 的驱动方。
-- **APIKey**：通过 `model_config` 关联，防止 Key 被误删。
+- **APIKey**：通过 workspace 默认模型列与实体 model override 关联，防止 Key 被误删。
 
 ---
 

@@ -64,8 +64,8 @@ type Conversation struct {
 
 ### 2.3 Per-Conversation Overrides (隔离重载)
 每个对话可以拥有完全独立的“智力水平”：
-- **原理**：`ModelOverride` 字段。
-- **联动**：如果该字段非空，`chat.Service` 在解析模型时会优先忽略 `/api/v1/model-configs` 中的全局默认值。
+- **原理**：`ModelOverride` 字段（一个 `model.ModelRef`）。
+- **联动**：`chat.Service` 经 `model.Resolve(ctx, dialogue, override, picker)` 解析——override 非空即胜出，否则回落 workspace 的 dialogue 默认模型（`model.md` §2）。
 - **用处**：用户可以在对话 A 用 GPT-4o 进行重度代码编写，而在对话 B 用 Haiku 进行快速问答，互不干扰。
 
 ---

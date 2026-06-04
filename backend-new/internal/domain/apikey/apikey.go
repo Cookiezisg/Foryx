@@ -69,10 +69,14 @@ type Credentials struct {
 }
 
 // ProbedKey is a read-only snapshot of one key's probe archive, handed to the
-// model module to parse available models from. Carries no secret.
+// model module to parse available models from. ID + DisplayName let the model
+// module attribute each parsed model to the key that offers it. Carries no secret.
 //
-// ProbedKey 是一把 key 探测档案的只读快照，交给 model 模块解析可用模型。不含密钥。
+// ProbedKey 是一把 key 探测档案的只读快照，交给 model 模块解析可用模型。ID + DisplayName 让
+// model 模块把每个解析出的模型归属到提供它的 key。不含密钥。
 type ProbedKey struct {
+	ID           string
+	DisplayName  string
 	Provider     string
 	TestStatus   string
 	TestResponse string

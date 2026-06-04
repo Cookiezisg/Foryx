@@ -46,17 +46,23 @@ func TestDoubaoBuildRequest(t *testing.T) {
 	if len(db.Messages) != 2 || db.Messages[0].Role != "system" || db.Messages[1].Role != "user" {
 		t.Errorf("messages = %+v", db.Messages)
 	}
-	// nil Thinking → auto → no thinking object.
-	// nil Thinking → auto → 不发 thinking 对象。
+	// No Options → no thinking object.
+	// 无 Options → 不发 thinking 对象。
 	if db.Thinking != nil {
-		t.Errorf("auto (nil) thinking = %+v, want omitted", db.Thinking)
+		t.Errorf("no options thinking = %+v, want omitted", db.Thinking)
 	}
 }
 
-func TestDoubaoBuildRequestThinkingModes(t *testing.T) {
+// TestDoubaoBuildRequestNativeKnobs verifies thinking ({type}) and reasoning_effort pass
+// through from Options verbatim (no normalization), and are omitted when Options lacks them.
+// Ark's Chat API has no budget_tokens — reasoning_effort is an effort tier, not a token budget.
+//
+// 验证 thinking（{type}）与 reasoning_effort 从 Options 原样透传（不归一），缺省时省略。
+// 方舟 Chat API 无 budget_tokens——reasoning_effort 是力度档，非 token 预算。
+func TestDoubaoBuildRequestNativeKnobs(t *testing.T) {
 	p := newDoubaoProvider()
 	base := Request{ModelID: "doubao-seed-1-6", Key: "k", BaseURL: "https://x"}
-	thinkingOf := func(req Request) *doubaoThinking {
+	encode := func(req Request) doubaoRequest {
 		httpReq, err := p.BuildRequest(context.Background(), req)
 		if err != nil {
 			t.Fatal(err)
@@ -64,39 +70,27 @@ func TestDoubaoBuildRequestThinkingModes(t *testing.T) {
 		body, _ := io.ReadAll(httpReq.Body)
 		var db doubaoRequest
 		_ = json.Unmarshal(body, &db)
-		return db.Thinking
+		return db
 	}
 
-	// auto / nil → omitted.
-	// auto / nil → 省略。
-	if got := thinkingOf(base); got != nil {
-		t.Errorf("auto (nil) → %+v, want omitted", got)
+	// No Options → both omitted.
+	// 无 Options → 两者省略。
+	if db := encode(base); db.Thinking != nil || db.ReasoningEffort != "" {
+		t.Errorf("no options → thinking=%+v effort=%q, want both omitted", db.Thinking, db.ReasoningEffort)
 	}
 
-	base.Thinking = &ThinkingSpec{Mode: "auto"}
-	if got := thinkingOf(base); got != nil {
-		t.Errorf("auto → %+v, want omitted", got)
+	// thinking:disabled → {type:disabled}, no effort.
+	// thinking:disabled → {type:disabled}，无 effort。
+	base.Options = map[string]string{"thinking": "disabled"}
+	if db := encode(base); db.Thinking == nil || db.Thinking.Type != "disabled" || db.ReasoningEffort != "" {
+		t.Errorf("disabled → thinking=%+v effort=%q, want {disabled}/omitted", db.Thinking, db.ReasoningEffort)
 	}
 
-	// off → {type:disabled}, no budget.
-	// off → {type:disabled}，无 budget。
-	base.Thinking = &ThinkingSpec{Mode: "off"}
-	if got := thinkingOf(base); got == nil || got.Type != "disabled" || got.BudgetTokens != 0 {
-		t.Errorf("off → %+v, want {disabled,0}", got)
-	}
-
-	// on → {type:enabled}, budget passed through.
-	// on → {type:enabled}，budget 透传。
-	base.Thinking = &ThinkingSpec{Mode: "on", Budget: 4096}
-	if got := thinkingOf(base); got == nil || got.Type != "enabled" || got.BudgetTokens != 4096 {
-		t.Errorf("on+budget → %+v, want {enabled,4096}", got)
-	}
-
-	// on without budget → {type:enabled}, budget omitted (0).
-	// on 无 budget → {type:enabled}，budget 省略（0）。
-	base.Thinking = &ThinkingSpec{Mode: "on"}
-	if got := thinkingOf(base); got == nil || got.Type != "enabled" || got.BudgetTokens != 0 {
-		t.Errorf("on → %+v, want {enabled,0}", got)
+	// thinking:enabled + reasoning_effort:max → both pass through verbatim.
+	// thinking:enabled + reasoning_effort:max → 两者原样透传。
+	base.Options = map[string]string{"thinking": "enabled", "reasoning_effort": "max"}
+	if db := encode(base); db.Thinking == nil || db.Thinking.Type != "enabled" || db.ReasoningEffort != "max" {
+		t.Errorf("enabled+max → thinking=%+v effort=%q, want {enabled}/max", db.Thinking, db.ReasoningEffort)
 	}
 }
 

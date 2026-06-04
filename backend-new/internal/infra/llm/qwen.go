@@ -7,21 +7,22 @@ import (
 	"fmt"
 	"iter"
 	"net/http"
+	"strconv"
 )
 
 // qwenProvider speaks Qwen DashScope's compatible-mode /chat/completions API, fully
 // self-contained: its own wire types, message encoding, and SSE chunk parsing — no
 // sharing with the openai/deepseek providers even though the wire is OpenAI-shaped.
 // Qwen specifics: enable_thinking bool (pointer to distinguish false vs absent) +
-// thinking_budget, a stream guard (enable_thinking=true is illegal on non-streaming
-// calls), and a FLAT error envelope {code,message,request_id} that arrives as a 200
-// SSE chunk with no nested "error" object — unlike every other provider here.
+// thinking_budget as top-level body fields, and a FLAT error envelope
+// {code,message,request_id} that arrives as a 200 SSE chunk with no nested "error"
+// object — unlike every other provider here.
 //
 // qwenProvider 完整自包含地讲 Qwen DashScope compatible-mode /chat/completions：自己的
 // wire 类型、消息编码、SSE 解析——即使 wire 是 OpenAI 形状也不与 openai/deepseek 共享。
-// Qwen 特有：enable_thinking bool（指针区分 false 与 absent）+ thinking_budget、流式守卫
-// （非流式调用禁用 enable_thinking=true）、以及扁平错误信封 {code,message,request_id}：以
-// 200 SSE chunk 返回、无嵌套 "error"，区别于这里所有其他 provider。
+// Qwen 特有：enable_thinking bool（指针区分 false 与 absent）+ thinking_budget 作为顶层
+// body 字段、以及扁平错误信封 {code,message,request_id}：以 200 SSE chunk 返回、无嵌套
+// "error"，区别于这里所有其他 provider。
 type qwenProvider struct{}
 
 func newQwenProvider() *qwenProvider { return &qwenProvider{} }
@@ -33,14 +34,11 @@ func (p *qwenProvider) DefaultBaseURL() string {
 
 // BuildRequest encodes a Request into a Qwen DashScope /chat/completions HTTP request.
 //
-// thinking: on → enable_thinking=true (+ thinking_budget when Budget>0); off →
-// enable_thinking=false; nil/auto → omit both. Stream guard: enable_thinking=true is
-// rejected on non-streaming calls, so when DisableStream is set the on-branch silently
-// omits the thinking fields rather than provoke a 400.
+// Native knobs from Options: enable_thinking ("true"/"false") + thinking_budget (int) —
+// both top-level body fields, not extra_body.
 //
-// BuildRequest 把 Request 编码为 Qwen DashScope 请求。thinking：on→enable_thinking=true
-// （Budget>0 时加 thinking_budget）；off→false；nil/auto→省略。流式守卫：非流式调用拒绝
-// enable_thinking=true，故 DisableStream 时 on 分支静默省略 thinking 字段以免 400。
+// BuildRequest 把 Request 编码为 Qwen DashScope 请求。原生旋钮取自 Options：
+// enable_thinking + thinking_budget——均为顶层 body 字段、非 extra_body。
 func (p *qwenProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	req.Messages = SanitizeMessages(req.Messages)
 	msgs, err := toQwenMsgs(req.Messages, req.System)
@@ -58,22 +56,19 @@ func (p *qwenProvider) BuildRequest(ctx context.Context, req Request) (*http.Req
 	if len(req.Tools) > 0 {
 		body.Tools = toQwenTools(req.Tools)
 	}
-	if req.Thinking != nil && req.Thinking.Mode != "auto" {
-		switch req.Thinking.Mode {
-		case "on":
-			// Stream guard: enable_thinking=true demands stream=true, so skip it on a
-			// non-streaming call to avoid Qwen's 400 on the conflicting parameter.
-			// 流式守卫：enable_thinking=true 要求 stream=true，非流式时跳过以避 400。
-			if !req.DisableStream {
-				t := true
-				body.EnableThinking = &t
-				if req.Thinking.Budget > 0 {
-					body.ThinkingBudget = req.Thinking.Budget
-				}
-			}
-		case "off":
-			f := false
-			body.EnableThinking = &f
+	if req.MaxTokens > 0 {
+		body.MaxTokens = req.MaxTokens
+	}
+	// enable_thinking via *bool so an explicit "false" reaches the wire (a plain bool's
+	// zero value would be omitted, collapsing "off" into "auto").
+	// enable_thinking 用 *bool，使显式 "false" 能上线（裸 bool 的零值会被 omit，把 "off" 误并入 "auto"）。
+	if v := req.Options["enable_thinking"]; v != "" {
+		b := v == "true"
+		body.EnableThinking = &b
+	}
+	if v := req.Options["thinking_budget"]; v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			body.ThinkingBudget = n
 		}
 	}
 	raw, err := json.Marshal(body)
@@ -284,11 +279,11 @@ type qwenRequest struct {
 	Stream        bool               `json:"stream"`
 	StreamOptions *qwenStreamOptions `json:"stream_options,omitempty"`
 	// EnableThinking is a pointer so false (thinking explicitly off) is distinguishable
-	// from absent (auto). ThinkingBudget rides along only on the on-branch with Budget>0.
-	// EnableThinking 用指针，使 false（显式关）区别于 absent（auto）。ThinkingBudget 仅
-	// 在 on 且 Budget>0 时随发。
+	// from absent (auto); a plain bool would omit its false zero value.
+	// EnableThinking 用指针，使 false（显式关）区别于 absent（auto）；裸 bool 会 omit 掉 false 零值。
 	EnableThinking *bool `json:"enable_thinking,omitempty"`
 	ThinkingBudget int   `json:"thinking_budget,omitempty"`
+	MaxTokens      int   `json:"max_tokens,omitempty"`
 }
 
 type qwenStreamOptions struct {
@@ -367,4 +362,36 @@ type qwenFuncDelta struct {
 type qwenUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
+}
+
+// ── model catalog (static; Qwen /models returns ids only) ───────────────────────
+
+func qwenThinkingKnobs() []Knob {
+	return []Knob{
+		boolKnob("enable_thinking", "Thinking", "false"),
+		intKnob("thinking_budget", "Thinking budget", ""),
+	}
+}
+
+// qwenSpecs is Qwen's static catalog, most-specific prefix first. The qwen3 line controls
+// thinking by enable_thinking+thinking_budget; qwen-long/qwen-max have no thinking. Numbers
+// per DashScope docs, 2026-06.
+//
+// qwenSpecs 是 Qwen 静态目录，最具体前缀在前。qwen3 线靠 enable_thinking+thinking_budget
+// 控思考；qwen-long/qwen-max 无思考。数值据 DashScope 文档 2026-06。
+var qwenSpecs = []modelSpec{
+	{"qwen3-max", 262144, 32768, qwenThinkingKnobs()},
+	{"qwen3.5-plus", 1000000, 65536, qwenThinkingKnobs()},
+	{"qwen-plus", 1000000, 32768, qwenThinkingKnobs()},
+	{"qwen-flash", 1000000, 32768, qwenThinkingKnobs()},
+	{"qwen-turbo", 131072, 16384, qwenThinkingKnobs()},
+	{"qwen-long", 10000000, 32768, nil},
+	{"qwen-max", 32768, 8192, nil},
+}
+
+// DescribeModels parses Qwen's id-only /models body against the static catalog.
+//
+// DescribeModels 解析 Qwen 仅含 id 的 /models 返回，查静态目录。
+func (p *qwenProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	return describeFromSpecs(qwenSpecs, raw), nil
 }

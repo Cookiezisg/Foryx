@@ -64,23 +64,47 @@ func TestGeminiBuildRequest(t *testing.T) {
 	}
 }
 
-func TestGeminiThinkingModes(t *testing.T) {
+// TestGeminiThinkingKnobs drives Gemini's native thinking knobs from Options:
+// thinkingBudget (Gemini-2.5 int: 0 off / -1 dynamic / positive) and thinkingLevel
+// (Gemini-3 enum). Values pass through verbatim; includeThoughts is surfaced unless budget is 0.
+//
+// TestGeminiThinkingKnobs 用 Options 驱动 Gemini 原生 thinking 旋钮：thinkingBudget
+// （Gemini-2.5 整数：0 关 / -1 动态 / 正数）与 thinkingLevel（Gemini-3 枚举）。原生值直接透传；
+// 除 budget=0 外打开 includeThoughts。
+func TestGeminiThinkingKnobs(t *testing.T) {
 	base := Request{ModelID: "m", Messages: []LLMMessage{{Role: RoleUser, Content: "x"}}}
 
-	base.Thinking = nil
+	// absent → thinkingConfig omitted.
+	// 不设 → thinkingConfig 省略。
 	if gr := geminiBody(t, base); gr.GenerationConfig != nil && gr.GenerationConfig.ThinkingConfig != nil {
-		t.Errorf("auto → thinkingConfig should be omitted")
+		t.Errorf("absent → thinkingConfig should be omitted")
 	}
-	base.Thinking = &ThinkingSpec{Mode: "off"}
+
+	// thinkingBudget "0" → off: budget 0 serialized, includeThoughts NOT set.
+	// thinkingBudget "0" → 关：budget 0 序列化，不设 includeThoughts。
+	base.Options = map[string]string{"thinkingBudget": "0"}
 	gr := geminiBody(t, base)
-	if gr.GenerationConfig.ThinkingConfig == nil || gr.GenerationConfig.ThinkingConfig.ThinkingBudget == nil || *gr.GenerationConfig.ThinkingConfig.ThinkingBudget != 0 {
-		t.Errorf("off → thinkingBudget 0, got %+v", gr.GenerationConfig.ThinkingConfig)
-	}
-	base.Thinking = &ThinkingSpec{Mode: "on"}
-	gr = geminiBody(t, base)
 	tc := gr.GenerationConfig.ThinkingConfig
+	if tc == nil || tc.ThinkingBudget == nil || *tc.ThinkingBudget != 0 || tc.IncludeThoughts {
+		t.Errorf("budget 0 → thinkingBudget 0 + no includeThoughts, got %+v", tc)
+	}
+
+	// thinkingBudget "-1" → dynamic: budget -1 + includeThoughts.
+	// thinkingBudget "-1" → 动态：budget -1 + includeThoughts。
+	base.Options = map[string]string{"thinkingBudget": "-1"}
+	gr = geminiBody(t, base)
+	tc = gr.GenerationConfig.ThinkingConfig
 	if tc == nil || tc.ThinkingBudget == nil || *tc.ThinkingBudget != -1 || !tc.IncludeThoughts {
-		t.Errorf("on (no budget) → dynamic -1 + includeThoughts, got %+v", tc)
+		t.Errorf("budget -1 → dynamic -1 + includeThoughts, got %+v", tc)
+	}
+
+	// thinkingLevel passes through verbatim + includeThoughts.
+	// thinkingLevel 原样透传 + includeThoughts。
+	base.Options = map[string]string{"thinkingLevel": "high"}
+	gr = geminiBody(t, base)
+	tc = gr.GenerationConfig.ThinkingConfig
+	if tc == nil || tc.ThinkingLevel != "high" || !tc.IncludeThoughts {
+		t.Errorf("level high → thinkingLevel high + includeThoughts, got %+v", tc)
 	}
 }
 

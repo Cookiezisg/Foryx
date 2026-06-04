@@ -19,7 +19,7 @@ func TestOpenRouterBuildRequest(t *testing.T) {
 		System:   "you are helpful",
 		Messages: []LLMMessage{{Role: RoleUser, Content: "hi"}},
 		Tools:    []ToolDef{{Name: "get_weather", Description: "d", Parameters: json.RawMessage(`{"type":"object"}`)}},
-		Thinking: &ThinkingSpec{Mode: "on", Effort: "high"},
+		Options:  map[string]string{"reasoning_effort": "high"},
 	}
 	httpReq, err := p.BuildRequest(context.Background(), req)
 	if err != nil {
@@ -42,7 +42,7 @@ func TestOpenRouterBuildRequest(t *testing.T) {
 	if or.Model != "anthropic/claude-3.5-sonnet" || !or.Stream {
 		t.Errorf("model=%s stream=%v", or.Model, or.Stream)
 	}
-	if or.Reasoning == nil || or.Reasoning.Effort != "high" || or.Reasoning.MaxTokens != 0 {
+	if or.Reasoning == nil || or.Reasoning.Effort != "high" {
 		t.Errorf("reasoning = %+v, want {effort:high}", or.Reasoning)
 	}
 	if len(or.Tools) != 1 || or.Tools[0].Function.Name != "get_weather" {
@@ -53,10 +53,16 @@ func TestOpenRouterBuildRequest(t *testing.T) {
 	}
 }
 
-func TestOpenRouterBuildRequestThinkingModes(t *testing.T) {
+// TestOpenRouterBuildRequestReasoningEffort drives OpenRouter's sole native knob from
+// Options: reasoning_effort → reasoning:{effort}, passed through verbatim. Absent → no
+// reasoning field at all (the upstream decides).
+//
+// TestOpenRouterBuildRequestReasoningEffort 用 Options 驱动 OpenRouter 唯一原生旋钮：
+// reasoning_effort → reasoning:{effort}，原样透传。不设 → 完全不发 reasoning 字段（由上游定）。
+func TestOpenRouterBuildRequestReasoningEffort(t *testing.T) {
 	p := newOpenRouterProvider()
-	base := Request{ModelID: "m", Key: "k", BaseURL: "https://x"}
-	reasoningOf := func(req Request) *orReasoningField {
+	reasoningOf := func(opts map[string]string) *orReasoning {
+		req := Request{ModelID: "m", Key: "k", BaseURL: "https://x", Options: opts}
 		httpReq, err := p.BuildRequest(context.Background(), req)
 		if err != nil {
 			t.Fatal(err)
@@ -67,38 +73,19 @@ func TestOpenRouterBuildRequestThinkingModes(t *testing.T) {
 		return or.Reasoning
 	}
 
-	// auto (nil) → no reasoning field at all.
-	// auto（nil）→完全不发 reasoning 字段。
-	if got := reasoningOf(base); got != nil {
-		t.Errorf("auto (nil) → %+v, want omitted", got)
+	// absent → no reasoning field at all.
+	// 不设 → 完全不发 reasoning 字段。
+	if got := reasoningOf(nil); got != nil {
+		t.Errorf("absent → %+v, want omitted", got)
 	}
 
-	// off → still omitted (OpenRouter has no clean disable form).
-	// off → 同样省略（OpenRouter 无干净关闭形式）。
-	base.Thinking = &ThinkingSpec{Mode: "off"}
-	if got := reasoningOf(base); got != nil {
-		t.Errorf("off → %+v, want omitted", got)
+	// reasoning_effort passes through verbatim into reasoning:{effort}.
+	// reasoning_effort 原样透传进 reasoning:{effort}。
+	if got := reasoningOf(map[string]string{"reasoning_effort": "low"}); got == nil || got.Effort != "low" {
+		t.Errorf("low → %+v, want {effort:low}", got)
 	}
-
-	// on + Effort → reasoning:{effort}.
-	// on + Effort → reasoning:{effort}。
-	base.Thinking = &ThinkingSpec{Mode: "on", Effort: "low"}
-	if got := reasoningOf(base); got == nil || got.Effort != "low" || got.MaxTokens != 0 {
-		t.Errorf("on+effort → %+v, want {effort:low}", got)
-	}
-
-	// on + Budget (no Effort) → reasoning:{max_tokens}.
-	// on + Budget（无 Effort）→ reasoning:{max_tokens}。
-	base.Thinking = &ThinkingSpec{Mode: "on", Budget: 2048}
-	if got := reasoningOf(base); got == nil || got.MaxTokens != 2048 || got.Effort != "" {
-		t.Errorf("on+budget → %+v, want {max_tokens:2048}", got)
-	}
-
-	// on + neither → default reasoning:{effort:medium}.
-	// on 无参 → 默认 reasoning:{effort:medium}。
-	base.Thinking = &ThinkingSpec{Mode: "on"}
-	if got := reasoningOf(base); got == nil || got.Effort != "medium" {
-		t.Errorf("on+neither → %+v, want {effort:medium}", got)
+	if got := reasoningOf(map[string]string{"reasoning_effort": "xhigh"}); got == nil || got.Effort != "xhigh" {
+		t.Errorf("xhigh → %+v, want {effort:xhigh}", got)
 	}
 }
 

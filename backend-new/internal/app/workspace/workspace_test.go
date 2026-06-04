@@ -9,7 +9,9 @@ import (
 
 	"go.uber.org/zap"
 
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	workspacedomain "github.com/sunweilin/forgify/backend/internal/domain/workspace"
+	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
 // fakeRepo is an in-memory workspacedomain.Repository. It mirrors the store's
@@ -170,5 +172,51 @@ func TestValidate_ExistingAndMissing(t *testing.T) {
 	}
 	if err := s.Validate(context.Background(), "ws_missing"); !errors.Is(err, workspacedomain.ErrNotFound) {
 		t.Errorf("validate missing: err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestSetDefault_AndPick(t *testing.T) {
+	s := newService()
+	w, _ := s.Create(context.Background(), CreateInput{Name: "WS"})
+	ref := &modeldomain.ModelRef{APIKeyID: "aki_1", ModelID: "gpt-5.5", Options: map[string]string{"reasoning_effort": "high"}}
+	if _, err := s.SetDefault(context.Background(), w.ID, modeldomain.ScenarioDialogue, ref); err != nil {
+		t.Fatalf("set default: %v", err)
+	}
+	// Pick reads the current workspace (id from ctx) — the picker contract LLM callers use.
+	// Pick 读当前 workspace（id 取自 ctx）——LLM caller 用的 picker 契约。
+	ctx := reqctxpkg.SetWorkspaceID(context.Background(), w.ID)
+	got, err := s.Pick(ctx, modeldomain.ScenarioDialogue)
+	if err != nil {
+		t.Fatalf("pick: %v", err)
+	}
+	if got.APIKeyID != "aki_1" || got.ModelID != "gpt-5.5" || got.Options["reasoning_effort"] != "high" {
+		t.Errorf("pick = %+v, want the set default", got)
+	}
+}
+
+func TestPick_NotConfigured(t *testing.T) {
+	s := newService()
+	w, _ := s.Create(context.Background(), CreateInput{Name: "WS"})
+	ctx := reqctxpkg.SetWorkspaceID(context.Background(), w.ID)
+	if _, err := s.Pick(ctx, modeldomain.ScenarioUtility); !errors.Is(err, modeldomain.ErrNotConfigured) {
+		t.Errorf("err = %v, want ErrNotConfigured", err)
+	}
+}
+
+func TestSetDefault_InvalidRef(t *testing.T) {
+	s := newService()
+	w, _ := s.Create(context.Background(), CreateInput{Name: "WS"})
+	_, err := s.SetDefault(context.Background(), w.ID, modeldomain.ScenarioAgent, &modeldomain.ModelRef{APIKeyID: "aki_1"})
+	if !errors.Is(err, modeldomain.ErrRefInvalid) {
+		t.Errorf("err = %v, want ErrRefInvalid", err)
+	}
+}
+
+func TestSetDefault_InvalidScenario(t *testing.T) {
+	s := newService()
+	w, _ := s.Create(context.Background(), CreateInput{Name: "WS"})
+	_, err := s.SetDefault(context.Background(), w.ID, "bogus", &modeldomain.ModelRef{APIKeyID: "a", ModelID: "m"})
+	if !errors.Is(err, modeldomain.ErrScenarioInvalid) {
+		t.Errorf("err = %v, want ErrScenarioInvalid", err)
 	}
 }

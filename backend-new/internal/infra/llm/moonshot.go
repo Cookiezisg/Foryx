@@ -12,12 +12,12 @@ import (
 // moonshotProvider speaks Moonshot Kimi's /v1 /chat/completions API, fully self-contained:
 // its own wire types, message encoding, and SSE chunk parsing — no sharing with the openai
 // provider even though the wire is OpenAI-shaped. Moonshot specifics: thinking:{type} toggle
-// for k2.5/k2.6 (kimi-k2-thinking is intrinsic and needs no param), and the official
+// for kimi-k2.6/k2.5 (the moonshot-v1-* line has no thinking), and the official
 // api.moonshot.cn streams reasoning_content (underscore form, never a bare "reasoning" alias).
 //
 // moonshotProvider 完整自包含地讲 Moonshot Kimi /v1 /chat/completions：自己的 wire 类型、消息
-// 编码、SSE 解析——即使 wire 是 OpenAI 形状也不与 openai 共享。Moonshot 特有：k2.5/k2.6 的
-// thinking:{type} 开关（kimi-k2-thinking 内禀，无需参数），官方 api.moonshot.cn 流
+// 编码、SSE 解析——即使 wire 是 OpenAI 形状也不与 openai 共享。Moonshot 特有：kimi-k2.6/k2.5 的
+// thinking:{type} 开关（moonshot-v1-* 线无思考），官方 api.moonshot.cn 流
 // reasoning_content（下划线形，绝不用裸 "reasoning" 别名）。
 type moonshotProvider struct{}
 
@@ -28,13 +28,13 @@ func (p *moonshotProvider) DefaultBaseURL() string { return "https://api.moonsho
 
 // BuildRequest encodes a Request into a Moonshot Kimi /chat/completions HTTP request.
 //
-// thinking: on → thinking:{type:enabled}; off → thinking:{type:disabled}; nil/auto → omit.
-// kimi-k2-thinking callers pass nil (model is intrinsic); k2.5/k2.6 callers pass on/off to
-// toggle the param. No max_tokens is sent so callers that omit a cap get the model default.
+// Native knobs from Options pass through verbatim: thinking ("enabled"/"disabled"), Kimi's only
+// reasoning toggle (kimi-k2.6/k2.5 support it). MaxTokens maps to max_completion_tokens (the legacy
+// max_tokens field is deprecated); omitting it lets the model use its default cap.
 //
-// BuildRequest 把 Request 编码为 Moonshot Kimi /chat/completions 请求。
-// thinking：on→enabled；off→disabled；nil/auto→省略。kimi-k2-thinking 传 nil（模型内禀），
-// k2.5/k2.6 传 on/off。不发 max_tokens，未指定上限时走模型默认。
+// BuildRequest 把 Request 编码为 Moonshot Kimi /chat/completions 请求。原生旋钮取自 Options
+// 原样透传：thinking（enabled/disabled，Kimi 唯一思考开关，仅 kimi-k2.6/k2.5 支持）。
+// MaxTokens 映射 max_completion_tokens（旧 max_tokens 已弃用）；不传则走模型默认上限。
 func (p *moonshotProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	req.Messages = SanitizeMessages(req.Messages)
 	msgs, err := tomoonshotMsgs(req.Messages, req.System)
@@ -52,13 +52,11 @@ func (p *moonshotProvider) BuildRequest(ctx context.Context, req Request) (*http
 	if len(req.Tools) > 0 {
 		body.Tools = tomoonshotTools(req.Tools)
 	}
-	if req.Thinking != nil && req.Thinking.Mode != "auto" {
-		switch req.Thinking.Mode {
-		case "on":
-			body.Thinking = &moonshotThinking{Type: "enabled"}
-		case "off":
-			body.Thinking = &moonshotThinking{Type: "disabled"}
-		}
+	if req.MaxTokens > 0 {
+		body.MaxCompletionTokens = req.MaxTokens
+	}
+	if v := req.Options["thinking"]; v != "" {
+		body.Thinking = &moonshotThinking{Type: v}
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -244,12 +242,13 @@ func (s *moonshotToolState) resolveIndex(tc moonshotToolCallDelta) int {
 // ── Moonshot wire types ─────────────────────────────────────────────────────────
 
 type moonshotRequest struct {
-	Model         string                 `json:"model"`
-	Messages      []moonshotMessage      `json:"messages"`
-	Tools         []moonshotTool         `json:"tools,omitempty"`
-	Stream        bool                   `json:"stream"`
-	StreamOptions *moonshotStreamOptions `json:"stream_options,omitempty"`
-	Thinking      *moonshotThinking      `json:"thinking,omitempty"`
+	Model               string                 `json:"model"`
+	Messages            []moonshotMessage      `json:"messages"`
+	Tools               []moonshotTool         `json:"tools,omitempty"`
+	Stream              bool                   `json:"stream"`
+	StreamOptions       *moonshotStreamOptions `json:"stream_options,omitempty"`
+	MaxCompletionTokens int                    `json:"max_completion_tokens,omitempty"`
+	Thinking            *moonshotThinking      `json:"thinking,omitempty"`
 }
 
 type moonshotStreamOptions struct {
@@ -329,4 +328,31 @@ type moonshotFuncDelta struct {
 type moonshotUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
+}
+
+// ── model catalog (static; Moonshot /models is richer but a static catalog suffices here) ──
+
+func moonshotThinkingKnobs() []Knob {
+	return []Knob{enumKnob("thinking", "Thinking", []string{"enabled", "disabled"}, "enabled")}
+}
+
+// moonshotSpecs is Moonshot's static catalog, most-specific prefix first. Only kimi-k2.6/k2.5
+// (256K ctx) expose the thinking toggle; the moonshot-v1-* line has no reasoning knob. Retired ids
+// (e.g. kimi-k2-thinking) are intentionally absent. Numbers per Moonshot docs, 2026-06-04.
+//
+// moonshotSpecs 是 Moonshot 静态目录，最具体前缀在前。仅 kimi-k2.6/k2.5（256K）有 thinking 开关；
+// moonshot-v1-* 线无思考旋钮。已下线 id（如 kimi-k2-thinking）刻意不收。数值据 Moonshot 文档 2026-06-04。
+var moonshotSpecs = []modelSpec{
+	{"kimi-k2.6", 262144, 32768, moonshotThinkingKnobs()},
+	{"kimi-k2.5", 262144, 32768, moonshotThinkingKnobs()},
+	{"moonshot-v1-128k", 131072, 4096, nil},
+	{"moonshot-v1-32k", 32768, 4096, nil},
+	{"moonshot-v1-8k", 8192, 4096, nil},
+}
+
+// DescribeModels parses Moonshot's /models body against the static catalog.
+//
+// DescribeModels 解析 Moonshot /models 返回，查静态目录。
+func (p *moonshotProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	return describeFromSpecs(moonshotSpecs, raw), nil
 }

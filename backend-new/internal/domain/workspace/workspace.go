@@ -16,6 +16,7 @@ import (
 	"time"
 
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
+	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 )
 
 // Workspace is one local isolation root. Name is a free-form display label,
@@ -26,14 +27,20 @@ import (
 // Workspace 是一个本地隔离根。Name 是自由展示名，全机唯一；Language 是 workspace 级 UI 偏好
 // （未来一组 workspace 偏好的第一个）。与其它所有实体不同，它不带 workspace_id。
 type Workspace struct {
-	ID          string     `db:"id,pk" json:"id"`
-	Name        string     `db:"name" json:"name"`
-	AvatarColor string     `db:"avatar_color" json:"avatarColor,omitempty"`
-	Language    string     `db:"language" json:"language"`
-	LastUsedAt  *time.Time `db:"last_used_at" json:"lastUsedAt,omitempty"`
-	CreatedAt   time.Time  `db:"created_at,created" json:"createdAt"`
-	UpdatedAt   time.Time  `db:"updated_at,updated" json:"updatedAt"`
-	DeletedAt   *time.Time `db:"deleted_at,deleted" json:"-"`
+	ID          string `db:"id,pk" json:"id"`
+	Name        string `db:"name" json:"name"`
+	AvatarColor string `db:"avatar_color" json:"avatarColor,omitempty"`
+	Language    string `db:"language" json:"language"`
+	// Per-scenario default model selections — workspace-scoped preferences alongside Language,
+	// stored as JSON; nil = not configured for that scenario.
+	// 按 scenario 的默认模型选择——与 Language 并列的 workspace 级偏好，JSON 存；nil = 该 scenario 未配置。
+	DefaultDialogue *modeldomain.ModelRef `db:"default_dialogue,json" json:"defaultDialogue,omitempty"`
+	DefaultUtility  *modeldomain.ModelRef `db:"default_utility,json" json:"defaultUtility,omitempty"`
+	DefaultAgent    *modeldomain.ModelRef `db:"default_agent,json" json:"defaultAgent,omitempty"`
+	LastUsedAt      *time.Time            `db:"last_used_at" json:"lastUsedAt,omitempty"`
+	CreatedAt       time.Time             `db:"created_at,created" json:"createdAt"`
+	UpdatedAt       time.Time             `db:"updated_at,updated" json:"updatedAt"`
+	DeletedAt       *time.Time            `db:"deleted_at,deleted" json:"-"`
 }
 
 // Supported UI languages; Language is CHECK-constrained to this set in the DDL.
@@ -54,6 +61,36 @@ const MaxNameLen = 64
 // IsValidLanguage 报告 l 是否为支持的 UI 语言。
 func IsValidLanguage(l string) bool {
 	return l == LanguageZhCN || l == LanguageEn
+}
+
+// DefaultFor returns the default ModelRef for a scenario, or nil if unconfigured / unknown scenario.
+//
+// DefaultFor 返回某 scenario 的默认 ModelRef；未配置 / 未知 scenario 返 nil。
+func (w *Workspace) DefaultFor(scenario string) *modeldomain.ModelRef {
+	switch scenario {
+	case modeldomain.ScenarioDialogue:
+		return w.DefaultDialogue
+	case modeldomain.ScenarioUtility:
+		return w.DefaultUtility
+	case modeldomain.ScenarioAgent:
+		return w.DefaultAgent
+	}
+	return nil
+}
+
+// SetDefaultFor sets (or clears with nil) the default ModelRef for a scenario; an unknown scenario
+// is a no-op (callers validate first).
+//
+// SetDefaultFor 设置（nil 则清除）某 scenario 的默认 ModelRef；未知 scenario 为 no-op（caller 先校验）。
+func (w *Workspace) SetDefaultFor(scenario string, ref *modeldomain.ModelRef) {
+	switch scenario {
+	case modeldomain.ScenarioDialogue:
+		w.DefaultDialogue = ref
+	case modeldomain.ScenarioUtility:
+		w.DefaultUtility = ref
+	case modeldomain.ScenarioAgent:
+		w.DefaultAgent = ref
+	}
 }
 
 // Domain sentinels — built via errorsdomain.New so transport reads Kind/Code

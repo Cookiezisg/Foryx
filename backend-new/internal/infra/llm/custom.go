@@ -30,12 +30,11 @@ func (p *customProvider) DefaultBaseURL() string { return "" } // caller must su
 // BuildRequest encodes a Request into a generic OpenAI-compat /chat/completions
 // HTTP request. Auth: Bearer token.
 //
-// No thinking fields are emitted: a custom endpoint is generic, and a thinking
-// knob it doesn't support would risk a 400. reasoning_effort / thinking are
-// therefore never set regardless of req.Thinking.
+// No knobs are emitted: a custom endpoint is generic, and any reasoning/thinking field it does
+// not recognise would risk a 400, so req.Options is deliberately ignored here.
 //
 // BuildRequest 把 Request 编码为通用 OpenAI-compat /chat/completions 请求。Auth：Bearer。
-// 不发 thinking 字段：通用端点不一定支持，发了会触发 400，故无论 req.Thinking 如何都不设。
+// 不发任何旋钮：通用端点不一定支持某推理/thinking 字段，发了会触发 400，故此处刻意忽略 req.Options。
 func (p *customProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	req.Messages = SanitizeMessages(req.Messages)
 	msgs, err := toCustomMsgs(req.Messages, req.System)
@@ -460,4 +459,19 @@ type customNonStreamMessage struct {
 	Content          string                `json:"content"`
 	ReasoningContent string                `json:"reasoning_content"`
 	ToolCalls        []customToolCallDelta `json:"tool_calls"`
+}
+
+// DescribeModels best-effort parses an OpenAI-compat /models id list from a custom endpoint. A
+// generic endpoint has no static catalog, so models carry no knobs or window specs — the user can
+// still target a model id directly.
+//
+// DescribeModels 尽力解析自定义端点的 OpenAI-compat /models id 列表。通用端点无静态目录，故模型
+// 不带旋钮或窗口规格——用户仍可直接用某 model id。
+func (p *customProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	ids := decodeOpenAICompatModelIDs(raw)
+	out := make([]ModelInfo, 0, len(ids))
+	for _, id := range ids {
+		out = append(out, ModelInfo{ID: id, DisplayName: id})
+	}
+	return out, nil
 }

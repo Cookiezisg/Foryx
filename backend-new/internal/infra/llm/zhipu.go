@@ -30,13 +30,14 @@ func (p *zhipuProvider) DefaultBaseURL() string { return "https://open.bigmodel.
 // BuildRequest encodes a Request into a Zhipu GLM /chat/completions HTTP request. Auth:
 // the raw API key as a Bearer token (JWT is legacy, not implemented).
 //
-// thinking: on → thinking:{type:enabled}; off → thinking:{type:disabled}; nil/auto → omit.
+// Native knob from Options: thinking ("enabled"/"disabled") passes through verbatim into
+// thinking:{type}.
 //
 // tool_choice quirk: Zhipu only supports "auto" — any other value risks a 400. When tools
 // are present we always send "auto"; tool-less requests omit it.
 //
 // BuildRequest 把 Request 编码为智谱 GLM /chat/completions HTTP 请求。Auth：原始 key 作
-// Bearer（JWT 是 legacy，不实现）。thinking：on→enabled；off→disabled；nil/auto→省略。
+// Bearer（JWT 是 legacy，不实现）。原生旋钮取自 Options：thinking 原样进 thinking:{type}。
 // tool_choice quirk：只支持 "auto"，有 tools 时固定发 "auto"。
 func (p *zhipuProvider) BuildRequest(ctx context.Context, req Request) (*http.Request, error) {
 	req.Messages = SanitizeMessages(req.Messages)
@@ -58,13 +59,11 @@ func (p *zhipuProvider) BuildRequest(ctx context.Context, req Request) (*http.Re
 		// Zhipu 的 tool_choice 只支持 "auto"，其他值可能返 400。
 		body.ToolChoice = "auto"
 	}
-	if req.Thinking != nil && req.Thinking.Mode != "auto" {
-		switch req.Thinking.Mode {
-		case "on":
-			body.Thinking = &zhipuThinking{Type: "enabled"}
-		case "off":
-			body.Thinking = &zhipuThinking{Type: "disabled"}
-		}
+	if req.MaxTokens > 0 {
+		body.MaxTokens = req.MaxTokens
+	}
+	if v := req.Options["thinking"]; v != "" {
+		body.Thinking = &zhipuThinking{Type: v}
 	}
 	raw, err := json.Marshal(body)
 	if err != nil {
@@ -301,6 +300,7 @@ type zhipuRequest struct {
 	ToolChoice    string              `json:"tool_choice,omitempty"`
 	Stream        bool                `json:"stream"`
 	StreamOptions *zhipuStreamOptions `json:"stream_options,omitempty"`
+	MaxTokens     int                 `json:"max_tokens,omitempty"`
 	Thinking      *zhipuThinking      `json:"thinking,omitempty"`
 }
 
@@ -389,4 +389,36 @@ type zhipuFuncDelta struct {
 type zhipuUsage struct {
 	PromptTokens     int `json:"prompt_tokens"`
 	CompletionTokens int `json:"completion_tokens"`
+}
+
+// ── model catalog (static; Zhipu /models returns ids only) ──────────────────────
+
+func zhipuThinkingKnobs() []Knob {
+	return []Knob{enumKnob("thinking", "Thinking", []string{"enabled", "disabled"}, "enabled")}
+}
+
+// zhipuSpecs is Zhipu's static catalog, most-specific prefix first. GLM-4.5+ defaults thinking
+// to enabled and exposes the thinking knob; glm-4-long/glm-4-flash predate thinking and carry
+// none. Numbers per Zhipu BigModel docs, 2026-06-04.
+//
+// zhipuSpecs 是智谱静态目录，最具体前缀在前。GLM-4.5+ thinking 默认 enabled 且暴露旋钮；
+// glm-4-long/glm-4-flash 早于 thinking 无旋钮。数值据智谱 BigModel 文档 2026-06-04。
+var zhipuSpecs = []modelSpec{
+	{"glm-5.1", 200000, 128000, zhipuThinkingKnobs()},
+	{"glm-5-turbo", 200000, 128000, zhipuThinkingKnobs()},
+	{"glm-5", 200000, 128000, zhipuThinkingKnobs()},
+	{"glm-4.7-flashx", 200000, 128000, zhipuThinkingKnobs()},
+	{"glm-4.7-flash", 200000, 128000, zhipuThinkingKnobs()},
+	{"glm-4.7", 200000, 128000, zhipuThinkingKnobs()},
+	{"glm-4.6", 200000, 128000, zhipuThinkingKnobs()},
+	{"glm-4.5", 131072, 96000, zhipuThinkingKnobs()},
+	{"glm-4-long", 1000000, 4096, nil},
+	{"glm-4-flash", 131072, 16000, nil},
+}
+
+// DescribeModels parses Zhipu's id-only /models body against the static catalog.
+//
+// DescribeModels 解析智谱仅含 id 的 /models 返回，查静态目录。
+func (p *zhipuProvider) DescribeModels(raw string) ([]ModelInfo, error) {
+	return describeFromSpecs(zhipuSpecs, raw), nil
 }
