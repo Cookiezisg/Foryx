@@ -107,3 +107,17 @@
 | workspaces DDL 收集 | `infra/store/workspace.Schema`（`[]string`） | M7.1 | cmd/server 收集各模块 `Schema` 传 `db.Migrate` |
 | `settings.json` ↔ workspace 偏好边界 | `settingsinfra` | settings 模块轮 | 判哪些偏好归 workspace 行、哪些留文件；`Language` 已进 workspace（第一个）|
 | 通用 `validate` 包（观察点，**未建**） | — | ≥2 模块共享格式校验时 | 现 0 跨模块校验需求（wikilink 正则是私有实现）；YAGNI，勿提前建、勿污染 wikilink 语义 |
+
+## 来自波次 1 · M1.2（apikey 收窄，设计敲定 2026-06-04，待重写）
+
+> apikey 收窄为「加密保险箱 + 哑探针 + 按 id 发钥匙」，大量职责下放。详见 `contracts/apikey.md`。
+
+| 待办 | 去向 | 备注 |
+|---|---|---|
+| 模型解析器 `parseOpenAIModels`/`parseModelsByName` | model（M1.3）| 吃 apikey 的 `(provider, test_response)` 解析模型 id |
+| `modelcatalog`（去 pkg，本就 import modeldomain）| model（M1.3）| **静态模型目录 = 模型列表基线来源**（Claude 等无 list-models 端点的家的唯一来源；动态解析 `test_response` 是增量红利，非"兜底"）；**目录应可更新推送**（数据驱动、非硬编码 → 新模型不必等 app 发版，跟厂商节奏）；含能力规则 + option + compile（effort/上下文/thinking → ThinkingSpec）|
+| `capabilities.go`(CapabilityService) + capabilities handler + `GET /model-capabilities` | model（M1.3）| 拼可用模型列表 = 动态(解析 test_response) ∪ 静态目录 |
+| 选搜索 key：`IsDefault`/`DefaultProvider`/`SearchProviderPriority`/`GetByProvider` 启发式 | **未来搜索配置模块** | 像 model 一样让用户显式配 api_key_id，**不启发式**（防乱烧钱）；随 WebSearch（波次 2）配套建 |
+| `RefScanner` 注入（model_config/conv/node override 引用检查）| model/conversation/workflow 各轮 + M7 | Delete → ErrInUse；DIP 端口 apikey 这轮留，实现注入留下游 |
+| `KeyProvider` 注入 | M7 | 28 模块按 id 取钥匙（`ResolveCredentialsByID`/`MarkInvalidByID`）|
+| `pkg/modelcatalog` import `modeldomain` 的错位 | model（M1.3）| 它非纯工具（依赖 model domain），随模型领域归 model 模块，不留 pkg |

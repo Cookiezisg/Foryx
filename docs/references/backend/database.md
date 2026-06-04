@@ -71,16 +71,25 @@ type Workspace struct {
     UpdatedAt   time.Time  `db:"updated_at,updated" json:"updatedAt"`
     DeletedAt   *time.Time `db:"deleted_at,deleted" json:"-"`
 }
+// api_keys — workspace-scoped credentials. The probe archives the upstream's raw
+// response verbatim (test_response, parsed downstream by model/search); no
+// models_found / is_default — selection lives in model / search-config modules.
 type APIKey struct {
-    ID           string         `gorm:"primaryKey;type:text" json:"id"`
-    UserID       string         `gorm:"not null;index;type:text" json:"userId"`
-    Provider     string         `gorm:"not null;index;type:text" json:"provider"`
-    DisplayName  string         `gorm:"not null;type:text" json:"displayName"`
-    KeyEncrypted string         `gorm:"not null;type:text" json:"-"`
-    KeyMasked    string         `gorm:"not null;type:text" json:"keyMasked"`
-    BaseURL      string         `gorm:"type:text" json:"baseUrl"`
-    IsDefault    bool           `gorm:"not null;default:false" json:"isDefault"`
-    ModelsFound  []string       `gorm:"serializer:json" json:"modelsFound"`
+    ID           string     `db:"id,pk" json:"id"`
+    WorkspaceID  string     `db:"workspace_id,ws" json:"-"`
+    Provider     string     `db:"provider" json:"provider"`
+    DisplayName  string     `db:"display_name" json:"displayName"`              // UNIQUE per workspace (partial, active)
+    KeyEncrypted string     `db:"key_encrypted" json:"-"`
+    KeyMasked    string     `db:"key_masked" json:"keyMasked"`
+    BaseURL      string     `db:"base_url" json:"baseUrl,omitempty"`
+    APIFormat    string     `db:"api_format" json:"apiFormat,omitempty"`
+    TestStatus   string     `db:"test_status" json:"testStatus"`                // pending|ok|error
+    TestError    string     `db:"test_error" json:"testError,omitempty"`
+    TestResponse string     `db:"test_response" json:"-"`                       // raw probe body; parsed by model/search
+    LastTestedAt *time.Time `db:"last_tested_at" json:"lastTestedAt,omitempty"`
+    CreatedAt    time.Time  `db:"created_at,created" json:"createdAt"`
+    UpdatedAt    time.Time  `db:"updated_at,updated" json:"updatedAt"`
+    DeletedAt    *time.Time `db:"deleted_at,deleted" json:"-"`
 }
 type ModelConfig struct {
     ID        string       `gorm:"primaryKey;type:text" json:"id"`

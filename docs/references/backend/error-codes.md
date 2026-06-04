@@ -52,13 +52,13 @@ audience: [human, ai]
 | Go Sentinel | Wire Code | HTTP | 场景 |
 |---|---|---|---|
 | `apikeydomain.ErrNotFound` | `API_KEY_NOT_FOUND` | 404 | Key 不存在 |
-| `apikeydomain.ErrNotFoundForProvider` | `API_KEY_PROVIDER_NOT_FOUND` | 404 | 该提供商无活跃 Key |
-| `apikeydomain.ErrInvalidProvider` | `INVALID_PROVIDER` | 400 | 不支持的 Provider |
-| `apikeydomain.ErrBaseURLRequired` | `BASE_URL_REQUIRED` | 400 | 某 Provider 要求必填 URL |
-| `apikeydomain.ErrAPIFormatRequired` | `API_FORMAT_REQUIRED` | 400 | Custom 模式需填格式 |
-| `apikeydomain.ErrKeyRequired` | `KEY_REQUIRED` | 400 | 秘钥值不能为空 |
-| `apikeydomain.ErrDisplayNameConflict` | `API_KEY_NAME_CONFLICT` | 409 | 显示名重复 |
-| `apikeydomain.ErrInUse` | `API_KEY_IN_USE` | 422 | 正在被模型配置引用，禁止删除 |
+| `apikeydomain.ErrInvalidProvider` | `API_KEY_INVALID_PROVIDER` | 400 | 不支持的 Provider |
+| `apikeydomain.ErrKeyRequired` | `API_KEY_VALUE_REQUIRED` | 400 | 秘钥值不能为空 |
+| `apikeydomain.ErrBaseURLRequired` | `API_KEY_BASE_URL_REQUIRED` | 400 | 某 Provider 要求必填 URL |
+| `apikeydomain.ErrAPIFormatRequired` | `API_KEY_API_FORMAT_REQUIRED` | 400 | Custom 模式需填格式 |
+| `apikeydomain.ErrDisplayNameConflict` | `API_KEY_DISPLAY_NAME_CONFLICT` | 409 | 显示名重复（workspace 内）|
+| `apikeydomain.ErrInUse` | `API_KEY_IN_USE` | 422 | 被引用（model / 对话 / 节点 override），禁止删除 |
+| (handler) | `API_KEY_TEST_FAILED` | 422 | `:test` 探测失败（非 sentinel，handler 直接渲染）|
 
 ### 2.4 Chat & Conversation Domain
 | Go Sentinel | Wire Code | HTTP | 场景 |

@@ -36,7 +36,7 @@
 | 编号 | 模块 | app→ 依赖 | 旗标 |
 |---|---|---|---|
 | M1.1 ✅ R0018 | `workspace`（原 `user` 正名） | — | 隔离标识=workspace_id；**多 workspace 数据隔离 + 资源不分桶**；Name 自由名 UNIQUE（去 slug/GetByUsername/EnsureExists）；`Validate` 实现 WorkspaceResolver；boot 默认 ws + 注入 + 共享资源布局 → M7 |
-| M1.2 | `apikey` | domain/crypto | |
+| M1.2 ✅ R0019 | `apikey` | domain/crypto | **收窄** = 加密保险箱 + 哑探针 + 按 id 发钥匙；选 key / 解析 / 模型理解全下放（model / 搜索配置）；首个吃 orm 自动隔离的表；modelcatalog/capabilities → M1.3 |
 | M1.3 | `model` | domain/apikey | ⚠️ `infra/store/modelcapoverride` + `pkg/modelcaps`（旧 model 范式残留） |
 | M1.4 | `relation` | — | 横切（实体关系图）；**持 `EntityKind` 常量 + 前缀→EntityKind 映射 + `KindForID`**（原 idgen.KindByPrefix，见 deps-todo R0005）|
 | M1.5 | `catalog` | — | 核心：被超多模块依赖（trinity catalog 源），重点审实现 |

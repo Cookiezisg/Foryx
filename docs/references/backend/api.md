@@ -225,7 +225,7 @@ audience: [human, ai]
 | Method | Path | 文件源 |
 |---|---|---|
 | GET | `/api/v1/health` | `health.go` |
-| GET | `/api/v1/providers` | `providers.go` |
+| GET | `/api/v1/providers` | `apikey.go` |
 | GET | `/api/v1/scenarios` | `scenarios.go` |
 | GET | `/api/v1/model-capabilities` | `capabilities.go` |
 | GET | `/api/v1/model-configs` | `model.go` |
