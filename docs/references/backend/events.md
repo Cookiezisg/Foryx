@@ -58,7 +58,7 @@ audience: [human, ai]
 | `ask` | `pending` | `ask/ask.go` | `{ toolCallId, conversationId }` |
 | `ask` | `resolved` | `ask/ask.go` | `{ toolCallId, status: "resolved" }` |
 | `ask` | `timeout` | `ask/ask.go` | `{ toolCallId, status: "timeout" }` |
-| `memory` | `created` | `memory/memory.go` | `{ id, name }` |
+| `memory` | `created`/`updated`/`deleted` | `app/memory` | `{ name }` |
 | `document` | `updated` | `document/document.go` | `{ id, action: "content_updated" }` |
 | `compaction` | `completed` | `contextmgr/compact.go` | `{ convID, coversToSeq }` |
 | `skill` | `scanned` | `skill/scan.go` | `{ count }` |

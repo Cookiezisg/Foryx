@@ -74,6 +74,17 @@ mention 纯 domain 契约已建。消费侧登记：
 | scope-relation EntityKind 收口 | 单独评估 | stream scope 实体 kind 与 relation.EntityKind 重叠；实体 kind 词表归一（依赖方向待定）|
 | 通知自动清理（保留 N 条/N 天） | 回头 | 当前只增不删；用户手动删/自动清理延后 |
 
+## 来自波次 1 · M1.7（memory 文件式 R0025）
+
+memory 文件式 store + app + handler 已建。消费侧 / 装配登记：
+
+| 关注点 | 去向 | 备注 |
+|---|---|---|
+| `read/write/forget_memory` 工具 | 波次 2/3 | 包 app 的 Get/Upsert/Delete；LLM 自管记忆 |
+| chat 注入 memory 段 | 波次 5 | chat runner 经 `SystemPromptProvider.ForSystemPrompt` 注入 |
+| `~/.forgify` base 路径 + `notification.Emitter` 注入 | M7 / boot | fs store `New(base)`；app `NewService(repo, emitter, log)` |
+| skills 复用文件 store 范式 | 波次 3 | skills 也是 frontmatter md 文件，复用 infra/fs 模式 |
+
 ## 来自波次 0 · M0.3（logger broadcast 删除 R0010）
 
 `LogBroadcaster`（日志 SSE 流，违反 E1 三流）已判删。连带清理（M7 wiring）：

@@ -187,9 +187,10 @@ audience: [human, ai]
 | `skilldomain.ErrBodyTooLarge` | `SKILL_BODY_TOO_LARGE` | 422 | |
 | `skilldomain.ErrNameConflict` | `SKILL_NAME_CONFLICT` | 409 | |
 | `skilldomain.ErrInvalidName` | `SKILL_INVALID_NAME` | 422 | |
-| `memorydomain.ErrNotFound` | `MEMORY_NOT_FOUND` | 404 | |
-| `memorydomain.ErrNameConflict` | `MEMORY_NAME_CONFLICT` | 409 | |
-| `memorydomain.ErrInvalidName` | `MEMORY_INVALID_NAME` | 400 | |
+| `memorydomain.ErrNotFound` | `MEMORY_NOT_FOUND` | 404 | 记忆文件不存在 |
+| `memorydomain.ErrInvalidName` | `MEMORY_INVALID_NAME` | 400 | name 非小写 slug |
+| `memorydomain.ErrInvalidSource` | `MEMORY_INVALID_SOURCE` | 400 | source 非 user/ai |
+| `memorydomain.ErrInvalidInput` | `MEMORY_INVALID_INPUT` | 400 | description/content 缺 |
 | `documentdomain.ErrNotFound` | `DOCUMENT_NOT_FOUND` | 404 | |
 | `documentdomain.ErrInvalidParent` | `DOCUMENT_INVALID_PARENT` | 422 | 自引或循环引 |
 | `documentdomain.ErrNameConflict` | `DOCUMENT_NAME_CONFLICT` | 409 | |

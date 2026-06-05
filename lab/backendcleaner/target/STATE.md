@@ -4,7 +4,7 @@
 
 ## 当前
 
-- **阶段**：Phase 2 逐模块 — 波次 0 全部完成；**波次 1（叶子业务域）进行中：M1.1 workspace ✅ · M1.2 apikey ✅ · M1.3 model ✅ · M1.4 relation ✅ · M1.5 catalog ✅ · M1.6 mention ✅**。
+- **阶段**：Phase 2 逐模块 — 波次 0 全部完成；**波次 1（叶子业务域）进行中：M1.1 workspace ✅ · M1.2 apikey ✅ · M1.3 model ✅ · M1.4 relation ✅ · M1.5 catalog ✅ · M1.6 mention ✅ · M1.7 memory ✅**。
 - **分支**：`main`（backend-new 平行重写不需要分支）。
 - **策略**：`backend-new/` 平行重建 → 覆盖回 `backend/` → 调前端/testend 兼容。
 
@@ -26,6 +26,7 @@
 - **catalog（收窄，M1.5）**：能力概览「实体名录」——只报「名字+描述」按类型分组，告诉 LLM「有哪些实体」。**砍 InvokeTool**（调用是搜索工具/调用层的事）+ 砍花活(handler 方法列表/mcp 合成/Kind/Active) + 砍预留(`Generator`/`GeneratedBy`/`Granularity`/`Category`/`activate_tools`)；**两段式**：概览→`search_*`(波次 2)精确定位，故 id 不进菜单、name 不要求唯一；document 例外(name=文档名/desc=路径)；无 store 派生现查。R0022 ✅。
 - **mention（纯契约，M1.6）**：@ 引用快照的 domain 契约——5 种可 @ 类型(四件套+document) + `MentionInput` + `Reference`(含 Content) + `Resolver` 接口 + `IsValidMentionType`。**Freeze-on-Send**(发送瞬间抓内容快照注入、定格)；**纯 domain 无 app/store/handler/error**——resolver 实现(波次 3)、chat 注册表+统一 `<mentions>` 渲染+错误处理(波次 5)。conversation/skill/mcp 不可 @。R0023 ✅。
 - **notification（新模块，R0024）**：通知从"内存广播"升格为**持久化实体**——`Notification{ID,Type,Payload,ReadAt}` 存 DB(workspace 隔离)、前端通知中心(列表/badge/标已读)、关机重开仍在。scope=`notification:noti_x`(锚通知实体)，**workspace 是 Bus 分流轴非 scope**(前端按当前 workspace 订阅防多窗口串台)，事件类型在 `node.type`=`<域>.<动作>`，后端只发 type+payload 前端自渲文案。`Emitter` 端口给 producer。连带 stream 清理(删 KindWorkspace/ListReader/list.go)+ **R0018 翻转**(一切 workspace 隔离/~/.forgify 分桶)。业界调研 4 agent 指导 memory(下一步)走文件式。R0024 ✅。
+- **memory（文件式，M1.7）**：从重型 SQLite CRUD 改为**按 workspace 的文件式 markdown**(`~/.forgify/workspaces/<wsID>/memories/<name>.md`，frontmatter description/pinned/source + 正文，文件名即 name、**无 mem_ id**)。两段式注入(pinned 全文常驻 + 非 pinned 目录 `read_memory` 按需)；天然去重(注入目录让 LLM 自判 update 否则新建，无向量 pipeline)；发通知用 `notification.Emitter`；用户可直接编辑文件。**backend-new 首个文件式 store**(手写 frontmatter/原子写/slug 防穿越，skills 波次 3 复用)。砍热度/Type 四分类/Metadata/向量/reflection/decay(业界调研判过度)。R0025 ✅。
 
 ## 模块进度（编号见 order.md）
 
@@ -33,7 +34,7 @@
 
 - **Phase 1 骨架** ✅：`backend-new/` + 空 go.mod + health server + smoke。
 - **波次0 地基**：M0.1 pkg ✅（**reqctx/idgen/pagination ✅** R0001；**tokencount ✅** R0002；**pathguard ✅** R0003；**userpath ⏭️删** R0004；**wikilink ✅** R0005；**jsonrepair ✅** R0006；**limits ✅** R0007；modelcaps/modelcatalog 移交 M1.3）· M0.2 数据库层 ✅（**pkg/orm R0008 · db 网关 R0009**；业务表 DDL 分散各模块）· M0.3 ✅（**logger R0010 · crypto R0011**）· M0.4 ✅：**errors R0012** · **stream 统一协议 R0013**（单一 domain/stream：信封+四动词Frame+通用 Node{Type,Content}+Bridge/ListReader；词表下放业务）· M0.5 ✅ infra **stream bus（单一 Bus）R0014**（实例化三次=三流；frame 分级；D2 全量推；infra/chat extractor 移交 M5.2）· M0.6 llm ✅（11 家 provider）· **M0.7 transport ✅ R0017**（response N1+errmap 塌缩+SSE marshal · middleware workspace · router 框架；完整 New→M7）· **波次 0 收官 ✅**
-- **波次1 叶子域**：M1.1 workspace(原 user) **✅ R0018** · M1.2 apikey **✅ R0019** · M1.3 model **✅ R0020** · M1.4 relation **✅ R0021** · M1.5 catalog **✅ R0022** · M1.6 mention **✅ R0023** · notification(基础) **✅ R0024** · M1.7 memory ⬜ · M1.8 sandbox ⬜ · M1.9 permissions/hooks ⬜ · M1.10 document ⬜ · M1.11 todo ⬜(待判定)
+- **波次1 叶子域**：M1.1 workspace(原 user) **✅ R0018** · M1.2 apikey **✅ R0019** · M1.3 model **✅ R0020** · M1.4 relation **✅ R0021** · M1.5 catalog **✅ R0022** · M1.6 mention **✅ R0023** · notification(基础) **✅ R0024** · M1.7 memory **✅ R0025** · M1.8 sandbox ⬜ · M1.9 permissions/hooks ⬜ · M1.10 document ⬜ · M1.11 todo ⬜(待判定)
 - **波次2 tool+原语**：tool ⬜ · loop ⬜ · tool/filesystem·search·web·toolset ⬜
 - **波次3 Quadrinity**：function·handler·subagent·agent·skill·mcp + tool 适配器组 ⬜
 - **波次4 编排核心**：workflow ⬜ · flowrun ⬜ · scheduler 🔴⬜ · trigger ⬜ · tool/workflow ⬜
@@ -43,5 +44,5 @@
 
 ## 下一步
 
-- **波次 1（下一轮）**：M1.7 memory（agent 长期记忆）。
+- **波次 1（下一轮）**：M1.8 sandbox（隔离运行时）。
 - M1.1 遗留 → M7：boot 默认 workspace（`Count==0→Create`）+ `WorkspaceResolver` 注入 `IdentifyWorkspace` + `~/.forgify/` 共享资源布局落地（不分桶）。

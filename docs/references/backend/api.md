@@ -195,6 +195,16 @@ audience: [human, ai]
 | GET | `/api/v1/relations/neighborhood` | `relation.go` |
 | GET | `/api/v1/relgraph` | `relation.go` |
 
+### 5.4 Memory（按 workspace 文件式 `~/.forgify/workspaces/<wsID>/memories/`）
+| Method | Path | 文件源 |
+|---|---|---|
+| GET | `/api/v1/memories` | `memory.go` |
+| GET | `/api/v1/memories/{name}` | `memory.go` |
+| PUT | `/api/v1/memories/{name}` | `memory.go` |
+| DELETE | `/api/v1/memories/{name}` | `memory.go` |
+| POST | `/api/v1/memories/{name}/pin` | `memory.go` |
+| POST | `/api/v1/memories/{name}/unpin` | `memory.go` |
+
 ---
 
 ## 6. 全局设置、用户与监控 (System)
