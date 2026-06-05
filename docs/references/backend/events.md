@@ -52,7 +52,8 @@ audience: [human, ai]
 | `flowrun` | `completed` | `scheduler/scheduler.go` | `{ FrID, WfID, status: "completed" }` |
 | `flowrun` | `failed` | `scheduler/scheduler.go` | `{ FrID, WfID, status: "failed", error }` |
 | `flowrun` | `tick` (Ephemeral) | `scheduler/state.go` | `{ WfID, nodeID, status, iterKey }` |
-| `sandbox_env` | `env_rebuilt` | `sandbox/sandbox.go` | `{ id, status, error? }` |
+| `sandbox` | `env_status_changed` | `app/sandbox` | `{ envId, status, ownerKind, ownerId, errorMsg? }` |
+| `sandbox` | `env_deleted` | `app/sandbox` | `{ envId, ownerKind, ownerId }` |
 | `mcp_server` | `connected` | `mcp/mcp.go` | `{ name, status: "ok" }` |
 | `mcp_server` | `error` | `mcp/mcp.go` | `{ name, status: "error", lastError }` |
 | `ask` | `pending` | `ask/ask.go` | `{ toolCallId, conversationId }` |

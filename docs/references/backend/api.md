@@ -145,20 +145,21 @@ audience: [human, ai]
 | POST | `/api/v1/mcp-registry/{nameAction}` | `mcp.go` | (:install) |
 
 ### 4.2 Sandbox
-| Method | Path | 文件源 |
+| Method | Path | 说明 |
 |---|---|---|
-| GET | `/api/v1/sandbox/runtimes` | `sandbox.go` |
-| GET | `/api/v1/sandbox/envs` | `sandbox.go` |
-| GET | `/api/v1/sandbox/envs/{id}` | `sandbox.go` |
-| GET | `/api/v1/sandbox/disk-usage` | `sandbox.go` |
-| GET | `/api/v1/sandbox/bootstrap-status` | `sandbox.go` |
-| GET | `/api/v1/conversations/{id}/sandbox-envs` | `sandbox.go` |
-| POST | `/api/v1/sandbox/envs/{idAction}` | `sandbox.go` | (:destroy) |
-| DELETE | `/api/v1/sandbox/envs/{id}` | `sandbox.go` |
-| POST | `/api/v1/sandbox/runtimes/{idAction}` | `sandbox.go` | (:destroy) |
-| POST | `/api/v1/sandbox/{action}` | `sandbox.go` | (:gc, :retry-bootstrap, runtimes:install) |
-| POST | `/api/v1/conversations/{id}/sandbox-envs/{kindAction}` | `sandbox.go` | (:reset) |
-| POST | `/api/v1/conversations/{id}/sandbox-envs:reset-all` | `sandbox.go` |
+| GET | `/api/v1/sandbox/runtimes` | 列出已装 runtime |
+| POST | `/api/v1/sandbox/runtimes` | 懒装 runtime（body `{kind, version}`）→ 201 |
+| DELETE | `/api/v1/sandbox/runtimes/{id}` | 删 runtime（有 env 引用 → 409） |
+| GET | `/api/v1/sandbox/envs?ownerKind=` | 列出某 ownerKind 的 env（ownerKind 必填） |
+| GET | `/api/v1/sandbox/envs/{id}` | 单个 env |
+| DELETE | `/api/v1/sandbox/envs/{id}` | 销毁 env（DB 行 + 磁盘目录） |
+| GET | `/api/v1/sandbox/disk-usage` | 磁盘占用审计 |
+| GET | `/api/v1/sandbox/bootstrap-status` | mise bootstrap 状态 |
+| POST | `/api/v1/sandbox:gc` | GC 超期 env（`?olderThanDays=30`） |
+| POST | `/api/v1/sandbox:retry-bootstrap` | 重试 bootstrap |
+| GET | `/api/v1/conversations/{id}/sandbox-envs` | 对话 scratch env 列表 |
+| POST | `/api/v1/conversations/{id}/sandbox-envs/{kind}:reset` | 重置对话某 kind env |
+| POST | `/api/v1/conversations/{id}/sandbox-envs:reset-all` | 重置对话所有 env |
 
 ---
 

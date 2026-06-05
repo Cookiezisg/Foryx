@@ -152,8 +152,9 @@ audience: [human, ai]
 ### 2.8 Sandbox & Infrastructure Domain
 | Go Sentinel | Wire Code | HTTP | 场景 |
 |---|---|---|---|
-| `sandboxdomain.ErrRuntimeNotSupported` | `SANDBOX_RUNTIME_NOT_SUPPORTED` | 422 | 缺少 Python/Node 环境 |
-| `sandboxdomain.ErrRuntimeInstallFailed` | `SANDBOX_RUNTIME_INSTALL_FAILED`| 502 | nix/mise 安装失败 |
+| `sandboxdomain.ErrRuntimeNotSupported` | `SANDBOX_RUNTIME_NOT_SUPPORTED` | 422 | runtime kind 未注册 |
+| `sandboxdomain.ErrRuntimeInstallFailed` | `SANDBOX_RUNTIME_INSTALL_FAILED`| 502 | mise/docker 安装失败 |
+| `sandboxdomain.ErrRuntimeNotFound` | `SANDBOX_RUNTIME_NOT_FOUND` | 404 | 内部查找未命中（EnsureRuntime 消化，通常不冒泡）|
 | `sandboxdomain.ErrEnvNotFound` | `SANDBOX_ENV_NOT_FOUND` | 404 | |
 | `sandboxdomain.ErrEnvCreateFailed` | `SANDBOX_ENV_CREATE_FAILED` | 502 | |
 | `sandboxdomain.ErrDepInstallFailed` | `SANDBOX_DEP_INSTALL_FAILED` | 502 | pip 失败 |

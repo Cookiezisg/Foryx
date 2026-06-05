@@ -185,3 +185,18 @@ memory 文件式 store + app + handler 已建。消费侧 / 装配登记：
 | 静态模型目录数值对账 | 随软件更新人工 | 各家 `infra/llm/<家>.go` 静态目录（窗口/上限/旋钮）随厂商迭代**人工对账**，OpenAI 迭代尤快；非自动同步 |
 | `pkg/limits/limits.go` modelcatalog 注释 | ✅ 已 doc-fix R0020 | 注释提已弃用的 `modelcatalog` → 改述（无遗留）|
 | M1.2 apikey anthropic 探针 | ✅ 已改 R0020 | 探针从 `anthropic_ping` 改打 `/v1/models`（`anthropic_models`）；envelope 不变（doc-fix 历史断言"无 list-models 端点"）|
+
+## 来自波次 1 · M1.8（sandbox 三 runtime R0026）
+
+sandbox 三 runtime 隔离运行时（domain/store/infra/app/handler + 25 测试）已建。消费侧 / 装配 / Docker 精细化登记：
+
+| 待办 | 去向 | 备注 |
+|---|---|---|
+| **Docker 容器生命周期精细化** | M3.6（mcp 那轮） | 优雅停止（`docker stop` + container-id 追踪，而非 kill 进程组留孤儿）、孤儿容器回收、stdio MCP 长连接 e2e——docker spawn 真正被消费验证处；本轮只基础 `docker run --rm -i` |
+| function/handler 的 `Sandbox` 适配器 | 波次 3（M3.1/M3.2） | 消费者侧把 Service 包成各自 `Sandbox` 接口（function 一次性 Spawn、handler 常驻 SpawnLongLived + lazy rebuild on ErrEnvNotFound）；本模块只提供 Service |
+| mcp docker 拉取接入 | 波次 3（M3.6） | mcp 镜像型 server 经 `EnsureEnv`（owner=mcp）+ `docker run` 起 stdio；docker `-e` env 注入已就位 |
+| chat 对话 scratch env | 波次 5 | bash 工具自动路由 per-conversation python/node env（owner=conversation `<convID>_<kind>`）|
+| 注册三 installer/envmanager + boot | M7 | `RegisterInstaller`(MiseInstaller python/node/uv + DockerInstaller) + `RegisterEnvManager`(Python/Node/Docker)；`New(repo, dataDir, emitter, log)` 注入 `~/.forgify` base + `notification.Emitter`；`Bootstrap`+`Shutdown` 生命周期钩子 |
+| `make fetch-mise` cmd | M7.2 | embed mise 二进制按平台生成（`cmd/fetch-mise`，git 不入库、SHA256 钉）；本地已有 darwin-arm64 |
+| sandbox handler 路由装配 | M7 | `NewSandboxHandler(svc, log).Register(mux)` 接入总 router |
+| sandbox DDL 收集 | M7 | `infra/store/sandbox.Schema` 交 cmd/server `db.Migrate` |

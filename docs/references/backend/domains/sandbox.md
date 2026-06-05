@@ -4,99 +4,113 @@ type: reference
 status: active
 owner: @weilin
 created: 2026-04-22
-reviewed: 2026-06-02
+reviewed: 2026-06-05
 review-due: 2026-09-01
 audience: [human, ai]
 ---
-# Sandbox Domain — PluginSandbox v2 隔离执行原理
+# Sandbox Domain — 隔离运行时
 
-> **核心职责**：Sandbox 是 Forgify 的 **“物理防线”**。它负责在宿主机上构建完全隔离的 Python/Node 环境，通过 `mise` 驱动版本管理，确保用户编写的代码（fn/hd）不会越权访问系统资源。
+> **核心职责**：Sandbox 是 Forgify 的**物理防线**。它在宿主机上为用户代码（function / handler / mcp / skill / 对话）构建隔离的 **Python / Node** 环境或 **Docker** 容器，确保 LLM 编写或拉取的代码被困在 per-owner 沙箱里、互不串扰。它是 Quadrinity 执行体的地基。
 
 ---
 
-## 1. 物理模型 (Data Anatomy)
+## 1. 三 runtime 统一模型
 
-### 1.1 `Env` (虚拟环境 Manifest)
-```go
-type Env struct {
-    ID          string         `gorm:"primaryKey;type:text" json:"id"` // se_<16hex>
-    
-    // 所有权: 哪个实体拥有此环境
-    OwnerKind   string         `gorm:"uniqueIndex:uniq_se_owner" json:"ownerKind"` // function|handler|conversation
-    OwnerID     string         `gorm:"uniqueIndex:uniq_se_owner" json:"ownerID"`
-    
-    RuntimeID   string         `gorm:"index" json:"runtimeId"` // sr_python_3_12 等
-    
-    // 物理路径: 磁盘上的实际 venv 目录
-    Path        string         `gorm:"type:text" json:"path"`
-    
-    // 依赖清单
-    Deps        []string       `gorm:"serializer:json;type:text" json:"deps"`
-    
-    Status      string         `gorm:"type:text" json:"status"` // installing|ready|failed
-    RunningPID  int            `gorm:"index" json:"-"`          // 关联的僵尸进程监控
-    
-    UpdatedAt   time.Time      `json:"updatedAt"`
-}
-```
+三种 runtime 复用同一套「`RuntimeInstaller`（装 + 定位）+ `EnvManager`（建 env + 装 deps + 组装执行命令）」双接口，按 kind 注册：
 
-### 1.2 `Runtime` (运行时版本)
+| 抽象层 | Python | Node | Docker |
+|---|---|---|---|
+| **Runtime**（全机共享） | mise 装 `python@3.12` | mise 装 `node@22` | `docker pull <image>`（镜像即 runtime） |
+| **Env**（per-owner） | `uv venv` + `uv pip` | `package.json` + `npm install` | no-op（镜像即环境） |
+| **Spawn** | `<venv>/bin/<cmd>` | `node_modules/.bin/<cmd>` | `docker run --rm -i <image> <cmd>` |
+
+**关键洞察**：把 Docker 镜像看作它的 "runtime"、容器看作 "env"，三者就能零特例共用 Runtime/Env manifest + owner 锁 + 幂等 Ensure 流程。`EnvManager.ResolveExec` 负责把用户的 cmd 翻译成宿主实际命令（venv binary / `docker run` 包装），故 spawn 层不持 runtime 知识。
+
+> **runtime 矩阵依据**：GitHub MCP registry 98 个 server 调研——Python+Node 覆盖 92%（含 45 个纯 remote、不吃本地 runtime），剩 8 个缺口里 7 个只发 Docker 镜像（Go/Java/C# 写的）。故定 Python+Node+Docker 三件套。
+
+---
+
+## 2. 物理模型
+
+### 2.1 `Runtime`（已装的 kind+version）
+全机共享解释器 / 镜像，`UNIQUE(kind, version)`。**无 workspace_id**——解释器/镜像是机器级资源，按 workspace 复制只会浪费。
 ```go
 type Runtime struct {
-    ID          string    `gorm:"primaryKey" json:"id"` // sr_python_3_11
-    Kind        string    `json:"kind"`                 // python|nodejs
-    Version     string    `json:"version"`              // 3.11.9
-    MiseSpec    string    `json:"miseSpec"`             // mise 内部标识
-    BootstrapOK bool      `json:"bootstrapOk"`          // mise install 成功标记
+    ID, Kind, Version, Path string // path: python/node 为相对 sandboxRoot 的目录；docker 为镜像 ref
+    SizeBytes               int64
+    InstalledAt, UpdatedAt  time.Time
 }
 ```
 
----
+### 2.2 `Env`（per-owner 隔离环境）
+绑定一个 Runtime 的 venv / node_modules 目录，或对 Docker 镜像的逻辑绑定。`UNIQUE(owner_kind, owner_id)`，`owner_kind ∈ {function,handler,mcp,skill,conversation}`。**无 workspace_id**——通过全局唯一的 owner id（`fn_xxx` / `mcp` owner 等）间接按 workspace 隔离。
+```go
+type Env struct {
+    ID, OwnerKind, OwnerID, OwnerName, RuntimeID, Path string
+    Deps                            []string
+    SizeBytes                       int64
+    Status                          string // installing | ready | failed
+    ErrorMsg                        string
+    RunningPID                      int    // >0 = 长生命周期进程；启动扫描杀残留
+    CreatedAt, LastUsedAt, UpdatedAt time.Time
+}
+```
 
-## 2. 核心原理 (Principles)
-
-### 2.1 Embedded-Mise 驱动 (ADR-014)
-Forgify 不依赖系统安装的 Python，而是内置了 `mise` 二进制进行私有化部署：
-- **零依赖安装**：在 `make setup` 或首次启动时，后端会自动下载对应架构的 Python/Node 二进制。
-- **物理路径隔离**：所有 Runtime 存放在 `~/.forgify/sandbox/runtimes/` 下。
-
-### 2.2 Shared-Runtime, Private-Venv
-为了平衡存储空间与隔离性：
-- **Runtime 层**：同一版本的 Python 二进制在全机共享。
-- **Venv 层**：每个 `se_xxx` 拥有一个独立的、基于 `venv` 或 `virtualenv` 的文件夹。
-- **隔离级别**：不同 Function 之间的 `pip install` 互不干扰，禁止跨环境读写。
-
-### 2.3 Command Auto-Routing (Bash 劫持)
-当 LLM 通过 Bash 工具运行命令时：
-- **原理**：后端会解析命令行字符串。
-- **逻辑**：若检测到 `pip install` 或 `python xxx.py`，后端会自动将其重定向为 `/path/to/se_123/bin/python`。
-- **效果**：对 LLM 来说它是直接操作系统，但物理上它始终被困在对话级的沙箱中。
+**workspace 隔离例外**：sandbox 两表系统级、磁盘 `~/.forgify/sandbox/` 不分桶——这是相对 memory/skills（per-ws 文本资源、按 workspace 分桶）的**合理例外**，因为 runtime 本就该跨 workspace 共享（装一份所有 ws 共用），env 跟随共享 runtime。行**物理删除**（无软删墓碑）。
 
 ---
 
-## 3. 生命周期 (Lifecycle)
+## 3. 核心机制
 
-1. **引导 (Bootstrapping)**：系统检查 `mise` 是否就绪。
-2. **同步 (Syncing)**：创建新实体时，后端开启 goroutine 执行 `pip install -r requirements.txt`。
-3. **活跃监控 (Heartbeat)**：对于 Handler 这种常驻进程，后端记录 `RunningPID`，确保异常退出时能自动清理。
-4. **垃圾回收 (GC)**：每天凌晨（或用户调 `:gc`）扫描 `updated_at` 超过 7 天的环境并物理物理删除文件夹。
-
----
-
-## 4. 跨域集成 (Interactions)
-
-- **Function / Handler**：依赖 Sandbox 提供 Python 解释器路径。
-- **Chat**：对话级的临时环境在对话删除时同步销毁。
-- **Infrastructure**：提供磁盘占用审计 API。
+1. **Embedded-mise bootstrap**：按平台 `go:embed` 内置 mise 二进制（`make fetch-mise` 生成、git 不入库）→ 启动时 SHA256 钉死解压到 `<root>/bin/mise`，写 `mise.toml` 关掉所有 attestation（避 GitHub 限流），macOS 剥 `com.apple.provenance` + ad-hoc 签名。失败进 **degraded mode**（不崩，`:retry-bootstrap`）。
+2. **双接口 + 按 kind 注册**：`MiseInstaller`（通用 mise 插件）→ python/node/uv；`PythonEnvManager`（uv）/`NodeEnvManager`（npm）/`DockerEnvManager`（docker run）。Docker 的 Installer = 探测 daemon + pull。
+3. **Ensure 幂等懒装**：per-kind / per-owner 锁 + double-check；env deps 漂移 → 销毁重建。
+4. **Spawn / SpawnLongLived**：一次性命令 vs 常驻进程；独立进程组（`Setpgid`）+ 取消时 `kill(-pid)` 杀整组；LongLived 返 handle，追踪 + Shutdown 全杀。
+5. **owner.ID 即 PATH 段**：owner.ID 直接当目录名并进 PATH，**强校验拒 `:;= \t\n\r\x00`**；conversation 用 `<convID>_<kind>` 下划线避冒号。
+6. **RunningPID 僵尸扫描**：常驻进程 PID 写进 manifest，启动时扫残留并杀（防上次崩溃留僵尸）。
+7. **GC + 磁盘审计**：`LastUsedAt` 超期（默认 30 天）的 env 物理删除；`TotalSizeBytes` 汇总占用。
 
 ---
 
-## 5. 错误字典 (Sentinels)
+## 4. 生命周期
 
-| Sentinel | HTTP | Wire Code | 备注 |
+1. **Bootstrap**：解压 mise，degraded 兜底，顺带 boot 扫残留进程。
+2. **EnsureRuntime**：缺则装（mise install / docker pull），manifest 记账。
+3. **EnsureEnv**：建 venv + 装 deps（docker no-op），status `installing → ready/failed`，发 `sandbox.env_status_changed`。
+4. **Spawn**：owner → env → `ResolveExec` 组装宿主命令 → 跑。
+5. **GC / Destroy**：超期或显式销毁，发 `sandbox.env_deleted`。
+
+---
+
+## 5. Docker 的当前边界
+
+本轮实装：探测 daemon + `docker pull` + env manifest + 基础 `docker run` spawn（`opts.Env` 经 `-e` 注入容器）。**容器优雅停止（`docker stop` + container-id 追踪）、孤儿回收、stdio MCP 长连接 e2e 留 mcp 模块那轮**——那才是 docker spawn 真正被消费验证处。Forgify **不能代装 docker**（需 root/admin），故探测不可达时优雅返 `ErrDockerNotInstalled`/`ErrDockerDaemonDown`。
+
+---
+
+## 6. 错误字典
+
+| Sentinel | Kind | Wire Code | HTTP |
 |---|---|---|---|
-| `ErrRuntimeNotSupported`| 422 | `SANDBOX_RUNTIME_MISSING` | nix 环境初始化失败。 |
-| `ErrDepInstallFailed` | 502 | `SANDBOX_PIP_FAILED` | 网速慢或包版本冲突。 |
-| `ErrSpawnFailed` | 502 | `SANDBOX_EXEC_ERROR` | 无法拉起子进程。 |
-| `ErrEnvNotFound` | 404 | `SANDBOX_ENV_NOT_FOUND` | 物理目录可能被手动删了。 |
-| `ErrSpawnTimeout` | 504 | `SANDBOX_TIMEOUT` | 运行超过 30s。 |
+| `ErrRuntimeNotSupported` | Unprocessable | `SANDBOX_RUNTIME_NOT_SUPPORTED` | 422 |
+| `ErrRuntimeInstallFailed` | BadGateway | `SANDBOX_RUNTIME_INSTALL_FAILED` | 502 |
+| `ErrRuntimeNotFound` | NotFound | `SANDBOX_RUNTIME_NOT_FOUND` | 404 |
+| `ErrEnvNotFound` | NotFound | `SANDBOX_ENV_NOT_FOUND` | 404 |
+| `ErrEnvCreateFailed` | BadGateway | `SANDBOX_ENV_CREATE_FAILED` | 502 |
+| `ErrDepInstallFailed` | BadGateway | `SANDBOX_DEP_INSTALL_FAILED` | 502 |
+| `ErrSpawnFailed` | BadGateway | `SANDBOX_SPAWN_FAILED` | 502 |
+| `ErrSpawnTimeout` | GatewayTimeout | `SANDBOX_SPAWN_TIMEOUT` | 504 |
+| `ErrEnvInUse` | Conflict | `SANDBOX_ENV_IN_USE` | 409 |
+| `ErrInvalidOwnerID` | Invalid | `SANDBOX_INVALID_OWNER_ID` | 400 |
+| `ErrCmdRequired` | Invalid | `SANDBOX_CMD_REQUIRED` | 400 |
+| `ErrDockerNotInstalled` | Unprocessable | `SANDBOX_DOCKER_NOT_INSTALLED` | 422 |
+| `ErrDockerDaemonDown` | Unavailable | `SANDBOX_DOCKER_DAEMON_DOWN` | 503 |
+
+---
+
+## 7. 跨域集成
+
+- **Function / Handler**：依赖 sandbox 提供 Python/Node 解释器 + venv 执行（一次性 `Spawn` / 常驻 `SpawnLongLived`）。
+- **MCP**：docker 镜像型 server 经 sandbox 拉取 + `docker run`。
+- **Chat**：对话级 scratch env，对话删除时销毁。
+- **Notification**：env 状态变更经 `notification.Emitter` 发到通知中心（`sandbox.env_status_changed` / `sandbox.env_deleted`）。

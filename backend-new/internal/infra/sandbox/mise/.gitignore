@@ -1,0 +1,6 @@
+# mise binaries fetched by `make fetch-mise` (cmd/fetch-mise) into per-platform
+# sub-dirs (darwin-arm64/, darwin-amd64/, linux-amd64/, linux-arm64/,
+# windows-amd64/). Picked up at compile time by D2-2's go:embed directives.
+# Never commit binaries — pinned via MISE_VERSION + verified by SHA256 fetch.
+*
+!.gitignore
