@@ -4,104 +4,102 @@ type: reference
 status: active
 owner: @weilin
 created: 2026-04-22
-reviewed: 2026-06-02
+reviewed: 2026-06-06
 review-due: 2026-09-01
 audience: [human, ai]
 ---
-# Document Domain — Notion-style 树状知识库与 RAG 引擎
+# Document Domain — Notion-style 树状知识库
 
-> **核心地位**：Document 是 Forgify 的 **“本地知识脑库”**。它支持无限层级的文件夹结构，不仅作为用户的 Wiki，更作为 RAG (检索增强生成) 的核心数据源，直接注入到 Agent 的 Context 中。
+> **核心地位**：Document 是 Forgify 的**本地知识脑库**——无限层级的 markdown 文档树，既是用户的 Wiki，也能被 @ 引用、显式挂载到对话/workflow 当背景资料、用 wikilink 互链。**无 RAG / 无向量检索**：注入靠用户显式挑选，可控、有界。
 
 ---
 
-## 1. 物理模型 (Data Anatomy)
+## 1. 物理模型
 
-### 1.1 `Document` 实体
+### 1.1 `Document` 实体（按 workspace、软删）
+markdown 树的一个节点，`ParentID nil = 根级`。去 GORM——纯 struct + 轻量 db tag，workspace 隔离由 orm 自动施加。
 ```go
 type Document struct {
-    ID          string         `gorm:"primaryKey;type:text" json:"id"` // doc_<16hex>
-    UserID      string         `gorm:"not null;index" json:"userId"`
-    
-    // 树状结构
-    ParentID    *string        `gorm:"index;type:text" json:"parentId,omitempty"`
-    Name        string         `gorm:"not null;type:text" json:"name"`
-    Path        string         `gorm:"index;not null;type:text" json:"path"` // 全路径如 /work/spec.md
-    
-    Description string         `gorm:"type:text;default:''" json:"description"`
-    Content     string         `gorm:"type:text;default:''" json:"content"` // 1MB 限制
-    
-    // 渲染参数
-    Position    int            `gorm:"not null;default:0" json:"position"`
-    Tags        []string       `gorm:"serializer:json;type:text" json:"tags"`
-    
-    SizeBytes   int64          `gorm:"not null;default:0" json:"sizeBytes"`
-    CreatedAt   time.Time      `json:"createdAt"`
-    UpdatedAt   time.Time      `json:"updatedAt"`
-    DeletedAt   gorm.DeletedAt `gorm:"index" json:"-"`
+    ID          string     `db:"id,pk"`              // doc_<16hex>
+    WorkspaceID string     `db:"workspace_id,ws"`
+    ParentID    *string    `db:"parent_id"`
+    Name        string     `db:"name"`
+    Description string     `db:"description"`
+    Content     string     `db:"content"`           // markdown, ≤ 1 MB
+    Tags        []string   `db:"tags,json"`
+    Position    int        `db:"position"`
+    Path        string     `db:"path"`              // "/Parent/Child"
+    SizeBytes   int64      `db:"size_bytes"`
+    CreatedAt   time.Time  `db:"created_at,created"`
+    UpdatedAt   time.Time  `db:"updated_at,updated"`
+    DeletedAt   *time.Time `db:"deleted_at,deleted"`
 }
 ```
+`UNIQUE(workspace_id, COALESCE(parent_id,''), name) WHERE deleted_at IS NULL` — 同父名唯一（根级 NULL→'' 兜住）、软删后名复用。
 
-### 1.2 `AttachedDocument` (引用协议)
-这是在 `Conversation` 或 `Agent` 中持久化的 DTO。
-```typescript
-interface AttachedDocument {
-    documentId: string;
-    includeSubtree: boolean; // 是否包含该文件夹下所有后代
+### 1.2 `AttachedDocument`（引用协议）
+持久化在 `Conversation` / workflow 节点的 DTO。**只引用单篇，不含子树**——子树自动注入已砍（挂载必须显式有界，不能"挂一篇拖出一整棵树"炸 context）。
+```go
+type AttachedDocument struct {
+    DocumentID string `json:"documentId"`
 }
 ```
 
 ---
 
-## 2. 核心原理 (Principles)
+## 2. 核心原理
 
-### 2.1 Virtual Path (虚拟路径同步)
-后端在每次 `Move` 或 `Rename` 操作后，会自动计算并递归更新所有子节点的 `Path` 字段。
-- **优点**：支持通过 `LIKE '/work/%'` 进行极速的子树检索，无需递归 DB 查询。
-- **物理约束**：同一父节点下禁止重名。
+### 2.1 Virtual Path（虚拟路径级联）
+每次 `Move` / `Rename` 后，后端 BFS 递归重算所有子节点的 `Path`。优点：`LIKE '/work/%'` 极速子树检索；同父禁止重名（重名自动加后缀 `foo`→`foo 2`，Notion 风格）；防环（`IsAncestor` 拒绝把节点移入自己的子树）。
 
-### 2.2 XML-Style Context Injection
-当 Document 被挂载到对话时：
-1. **即时展开**：根据 `includeSubtree` 标志，系统在运行时扫描并抓取所有相关的 `doc_` 内容。
-2. **XML 封装**：
-   ```xml
-   <document path="/work/prd.md" id="doc_123">
-     [内容明文]
-   </document>
-   ```
-3. **注入位置**：注入在 System Prompt 的 `documents` 段，利用 XML 标签辅助模型精确定位。
+### 2.2 XML Context Injection（无子树）
+挂载文档注入对话/workflow 节点时：`ResolveAttached` 取**显式挂的那几篇**（不展开子树）→ `RenderAttachedAsXML` 拼成 `<documents>` 段：
+```xml
+<document path="/work/prd.md" id="doc_123">
+  [内容明文]
+</document>
+```
+注入 system prompt 的 documents 段。
 
-### 2.3 Wikilink 解析
-系统在保存 Document 内容时，会自动正则匹配 `[[doc_<id>]]` 或 `[[fn_<id>]]`：
-- **原理**：将解析结果同步到 `relations` 表。
-- **效果**：在 UI 侧可以实时看到“谁引用了这篇文章”的反向链接。
+### 2.3 Wikilink → relation 边
+保存内容时正则抓 `[[<prefix>_<16hex>]]`：`wikilink.Parse` 取 id（**无 kind**）→ `relation.KindForID` 据前缀解析 kind + 过滤未知前缀 + 跳自链 → 写一条 `link` 边（relation 4 动词之一）到拓扑图。UI 侧据此显示反向链接。
 
 ---
 
-## 3. 生命周期 (Lifecycle)
+## 3. 四个适配器（接入前三模块）
 
-1. **创建 (Creating)**：用户调 POST API，指定 `parentId`。
-2. **编辑 (Editing)**：支持实时保存草稿。
-3. **挂载 (Attaching)**：用户在对话侧栏选择文档。
-4. **注入 (Hydrating)**：LLM 每次生成前，系统动态拼装文档 XML。
-5. **归档 (Archiving)**：软删除，保留数据以便已发送的消息可以解引用。
+document 是**第一个接通 catalog / relation / mention 的实体**，实现 4 个端口（注入在 M7）：
 
----
+| 适配器 | 接入 | 作用 |
+|---|---|---|
+| `AsCatalogSource` | catalog | 把文档名录（name = path + description）报给能力概览，让 LLM 知道有哪些文档 |
+| `AsMentionResolver` | mention | `@文档` 时抓 description+content 快照 |
+| `syncRelationsForDocumentBody` / `purgeRelationsForDocuments` | relation（消费 `SyncOutgoing`/`PurgeEntity`） | wikilink → `link` 边；删除级联清边 |
+| `NamesByIDs` | relation（提供 `Namer`） | relation 读时 hydrate 给 document 节点贴名 |
 
-## 4. 跨域集成 (Interactions)
-
-- **Agent**：`Knowledge` 挂载点的物理载体。
-- **Chat**：作为 RAG 源注入。
-- **Relation**：作为 RelGraph 的中心节点，维护 `links_to` 关系。
-- **Search**：支持对文档全内容的词频检索。
+> 这些端口对齐的是前三模块**收窄后**的新接口（catalog 去 Granularity/InvokeTool/Category、relation 4 动词边、wikilink 去 Kind）——document 是验证那些设计的试金石。
 
 ---
 
-## 5. 错误字典 (Sentinels)
+## 4. 生命周期
+创建（指定 parentId）→ 编辑（实时保存；改 content 重 sync wikilink）→ 挂载（用户挑文档）→ 注入（每轮拼 XML，仅显式那几篇）→ 软删（保留墓碑，已发消息可解引用；级联软删子树 + 清边）。
 
-| Sentinel | HTTP | Wire Code | 场景 |
+---
+
+## 5. 跨域集成
+- **Chat / Scheduler**：消费 `ResolveAttached` + `RenderAttachedAsXML` 注入挂载文档（波次 4/5）。
+- **Catalog / Mention / Relation**：经上述 4 适配器（注入 M7）。
+- **AI `:iterate`**：askai 编辑（波次 6）。
+
+---
+
+## 6. 错误字典
+
+| Sentinel | Kind | Wire Code | HTTP |
 |---|---|---|---|
-| `ErrNameConflict` | 409 | `DOCUMENT_NAME_CONFLICT` | 同目录下重名。 |
-| `ErrInvalidParent`| 422 | `DOCUMENT_INVALID_PARENT` | 尝试将父文件夹移入自己的子文件夹。 |
-| `ErrContentTooLarge`| 413 | `DOCUMENT_TOO_LARGE` | 超过 1MB 安全上限。 |
-| `ErrParentNotFound`| 422 | `DOCUMENT_PARENT_MISSING`| `parentId` 指向了虚空。 |
-| `ErrNotFound` | 404 | `DOCUMENT_NOT_FOUND` | |
+| `ErrNotFound` | NotFound | `DOCUMENT_NOT_FOUND` | 404 |
+| `ErrInvalidParent` | Unprocessable | `DOCUMENT_INVALID_PARENT` | 422 |
+| `ErrNameConflict` | Conflict | `DOCUMENT_NAME_CONFLICT` | 409 |
+| `ErrContentTooLarge` | TooLarge | `DOCUMENT_CONTENT_TOO_LARGE` | 413 |
+| `ErrInvalidName` | Invalid | `DOCUMENT_INVALID_NAME` | 400 |
+| `ErrParentNotFound` | Unprocessable | `DOCUMENT_PARENT_NOT_FOUND` | 422 |

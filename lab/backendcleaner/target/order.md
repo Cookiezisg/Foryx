@@ -45,7 +45,7 @@
 | M1.7 ✅ R0025 | `memory` | domain/notification | 文件式按 workspace(~/.forgify/workspaces/<wsID>/memories/*.md)；两段式注入(pinned 全文+目录按需读)；无 mem_ id/无 SQLite；发通知用 notification.Emitter；首个文件式 store skills 复用；工具/chat 注入留波次 2/3/5 |
 | M1.8 ✅ R0026 | `sandbox` | infra/sandbox | 三 runtime(Python+Node+Docker，registry 调研 92%+7 docker 缺口)；image=docker runtime/容器=env 统一双接口、`ResolveExec`；两表系统级不分桶(orm meta.ws==nil)；去 GORM+硬删；docker 探测+pull+run(不代装)；Emitter；路由 RESTful+N5；**docker 精细化(stop/孤儿/stdio e2e)留 M3.6、注册+base+fetch-mise 留 M7** |
 | M1.9 ⏭️ R0027 | ~~`permissions` / `hooks`~~ **判定解散** | — | hooks 砍（Claude Code 花活）、危险控制别处管（不做中央门控）、limits 用 `pkg/limits` 默认、settings.json 砍；permissions domain + app/hooks + infra/settings 全不迁。连带 M5.4 permissionsgate 解散、M5.2 chat 去 hooks 依赖 |
-| M1.10 | `document` | catalog, relation, mention | LLM-ranked attach（**无 RAG**），Notion 树；relations 消费 `wikilink.Parse`(去 Kind) + `relation.KindForID` 解析/过滤（deps-todo R0005）|
+| M1.10 ✅ R0028 | `document` | catalog, relation, mention | Notion 树(树 CRUD/path 级联/防环/软删/COALESCE UNIQUE)+ 显式挂载注入(**无 RAG/砍子树**)；去 GORM+workspace；**4 适配器对齐前三模块新地基**(catalog 去 Granularity/Category、relations wikilink→KindForID→link 边、mention、Namer)；注入留 M7、attach 消费波次4/5、:iterate 波次6 |
 | M1.11 | `todo` | — | ⚠️ 待判定：是否 Quadrinity/agent 真需要 |
 
 ### 波次 2 — tool 基础 + 执行原语

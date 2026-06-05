@@ -212,3 +212,16 @@ permissions domain + app/hooks + infra/settings 整个不迁。碎片去向：
 | limits 装配 | M7 | `pkg/limits.Current()` 走 `Default()`；**删** settings-backed `SetProvider`（旧 main.go 把 `settings.Limits` 接进去）——不接 settings |
 | M5.4 tool/permissionsgate | 删 | 随 permissions 解散；chat（M5.2）危险控制改由工具自管 |
 | 前端 settings/permissions UI | 覆盖阶段（contract #7） | testend Permissions.tsx + `/settings`·`/permissions` 调用全拆 |
+
+## 来自波次 1 · M1.10（document 建立 R0028）
+
+document Notion 树 + 4 适配器已建。消费侧 / 注入登记：
+
+| 关注点 | 去向 | 备注 |
+|---|---|---|
+| 4 适配器注入 | M7 | catalog `RegisterSource(doc.AsCatalogSource())`、chat mention 注册 `doc.AsMentionResolver()`、`doc.SetRelationSyncer(relationSvc)`、relation `Config.Namers["document"]=docSvc`；双向（doc↔relation）注入避 init 环 |
+| attach 消费（`ResolveAttached` + `RenderAttachedAsXML`） | 波次 4/5 | chat runner system prompt + workflow llm/agent dispatcher 注入挂载文档；AttachedDocument 已去 IncludeSubtree（只单篇） |
+| AttachedDocument 去 IncludeSubtree 连带 | conversation（波次5）/ workflow node（波次4） | 那俩持 `[]AttachedDocument` 字段；去 includeSubtree；前端挂载 UI 去子树选项（contract #8） |
+| `:iterate`（askai 编辑） | 波次 6 | document handler 的 `:iterate` + `BuildDocumentContext` |
+| `app/tool/document`（LLM 工具） | 波次 3 | `read_document` 等工具适配器 |
+| document handler 路由装配 + DDL 收集 | M7 | `NewDocumentHandler(...).Register(mux)` + `documentstore.Schema` 交 `db.Migrate` |

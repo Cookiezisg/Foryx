@@ -4,7 +4,7 @@
 
 ## 当前
 
-- **阶段**：Phase 2 逐模块 — 波次 0 全部完成；**波次 1（叶子业务域）进行中：M1.1 workspace ✅ · M1.2 apikey ✅ · M1.3 model ✅ · M1.4 relation ✅ · M1.5 catalog ✅ · M1.6 mention ✅ · M1.7 memory ✅ · M1.8 sandbox ✅ · M1.9 ⏭️解散**。
+- **阶段**：Phase 2 逐模块 — 波次 0 全部完成；**波次 1（叶子业务域）进行中：M1.1 workspace ✅ · M1.2 apikey ✅ · M1.3 model ✅ · M1.4 relation ✅ · M1.5 catalog ✅ · M1.6 mention ✅ · M1.7 memory ✅ · M1.8 sandbox ✅ · M1.9 ⏭️解散 · M1.10 document ✅**。
 - **分支**：`main`（backend-new 平行重写不需要分支）。
 - **策略**：`backend-new/` 平行重建 → 覆盖回 `backend/` → 调前端/testend 兼容。
 
@@ -29,6 +29,7 @@
 - **memory（文件式，M1.7）**：从重型 SQLite CRUD 改为**按 workspace 的文件式 markdown**(`~/.forgify/workspaces/<wsID>/memories/<name>.md`，frontmatter description/pinned/source + 正文，文件名即 name、**无 mem_ id**)。两段式注入(pinned 全文常驻 + 非 pinned 目录 `read_memory` 按需)；天然去重(注入目录让 LLM 自判 update 否则新建，无向量 pipeline)；发通知用 `notification.Emitter`；用户可直接编辑文件。**backend-new 首个文件式 store**(手写 frontmatter/原子写/slug 防穿越，skills 波次 3 复用)。砍热度/Type 四分类/Metadata/向量/reflection/decay(业界调研判过度)。R0025 ✅。
 - **sandbox（三 runtime，M1.8）**：Python+Node+Docker 隔离运行时（GitHub MCP registry 98 调研:Python+Node+remote 覆盖 92%、缺口 7 Docker-only）。**三 runtime 统一双接口**（image=docker 的 runtime、容器=env，零特例共用 manifest/锁/Ensure 流程）；`EnvBin/EnvDir`→`ResolveExec`（spawn 层不持 runtime 知识，docker 返回 `docker run --rm -i` 包装）；**两表系统级不分桶**（orm `meta.ws==nil` 自动跳隔离，runtime 全机共享——相对 memory/skills 分桶的合理例外）；去 GORM+硬删（无 deleted 列）；`docker.go` 新写（探测 daemon+pull+docker run+`-e` env，**不代装** docker，ErrDocker* 从"残留"转正预留）；notifications pkg→`notification.Emitter`（`sandbox.env_status_changed`/`env_deleted`）；路由 hacky(`POST /sandbox/{action}` 前导冒号)→RESTful+N5(`DELETE /runtimes|envs/{id}`、`POST /sandbox:gc`)。**骨架照搬**（旧实现本质复杂度无脂肪、双接口正交故 docker 无缝插入）+重写烂文档（MiseSpec/BootstrapOK 虚构字段、错误码全旧）。Docker 精细化（stop/孤儿/stdio e2e）留 M3.6、注册+base+fetch-mise 留 M7。R0026 ✅。
 - **permissions/hooks/settings（M1.9，判定解散 R0027）**：三者整个**不迁 backend-new**。**中央配置门控是错误抽象**（抄 Claude Code 的交互式逐步授权，但 Forgify 单人本地：交互聊天嫌烦 bypass、无人值守 workflow 没人答 ask → 实际闲置）。**hooks 砍**（花活）；**危险控制不做中央门控**（由别处/工具自管）；**protectedPaths** 归危险控制（`pathguard` 已有默认禁区）；**limits 用 `pkg/limits` 默认**（不暴露用户调、不进 settings）；**settings.json + infra/settings 砍**（无内容可存）。连带 **M5.4 tool/permissionsgate 解散**、**M5.2 chat 去 hooks 依赖**、pkg/limits 删 settings-backed `SetProvider` 装配。契约删 permissions.md / api 7 端点 / 2 错误码。对齐 userpath R0004 判删。R0027 ⏭️。
+- **document（Notion 树，M1.10）**：去 GORM + workspace 隔离（app 去掉所有 RequireUserID，orm 自动）+ Emitter（document.created/updated/moved/deleted）+ 树 CRUD 照搬（path 级联/防环/重名加后缀/软删子树/COALESCE UNIQUE 兜根级同名）。**砍 attach 子树注入**（AttachedDocument 去 IncludeSubtree、ResolveAttached 只取单篇——挂载有界不炸 context，用户拍板）。**第一个接通 catalog/relation/mention 的实体，4 适配器对齐前三模块收窄后的新地基**（catalog_source 去 Granularity/InvokeTool/Category、relations wikilink.Parse(去 Kind)→KindForID→link 边、mention 微调、Namer.NamesByIDs 给 relation 读时 hydrate）——验证了前三模块端口设计。旧文档腐烂（标题"RAG 引擎"实无 RAG）整篇重写。注入留 M7、attach 消费波次4/5、:iterate 波次6、tool 波次3。R0028 ✅。
 
 ## 模块进度（编号见 order.md）
 
@@ -36,7 +37,7 @@
 
 - **Phase 1 骨架** ✅：`backend-new/` + 空 go.mod + health server + smoke。
 - **波次0 地基**：M0.1 pkg ✅（**reqctx/idgen/pagination ✅** R0001；**tokencount ✅** R0002；**pathguard ✅** R0003；**userpath ⏭️删** R0004；**wikilink ✅** R0005；**jsonrepair ✅** R0006；**limits ✅** R0007；modelcaps/modelcatalog 移交 M1.3）· M0.2 数据库层 ✅（**pkg/orm R0008 · db 网关 R0009**；业务表 DDL 分散各模块）· M0.3 ✅（**logger R0010 · crypto R0011**）· M0.4 ✅：**errors R0012** · **stream 统一协议 R0013**（单一 domain/stream：信封+四动词Frame+通用 Node{Type,Content}+Bridge/ListReader；词表下放业务）· M0.5 ✅ infra **stream bus（单一 Bus）R0014**（实例化三次=三流；frame 分级；D2 全量推；infra/chat extractor 移交 M5.2）· M0.6 llm ✅（11 家 provider）· **M0.7 transport ✅ R0017**（response N1+errmap 塌缩+SSE marshal · middleware workspace · router 框架；完整 New→M7）· **波次 0 收官 ✅**
-- **波次1 叶子域**：M1.1 workspace(原 user) **✅ R0018** · M1.2 apikey **✅ R0019** · M1.3 model **✅ R0020** · M1.4 relation **✅ R0021** · M1.5 catalog **✅ R0022** · M1.6 mention **✅ R0023** · notification(基础) **✅ R0024** · M1.7 memory **✅ R0025** · M1.8 sandbox **✅ R0026** · M1.9 permissions/hooks **⏭️ 解散 R0027** · M1.10 document ⬜ · M1.11 todo ⬜(待判定)
+- **波次1 叶子域**：M1.1 workspace(原 user) **✅ R0018** · M1.2 apikey **✅ R0019** · M1.3 model **✅ R0020** · M1.4 relation **✅ R0021** · M1.5 catalog **✅ R0022** · M1.6 mention **✅ R0023** · notification(基础) **✅ R0024** · M1.7 memory **✅ R0025** · M1.8 sandbox **✅ R0026** · M1.9 permissions/hooks **⏭️ 解散 R0027** · M1.10 document **✅ R0028** · M1.11 todo ⬜(待判定)
 - **波次2 tool+原语**：tool ⬜ · loop ⬜ · tool/filesystem·search·web·toolset ⬜
 - **波次3 Quadrinity**：function·handler·subagent·agent·skill·mcp + tool 适配器组 ⬜
 - **波次4 编排核心**：workflow ⬜ · flowrun ⬜ · scheduler 🔴⬜ · trigger ⬜ · tool/workflow ⬜
@@ -46,5 +47,5 @@
 
 ## 下一步
 
-- **波次 1（下一轮）**：M1.10 document。
+- **波次 1（下一轮）**：M1.11 todo（待判定，波次 1 收尾）。
 - M1.1 遗留 → M7：boot 默认 workspace（`Count==0→Create`）+ `WorkspaceResolver` 注入 `IdentifyWorkspace` + `~/.forgify/` 共享资源布局落地（不分桶）。

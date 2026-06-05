@@ -187,7 +187,7 @@ audience: [human, ai]
 | GET | `/api/v1/documents/{id}` | `document.go` |
 | PATCH | `/api/v1/documents/{id}` | `document.go` |
 | DELETE | `/api/v1/documents/{id}` | `document.go` |
-| POST | `/api/v1/documents/{idAction}` | `document.go` | (:move, :iterate) |
+| POST | `/api/v1/documents/{idAction}` | `document.go` | (:move；:iterate 留波次 6 askai) |
 
 ### 5.3 Relations & Graph
 | Method | Path | 文件源 |

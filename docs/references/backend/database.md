@@ -265,12 +265,23 @@ interface EdgeSpec {
 ### 4.1 Document (Knowledge)
 ```go
 type Document struct {
-    ParentID *string `gorm:"index" json:"parentId"`
-    Path     string  `gorm:"index;not null" json:"path"`
-    Content  string  `gorm:"not null" json:"content"`
-    Position int     `gorm:"not null;default:0" json:"position"`
+    ID          string     `db:"id,pk"`              // doc_<16hex>
+    WorkspaceID string     `db:"workspace_id,ws"`
+    ParentID    *string    `db:"parent_id"`          // nil = root-level
+    Name        string     `db:"name"`
+    Description string     `db:"description"`
+    Content     string     `db:"content"`           // markdown, ≤ 1 MB
+    Tags        []string   `db:"tags,json"`
+    Position    int        `db:"position"`
+    Path        string     `db:"path"`              // "/Parent/Child" dotted path
+    SizeBytes   int64      `db:"size_bytes"`
+    CreatedAt   time.Time  `db:"created_at,created"`
+    UpdatedAt   time.Time  `db:"updated_at,updated"`
+    DeletedAt   *time.Time `db:"deleted_at,deleted"` // 软删（删除子树留墓碑）
 }
 ```
+- `idx_documents_ws_parent_name` UNIQUE(workspace_id, COALESCE(parent_id,''), name) WHERE deleted_at IS NULL — 同父名唯一（根级 NULL→'' 兜住，否则 SQLite 放过根级重名）、软删后名可复用。
+- `idx_documents_ws_parent` / `idx_documents_ws_path` (workspace_id, …) WHERE deleted_at IS NULL — 子节点列举 + path 排序。
 
 ### 4.2 Relation (Topology)
 跨实体有向边。**无 name 列**（显示名读时内存查、不入库）、**无 deleted_at**（边随实体硬删）。
