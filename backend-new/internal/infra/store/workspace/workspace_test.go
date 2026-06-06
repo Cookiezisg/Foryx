@@ -56,6 +56,24 @@ func TestStore_SaveGetRoundTrip(t *testing.T) {
 	}
 }
 
+func TestStore_DefaultSearchKeyID_RoundTrip(t *testing.T) {
+	s := newStore(t)
+	w := &workspacedomain.Workspace{
+		ID: "ws_1", Name: "Alpha", Language: workspacedomain.LanguageZhCN,
+		DefaultSearchKeyID: "aki_search",
+	}
+	if err := s.Save(context.Background(), w); err != nil {
+		t.Fatalf("save: %v", err)
+	}
+	got, err := s.Get(context.Background(), "ws_1")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.DefaultSearchKeyID != "aki_search" {
+		t.Fatalf("DefaultSearchKeyID round-trip = %q, want aki_search", got.DefaultSearchKeyID)
+	}
+}
+
 func TestStore_DuplicateName_ErrNameConflict(t *testing.T) {
 	s := newStore(t)
 	mustSave(t, s, "ws_1", "Dup")

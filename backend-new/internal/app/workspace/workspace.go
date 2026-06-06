@@ -16,6 +16,7 @@ import (
 	"go.uber.org/zap"
 
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
+	websearchdomain "github.com/sunweilin/forgify/backend/internal/domain/websearch"
 	workspacedomain "github.com/sunweilin/forgify/backend/internal/domain/workspace"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
@@ -214,10 +215,55 @@ func (s *Service) SetDefault(ctx context.Context, id, scenario string, ref *mode
 	return w, nil
 }
 
-// Service implements ModelPicker — the LLM-using callers (波次 2/3/5) depend on this port.
+// DefaultSearchKeyID implements websearch.SearchKeyPicker: it returns the current
+// workspace's chosen search api-key id (workspace id from ctx); ok=false when none is
+// configured or the workspace can't be loaded — WebSearch then falls through to its
+// next backend rather than failing.
 //
-// Service 实现 ModelPicker——用 LLM 的 caller（波次 2/3/5）依赖此端口。
-var _ modeldomain.ModelPicker = (*Service)(nil)
+// DefaultSearchKeyID 实现 websearch.SearchKeyPicker：返回当前 workspace（id 取自 ctx）选定的搜索
+// api-key id；未配置或 workspace 取不到时 ok=false——WebSearch 据此降级到下个后端而非报错。
+func (s *Service) DefaultSearchKeyID(ctx context.Context) (string, bool) {
+	wsID, err := reqctxpkg.RequireWorkspaceID(ctx)
+	if err != nil {
+		return "", false
+	}
+	w, err := s.repo.Get(ctx, wsID)
+	if err != nil {
+		return "", false
+	}
+	id := strings.TrimSpace(w.DefaultSearchKeyID)
+	return id, id != ""
+}
+
+// SetDefaultSearch sets (or clears with "") the workspace's default search api-key id.
+// No provider/category check — mirrors SetDefault's runtime-graceful style: the WebSearch
+// tool rejects a non-search key at call time, and the UI only offers search-category keys.
+//
+// SetDefaultSearch 设置（""则清除）workspace 的默认搜索 api-key id。不校验 provider/category
+// ——镜像 SetDefault 的运行时优雅风格：WebSearch 工具调用时拒非搜索 key，UI 只让选 search 类 key。
+func (s *Service) SetDefaultSearch(ctx context.Context, id, keyID string) (*workspacedomain.Workspace, error) {
+	w, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	w.DefaultSearchKeyID = strings.TrimSpace(keyID)
+	w.UpdatedAt = time.Now().UTC()
+	if err := s.repo.Save(ctx, w); err != nil {
+		return nil, err
+	}
+	s.log.Info("workspace default search key set",
+		zap.String("workspace_id", id), zap.Bool("cleared", w.DefaultSearchKeyID == ""))
+	return w, nil
+}
+
+// Service implements ModelPicker and websearch.SearchKeyPicker — the LLM/search-using
+// callers (波次 2/3/5) depend on these ports.
+//
+// Service 实现 ModelPicker 与 websearch.SearchKeyPicker——用 LLM/搜索的 caller（波次 2/3/5）依赖这些端口。
+var (
+	_ modeldomain.ModelPicker         = (*Service)(nil)
+	_ websearchdomain.SearchKeyPicker = (*Service)(nil)
+)
 
 // cleanName trims, requires non-empty, and bounds the length of a workspace name.
 //

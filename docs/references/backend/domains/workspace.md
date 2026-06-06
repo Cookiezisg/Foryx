@@ -28,6 +28,7 @@ type Workspace struct {
     DefaultDialogue *modeldomain.ModelRef `db:"default_dialogue,json" json:"defaultDialogue,omitempty"`
     DefaultUtility  *modeldomain.ModelRef `db:"default_utility,json" json:"defaultUtility,omitempty"`
     DefaultAgent    *modeldomain.ModelRef `db:"default_agent,json" json:"defaultAgent,omitempty"`
+    DefaultSearchKeyID string `db:"default_search_key_id" json:"defaultSearchKeyId,omitempty"`  // "" = 未配；WebSearch 的唯一显式搜索 key（provider 由 key 隐含）
     LastUsedAt      *time.Time `db:"last_used_at" json:"lastUsedAt,omitempty"`  // 切换时刷，前端 picker 排序
     CreatedAt       time.Time  `db:"created_at,created" json:"createdAt"`
     UpdatedAt       time.Time  `db:"updated_at,updated" json:"updatedAt"`
@@ -36,6 +37,8 @@ type Workspace struct {
 ```
 
 - **`DefaultDialogue/Utility/Agent` 是 workspace 级模型偏好**：每个是一个 `modeldomain.ModelRef`（`apiKeyId`+`modelId`+原生 `options`），JSON 序列化进 `TEXT` 列，`nil` = 该 scenario 未配置。模型选择不再有独立表——它就是跟着 workspace 走的偏好（见 §5）。`DefaultFor(scenario)` / `SetDefaultFor(scenario, ref)` 在三列上做 scenario→列的开关。
+
+- **`DefaultSearchKeyID` 是 workspace 级搜索偏好**：WebSearch 用的唯一显式搜索 api-key id（`TEXT NOT NULL DEFAULT ''`，`""` = 未配置），provider 由 key 隐含（`apikey.Credentials.Provider`）。**单选、无优先级列表**——agent 永不挨个试 provider 乱烧钱。`Service` 经 `DefaultSearchKeyID(ctx)` 实现 `websearch.SearchKeyPicker`（同 `ModelPicker` 的 DIP；详见 `domains/websearch.md`）。
 
 - **`Name` 是自由展示名，不是 slug**：允许中文、空格、大小写，`TrimSpace` 后非空、长度 ≤ 64 rune。全机唯一（大小写敏感），由物理 `UNIQUE INDEX idx_workspaces_name ... WHERE deleted_at IS NULL` 保证——partial index 使软删掉的名字可被重用。重名冲突由 `pkg/orm` 把 SQLite UNIQUE 违例翻译成 `ErrConflict`，store 再翻成 `ErrNameConflict`。
 - **`Language` 是 workspace 级偏好**：物理 CHECK 约束限制集合 `{'zh-CN','en'}`，默认 `'zh-CN'`。它是 workspace 一组未来偏好里的**第一个**（见 §5）。
@@ -95,6 +98,11 @@ Forgify 采用 **「无状态声明 + 状态校验」** 模式，后端不持 Se
 - `PUT /api/v1/workspaces/{id}/default-models/{scenario}`（`scenario ∈ dialogue/utility/agent`）→ body 是 `ModelRef`（`apiKeyId`+`modelId`+原生 `options`），写进对应的 `default_*` 列，返回更新后的 `Workspace`。
 - 校验：scenario 非白名单 → `modeldomain.ErrScenarioInvalid`(`MODEL_SCENARIO_INVALID`)；ModelRef 缺 `apiKeyId`/`modelId` → `modeldomain.ErrRefInvalid`(`MODEL_REF_INVALID`)。
 - 前端在 Settings 的模型配置页为三个 scenario 分别选模型，每选一次打一发。
+
+### 4.4 设默认搜索 key (`default-search`)
+- `PUT /api/v1/workspaces/{id}/default-search` → body `{apiKeyId}`，写进 `default_search_key_id` 列，返回更新后的 `Workspace`。`DELETE` 同路径清除（写 `""`）。
+- **不校验 provider/category**（运行时优雅，对齐 default-models）——WebSearch 调用时拒非搜索 key，前端只让选 `category=search` 的 key。
+- **单选显式 = 防乱烧钱**（替代旧 `SearchProviderPriority` 自动遍历 4 个 provider）。详见 `domains/websearch.md`。
 
 ### 4.3 终极保护 (The Last Guardian)
 - `Service.Delete` 内部先 `Count()`，若 `count <= 1` 拒删（`ErrCannotDeleteLast`）。

@@ -194,6 +194,52 @@ func TestSetDefault_AndPick(t *testing.T) {
 	}
 }
 
+func TestSetDefaultSearch_AndPick(t *testing.T) {
+	s := newService()
+	w, _ := s.Create(context.Background(), CreateInput{Name: "WS"})
+	if _, err := s.SetDefaultSearch(context.Background(), w.ID, "aki_search"); err != nil {
+		t.Fatalf("set default search: %v", err)
+	}
+	// DefaultSearchKeyID reads the current workspace (id from ctx) — the SearchKeyPicker contract.
+	// DefaultSearchKeyID 读当前 workspace（id 取自 ctx）——SearchKeyPicker 契约。
+	ctx := reqctxpkg.SetWorkspaceID(context.Background(), w.ID)
+	id, ok := s.DefaultSearchKeyID(ctx)
+	if !ok || id != "aki_search" {
+		t.Fatalf("DefaultSearchKeyID = (%q,%v), want (aki_search,true)", id, ok)
+	}
+}
+
+func TestDefaultSearchKeyID_Unconfigured(t *testing.T) {
+	s := newService()
+	w, _ := s.Create(context.Background(), CreateInput{Name: "WS"})
+	ctx := reqctxpkg.SetWorkspaceID(context.Background(), w.ID)
+	if id, ok := s.DefaultSearchKeyID(ctx); ok || id != "" {
+		t.Fatalf(`DefaultSearchKeyID = (%q,%v), want ("",false)`, id, ok)
+	}
+}
+
+func TestSetDefaultSearch_Clear(t *testing.T) {
+	s := newService()
+	w, _ := s.Create(context.Background(), CreateInput{Name: "WS"})
+	if _, err := s.SetDefaultSearch(context.Background(), w.ID, "aki_search"); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	if _, err := s.SetDefaultSearch(context.Background(), w.ID, ""); err != nil {
+		t.Fatalf("clear: %v", err)
+	}
+	ctx := reqctxpkg.SetWorkspaceID(context.Background(), w.ID)
+	if id, ok := s.DefaultSearchKeyID(ctx); ok || id != "" {
+		t.Fatalf(`after clear = (%q,%v), want ("",false)`, id, ok)
+	}
+}
+
+func TestDefaultSearchKeyID_NoWorkspaceInCtx(t *testing.T) {
+	s := newService()
+	if id, ok := s.DefaultSearchKeyID(context.Background()); ok || id != "" {
+		t.Fatalf(`no ws in ctx = (%q,%v), want ("",false)`, id, ok)
+	}
+}
+
 func TestPick_NotConfigured(t *testing.T) {
 	s := newService()
 	w, _ := s.Create(context.Background(), CreateInput{Name: "WS"})

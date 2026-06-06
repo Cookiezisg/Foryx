@@ -226,6 +226,8 @@ audience: [human, ai]
 | DELETE | `/api/v1/workspaces/{id}` | `workspaces.go` |
 | POST | `/api/v1/workspaces/{idAction}` | `workspaces.go` | (:activate) |
 | PUT | `/api/v1/workspaces/{id}/default-models/{scenario}` | `workspaces.go` |
+| PUT | `/api/v1/workspaces/{id}/default-search` | `workspaces.go` |
+| DELETE | `/api/v1/workspaces/{id}/default-search` | `workspaces.go` |
 
 ### 6.2 Utility & Metrics
 | Method | Path | 文件源 |
@@ -267,6 +269,8 @@ audience: [human, ai]
 - `knobs[]` 是「容器统一、内容全原生」的可渲染描述符：`type ∈ enum|bool|int`；`key`/`values` 是各家 wire 词表，绝不归一。各家原生旋钮：openai `reasoning_effort`+`verbosity`；anthropic `thinking`(adaptive/disabled…)+`effort`(low..max,xhigh)；gemini `thinkingLevel`(Gemini-3 枚举) 或 `thinkingBudget`(Gemini-2.5 整数)；deepseek `thinking`+`reasoning_effort`(high/max)；qwen `enable_thinking`+`thinking_budget`；ollama `think`+`num_ctx`。
 
 **`PUT /api/v1/workspaces/{id}/default-models/{scenario}`** — 设 workspace 某 scenario（`dialogue`/`utility`/`agent`）默认模型；body 是 ModelRef，`options` 为原生旋钮 k-v。返回更新后的 workspace。
+
+**`PUT /api/v1/workspaces/{id}/default-search`** — 设 workspace 默认搜索 api-key（body `{apiKeyId}`）——WebSearch 用的唯一显式 key，provider 由 key 隐含（单选、防乱烧钱）。`DELETE` 同路径清除。返回更新后的 workspace。详见 `domains/websearch.md`。
 ```jsonc
 // request
 { "apiKeyId": "aki_…", "modelId": "claude-opus-4-8", "options": { "thinking": "adaptive" } }

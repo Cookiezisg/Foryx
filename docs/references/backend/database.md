@@ -70,6 +70,7 @@ type Workspace struct {
     DefaultDialogue *modeldomain.ModelRef `db:"default_dialogue,json" json:"defaultDialogue,omitempty"` // TEXT, JSON ModelRef, nullable
     DefaultUtility  *modeldomain.ModelRef `db:"default_utility,json" json:"defaultUtility,omitempty"`   // TEXT, JSON ModelRef, nullable
     DefaultAgent    *modeldomain.ModelRef `db:"default_agent,json" json:"defaultAgent,omitempty"`       // TEXT, JSON ModelRef, nullable
+    DefaultSearchKeyID string             `db:"default_search_key_id" json:"defaultSearchKeyId,omitempty"` // TEXT NOT NULL DEFAULT '', "" = unconfigured; WebSearch's single explicit search key (provider implied by the key)
     LastUsedAt      *time.Time            `db:"last_used_at" json:"lastUsedAt,omitempty"`
     CreatedAt       time.Time             `db:"created_at,created" json:"createdAt"`
     UpdatedAt       time.Time             `db:"updated_at,updated" json:"updatedAt"`

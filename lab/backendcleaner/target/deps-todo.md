@@ -294,3 +294,14 @@ search 三件套(LS/Glob/Grep) + `pkg/fspath.Expand` + filesystem 回溯补 `~` 
 | **`rg` 二进制** | 不代装 | `exec.LookPath("rg")` 探测,无则 stdlib 兜底;同 sandbox docker"不代装"决策 |
 | **`fspath.Expand` 共用** | 所有文件工具 | filesystem 3 + search 3 工具 path 的唯一解析点(展开 `~` + 必绝对) |
 | **testend search 工具断言** | 覆盖阶段(contract #13) | 旧假名 `grep_search`/`glob` → `Grep`/`Glob`;新增 `LS`;path 参数断言改"必填、绝对或 `~`" |
+
+## 来自波次 2 · M2.3#3 前置（搜索配置 domain/websearch + workspace 列 R0034）
+
+`domain/websearch`(Provider 词表 + SearchKeyPicker 接口)+ workspace `default_search_key_id` 列已建。跨波次接线登记：
+
+| 关注点 | 去向 | 备注 |
+|---|---|---|
+| **WebSearch 消费 SearchKeyPicker + Provider 常量** | tool/web（R0035 下一轮） | `picker.DefaultSearchKeyID(ctx)` → `keys.ResolveCredentialsByID(id)` → `websearch.IsProvider(creds.Provider)` ? switch → searchBrave/Serper/Tavily/Bocha;`workspace.Service` 已实现 picker(注入 web) |
+| **WebSearch MCP tier** | mcp（M3.6） | `MCPSearchRouter` 接口由 web 定义、mcp 注入;nil 降级（同旧设计的 DIP，已对） |
+| **前端"默认搜索 key"选择器** | 覆盖阶段（contract #14） | Settings 从 `category=search` 的 apikey 单选 → PUT/DELETE default-search;读 workspace 响应 `defaultSearchKeyId` |
+| **boot 注入 web 的 SearchKeyPicker** | server boot M7 | `workspace.Service` 实例传给 `WebTools(...)`（同 model.ModelPicker 的注入） |

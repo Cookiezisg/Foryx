@@ -37,10 +37,16 @@ type Workspace struct {
 	DefaultDialogue *modeldomain.ModelRef `db:"default_dialogue,json" json:"defaultDialogue,omitempty"`
 	DefaultUtility  *modeldomain.ModelRef `db:"default_utility,json" json:"defaultUtility,omitempty"`
 	DefaultAgent    *modeldomain.ModelRef `db:"default_agent,json" json:"defaultAgent,omitempty"`
-	LastUsedAt      *time.Time            `db:"last_used_at" json:"lastUsedAt,omitempty"`
-	CreatedAt       time.Time             `db:"created_at,created" json:"createdAt"`
-	UpdatedAt       time.Time             `db:"updated_at,updated" json:"updatedAt"`
-	DeletedAt       *time.Time            `db:"deleted_at,deleted" json:"-"`
+	// DefaultSearchKeyID is the api-key id chosen for WebSearch (provider implied by the
+	// key). "" = unconfigured. A single explicit choice, not a priority list — the agent
+	// never burns credits probing providers. Implements websearch.SearchKeyPicker via Service.
+	// DefaultSearchKeyID 是为 WebSearch 选定的 api-key id（provider 由 key 隐含）。"" = 未配置。
+	// 单一显式选择、非优先级列表——agent 永不试 provider 乱烧钱。经 Service 实现 websearch.SearchKeyPicker。
+	DefaultSearchKeyID string     `db:"default_search_key_id" json:"defaultSearchKeyId,omitempty"`
+	LastUsedAt         *time.Time `db:"last_used_at" json:"lastUsedAt,omitempty"`
+	CreatedAt          time.Time  `db:"created_at,created" json:"createdAt"`
+	UpdatedAt          time.Time  `db:"updated_at,updated" json:"updatedAt"`
+	DeletedAt          *time.Time `db:"deleted_at,deleted" json:"-"`
 }
 
 // Supported UI languages; Language is CHECK-constrained to this set in the DDL.

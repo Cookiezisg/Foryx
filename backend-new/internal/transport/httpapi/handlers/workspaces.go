@@ -37,6 +37,10 @@ func (h *WorkspacesHandler) Register(mux Registrar) {
 	// Per-scenario default model selection — a workspace-scoped preference (alongside language).
 	// 按 scenario 的默认模型选择——workspace 级偏好（与 language 并列）。
 	mux.HandleFunc("PUT /api/v1/workspaces/{id}/default-models/{scenario}", h.SetDefaultModel)
+	// Default search key — the single explicit api-key WebSearch uses (provider implied).
+	// 默认搜索 key——WebSearch 用的唯一显式 api-key（provider 隐含）。
+	mux.HandleFunc("PUT /api/v1/workspaces/{id}/default-search", h.SetDefaultSearch)
+	mux.HandleFunc("DELETE /api/v1/workspaces/{id}/default-search", h.ClearDefaultSearch)
 	// Go 1.22+ ServeMux disallows a literal `{id}:action` segment — capture the
 	// whole `{idAction}` and split in postOnWorkspace.
 	// Go 1.22+ ServeMux 禁止字面 `{id}:action` 分段——整体捕获 {idAction}，在 postOnWorkspace 拆分。
@@ -59,6 +63,10 @@ type setDefaultModelRequest struct {
 	APIKeyID string            `json:"apiKeyId"`
 	ModelID  string            `json:"modelId"`
 	Options  map[string]string `json:"options,omitempty"`
+}
+
+type setDefaultSearchRequest struct {
+	APIKeyID string `json:"apiKeyId"`
 }
 
 func (h *WorkspacesHandler) List(w http.ResponseWriter, r *http.Request) {
@@ -169,6 +177,39 @@ func (h *WorkspacesHandler) SetDefaultModel(w http.ResponseWriter, r *http.Reque
 	}
 	ref := &modeldomain.ModelRef{APIKeyID: req.APIKeyID, ModelID: req.ModelID, Options: req.Options}
 	ws, err := h.svc.SetDefault(r.Context(), r.PathValue("id"), r.PathValue("scenario"), ref)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, ws)
+}
+
+// SetDefaultSearch sets the workspace's default search api-key (body {apiKeyId}) — the
+// single explicit key WebSearch uses; its provider is implied by the key itself.
+//
+// SetDefaultSearch 设置 workspace 默认搜索 api-key（body {apiKeyId}）——WebSearch 用的唯一显式 key；
+// 其 provider 由 key 自身隐含。
+func (h *WorkspacesHandler) SetDefaultSearch(w http.ResponseWriter, r *http.Request) {
+	var req setDefaultSearchRequest
+	if err := decodeJSON(r, &req); err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	ws, err := h.svc.SetDefaultSearch(r.Context(), r.PathValue("id"), req.APIKeyID)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, ws)
+}
+
+// ClearDefaultSearch clears the workspace's default search key (DELETE) — WebSearch then
+// falls back to MCP / the actionable "configure a search backend" message.
+//
+// ClearDefaultSearch 清除 workspace 默认搜索 key（DELETE）——WebSearch 据此降级到 MCP / 可操作的
+// "去配置搜索后端"提示。
+func (h *WorkspacesHandler) ClearDefaultSearch(w http.ResponseWriter, r *http.Request) {
+	ws, err := h.svc.SetDefaultSearch(r.Context(), r.PathValue("id"), "")
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
