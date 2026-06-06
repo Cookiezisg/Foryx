@@ -100,7 +100,19 @@ Write 不做这一步——Write 是**整盘覆盖**,size 不该是闸门;只查
 
 ---
 
-## 4. 路径守卫两级 — `Allow` vs `AllowWrite`
+## 4. 路径解析与守卫
+
+### 4.1 路径解析 — `fspath.Expand`(永远绝对,无 cwd)
+
+桌面 agent 没有项目根、没有当前目录——它像人点 Finder 一样用绝对路径在整台机器导航。三工具的 `file_path` 先过 `pkg/fspath.Expand`:
+
+- 展开开头的 `~` / `~/sub` 为系统 home(`os.UserHomeDir()`——后端进程天然知道,agent 自己并不知道这是谁的 home)
+- 展开后**必须绝对**,否则返 `path must be absolute ...`(没有 cwd 可解析相对路径)
+- 返回 `filepath.Clean` 后的干净绝对路径
+
+`ValidateInput` 只查 `file_path` 非空;**绝对性的唯一裁判是 `fspath.Expand`**(在 Execute 里),不在工具层重复判断。
+
+### 4.2 两级守卫 — `Allow` vs `AllowWrite`
 
 由 `pkg/pathguard`(R0003)提供的两级守卫:
 
@@ -187,7 +199,7 @@ CreateTemp(parent, ".forgify-write-*" | ".forgify-edit-*")
 ## 8. 不做什么 — 边界
 
 - ❌ **`Glob` / `Grep` / `LS`** — 归 **`tool/search`**(M2.3 下一个)
-- ❌ **`Bash` 的 cwd 跟踪** — 归 **`tool/shell`**(M3.7),独立的 `agentstate.cwd` 字段由那一轮按需追加
+- ❌ **任何"当前目录"/ cwd 状态** — **cwd 概念全局废弃**:桌面 agent 永远用绝对路径(`~` 由 `fspath` 展开),不维护"现在在哪"。`tool/shell`(M3.7)也将无 cwd 持久化
 - ❌ **Notebook 编辑**(`.ipynb`)/ **二进制读** / **多文件 patch** — 旧版没有,新版不预建
 - ❌ **HTTP 端点 / DDL / 错误码** — 工具失败永不冒泡到 HTTP,只回 tool-result 串供 LLM 自纠;无 sentinel,无 wire code,无 DB schema
 
@@ -198,7 +210,7 @@ CreateTemp(parent, ".forgify-write-*" | ".forgify-edit-*")
 | 接线 | 当下 | 实接 |
 |---|---|---|
 | `WithAgentState` seed | 本轮立契约 | chat M5.2 / subagent M3.3 / scheduler M4.3 |
-| `agentstate.cwd` 字段 | 不建 | shell M3.7 |
+| ~~`agentstate.cwd` 字段~~ | **废弃** | cwd 概念不存在;shell 也走绝对路径、无持久工作目录 |
 | `agentstate.activeSkill` 字段 | 不建 | skill M3.5 |
 | `agentstate.activatedGroups` 字段 | 不建 | toolset M2.3 后续 |
 | 三工具装入 `Toolset.Resident` | host 调 `FilesystemTools(pathGuard)` | chat M5.2 host 组装 |

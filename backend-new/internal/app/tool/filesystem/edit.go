@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	fspathpkg "github.com/sunweilin/forgify/backend/internal/pkg/fspath"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -79,9 +80,6 @@ func (t *Edit) ValidateInput(args json.RawMessage) error {
 	if strings.TrimSpace(a.FilePath) == "" {
 		return ErrEmptyFilePath
 	}
-	if !filepath.IsAbs(a.FilePath) {
-		return ErrPathNotAbsolute
-	}
 	if a.OldString == nil || *a.OldString == "" {
 		return ErrEmptyOldString
 	}
@@ -113,11 +111,13 @@ func (t *Edit) Execute(ctx context.Context, argsJSON string) (string, error) {
 		return "", fmt.Errorf("Edit.Execute: %w", err)
 	}
 
-	if ok, reason := t.pathGuard.AllowWrite(args.FilePath); !ok {
+	cleaned, err := fspathpkg.Expand(args.FilePath)
+	if err != nil {
+		return err.Error(), nil
+	}
+	if ok, reason := t.pathGuard.AllowWrite(cleaned); !ok {
 		return reason, nil
 	}
-
-	cleaned := filepath.Clean(args.FilePath)
 
 	info, err := os.Stat(cleaned)
 	if err != nil {

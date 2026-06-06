@@ -29,7 +29,6 @@ func TestWrite_ValidateInput(t *testing.T) {
 		wantMatch string
 	}{
 		{"empty path", `{"file_path":"","content":""}`, ErrEmptyFilePath, ""},
-		{"relative", `{"file_path":"rel","content":""}`, ErrPathNotAbsolute, ""},
 		{"missing content", `{"file_path":"/x"}`, nil, "content field is required"},
 		{"empty content ok", `{"file_path":"/x","content":""}`, nil, ""},
 	}
@@ -52,6 +51,36 @@ func TestWrite_ValidateInput(t *testing.T) {
 				t.Fatalf("err = %v, want contains %q", got, c.wantMatch)
 			}
 		})
+	}
+}
+
+func TestWrite_Execute_TildeExpanded(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("home dir unknown")
+	}
+	w := &Write{pathGuard: pathguardpkg.New(nil)}
+	ctx := reqctxpkg.WithAgentState(context.Background(), agentstatepkg.New())
+	// Parent dir missing → fails before writing anything, but the message proves
+	// ~ expanded to the home-based absolute path. No file is created.
+	out, err := w.Execute(ctx, `{"file_path":"~/__forgify_nope_dir__/x.txt","content":"y"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, home) {
+		t.Fatalf("~ not expanded to home: %q", out)
+	}
+}
+
+func TestWrite_Execute_RelativeRejected(t *testing.T) {
+	w := &Write{pathGuard: pathguardpkg.New(nil)}
+	ctx := reqctxpkg.WithAgentState(context.Background(), agentstatepkg.New())
+	out, err := w.Execute(ctx, `{"file_path":"rel.txt","content":"y"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "must be absolute") {
+		t.Fatalf("relative path should be rejected: %q", out)
 	}
 }
 

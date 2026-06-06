@@ -3,6 +3,7 @@ module github.com/sunweilin/forgify/backend
 go 1.25.5
 
 require (
+	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/glebarez/go-sqlite v1.21.2
 	go.uber.org/zap v1.28.0
 	golang.org/x/sys v0.7.0

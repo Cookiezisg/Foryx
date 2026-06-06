@@ -41,7 +41,6 @@ func TestEdit_ValidateInput(t *testing.T) {
 		wantMatch string
 	}{
 		{"empty path", `{"file_path":"","old_string":"a","new_string":"b"}`, ErrEmptyFilePath, ""},
-		{"relative", `{"file_path":"rel","old_string":"a","new_string":"b"}`, ErrPathNotAbsolute, ""},
 		{"empty old", `{"file_path":"/x","old_string":"","new_string":"b"}`, ErrEmptyOldString, ""},
 		{"missing old", `{"file_path":"/x","new_string":"b"}`, ErrEmptyOldString, ""},
 		{"missing new", `{"file_path":"/x","old_string":"a"}`, nil, "new_string field is required"},
@@ -68,6 +67,35 @@ func TestEdit_ValidateInput(t *testing.T) {
 				t.Fatalf("err = %v, want contains %q", got, c.wantMatch)
 			}
 		})
+	}
+}
+
+func TestEdit_Execute_TildeExpanded(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("home dir unknown")
+	}
+	e := &Edit{pathGuard: pathguardpkg.New(nil)}
+	ctx := reqctxpkg.WithAgentState(context.Background(), agentstatepkg.New())
+	// Nonexistent file under ~ — proves ~ expanded; no side effect.
+	out, err := e.Execute(ctx, `{"file_path":"~/__forgify_nope__.txt","old_string":"a","new_string":"b"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, home) {
+		t.Fatalf("~ not expanded to home: %q", out)
+	}
+}
+
+func TestEdit_Execute_RelativeRejected(t *testing.T) {
+	e := &Edit{pathGuard: pathguardpkg.New(nil)}
+	ctx := reqctxpkg.WithAgentState(context.Background(), agentstatepkg.New())
+	out, err := e.Execute(ctx, `{"file_path":"rel.txt","old_string":"a","new_string":"b"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "must be absolute") {
+		t.Fatalf("relative path should be rejected: %q", out)
 	}
 }
 

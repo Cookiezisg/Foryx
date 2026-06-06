@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	fspathpkg "github.com/sunweilin/forgify/backend/internal/pkg/fspath"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -66,9 +67,6 @@ func (t *Write) ValidateInput(args json.RawMessage) error {
 	if strings.TrimSpace(a.FilePath) == "" {
 		return ErrEmptyFilePath
 	}
-	if !filepath.IsAbs(a.FilePath) {
-		return ErrPathNotAbsolute
-	}
 	if a.Content == nil {
 		return errors.New("content field is required (use empty string to create an empty file)")
 	}
@@ -92,11 +90,14 @@ func (t *Write) Execute(ctx context.Context, argsJSON string) (string, error) {
 		return "", fmt.Errorf("Write.Execute: %w", err)
 	}
 
-	if ok, reason := t.pathGuard.AllowWrite(args.FilePath); !ok {
+	cleaned, err := fspathpkg.Expand(args.FilePath)
+	if err != nil {
+		return err.Error(), nil
+	}
+	if ok, reason := t.pathGuard.AllowWrite(cleaned); !ok {
 		return reason, nil
 	}
 
-	cleaned := filepath.Clean(args.FilePath)
 	parent := filepath.Dir(cleaned)
 
 	parentInfo, err := os.Stat(parent)

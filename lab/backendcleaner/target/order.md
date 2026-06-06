@@ -54,8 +54,9 @@
 |---|---|---|---|
 | M2.1 ✅ R0030 | `tool`（基础接口） | infra/llm | **S18 9→5 方法**（删权限模式机制）；framework 注入 summary/`danger`(三级)/execution_group；Toolset 懒加载保留（与 catalog 正交）；danger 确认流/并行批 → loop M2.2 |
 | M2.2 ✅ R0031 | `loop`（ReAct 引擎）+ `domain/messages` | tool, messages | 共享 ReAct 引擎接 stream(eventlog→messages 流 open/delta/close、close 带快照)、danger 纯标记、删 interceptor(M1.9)、todo 注入走 `ReminderProvider` 钩子；**建 messages domain**(Block/ToolCallData/词表无家可归——修正 loop 依赖 chat 耦合反向)；executeTool 极简(删权限/sanitize/enrich)；agentstate 零依赖(随各工具消费者重建)；message_blocks 表/落盘/History 留 M5.2 |
-| M2.3#1 ✅ R0032 | `tool/filesystem` | tool, pkg/agentstate(新建,SeenFiles 渐进) | Read/Write/Edit 三件套:9→5 方法机械跟进;Read 用 `Allow`、Write/Edit 升级用 `AllowWrite`(.git/.env/node_modules 物理拦截);写前必读 fail-closed;Edit size 漂移;原子写 mode 保留;danger 不静态(M2.1 纯信任);agentstate cwd/activeSkill/activatedGroups 字段留 shell/skill/toolset 按需追加 |
-| M2.3#2-4 | `tool/search` `tool/web` `tool/toolset` | tool | 剩余叶子工具适配器 |
+| M2.3#1 ✅ R0032 | `tool/filesystem` | tool, pkg/agentstate(新建,SeenFiles 渐进) | Read/Write/Edit 三件套:9→5 方法机械跟进;Read 用 `Allow`、Write/Edit 升级用 `AllowWrite`(.git/.env/node_modules 物理拦截);写前必读 fail-closed;Edit size 漂移;原子写 mode 保留;danger 不静态(M2.1 纯信任);agentstate activeSkill/activatedGroups 留 skill/toolset 按需追加(**cwd R0033 废弃**) |
+| M2.3#2 ✅ R0033 | `tool/search`(LS/Glob/Grep) | tool, pkg/fspath(新建) | 三件套;**LS 新增**列目录;**无 cwd 全绝对路径 + `~` 展开**(fspath,六文件工具共用);Grep 双后端(rg 优先/stdlib 兜底,不代装);path 必填;danger LLM 自报工具不碰;**回溯改 filesystem 补 `~` + cwd 全局废弃** |
+| M2.3#3-4 | `tool/web` `tool/toolset` | tool | 剩余叶子工具适配器 |
 
 ### 波次 3 — Quadrinity 执行体
 

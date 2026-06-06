@@ -8,10 +8,10 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
-	"path/filepath"
 	"strings"
 
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	fspathpkg "github.com/sunweilin/forgify/backend/internal/pkg/fspath"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -36,10 +36,9 @@ const (
 // Read 工具错误由 ValidateInput 返回、以 tool-result 字符串呈现给 LLM 让它修参数。
 // 它们不走 domain errmap（S20）——永不到达 HTTP。
 var (
-	ErrEmptyFilePath   = errors.New("file_path is required")
-	ErrPathNotAbsolute = errors.New("file_path must be an absolute path (e.g. /Users/you/file.txt)")
-	ErrNegativeOffset  = errors.New("offset must be non-negative")
-	ErrNegativeLimit   = errors.New("limit must be non-negative")
+	ErrEmptyFilePath  = errors.New("file_path is required")
+	ErrNegativeOffset = errors.New("offset must be non-negative")
+	ErrNegativeLimit  = errors.New("limit must be non-negative")
 )
 
 const readDescription = `Read a file. Absolute path; cat -n output (line-num TAB content). Defaults to first 2000 lines; use offset+limit to page. For directory listing use Glob "*".`
@@ -92,9 +91,6 @@ func (t *Read) ValidateInput(args json.RawMessage) error {
 	if strings.TrimSpace(a.FilePath) == "" {
 		return ErrEmptyFilePath
 	}
-	if !filepath.IsAbs(a.FilePath) {
-		return ErrPathNotAbsolute
-	}
 	if a.Offset < 0 {
 		return ErrNegativeOffset
 	}
@@ -129,11 +125,13 @@ func (t *Read) Execute(ctx context.Context, argsJSON string) (string, error) {
 		args.Limit = defaultLimit
 	}
 
-	if ok, reason := t.pathGuard.Allow(args.FilePath); !ok {
+	cleaned, err := fspathpkg.Expand(args.FilePath)
+	if err != nil {
+		return err.Error(), nil
+	}
+	if ok, reason := t.pathGuard.Allow(cleaned); !ok {
 		return reason, nil
 	}
-
-	cleaned := filepath.Clean(args.FilePath)
 
 	info, err := os.Stat(cleaned)
 	if err != nil {

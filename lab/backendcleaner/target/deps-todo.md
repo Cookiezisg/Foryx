@@ -275,10 +275,22 @@ filesystem 三件套 + `pkg/agentstate{SeenFiles}` + reqctx `WithAgentState/GetA
 
 | 关注点 | 去向 | 备注 |
 |---|---|---|
-| **`agentstate.cwd` 字段 + Bash `cd <path>` 追踪** | shell M3.7 | 在 `pkg/agentstate` 追加 `cwd string + sync.Mutex` + `Cwd()/SetCwd(path)`；Bash 工具识别整条命令为 `cd <path>` 时更新；`ResolveExec` 拼后续命令时优先此 cwd |
+| ~~`agentstate.cwd` 字段 + Bash `cd` 追踪~~ **废弃 R0033** | — | **cwd 概念全局取消**:桌面 agent 无项目根 / 无当前目录、永远绝对路径(`~` 由 `fspath` 展开)。`pkg/agentstate` 永不加 cwd 字段;shell M3.7 也无 cwd 持久化——Bash 命令若需工作目录,命令内显式 `cd /abs &&`,不跨调用记忆 |
 | **`agentstate.activeSkill` 字段 + skill 预授权域** | skill M3.5 | 在 `pkg/agentstate` 追加 `activeSkill activeSkillSlot`（slot 含 skill id + 允许的工具白名单）；skill 调用时把白名单内工具标"已预授权"避免每次确认；M1.9 砍 CheckPermissions 后失靶——skill 这一轮重新设计预授权语义（可能就是"工具调用不弹 dangerous 确认"） |
 | **`agentstate.activatedGroups` 字段 + Toolset lazy 激活账本** | toolset M2.3 后续 + chat M5.2 host | 在 `pkg/agentstate` 追加 `activatedGroups map[string]bool + sync.Mutex`；`activate_tools(category)` 工具更新；chat host 的 `AutoActivator` 钩子（loop 调）读它决定 `host.Tools(ctx)` 该不该露 lazy 组 |
 | **`WithAgentState` 调用方接线** | chat M5.2 / subagent M3.3 / scheduler M4.3 | 每对话 host 起一个 AgentState 挂 ctx；subagent 继承父 ctx 还是独立新建（防 SeenFiles 污染父）波次 3 定；scheduler 跑 workflow 内 agent 时是否需要独立 state 也波次 4 定 |
 | **三工具装入 `Toolset.Resident`** | chat M5.2 host 组装 | filesystem 是常驻工具典型例（巨大 description 不需 lazy）；`FilesystemTools(pathGuard)` 返切片直接进 Resident |
 | **`PathGuard` 实例** | server boot M7 | `pathguardpkg.NewDefault()` 拿 `DefaultDenyList ∪ DefaultWriteOnlyExtras`；本轮已用、boot 装配即可 |
 | **testend 工具断言改名 `fs_*`→`Read/Write/Edit`** | 覆盖阶段（contract #12） | 旧文档错把工具名写成 `fs_read/fs_write/fs_edit`；若 testend 真按假名断言（疑似——文档腐烂的常见连锁）改首字母大写 |
+
+## 来自波次 2 · M2.3#2（tool/search + 新建 pkg/fspath + cwd 全局废弃 R0033）
+
+search 三件套(LS/Glob/Grep) + `pkg/fspath.Expand` + filesystem 回溯补 `~` 已建。跨波次接线登记：
+
+| 关注点 | 去向 | 备注 |
+|---|---|---|
+| **cwd 概念全局废弃** | shell M3.7 + 一切文件工具 | 桌面 agent 全电脑范围、靠交互定位,无项目根/无 cwd。shell 的 Bash 也无 cwd 持久化(命令内显式 `cd /abs &&`,不跨调用记忆);`agentstate` 永不加 cwd 字段。**R0032 的"cwd→shell M3.7"已撤销** |
+| **search 三工具装入 `Toolset.Resident`** | chat M5.2 host 组装 | `SearchTools(pathGuard, log)` 返切片直接进 Resident(同 filesystem) |
+| **`rg` 二进制** | 不代装 | `exec.LookPath("rg")` 探测,无则 stdlib 兜底;同 sandbox docker"不代装"决策 |
+| **`fspath.Expand` 共用** | 所有文件工具 | filesystem 3 + search 3 工具 path 的唯一解析点(展开 `~` + 必绝对) |
+| **testend search 工具断言** | 覆盖阶段(contract #13) | 旧假名 `grep_search`/`glob` → `Grep`/`Glob`;新增 `LS`;path 参数断言改"必填、绝对或 `~`" |

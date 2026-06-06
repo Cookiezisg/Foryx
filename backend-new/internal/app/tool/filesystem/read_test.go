@@ -32,7 +32,6 @@ func TestRead_ValidateInput(t *testing.T) {
 		want error
 	}{
 		{"empty path", `{"file_path":""}`, ErrEmptyFilePath},
-		{"relative path", `{"file_path":"rel.go"}`, ErrPathNotAbsolute},
 		{"negative offset", `{"file_path":"/x","offset":-1}`, ErrNegativeOffset},
 		{"negative limit", `{"file_path":"/x","limit":-1}`, ErrNegativeLimit},
 		{"happy", `{"file_path":"/x"}`, nil},
@@ -44,6 +43,34 @@ func TestRead_ValidateInput(t *testing.T) {
 				t.Fatalf("got %v, want %v", got, c.want)
 			}
 		})
+	}
+}
+
+func TestRead_Execute_TildeExpanded(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		t.Skip("home dir unknown")
+	}
+	r := &Read{pathGuard: pathguardpkg.New(nil)}
+	// Nonexistent file under ~ — proves ~ expanded to home (the not-found message
+	// references the home-based absolute path) without creating anything.
+	out, err := r.Execute(context.Background(), `{"file_path":"~/__forgify_nonexistent_xyz__.txt"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, home) {
+		t.Fatalf("~ not expanded to home: %q", out)
+	}
+}
+
+func TestRead_Execute_RelativeRejected(t *testing.T) {
+	r := &Read{pathGuard: pathguardpkg.New(nil)}
+	out, err := r.Execute(context.Background(), `{"file_path":"rel.go"}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, "must be absolute") {
+		t.Fatalf("relative path should be rejected via fspath.Expand: %q", out)
 	}
 }
 
