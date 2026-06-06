@@ -4,7 +4,7 @@
 
 ## 当前
 
-- **阶段**：Phase 2 逐模块 — 波次 0 全部完成；**波次 1（叶子业务域）进行中：M1.1 workspace ✅ · M1.2 apikey ✅ · M1.3 model ✅ · M1.4 relation ✅ · M1.5 catalog ✅ · M1.6 mention ✅ · M1.7 memory ✅ · M1.8 sandbox ✅ · M1.9 ⏭️解散 · M1.10 document ✅ · M1.11 todo ✅**。**波次 1 收官**。
+- **阶段**：Phase 2 逐模块 — 波次 0 全部完成；**波次 1（叶子业务域）进行中：M1.1 workspace ✅ · M1.2 apikey ✅ · M1.3 model ✅ · M1.4 relation ✅ · M1.5 catalog ✅ · M1.6 mention ✅ · M1.7 memory ✅ · M1.8 sandbox ✅ · M1.9 ⏭️解散 · M1.10 document ✅ · M1.11 todo ✅**。**波次 1 收官**；**波次 2（tool + 原语）进行中：M2.1 tool ✅**。
 - **分支**：`main`（backend-new 平行重写不需要分支）。
 - **策略**：`backend-new/` 平行重建 → 覆盖回 `backend/` → 调前端/testend 兼容。
 
@@ -31,6 +31,7 @@
 - **permissions/hooks/settings（M1.9，判定解散 R0027）**：三者整个**不迁 backend-new**。**中央配置门控是错误抽象**（抄 Claude Code 的交互式逐步授权，但 Forgify 单人本地：交互聊天嫌烦 bypass、无人值守 workflow 没人答 ask → 实际闲置）。**hooks 砍**（花活）；**危险控制不做中央门控**（由别处/工具自管）；**protectedPaths** 归危险控制（`pathguard` 已有默认禁区）；**limits 用 `pkg/limits` 默认**（不暴露用户调、不进 settings）；**settings.json + infra/settings 砍**（无内容可存）。连带 **M5.4 tool/permissionsgate 解散**、**M5.2 chat 去 hooks 依赖**、pkg/limits 删 settings-backed `SetProvider` 装配。契约删 permissions.md / api 7 端点 / 2 错误码。对齐 userpath R0004 判删。R0027 ⏭️。
 - **document（Notion 树，M1.10）**：去 GORM + workspace 隔离（app 去掉所有 RequireUserID，orm 自动）+ Emitter（document.created/updated/moved/deleted）+ 树 CRUD 照搬（path 级联/防环/重名加后缀/软删子树/COALESCE UNIQUE 兜根级同名）。**砍 attach 子树注入**（AttachedDocument 去 IncludeSubtree、ResolveAttached 只取单篇——挂载有界不炸 context，用户拍板）。**第一个接通 catalog/relation/mention 的实体，4 适配器对齐前三模块收窄后的新地基**（catalog_source 去 Granularity/InvokeTool/Category、relations wikilink.Parse(去 Kind)→KindForID→link 边、mention 微调、Namer.NamesByIDs 给 relation 读时 hydrate）——验证了前三模块端口设计。旧文档腐烂（标题"RAG 引擎"实无 RAG）整篇重写。注入留 M7、attach 消费波次4/5、:iterate 波次6、tool 波次3。R0028 ✅。
 - **todo（TodoWrite 重铸，M1.11）**：旧「4 工具 CRUD 数据库」是**错误抽象**（注入没接→LLM 看不见自己清单、前端看板返 `[]` 假、testend 调死链 REST、blocked_by/owner/metadata 三死字段），重铸为 Claude Code 的 **TodoWrite**——**1 工具 `TodoWrite` 整列替换**、item 3 字段(content/activeForm/status)、无逐项 id。**作用域 (conversation, subagent?)** + `scope_id=subagent??conv` **多态键**（同 relation `from_id`、两 id 全局唯一故天然 PK 无 surrogate/COALESCE）、**subagent 各自一张不污染父看板**（旧 owner 字段做对了=作用域非 item 属性）。**两条硬指标钉死**：「LLM 真用」=双层可见(工具结果回显 + 每轮 `SystemReminder` 注入,loop M2.2)、「前端真看见」=REST 初值(`GET /conversations/{id}/todos`)+messages 流 `todo` signal(scope=conversation/node.type=todo/payload 带 conv+subagent，**不走 notifications 收件箱**)。**reqctx 补双种子**(conversation_id+subagent_id，subagent 提前埋、写入方波次3)；**无 HTTP 错误码**(校验只回 tool-result 串供 LLM 自纠、永不冒泡)。工具波次2/3、注入 M2.2、bridge 实接 M7、前端真看板覆盖后。R0029 ✅。
+- **tool（基础接口瘦身，M2.1）**：M1.9 权限解散 + M1.5 catalog 落到工具层。**Tool 9→5 方法**（`Name`/`Description`/`Parameters`/`ValidateInput`/`Execute`；删 `CheckPermissions`/`IsReadOnly`/`NeedsReadFirst`/`RequiresWorkspace`——全仓无消费者、仅已解散 permissionsgate 用过 IsReadOnly + 整套 `PermissionMode`/`PermissionResult`）。**`destructive` boolean → `danger` 三级枚举**（safe 静默 / cautious 标记不阻塞 / dangerous 阻塞等用户同意）；**纯信任**——工具不设静态下限、危险全由 LLM 逐次自报。三字段强制注入剥离（`summary` 必填 + `danger` 必填 + `execution_group`；jsonrepair 兜畸形 JSON、danger 缺/坏→safe）。**Toolset 懒加载保留**（resident/lazy + activate_tools）——与 catalog 实体菜单**正交**（catalog 报实体=搜索数据、懒加载解决工具自身巨大 description 烧 token），**不是** catalog 替代的（纠正一度判错）。与 M1.9 不冲突：砍的是**配置门控**、这是**逐次自报 + 一次确认**。无 domain/store/handler（纯 app 接口模块）；14 测试。danger 确认流 + 并行批 → loop M2.2、activate_tools + lazy prompt + host 组装 → chat M5.2、15 工具适配器 → 波次2.3/3。R0030 ✅。
 
 ## 模块进度（编号见 order.md）
 
@@ -39,7 +40,7 @@
 - **Phase 1 骨架** ✅：`backend-new/` + 空 go.mod + health server + smoke。
 - **波次0 地基**：M0.1 pkg ✅（**reqctx/idgen/pagination ✅** R0001；**tokencount ✅** R0002；**pathguard ✅** R0003；**userpath ⏭️删** R0004；**wikilink ✅** R0005；**jsonrepair ✅** R0006；**limits ✅** R0007；modelcaps/modelcatalog 移交 M1.3）· M0.2 数据库层 ✅（**pkg/orm R0008 · db 网关 R0009**；业务表 DDL 分散各模块）· M0.3 ✅（**logger R0010 · crypto R0011**）· M0.4 ✅：**errors R0012** · **stream 统一协议 R0013**（单一 domain/stream：信封+四动词Frame+通用 Node{Type,Content}+Bridge/ListReader；词表下放业务）· M0.5 ✅ infra **stream bus（单一 Bus）R0014**（实例化三次=三流；frame 分级；D2 全量推；infra/chat extractor 移交 M5.2）· M0.6 llm ✅（11 家 provider）· **M0.7 transport ✅ R0017**（response N1+errmap 塌缩+SSE marshal · middleware workspace · router 框架；完整 New→M7）· **波次 0 收官 ✅**
 - **波次1 叶子域**：M1.1 workspace(原 user) **✅ R0018** · M1.2 apikey **✅ R0019** · M1.3 model **✅ R0020** · M1.4 relation **✅ R0021** · M1.5 catalog **✅ R0022** · M1.6 mention **✅ R0023** · notification(基础) **✅ R0024** · M1.7 memory **✅ R0025** · M1.8 sandbox **✅ R0026** · M1.9 permissions/hooks **⏭️ 解散 R0027** · M1.10 document **✅ R0028** · M1.11 todo **✅ R0029** · **波次 1 收官 ✅**
-- **波次2 tool+原语**：tool ⬜ · loop ⬜ · tool/filesystem·search·web·toolset ⬜
+- **波次2 tool+原语**：tool **✅ R0030** · loop ⬜ · tool/filesystem·search·web·toolset ⬜
 - **波次3 Quadrinity**：function·handler·subagent·agent·skill·mcp + tool 适配器组 ⬜
 - **波次4 编排核心**：workflow ⬜ · flowrun ⬜ · scheduler 🔴⬜ · trigger ⬜ · tool/workflow ⬜
 - **波次5 对话**：conversation ⬜ · chat ⬜ · contextmgr ⬜ · tool/permissionsgate ⬜
@@ -48,5 +49,5 @@
 
 ## 下一步
 
-- **波次 2（下一轮）**：M2.1 tool（基础接口，S18 九方法）→ M2.2 loop（ReAct 引擎，含 todo `SystemReminder` 注入）→ M2.3 叶子工具（filesystem/search/web/toolset）。
+- **波次 2（下一轮）**：M2.1 tool ✅ → **M2.2 loop**（ReAct 引擎，接 danger 闸门 / execution_group 并行批 / todo `SystemReminder` 注入）→ M2.3 叶子工具（filesystem/search/web/toolset）。
 - M1.1 遗留 → M7：boot 默认 workspace（`Count==0→Create`）+ `WorkspaceResolver` 注入 `IdentifyWorkspace` + `~/.forgify/` 共享资源布局落地（不分桶）。

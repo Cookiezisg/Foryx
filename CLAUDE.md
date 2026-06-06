@@ -76,7 +76,7 @@
 - **S11 注释双语化**：`// English \n\n // 中文`。只写 Why，不写 What。
 - **S13 导入别名**：所有 `internal/` 包导入必须带 `<name><role>` 别名（如 `apikeydomain`, `chatapp`）。
 - **S15 ID 宪法**：`<prefix>_<16hex>`。前缀全集（33 种）必须在 `database.md` 中登记。
-- **S18 Tool 规范**：Tool 必须实现 9 方法接口；`summary`/`destructive` 字段由 Framework 强制注入与剥离。
+- **S18 Tool 规范**：Tool 必须实现 5 方法接口（`Name`/`Description`/`Parameters`/`ValidateInput`/`Execute`）；`summary`/`danger`（三级 safe/cautious/dangerous，LLM 逐次自报）/`execution_group` 三字段由 Framework 强制注入 schema 并从 args 剥离。无中央权限门控（M1.9 解散）：危险靠 LLM 自报 + 逐次确认。
 - **S20 错误构造**：创建会冒泡到 HTTP 的 domain 错误一律 `errorsdomain.New(kind, code, msg)`（带 Kind→HTTP status + 稳定 wire code），**禁止**用标准库 `errors.New` 造命名错误；`errors.Is`/`errors.As`（匹配/解包）仍用标准库。
 
 ---

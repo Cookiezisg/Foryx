@@ -52,7 +52,7 @@
 
 | 编号 | 模块 | 依赖 | 旗标 |
 |---|---|---|---|
-| M2.1 | `tool`（基础接口） | infra/llm | S18 九方法接口；framework 注入 summary/destructive |
+| M2.1 ✅ R0030 | `tool`（基础接口） | infra/llm | **S18 9→5 方法**（删权限模式机制）；framework 注入 summary/`danger`(三级)/execution_group；Toolset 懒加载保留（与 catalog 正交）；danger 确认流/并行批 → loop M2.2 |
 | M2.2 | `loop`（ReAct 引擎） | tool | 被 chat/agent/subagent/skill 共享 |
 | M2.3 | `tool/filesystem` `tool/search` `tool/web` `tool/toolset` | tool | 叶子工具适配器 |
 
