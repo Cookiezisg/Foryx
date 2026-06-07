@@ -121,12 +121,17 @@ func (s *Service) Shutdown(ctx context.Context) error {
 //
 // prepareSpawn 把 owner 解析为 env → 宿主 命令/参数/cwd/env vars。EnvManager 组装 cmd+args
 // （python/node 为 venv binary，docker 为 `docker run` 包装），故 spawn 本身不持 runtime 知识。
+// dockerRuntimeKind is the one runtime kind whose rt.Path is an image ref (not an install
+// dir), so it's exempt from absolute-runtimeRef joining and from empty-Cmd rejection (a docker
+// MCP server runs via the image entrypoint with no command).
+//
+// dockerRuntimeKind 是唯一 rt.Path 为镜像 ref（非 install dir）的 runtime kind，故豁免
+// 绝对-runtimeRef 拼接与空-Cmd 拒绝（docker MCP server 经 image entrypoint 运行、无命令）。
+const dockerRuntimeKind = "docker"
+
 func (s *Service) prepareSpawn(ctx context.Context, owner sandboxdomain.Owner, opts sandboxdomain.SpawnOpts) (cmd string, args []string, cwd string, env []string, envID string, err error) {
 	if !s.IsReady() {
 		return "", nil, "", nil, "", fmt.Errorf("sandboxapp.Spawn: %w", sandboxdomain.ErrSpawnFailed)
-	}
-	if opts.Cmd == "" {
-		return "", nil, "", nil, "", fmt.Errorf("sandboxapp.Spawn: %w", sandboxdomain.ErrCmdRequired)
 	}
 
 	envRow, err := s.repo.FindEnvByOwner(ctx, owner.Kind, owner.ID)
@@ -149,12 +154,32 @@ func (s *Service) prepareSpawn(ctx context.Context, owner sandboxdomain.Owner, o
 		return "", nil, "", nil, "", fmt.Errorf("sandboxapp.Spawn: no env manager for kind %s: %w", rt.Kind, sandboxdomain.ErrRuntimeNotSupported)
 	}
 
-	// rt.Path is passed verbatim as runtimeRef: python/node ignore it (the venv
-	// pins the interpreter); docker uses it as the image ref.
-	// rt.Path 原样作 runtimeRef：python/node 忽略（venv 钉死解释器）；docker 用作镜像 ref。
+	// docker uses the image entrypoint, so an empty Cmd is valid; every other runtime needs one.
+	// docker 用 image entrypoint，故空 Cmd 合法；其它 runtime 都需要 Cmd。
+	if rt.Kind != dockerRuntimeKind && opts.Cmd == "" {
+		return "", nil, "", nil, "", fmt.Errorf("sandboxapp.Spawn: %w", sandboxdomain.ErrCmdRequired)
+	}
+
+	// Non-docker runtimeRef is the ABSOLUTE install dir so EnvManagers can resolve bundled
+	// runners (npx/uvx/dnx) under it; docker's rt.Path is an image ref, passed verbatim.
+	// 非-docker 的 runtimeRef 是绝对 install dir，使 EnvManager 能解析其下的自带 runner
+	// （npx/uvx/dnx）；docker 的 rt.Path 是镜像 ref，原样传。
 	envPath := filepath.Join(s.sandboxRoot, envRow.Path)
-	cmd, args, cwd = em.ResolveExec(rt.Path, envPath, opts)
+	runtimeRef := rt.Path
+	if rt.Kind != dockerRuntimeKind {
+		runtimeRef = filepath.Join(s.sandboxRoot, rt.Path)
+	}
+	cmd, args, cwd = em.ResolveExec(runtimeRef, envPath, opts)
 	env = mergeEnv(opts.Env)
+	if rt.Kind != dockerRuntimeKind {
+		// runtime-tool runners need the runtime's OWN bin on PATH: npx has a
+		// `#!/usr/bin/env node` shebang so node must be findable; dnx (top level) invokes
+		// dotnet likewise. node → <rt>/bin, dotnet → <rt>. Harmless for venv/absolute cmds.
+		// runtime-tool runner 需要 runtime 自己的 bin 在 PATH：npx 是 `#!/usr/bin/env node`
+		// shebang，须能找到 node；dnx（顶层）同理调 dotnet。node → <rt>/bin，dotnet → <rt>。
+		// 对 venv/绝对 cmd 无害。
+		env = prependPATH(env, filepath.Join(runtimeRef, "bin"), runtimeRef)
+	}
 	envID = envRow.ID
 
 	envRow.LastUsedAt = time.Now()
@@ -169,6 +194,22 @@ func (s *Service) prepareSpawn(ctx context.Context, owner sandboxdomain.Owner, o
 // mergeEnv overlays overrides onto os.Environ(); existing keys are replaced.
 //
 // mergeEnv 把 overrides 叠加到 os.Environ()，同 key 替换，新 key 追加。
+// prependPATH puts dirs at the front of env's PATH entry (creating it if absent), so a
+// runtime's bundled runners (npx → node, dnx → dotnet) resolve their interpreter.
+//
+// prependPATH 把 dirs 放到 env 的 PATH 条目最前（无则新建），使 runtime 自带 runner（npx → node、
+// dnx → dotnet）能找到解释器。
+func prependPATH(env []string, dirs ...string) []string {
+	prefix := strings.Join(dirs, string(os.PathListSeparator))
+	for i, kv := range env {
+		if strings.HasPrefix(kv, "PATH=") {
+			env[i] = "PATH=" + prefix + string(os.PathListSeparator) + kv[len("PATH="):]
+			return env
+		}
+	}
+	return append(env, "PATH="+prefix)
+}
+
 func mergeEnv(overrides map[string]string) []string {
 	base := os.Environ()
 	if len(overrides) == 0 {
