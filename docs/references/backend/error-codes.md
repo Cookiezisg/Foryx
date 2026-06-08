@@ -139,6 +139,17 @@ audience: [human, ai]
 | `controldomain.ErrNoCatchAll` | `CONTROL_NO_CATCHALL` | 422 | 末条非 when:"true" 兜底 |
 | `controldomain.ErrInvalidCEL` | `CONTROL_INVALID_CEL` | 422 | branch when/emit CEL 编译失败 |
 
+### 2.6c Approval Form（审批渲染实体，apf_）
+| Go Sentinel | Wire Code | HTTP | 场景 |
+|---|---|---|---|
+| `approvaldomain.ErrNotFound` | `APPROVAL_NOT_FOUND` | 404 | |
+| `approvaldomain.ErrDuplicateName` | `APPROVAL_NAME_DUPLICATE` | 409 | workspace 内同名 |
+| `approvaldomain.ErrVersionNotFound` | `APPROVAL_VERSION_NOT_FOUND` | 404 | |
+| `approvaldomain.ErrNoActiveVersion` | `APPROVAL_NO_ACTIVE_VERSION` | 422 | |
+| `approvaldomain.ErrInvalidName` | `APPROVAL_INVALID_NAME` | 422 | name 空 / 畸形 |
+| `approvaldomain.ErrInvalidTemplate` | `APPROVAL_INVALID_TEMPLATE` | 422 | template 空 / {{ CEL }} 编译失败 |
+| `approvaldomain.ErrInvalidTimeout` | `APPROVAL_INVALID_TIMEOUT` | 422 | timeout 非法 duration / behavior 缺或非法 |
+
 ### 2.7 Workflow & Execution Domain
 | Go Sentinel | Wire Code | HTTP | 场景 |
 |---|---|---|---|

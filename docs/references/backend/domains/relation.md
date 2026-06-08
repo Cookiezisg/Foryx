@@ -40,8 +40,8 @@ type Relation struct {
 
 **索引**：`idx_rel_dedup` UNIQUE(workspace_id, from_id, to_id, kind) 保幂等；`idx_rel_from` / `idx_rel_to` 支撑邻域遍历。
 
-### 1.2 节点类型（10 种 EntityKind）
-`function` `handler` `workflow` `agent`（Quadrinity）+ `document` `conversation` + `skill` `mcp`（外部能力）+ `trigger`（信号源，前缀 `trg_`）+ `control`（路由逻辑，前缀 `ctl_`）。
+### 1.2 节点类型（11 种 EntityKind）
+`function` `handler` `workflow` `agent`（Quadrinity）+ `document` `conversation` + `skill` `mcp`（外部能力）+ `trigger`（信号源，前缀 `trg_`）+ `control`（路由逻辑，前缀 `ctl_`）+ `approval`（审批渲染，前缀 `apf_`）。
 
 ### 1.3 边类型（4 个动词）
 两端类型已在 from_kind/to_kind 列里，故 kind 只需**动词**——无论实体增加多少，边类型恒为 4 个，DB CHECK 恒为 4 值集。

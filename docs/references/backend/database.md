@@ -34,6 +34,8 @@ audience: [human, ai]
 | | `agent_versions` | `agv_` | `AgentVersion` |
 | | `control_logics` | `ctl_` | `ControlLogic` |
 | | `control_logic_versions` | `ctlv_` | `Version` |
+| | `approval_forms` | `apf_` | `ApprovalForm` |
+| | `approval_form_versions` | `apfv_` | `Version` |
 | | `mcp_servers` | `mcp_` | `Server` |
 | **Execution**| `flowruns` | `fr_` | `FlowRun` |
 | | `flowrun_events` | `fre_` | `FlowRunEvent` |
@@ -389,6 +391,14 @@ type Item struct {
 | `control_logics` | id(ctl_), workspace_id, name, description, active_version_id, deleted_at | 实体本体，软删；`idx_control_logics_ws_name` = UNIQUE(workspace_id, name) WHERE deleted_at IS NULL |
 | `control_logic_versions` | id(ctlv_), control_id, version, branches(JSON `[{port,when,emit}]`), change_reason, forged_in_conversation_id | append-only + cap 50 裁剪（无 deleted_at）；`idx_ctlv_control_version` = UNIQUE(control_id, version) |
 
+### 4.6 Approval（审批渲染实体，apf_/apfv_）
+> workflow `approval` 节点引用的审批表（markdown prompt 模板 + 决策规则）。AI 工作实体，有版本但**无 sandbox/env/executions**——渲染 + park 是波次 4 运行时事。**前缀 `apf_`/`apfv_` ≠ `apv_`**（`apv_` 是 `approvals` 运行时表）。详 domains/approval.md。2 表，pkg/orm。
+
+| 表 | 关键列 | 说明 |
+|---|---|---|
+| `approval_forms` | id(apf_), workspace_id, name, description, active_version_id, deleted_at | 实体本体，软删；`idx_approval_forms_ws_name` = UNIQUE(workspace_id, name) WHERE deleted_at IS NULL |
+| `approval_form_versions` | id(apfv_), approval_id, version, template(markdown `{{ CEL }}`), allow_reason(bool), timeout, timeout_behavior(reject/approve/fail), change_reason, forged_in_conversation_id | append-only + cap 50 裁剪（无 deleted_at）；`idx_apfv_approval_version` = UNIQUE(approval_id, version) |
+
 ---
 
 ## 5. SQL 约束与扩展 (Schema Extras)
@@ -397,10 +407,11 @@ type Item struct {
 - **Partial Unique**: `idx_mcp_ws_name` -> `UNIQUE(workspace_id, name) WHERE deleted_at IS NULL`（mcp server 短名工作区内唯一，故可作 HTTP path key）。
 - **Encrypted Column**: `mcp_servers.config_enc` -> AES-GCM 密文，载 `{env, headers}`；加密封在 store 层，domain.Server 持明文 `Env`/`Headers`。
 - **Soft Delete**: `DeletedAt` 字段在全量业务表中存在，查询需强制过滤。
-- **ID 前缀**: `u_, aki_, cv_, msg_, blk_, att_, fn_, fnv_, fne_, fnenv_, hd_, hdv_, hcl_, hdenv_, hdi_, wf_, wfv_, ag_, agv_, agx_, fr_, fre_, frn_, apv_, trg_, trf_, tra_, mcp_, doc_, rel_, se_, sr_, noti_, bsh_, ctl_, ctlv_`. （`fnenv_`/`hdenv_` = function/handler 为各版本 venv 自 mint 的 sandbox owner id；`hdi_` = handler 常驻实例 id（内存态，不入库）；`trg_`/`trf_`/`tra_` = trigger 实体 / firing 收件箱 / activation 动作日志（trigger 升为独立实体，取代旧 `ts_`/`tfi_`）；`mcp_` = mcp server 容器实体（一表 `mcp_servers`，工具不落库）；`se_` = sandbox 内部物理 env 行 id——consumer 不复用 entity id，见 shared-infra-IDs；`bsh_` = 后台 shell 进程 id（`tool/shell` 的 `ProcessManager`，内存态、不入库，性质同 `hdi_`））
+- **ID 前缀**: `u_, aki_, cv_, msg_, blk_, att_, fn_, fnv_, fne_, fnenv_, hd_, hdv_, hcl_, hdenv_, hdi_, wf_, wfv_, ag_, agv_, agx_, fr_, fre_, frn_, apv_, trg_, trf_, tra_, mcp_, doc_, rel_, se_, sr_, noti_, bsh_, ctl_, ctlv_, apf_, apfv_`. （`fnenv_`/`hdenv_` = function/handler 为各版本 venv 自 mint 的 sandbox owner id；`hdi_` = handler 常驻实例 id（内存态，不入库）；`trg_`/`trf_`/`tra_` = trigger 实体 / firing 收件箱 / activation 动作日志（trigger 升为独立实体，取代旧 `ts_`/`tfi_`）；`mcp_` = mcp server 容器实体（一表 `mcp_servers`，工具不落库）；`se_` = sandbox 内部物理 env 行 id——consumer 不复用 entity id，见 shared-infra-IDs；`bsh_` = 后台 shell 进程 id（`tool/shell` 的 `ProcessManager`，内存态、不入库，性质同 `hdi_`））
 > 注：memory 改文件式（`~/.forgify/workspaces/<wsID>/memories/*.md`），**无 memories 表、无 `mem_` 前缀**（文件名即标识）。
 > 注：todo 改 TodoWrite 式（一行一作用域、整列替换），PK `scope_id` = 对话/subagent id 多态键，**无 `td_` 前缀**（项无 id、清单按作用域寻址）。
 > 注：skill 改文件式（`~/.forgify/workspaces/<wsID>/skills/<name>/SKILL.md`），**无 skill 表、无 `skill_executions` 表（execution 审计砍）、无 `ske_`/`sk_` 前缀**（name 即标识、relation 节点用 name；R0021 预留的 `sk_` 对文件式 skill 不启用）。
 > 注：mcp server 为容器实体（`mcp_` 前缀、一表 `mcp_servers`，`relation.KindForID` 已识别）。**无 `mcp_calls`/`mcp_health_history` 表、无 `mcl_`/`mch_` 前缀**（调用审计 + 健康历史砍，server 工具不落库——动态落成 `mcp__<server>__<tool>` 工具）。
 > 注：`ctl_`/`ctlv_` = control 逻辑实体 / 其版本（workflow `control` 节点引用的路由逻辑 when/emit 分支组；AI 工作实体，有版本但无 sandbox/env/executions，详 domains/control.md）。
+> 注：`apf_`/`apfv_` = approval **form**（审批渲染实体）/ 其版本（workflow `approval` 节点引用的 markdown 模板 + 决策规则；详 domains/approval.md）。**`apf_` ≠ `apv_`**——`apv_` 是 `approvals` 运行时表（波次 4 flowrun 的 parked 记录）。
 - **作废前缀**: `sk_` 原为 skill 预留，**R0040 skill 重写为文件式后作废**——skill 无生成 id、relation 节点用 name；`ske_` 随 skill execution 审计砍而删。

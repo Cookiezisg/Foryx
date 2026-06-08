@@ -43,7 +43,7 @@ landed-into:
 | **action** | callable `fn_` / `hd_.method` / `mcp:` | activity（整步记账） | 原 `tool` |
 | **agent** | `ag_` | activity（子步记账） | 同名 |
 | **control** | `ctl_` 路由逻辑实体（新） | 纯控制（确定性，不记 activity） | 原 `case` |
-| **approval** | `apv_` 审批渲染实体（新） | 等信号（durable park） | 同名 |
+| **approval** | `apf_` 审批渲染实体（新） | 等信号（durable park） | 同名 |
 
 ### 五条铁律
 
@@ -63,7 +63,7 @@ trigger(trg_manual)
        ├ port=pass  : score>=0.9               → action(fn_publish 发布)
        ├ port=retry : score<0.9 && attempt<3   →[回边]→ action(fn_draft)
        │              emit: {draft, attempt: attempt+1, feedback: reviewer.reason}
-       └ port=else  : "true"                    → approval(apv_humancheck 人工兜底)
+       └ port=else  : "true"                    → approval(apf_humancheck 人工兜底)
 ```
 
 - 每个节点**引用一个实体**；边传 **payload**；`control` 的 `retry` 出口是**回边**，emit **把审核反馈 + attempt+1 塞进回边**（数据管道携带循环状态）。
@@ -104,7 +104,7 @@ trigger(trg_manual)
 
 ### 2.5 approval
 - **角色**：durable 挂起等人工信号 + 二元路由（非 activity；signal_awaited/received 记账）。
-- **引用**：`apv_` 审批渲染实体（§3.2）。**逻辑在实体**：渲染规则（markdown 模板 + `{{ CEL }}` 插值）、`allowReason`、`timeout` / `timeoutBehavior`。
+- **引用**：`apf_` 审批渲染实体（§3.2）。**逻辑在实体**：渲染规则（markdown 模板 + `{{ CEL }}` 插值）、`allowReason`、`timeout` / `timeoutBehavior`。
 - **图只定义**：`yes` / `no` 两个固定出口各连哪个下游。
 - **不改 payload**（透传）；决策只决定走哪个出口，reason 只进审计（不进数据流，对齐 05）。
 
@@ -117,9 +117,9 @@ control 与 approval 的逻辑物化成实体。它们是一类**新的可见性
 **共性规格：**
 - **版本模型**：有 linear 单调版本 + active 指针（同 function 的版本模型，§ `function.md`），**这是 pin 所必需**（在途 flowrun 不漂移）；**无 sandbox / env / executions 日志**（它们不是 activity，不产生执行记录——control 的选择记 flowrun journal 的 `branch_taken`、approval 记 `approvals` 表）。比 function 轻、比 trigger（无版本）重。
 - **catalog**：进（name + description；强制每个节点都引用实体 ⇒ catalog 会比 function 多很多一次性小实体，**靠 AI 写清楚 name/description 区分**，不设特殊过滤机制——决策 B）。
-- **relation**：进，新增 2 类 EntityKind（`control` / `approval`），relation 实体 **9 → 11**；`workflow → ctl_/apv_` 记引用边（引用计数 + 改了反查影响 + needs_attention）。
+- **relation**：进，新增 2 类 EntityKind（`control` / `approval`），relation 实体 **9 → 11**；`workflow → ctl_/apf_` 记引用边（引用计数 + 改了反查影响 + needs_attention）。
 - **pin**：执行时进 flowrun 的 pin 闭包——`pinned_callables` 扩展为「pin 所有引用的版本化实体（fn/hd/ag/**ctl/apv**）」，机制与 callable pin 完全统一（17 §1，ADR-020）。
-- **生命周期**：**独立孤儿**（决策 C）——删 workflow **不级联删**它引用的 ctl_/apv_，与 function/agent 一致；孤儿（relation `refCount=0`）可被识别、AI/用户按需清理。
+- **生命周期**：**独立孤儿**（决策 C）——删 workflow **不级联删**它引用的 ctl_/apf_，与 function/agent 一致；孤儿（relation `refCount=0`）可被识别、AI/用户按需清理。
 - **可引用永远指 active**（永远 prod，编排语义）；在途执行 pin 版本（同 callable）。
 
 ### 3.1 control 逻辑实体（`ctl_`）
@@ -142,14 +142,14 @@ type ControlBranch struct {
 - **能力边界**：when/emit 仅确定性 CEL（读 payload/ctx、禁 now()、禁外部）——**不是轻量 function**，不做任意计算。
 - **复用现实（诚实）**：when/emit 与具体 workflow 的 payload 形状**强耦合**，跨 workflow 复用少；价值在「编排-锻造分离 + 统一心智」，非建共享库。
 
-### 3.2 approval 渲染实体（`apv_`）
+### 3.2 approval 渲染实体（`apf_`）
 
 ```go
-type ApprovalForm struct {              // apv_<16hex>
+type ApprovalForm struct {              // apf_<16hex>
     ID, WorkspaceID, Name, Description string
     ActiveVersionID string
 }
-type ApprovalFormVersion struct {       // apvv_<16hex>
+type ApprovalFormVersion struct {       // apfv_<16hex>
     Version int
     Template        string               // markdown，含 {{ CEL }} 插值（"把数据变成人能看懂的审批点"）
     AllowReason     bool
@@ -161,7 +161,7 @@ type ApprovalFormVersion struct {       // apvv_<16hex>
 - `timeout` 是**唯一保留的 durable timer 用途**（§5 砍 wait 后，timer 原语缩到这里）。
 - 复用潜力高于 control（审批界面更通用，如「邮件发送审批」可跨 workflow）。
 
-> **ID 前缀**（`ctl_`/`ctlv_`/`apv_`/`apvv_`）为建议值，落地时进 `database.md` S15 登记。
+> **ID 前缀**（`ctl_`/`ctlv_`/`apf_`/`apfv_`）为建议值，落地时进 `database.md` S15 登记。
 
 ---
 
@@ -200,7 +200,7 @@ revamp「14→5」做对了**调用类合并**（llm/function/handler/mcp/skill 
 
 | 契约 | 兼容性 |
 |---|---|
-| **17 durable 执行契约** | journal / record-once / replay / join 语义 / pin **全不变**；`pinned_callables` 扩展含 ctl_/apv_（§3）；**§7 节点 config 要改**（从内联 `{branches}`/`{prompt}` 改为 `{ ref, args/出口连线 }`）；§5 作用域变量不变（payload 模型对齐） |
+| **17 durable 执行契约** | journal / record-once / replay / join 语义 / pin **全不变**；`pinned_callables` 扩展含 ctl_/apf_（§3）；**§7 节点 config 要改**（从内联 `{branches}`/`{prompt}` 改为 `{ ref, args/出口连线 }`）；§5 作用域变量不变（payload 模型对齐） |
 | **08 编排 UI** | ✅ 印证「边不画流动、节点是唯一滴答载体」；palette 5 节点改名（tool→action / case→control）；**inspector 改为「引用哪个实体 + 接线」**（不再内联 branches/prompt）；运行时滴答 / trace 不受影响 |
 | **16 标准符合性** | WP1-5/10/16 符合性**不变**（control 实体化不改 WP4 XOR / approval 不改 WP16 deferred choice，只改逻辑存放位置）；**A-4 durable timer 修订**（缩到 approval timeout）；**A-3 trigger 出图**被本模型印证（trg_ 实体）；WP11 implicit termination / WP19-20 cancellation 仍 GAP（继承，不恶化） |
 | **DOC-125 trigger 实体** | ✅ 一致；本文补「图内 trigger **入口节点**引用 trg_ 实体」这一层（DOC-125 §6 已铺垫「payload 成 flowrun 入口输入」） |
@@ -213,10 +213,10 @@ revamp「14→5」做对了**调用类合并**（llm/function/handler/mcp/skill 
 - trigger：节点 → 出图信号源实体（trg_）+ 图内入口节点引用它
 - `tool` → **`action`**（改名；只调 fn/hd/mcp，agent 单列）
 - `case` → **`control`** + 逻辑物化成 `ctl_` 实体
-- `approval` 渲染逻辑物化成 `apv_` 实体
+- `approval` 渲染逻辑物化成 `apf_` 实体
 - **砍 wait 节点**（时间归 trigger / approval timeout / retry backoff / callable 内部）
 - 控制下沉 → **控制即节点**（引用实体）；并发 = 拓扑涌现；边 = payload 数据管道
-- 新增 2 类「AI 工作实体」（ctl_ / apv_）；relation 实体 **9 → 11**
+- 新增 2 类「AI 工作实体」（ctl_ / apf_）；relation 实体 **9 → 11**
 
 **待收口旧文档**（本文先成总纲，后续逐份对齐）：
 - `00-overview`：控制流哲学（下沉→即节点）、节点全集（5 节点改名）、砍 wait、表达式段
@@ -234,7 +234,7 @@ revamp「14→5」做对了**调用类合并**（llm/function/handler/mcp/skill 
 
 - **WP11 implicit termination**：flowrun `completed` 定义（所有活跃路径到无后继出边节点、且无 parked）——16 GAP，波次 4 落实。
 - **WP19/20 cancellation**：单 activity / parked approval / drain 期取消语义——16 GAP，波次 4 落实。
-- **ID 前缀** `ctl_`/`ctlv_`/`apv_`/`apvv_` 进 `database.md` S15 登记。
+- **ID 前缀** `ctl_`/`ctlv_`/`apf_`/`apfv_` 进 `database.md` S15 登记。
 - **catalog 可见性**（决策 B）：靠 AI 写清楚 name/description；若实测噪音过大，再考虑按类型/workflow 分组展示（UI 细节，非阻塞）。
 - **两个新实体的 LLM 工具组**：create/edit/revert/search/get/delete（同 function 工具形态，去掉 run/executions）——波次 4 或随 workflow 锻造一起。
 

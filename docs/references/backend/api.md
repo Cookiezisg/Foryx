@@ -130,6 +130,20 @@ audience: [human, ai]
 | GET | `/api/v1/controls/{id}/versions` | `control.go` | 分页 |
 | GET | `/api/v1/controls/{id}/versions/{version}` | `control.go` | 整数号或 version id |
 
+### 2.7 Approvals (apf_)
+> workflow `approval` 节点引用的审批渲染实体（prompt 模板 + 决策规则；详 domains/approval.md）。AI 工作实体，前缀 `apf_`（≠ `apv_`=运行时），无 `:run`。
+
+| Method | Path | 文件源 | 备注 |
+|---|---|---|---|
+| POST | `/api/v1/approvals` | `approval.go` | 创建（name + template + 规则）|
+| GET | `/api/v1/approvals` | `approval.go` | 列表（分页）|
+| GET | `/api/v1/approvals/{id}` | `approval.go` | 含 active 版 template + 规则 |
+| PATCH | `/api/v1/approvals/{id}` | `approval.go` | 改 name/description（不动版本）|
+| DELETE | `/api/v1/approvals/{id}` | `approval.go` | 软删 + 清边 |
+| POST | `/api/v1/approvals/{idAction}` | `approval.go` | (:edit 整组替换、:revert 移指针；**无 :run**) |
+| GET | `/api/v1/approvals/{id}/versions` | `approval.go` | 分页 |
+| GET | `/api/v1/approvals/{id}/versions/{version}` | `approval.go` | 整数号或 version id |
+
 ---
 
 ## 3. 执行引擎 (Execution Plane)

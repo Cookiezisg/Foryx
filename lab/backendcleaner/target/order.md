@@ -75,7 +75,7 @@
 
 ### 波次 4 — 编排核心（最复杂，重灾区）
 
-> **波次 4 前置（R0045，`18-graph-model-redesign` 重定型）**：用户从「CEL 实体化」纠结推导出 workflow 图模型**彻底重定型**——纯编排数据依赖图、5 节点（trigger/action/agent/control/approval）各引用一类实体、边 = payload。**control 逻辑实体 ✅ R0045**（旧 `case` 节点 CEL 路由逻辑 → 独立 `ctl_` AI 工作实体：版本去 sandbox/executions、全量 branches、强制兜底、无 run、relation 第 10 类）。下一 **approval 渲染实体 `apv_`**，再 **workflow domain 改造**（node 引用实体、边 = payload）。下表 M4.1-M4.5 的 workflow/flowrun/scheduler 均在此新模型下重做（旧「13→5 节点」表述以 18 为准）。
+> **波次 4 前置（R0045，`18-graph-model-redesign` 重定型）**：用户从「CEL 实体化」纠结推导出 workflow 图模型**彻底重定型**——纯编排数据依赖图、5 节点（trigger/action/agent/control/approval）各引用一类实体、边 = payload。**control 逻辑实体 ✅ R0045** + **approval 渲染实体 ✅ R0046**（旧 `case`/`approval` 节点逻辑 → 独立 `ctl_`/`apf_` AI 工作实体：版本去 sandbox/executions、无 run、relation 第 10/11 类；approval 顺带给 `pkg/cel` 加 `{{ CEL }}` 模板地基）。**两个新 AI 工作实体收齐**。下一 **workflow domain 改造**（node 引用实体、边 = payload）。下表 M4.1-M4.5 的 workflow/flowrun/scheduler 均在此新模型下重做（旧「13→5 节点」表述以 18 为准）。
 
 | 编号 | 模块 | app→ 依赖 | 旗标 |
 |---|---|---|---|

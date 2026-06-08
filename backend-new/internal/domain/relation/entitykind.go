@@ -20,17 +20,18 @@ const (
 	EntityKindSkill        = "skill"
 	EntityKindMCP          = "mcp"
 	EntityKindTrigger      = "trigger"
-	EntityKindControl      = "control" // ctl_：workflow control 节点引用的路由逻辑实体
+	EntityKindControl      = "control"  // ctl_：workflow control 节点引用的路由逻辑实体
+	EntityKindApproval     = "approval" // apf_：workflow approval 节点引用的审批渲染实体（非 apv_=运行时）
 )
 
-// IsValidEntityKind reports whether k is one of the 10 node kinds.
+// IsValidEntityKind reports whether k is one of the 11 node kinds.
 //
-// IsValidEntityKind 报告 k 是否 10 种节点类型之一。
+// IsValidEntityKind 报告 k 是否 11 种节点类型之一。
 func IsValidEntityKind(k string) bool {
 	switch k {
 	case EntityKindFunction, EntityKindHandler, EntityKindWorkflow, EntityKindAgent,
 		EntityKindDocument, EntityKindConversation, EntityKindSkill, EntityKindMCP,
-		EntityKindTrigger, EntityKindControl:
+		EntityKindTrigger, EntityKindControl, EntityKindApproval:
 		return true
 	}
 	return false
@@ -83,6 +84,7 @@ var prefixKind = map[string]string{
 	"mcp": EntityKindMCP,
 	"trg": EntityKindTrigger,
 	"ctl": EntityKindControl,
+	"apf": EntityKindApproval,
 }
 
 // KindForID returns the EntityKind for an id like "fn_a1b2…"; ok=false when the
