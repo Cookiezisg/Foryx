@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 var validNameRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
@@ -15,20 +17,11 @@ func validateIncremental(d *VersionDraft) error {
 	if d.Name != "" && !validNameRe.MatchString(d.Name) {
 		return fmt.Errorf("name %q invalid: lowercase alphanumeric + dashes/underscores, 1-64 chars", d.Name)
 	}
-	if len(d.Parameters) > 0 {
-		seen := map[string]bool{}
-		for _, p := range d.Parameters {
-			if p.Name == "" {
-				return fmt.Errorf("parameter has empty name")
-			}
-			if seen[p.Name] {
-				return fmt.Errorf("duplicate parameter name: %q", p.Name)
-			}
-			seen[p.Name] = true
-			if !isValidParamType(p.Type) {
-				return fmt.Errorf("parameter %q invalid type: %q", p.Name, p.Type)
-			}
-		}
+	if err := schemapkg.ValidateFields(d.Inputs); err != nil {
+		return fmt.Errorf("inputs: %w", err)
+	}
+	if err := schemapkg.ValidateFields(d.Outputs); err != nil {
+		return fmt.Errorf("outputs: %w", err)
 	}
 	return nil
 }
@@ -62,14 +55,6 @@ func validateFinal(d *VersionDraft) error {
 var handlerImportBlacklist = []string{
 	"from forgify_handler import",
 	"import forgify_handler",
-}
-
-func isValidParamType(t string) bool {
-	switch t {
-	case "string", "number", "integer", "boolean", "object", "array":
-		return true
-	}
-	return false
 }
 
 // entryFuncName extracts the first top-level def's name (the spawn driver calls it).

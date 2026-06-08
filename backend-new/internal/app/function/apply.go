@@ -6,6 +6,7 @@ import (
 
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	jsonrepairpkg "github.com/sunweilin/forgify/backend/internal/pkg/jsonrepair"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // Op is a JSON-discriminated forge op; Type lives in the `op` field, Raw holds the body.
@@ -24,8 +25,8 @@ type VersionDraft struct {
 	Description   string
 	Tags          []string
 	Code          string
-	Parameters    []functiondomain.ParameterSpec
-	ReturnSchema  map[string]any
+	Inputs        []schemapkg.Field
+	Outputs       []schemapkg.Field
 	Dependencies  []string
 	PythonVersion string
 }
@@ -91,22 +92,22 @@ func applyOne(state *VersionDraft, op Op) error {
 			return fmt.Errorf("set_code unmarshal: %w", err)
 		}
 		state.Code = p.Code
-	case "set_parameters":
+	case "set_inputs":
 		var p struct {
-			Parameters []functiondomain.ParameterSpec `json:"parameters"`
+			Inputs []schemapkg.Field `json:"inputs"`
 		}
 		if err := json.Unmarshal(op.Raw, &p); err != nil {
-			return fmt.Errorf("set_parameters unmarshal: %w", err)
+			return fmt.Errorf("set_inputs unmarshal: %w", err)
 		}
-		state.Parameters = p.Parameters
-	case "set_return_schema":
+		state.Inputs = p.Inputs
+	case "set_outputs":
 		var p struct {
-			ReturnSchema map[string]any `json:"returnSchema"`
+			Outputs []schemapkg.Field `json:"outputs"`
 		}
 		if err := json.Unmarshal(op.Raw, &p); err != nil {
-			return fmt.Errorf("set_return_schema unmarshal: %w", err)
+			return fmt.Errorf("set_outputs unmarshal: %w", err)
 		}
-		state.ReturnSchema = p.ReturnSchema
+		state.Outputs = p.Outputs
 	case "set_dependencies":
 		var p struct {
 			Dependencies []string `json:"dependencies"`
@@ -161,13 +162,8 @@ func cloneDraft(d *VersionDraft) *VersionDraft {
 	}
 	out := *d
 	out.Tags = append([]string(nil), d.Tags...)
-	out.Parameters = append([]functiondomain.ParameterSpec(nil), d.Parameters...)
+	out.Inputs = append([]schemapkg.Field(nil), d.Inputs...)
+	out.Outputs = append([]schemapkg.Field(nil), d.Outputs...)
 	out.Dependencies = append([]string(nil), d.Dependencies...)
-	if d.ReturnSchema != nil {
-		out.ReturnSchema = make(map[string]any, len(d.ReturnSchema))
-		for k, v := range d.ReturnSchema {
-			out.ReturnSchema[k] = v
-		}
-	}
 	return &out
 }

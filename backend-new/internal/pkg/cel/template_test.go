@@ -8,9 +8,9 @@ import (
 func TestCompileTemplate_OK(t *testing.T) {
 	cases := []string{
 		"no spans at all",
-		"hello {{ payload.name }}",
-		"{{ payload.a }} and {{ payload.b }}",
-		"{{ payload.items.size() }} items",
+		"hello {{ input.name }}",
+		"{{ input.a }} and {{ input.b }}",
+		"{{ input.items.size() }} items",
 		"", // empty template is valid
 	}
 	for _, c := range cases {
@@ -22,9 +22,9 @@ func TestCompileTemplate_OK(t *testing.T) {
 
 func TestCompileTemplate_Errors(t *testing.T) {
 	cases := []string{
-		"unterminated {{ payload.x", // no closing }}
-		"bad expr {{ payload.( }}",  // syntax error in span
-		"wall clock {{ now() }}",    // unknown function (no now())
+		"unterminated {{ input.x", // no closing }}
+		"bad expr {{ input.( }}",  // syntax error in span
+		"wall clock {{ now() }}",  // unknown function (no now())
 	}
 	for _, c := range cases {
 		if _, err := CompileTemplate(c); err == nil {
@@ -34,14 +34,14 @@ func TestCompileTemplate_Errors(t *testing.T) {
 }
 
 func TestTemplate_Render(t *testing.T) {
-	tmpl, err := CompileTemplate("批准对 {{ payload.user.name }} 的退款 {{ payload.amount }} 元?")
+	tmpl, err := CompileTemplate("批准对 {{ input.user.name }} 的退款 {{ input.amount }} 元?")
 	if err != nil {
 		t.Fatalf("compile: %v", err)
 	}
-	out, err := tmpl.Render(map[string]any{
+	out, err := tmpl.Render(map[string]any{"input": map[string]any{
 		"user":   map[string]any{"name": "alice"},
 		"amount": 42,
-	}, nil)
+	}})
 	if err != nil {
 		t.Fatalf("render: %v", err)
 	}
@@ -52,7 +52,7 @@ func TestTemplate_Render(t *testing.T) {
 
 func TestTemplate_RenderPureLiteral(t *testing.T) {
 	tmpl, _ := CompileTemplate("是否批准发送?")
-	out, err := tmpl.Render(nil, nil)
+	out, err := tmpl.Render(nil)
 	if err != nil || out != "是否批准发送?" {
 		t.Fatalf("pure literal render: %q err=%v", out, err)
 	}

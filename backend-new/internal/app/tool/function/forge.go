@@ -17,15 +17,17 @@ type CreateFunction struct{ svc *functionapp.Service }
 func (t *CreateFunction) Name() string { return "create_function" }
 
 func (t *CreateFunction) Description() string {
-	return `Forge a new Python function from ops; v1 takes effect immediately (no separate accept step). Required ops: set_meta, set_code. Optional: set_parameters, set_return_schema, set_dependencies, set_python_version.
+	return `Forge a new Python function from ops; v1 takes effect immediately (no separate accept step). Required ops: set_meta, set_code. Optional: set_inputs, set_outputs, set_dependencies, set_python_version.
 
 OP SHAPES (exact field names):
   {"op":"set_meta", "name":"snake_case_name", "description":"one line", "tags":["..."]}
   {"op":"set_code", "code":"def main(x: str) -> dict:\n    return {\"y\": x}"}
-  {"op":"set_parameters", "parameters":[{"name":"x","type":"string","required":true,"description":"..."}]}
-  {"op":"set_return_schema", "returnSchema":{"type":"object","properties":{...}}}
+  {"op":"set_inputs", "inputs":[{"name":"x","type":"string","description":"..."}]}
+  {"op":"set_outputs", "outputs":[{"name":"y","type":"string","description":"..."}]}
   {"op":"set_dependencies", "dependencies":["requests==2.31","pandas"]}
   {"op":"set_python_version", "version":"3.12"}
+
+Field type is one of: string, number, boolean, object, array (a coarse hint; nested shapes are read with CEL at runtime, not declared here).
 
 The function is a stateless def(**kwargs) -> JSON-serialisable value, run in a fresh isolated process per call. If the dependency install fails, the platform auto-revises the deps with an LLM and retries (≤3); the result reports envStatus + any envFixAttempts. Pass credentials via arguments, never hard-code them.`
 }

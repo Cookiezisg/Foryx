@@ -5,15 +5,15 @@ import (
 	"strings"
 )
 
-// Template is a compiled `{{ CEL }}` interpolation template for text-document fields
-// (agent.prompt / approval.prompt). Literal text and compiled `{{ expr }}` spans are kept
-// interleaved; Render evaluates each span over payload/ctx and stringifies it into the
-// literals. The expressions share the same env as bare CEL (payload/ctx only, no now()),
-// so a rendered prompt stays replay-deterministic.
+// Template is a compiled `{{ CEL }}` interpolation template for the approval form's rendered
+// markdown (and any other text field that interpolates an entity input). Literal text and
+// compiled `{{ expr }}` spans are kept interleaved; Render evaluates each span over the
+// caller's activation and stringifies it into the literals. The spans share the same env as
+// bare CEL (payload/ctx/input, no now()), so a rendered prompt stays replay-deterministic.
 //
-// Template 是文本文档字段（agent.prompt / approval.prompt）的 `{{ CEL }}` 插值模板。字面文本与
-// 编译后的 `{{ expr }}` 段交错保存；Render 对每段求值并字符串化插回字面。表达式与裸 CEL 共用同一
-// env（只读 payload/ctx、无 now()），故渲染结果重放确定。
+// Template 是 approval 表单渲染 markdown（及其它插值实体输入的文本字段）的 `{{ CEL }}` 插值模板。
+// 字面文本与编译后的 `{{ expr }}` 段交错保存；Render 对每段按调用方 activation 求值并字符串化插回字面。
+// 段与裸 CEL 共用同一 env（payload/ctx/input、无 now()），故渲染结果重放确定。
 type Template struct {
 	parts []tmplPart
 	src   string
@@ -63,20 +63,21 @@ func CompileTemplate(tmpl string) (*Template, error) {
 	}
 }
 
-// Render evaluates each `{{ expr }}` span over payload/ctx, stringifies the result, and
-// splices it between the literal chunks. A span eval error aborts (the interpreter decides
-// how to surface it). Used by the workflow durable interpreter (波次 4), not at authoring.
+// Render evaluates each `{{ expr }}` span over the caller's activation (vars), stringifies
+// the result, and splices it between the literal chunks. A span eval error aborts (the
+// interpreter decides how to surface it). Used by the workflow durable interpreter (波次 4),
+// not at authoring.
 //
-// Render 对每个 `{{ expr }}` 段求值、字符串化、插回字面间。某段求值错则中止（解释器决定如何上呈）。
-// 由 workflow durable 解释器（波次 4）使用，非编写期。
-func (t *Template) Render(payload, ctxVar map[string]any) (string, error) {
+// Render 对每个 `{{ expr }}` 段按调用方 activation（vars）求值、字符串化、插回字面间。某段求值错
+// 则中止（解释器决定如何上呈）。由 workflow durable 解释器（波次 4）使用，非编写期。
+func (t *Template) Render(vars map[string]any) (string, error) {
 	var b strings.Builder
 	for _, p := range t.parts {
 		if p.prog == nil {
 			b.WriteString(p.literal)
 			continue
 		}
-		v, err := p.prog.Eval(payload, ctxVar)
+		v, err := p.prog.Eval(vars)
 		if err != nil {
 			return "", fmt.Errorf("cel.Render %q: %w", t.src, err)
 		}

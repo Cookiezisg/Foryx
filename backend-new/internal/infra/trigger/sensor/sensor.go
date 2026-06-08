@@ -150,7 +150,7 @@ func (l *Listener) probe(ctx context.Context, triggerID string, sc triggerdomain
 		l.report(triggerID, triggerinfra.Activity{Fired: false, Error: err.Error(), Detail: "invoke failed"})
 		return
 	}
-	met, evalErr := cond.EvalBool(rv, nil)
+	met, evalErr := cond.EvalBool(map[string]any{"payload": rv})
 	if evalErr != nil {
 		l.report(triggerID, triggerinfra.Activity{Fired: false, ReturnValue: rv, Error: evalErr.Error(), Detail: "condition eval error"})
 		return
@@ -159,7 +159,7 @@ func (l *Listener) probe(ctx context.Context, triggerID string, sc triggerdomain
 		l.report(triggerID, triggerinfra.Activity{Fired: false, ReturnValue: rv, Detail: "condition evaluated false"})
 		return
 	}
-	payloadAny, outErr := out.Eval(rv, nil)
+	payloadAny, outErr := out.Eval(map[string]any{"payload": rv})
 	if outErr != nil {
 		l.report(triggerID, triggerinfra.Activity{Fired: false, ReturnValue: rv, Error: outErr.Error(), Detail: "output eval error"})
 		return

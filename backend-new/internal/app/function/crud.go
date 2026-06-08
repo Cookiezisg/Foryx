@@ -14,6 +14,7 @@ import (
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // CreateInput is the LLM-forge create payload; Progress (optional) streams env-fix attempts.
@@ -43,8 +44,8 @@ type DirectCreateInput struct {
 	Description   string
 	Code          string
 	Tags          []string
-	Parameters    []functiondomain.ParameterSpec
-	ReturnSchema  map[string]any
+	Inputs        []schemapkg.Field
+	Outputs       []schemapkg.Field
 	Dependencies  []string
 	PythonVersion string
 	ChangeReason  string
@@ -326,7 +327,7 @@ func newVersionFromDraft(versionID, functionID string, versionN int, d *VersionD
 	}
 	return &functiondomain.Version{
 		ID: versionID, FunctionID: functionID, Version: versionN,
-		Code: d.Code, Parameters: d.Parameters, ReturnSchema: d.ReturnSchema,
+		Code: d.Code, Inputs: d.Inputs, Outputs: d.Outputs,
 		Dependencies: d.Dependencies, PythonVersion: pyVer,
 		EnvID: idgenpkg.New("fnenv"), EnvStatus: functiondomain.EnvStatusPending,
 		ChangeReason: changeReason, CreatedAt: now, UpdatedAt: now,
@@ -351,8 +352,8 @@ func (s *Service) activeAsDraft(ctx context.Context, f *functiondomain.Function)
 		return nil, err
 	}
 	d.Code = active.Code
-	d.Parameters = append([]functiondomain.ParameterSpec(nil), active.Parameters...)
-	d.ReturnSchema = active.ReturnSchema
+	d.Inputs = append([]schemapkg.Field(nil), active.Inputs...)
+	d.Outputs = append([]schemapkg.Field(nil), active.Outputs...)
 	d.Dependencies = append([]string(nil), active.Dependencies...)
 	d.PythonVersion = active.PythonVersion
 	return d, nil
@@ -376,13 +377,13 @@ func buildOpsFromDirect(in DirectCreateInput) ([]Op, error) {
 			return nil, err
 		}
 	}
-	if len(in.Parameters) > 0 {
-		if err := add("set_parameters", map[string]any{"parameters": in.Parameters}); err != nil {
+	if len(in.Inputs) > 0 {
+		if err := add("set_inputs", map[string]any{"inputs": in.Inputs}); err != nil {
 			return nil, err
 		}
 	}
-	if in.ReturnSchema != nil {
-		if err := add("set_return_schema", map[string]any{"returnSchema": in.ReturnSchema}); err != nil {
+	if len(in.Outputs) > 0 {
+		if err := add("set_outputs", map[string]any{"outputs": in.Outputs}); err != nil {
 			return nil, err
 		}
 	}

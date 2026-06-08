@@ -9,6 +9,7 @@ import (
 
 	functionapp "github.com/sunweilin/forgify/backend/internal/app/function"
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
@@ -53,12 +54,12 @@ type createFunctionRequest struct {
 	Name          string                         `json:"name"`
 	Description   string                         `json:"description"`
 	Code          string                         `json:"code"`
-	Tags          []string                       `json:"tags"`
-	Parameters    []functiondomain.ParameterSpec `json:"parameters"`
-	ReturnSchema  map[string]any                 `json:"returnSchema"`
-	Dependencies  []string                       `json:"dependencies"`
-	PythonVersion string                         `json:"pythonVersion"`
-	ChangeReason  string                         `json:"changeReason"`
+	Tags          []string          `json:"tags"`
+	Inputs        []schemapkg.Field `json:"inputs"`
+	Outputs       []schemapkg.Field `json:"outputs"`
+	Dependencies  []string          `json:"dependencies"`
+	PythonVersion string            `json:"pythonVersion"`
+	ChangeReason  string            `json:"changeReason"`
 }
 
 func (h *FunctionHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -72,8 +73,8 @@ func (h *FunctionHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Description:   req.Description,
 		Code:          req.Code,
 		Tags:          req.Tags,
-		Parameters:    req.Parameters,
-		ReturnSchema:  req.ReturnSchema,
+		Inputs:        req.Inputs,
+		Outputs:       req.Outputs,
 		Dependencies:  req.Dependencies,
 		PythonVersion: req.PythonVersion,
 		ChangeReason:  req.ChangeReason,

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // Function is a user-forged function; its code lives on the active Version, not here.
@@ -55,8 +56,8 @@ type Version struct {
 	FunctionID             string          `db:"function_id"                json:"functionId"`
 	Version                int             `db:"version"                    json:"version"`
 	Code                   string          `db:"code"                       json:"code"`
-	Parameters             []ParameterSpec `db:"parameters,json"           json:"parameters"`
-	ReturnSchema           map[string]any  `db:"return_schema,json"         json:"returnSchema"`
+	Inputs                 []schemapkg.Field `db:"inputs,json"             json:"inputs"`
+	Outputs                []schemapkg.Field `db:"outputs,json"            json:"outputs"`
 	Dependencies           []string        `db:"dependencies,json"          json:"dependencies"`
 	PythonVersion          string          `db:"python_version"             json:"pythonVersion"`
 	EnvID                  string          `db:"env_id"                     json:"envId"`
@@ -78,18 +79,6 @@ const (
 	EnvStatusReady   = "ready"
 	EnvStatusFailed  = "failed"
 )
-
-// ParameterSpec describes one declared input parameter (LLM self-reports via set_parameters).
-//
-// ParameterSpec 描述声明的一个入参（LLM 经 set_parameters 自报）。
-type ParameterSpec struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Description string `json:"description,omitempty"`
-	Required    bool   `json:"required"`
-	Default     any    `json:"default,omitempty"`
-	Enum        []any  `json:"enum,omitempty"`
-}
 
 var (
 	// ErrNotFound: function id miss (scoped to workspace).
