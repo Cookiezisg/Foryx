@@ -18,17 +18,7 @@ import (
 
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
-)
-
-// OutputSchemaKind enumerates the three output-shaping modes.
-//
-// OutputSchemaKind 枚举三种输出形态模式。
-type OutputSchemaKind string
-
-const (
-	OutputSchemaFreeText   OutputSchemaKind = "free_text"
-	OutputSchemaEnum       OutputSchemaKind = "enum"
-	OutputSchemaJSONSchema OutputSchemaKind = "json_schema"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // Agent is the top-level entity (ag_ prefix); its mutable config lives on the active Version.
@@ -50,15 +40,6 @@ type Agent struct {
 	//
 	// ActiveVersion 是计算字段（非列），由 Service.Get 附上，使读者一趟拿到当前配置。
 	ActiveVersion *Version `db:"-" json:"activeVersion,omitempty"`
-}
-
-// OutputSchema shapes the agent's final answer: free text, one-of an enum, or a JSON value.
-//
-// OutputSchema 约束 agent 最终回答：自由文本、枚举之一、或一个 JSON 值。
-type OutputSchema struct {
-	Kind   OutputSchemaKind `json:"kind"`
-	Schema map[string]any   `json:"schema,omitempty"` // Kind=json_schema
-	Enums  []string         `json:"enums,omitempty"`  // Kind=enum
 }
 
 // ToolRef is a callable the agent may use. Only fn_ / hd_…method / mcp:server/tool are valid —
@@ -83,7 +64,8 @@ type Version struct {
 	Skill         string                `db:"skill"                       json:"skill,omitempty"` // 0-1 skill name to pre-activate
 	Knowledge     []string              `db:"knowledge,json"              json:"knowledge"`       // document IDs attached as context
 	Tools         []ToolRef             `db:"tools,json"                  json:"tools"`           // fn_/hd_/mcp refs (no ag_)
-	OutputSchema  *OutputSchema         `db:"output_schema,json"          json:"outputSchema,omitempty"`
+	Inputs        []schemapkg.Field     `db:"inputs,json"                 json:"inputs"`  // declared task inputs (workflow feeds these)
+	Outputs       []schemapkg.Field     `db:"outputs,json"                json:"outputs"` // declared result fields (downstream reads these)
 	ModelOverride *modeldomain.ModelRef `db:"model_override,json"         json:"modelOverride,omitempty"` // nil → default agent scenario model
 	ChangeReason  string                `db:"change_reason"               json:"changeReason,omitempty"`
 

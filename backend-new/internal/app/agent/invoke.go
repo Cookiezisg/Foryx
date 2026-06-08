@@ -16,6 +16,7 @@ import (
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // InvokeInput is the request shape for InvokeAgent (mirrors functionapp.RunInput).
@@ -111,7 +112,7 @@ func (s *Service) InvokeAgent(ctx context.Context, in InvokeInput) (*InvokeResul
 			res.Status = agentdomain.ExecutionStatusFailed
 			res.ErrorMsg = "agent loop error"
 		}
-		res.Output = coerceEnumOutput(v.OutputSchema, result.LastMessage)
+		res.Output = result.LastMessage
 		res.StopReason = result.StopReason
 		res.Steps = result.Steps
 		res.TokensIn = result.TokensIn
@@ -244,7 +245,7 @@ func buildSystemPrompt(a *agentdomain.Agent, v *agentdomain.Version) string {
 	return identity +
 		" Use available tools as needed; respond concisely when finished." +
 		" Only use the tools explicitly provided to you. Do not attempt capabilities you have no tool for." +
-		outputSchemaInstruction(v.OutputSchema)
+		outputsInstruction(v.Outputs)
 }
 
 // agentHost is the per-invoke loop.Host: history is the prompt (+ replay), Tools is the
@@ -309,53 +310,23 @@ func filterToolsByWhitelist(all []toolapp.Tool, whitelist []string) []toolapp.To
 	return out
 }
 
-// outputSchemaInstruction renders the OutputSchema as a hard instruction appended to the system
-// prompt, so a configured enum/json_schema actually shapes the LLM's final answer.
+// outputsInstruction renders the agent's declared output fields as a hard instruction
+// appended to the system prompt, so the LLM's final answer is a single JSON object with those
+// fields. No declared outputs → no instruction (the agent answers free-form).
 //
-// outputSchemaInstruction 把 OutputSchema 渲染成追加到 system prompt 的硬约束，让配置的
-// enum/json_schema 真正约束 LLM 最终输出。
-func outputSchemaInstruction(os *agentdomain.OutputSchema) string {
-	if os == nil {
+// outputsInstruction 把 agent 声明的输出字段渲成追加 system prompt 的硬约束，使 LLM 最终答案是带
+// 这些字段的单个 JSON 对象。无声明 → 无约束（agent 自由作答）。
+func outputsInstruction(fields []schemapkg.Field) string {
+	if len(fields) == 0 {
 		return ""
 	}
-	switch os.Kind {
-	case agentdomain.OutputSchemaEnum:
-		if len(os.Enums) > 0 {
-			return "\n\nYour FINAL answer must be exactly one of these values verbatim — no extra words, quotes, or punctuation: " +
-				strings.Join(os.Enums, " | ") + "."
-		}
-	case agentdomain.OutputSchemaJSONSchema:
-		if len(os.Schema) > 0 {
-			b, _ := json.Marshal(os.Schema)
-			return "\n\nYour FINAL answer must be a single JSON value conforming to this JSON Schema. Output only the JSON, no prose:\n" + string(b)
+	var b strings.Builder
+	b.WriteString("\n\nYour FINAL answer must be a single JSON object with exactly these fields (output only the JSON, no prose):")
+	for _, f := range fields {
+		fmt.Fprintf(&b, "\n  - %s (%s)", f.Name, f.Type)
+		if f.Description != "" {
+			b.WriteString(": " + f.Description)
 		}
 	}
-	return ""
-}
-
-// coerceEnumOutput best-effort snaps a free-form enum answer onto an allowed value (exact match
-// after trim, else the first enum the answer contains) so downstream workflow case nodes match.
-//
-// coerceEnumOutput 把 enum 输出尽力规整到允许值（trim 精确匹配，否则取输出包含的第一个 enum），方便
-// 下游 case 命中。
-func coerceEnumOutput(os *agentdomain.OutputSchema, out any) any {
-	if os == nil || os.Kind != agentdomain.OutputSchemaEnum || len(os.Enums) == 0 {
-		return out
-	}
-	s, ok := out.(string)
-	if !ok {
-		return out
-	}
-	trimmed := strings.TrimSpace(s)
-	for _, e := range os.Enums {
-		if strings.EqualFold(trimmed, e) {
-			return e
-		}
-	}
-	for _, e := range os.Enums {
-		if strings.Contains(trimmed, e) {
-			return e
-		}
-	}
-	return out
+	return b.String()
 }

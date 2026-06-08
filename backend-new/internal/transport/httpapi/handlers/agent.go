@@ -9,6 +9,7 @@ import (
 	agentapp "github.com/sunweilin/forgify/backend/internal/app/agent"
 	agentdomain "github.com/sunweilin/forgify/backend/internal/domain/agent"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
@@ -56,16 +57,17 @@ type agentConfigRequest struct {
 	Prompt        string                    `json:"prompt"`
 	Skill         string                    `json:"skill"`
 	Knowledge     []string                  `json:"knowledge"`
-	Tools         []agentdomain.ToolRef     `json:"tools"`
-	OutputSchema  *agentdomain.OutputSchema `json:"outputSchema"`
-	ModelOverride *modeldomain.ModelRef     `json:"modelOverride"`
-	ChangeReason  string                    `json:"changeReason"`
+	Tools         []agentdomain.ToolRef `json:"tools"`
+	Inputs        []schemapkg.Field     `json:"inputs"`
+	Outputs       []schemapkg.Field     `json:"outputs"`
+	ModelOverride *modeldomain.ModelRef `json:"modelOverride"`
+	ChangeReason  string                `json:"changeReason"`
 }
 
 func (c agentConfigRequest) toConfig() agentapp.Config {
 	return agentapp.Config{
 		Prompt: c.Prompt, Skill: c.Skill, Knowledge: c.Knowledge, Tools: c.Tools,
-		OutputSchema: c.OutputSchema, ModelOverride: c.ModelOverride, ChangeReason: c.ChangeReason,
+		Inputs: c.Inputs, Outputs: c.Outputs, ModelOverride: c.ModelOverride, ChangeReason: c.ChangeReason,
 	}
 }
 

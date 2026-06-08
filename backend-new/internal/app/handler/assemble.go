@@ -48,11 +48,8 @@ func AssembleClass(d *VersionDraft) string {
 
 func writeMethod(b *strings.Builder, m handlerdomain.MethodSpec) {
 	fmt.Fprintf(b, "    def %s(self", m.Name)
-	for _, a := range m.Args {
+	for _, a := range m.Inputs {
 		fmt.Fprintf(b, ", %s: %s", a.Name, pythonType(a.Type))
-		if !a.Required {
-			fmt.Fprintf(b, " = %s", pythonDefault(a.Default))
-		}
 	}
 	b.WriteString("):\n")
 	writeBody(b, m.Body)

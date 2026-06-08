@@ -25,7 +25,7 @@ OP SHAPES:
   {"op":"set_init", "initBody":"self.session = requests.Session()"}     — __init__ body (after init args)
   {"op":"set_shutdown", "shutdownBody":"self.session.close()"}          — cleanup on stop/restart
   {"op":"set_init_args_schema", "args":[{"name":"api_key","type":"string","required":true,"sensitive":true}]}
-  {"op":"add_method", "method":{"name":"fetch","args":[{"name":"url","type":"string","required":true}],"body":"return self.session.get(url).json()","streaming":false}}
+  {"op":"add_method", "method":{"name":"fetch","inputs":[{"name":"url","type":"string"}],"outputs":[{"name":"body","type":"object"}],"body":"return self.session.get(url).json()","streaming":false}}
   {"op":"update_method", "name":"fetch", "patch":{"description":"..."}}  — RFC 7396 merge patch
   {"op":"delete_method", "name":"fetch"}
   {"op":"set_dependencies", "dependencies":["requests==2.31"]}

@@ -13,6 +13,7 @@ import (
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // Config is the mutable agent configuration carried by create/edit (a full snapshot — edit
@@ -25,7 +26,8 @@ type Config struct {
 	Skill         string
 	Knowledge     []string
 	Tools         []agentdomain.ToolRef
-	OutputSchema  *agentdomain.OutputSchema
+	Inputs        []schemapkg.Field
+	Outputs       []schemapkg.Field
 	ModelOverride *modeldomain.ModelRef
 	ChangeReason  string
 }
@@ -270,7 +272,7 @@ func buildVersion(id, agentID string, ver int, cfg Config, now time.Time, convID
 		ID: id, AgentID: agentID, Version: ver,
 		Prompt: cfg.Prompt, Skill: cfg.Skill,
 		Knowledge: orEmptyStrs(cfg.Knowledge), Tools: orEmptyTools(cfg.Tools),
-		OutputSchema: cfg.OutputSchema, ModelOverride: cfg.ModelOverride,
+		Inputs: cfg.Inputs, Outputs: cfg.Outputs, ModelOverride: cfg.ModelOverride,
 		ChangeReason: cfg.ChangeReason, ForgedInConversationID: convID,
 		CreatedAt: now,
 	}

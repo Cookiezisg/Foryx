@@ -3,6 +3,8 @@ package handler
 import (
 	"fmt"
 	"regexp"
+
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 var validNameRe = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
@@ -23,13 +25,11 @@ func validateIncremental(d *VersionDraft) error {
 			return fmt.Errorf("duplicate method name: %q", m.Name)
 		}
 		seenMethods[m.Name] = true
-		for _, a := range m.Args {
-			if a.Name == "" {
-				return fmt.Errorf("method %q has an arg with empty name", m.Name)
-			}
-			if !validArgType(a.Type) {
-				return fmt.Errorf("method %q arg %q invalid type: %q", m.Name, a.Name, a.Type)
-			}
+		if err := schemapkg.ValidateFields(m.Inputs); err != nil {
+			return fmt.Errorf("method %q inputs: %w", m.Name, err)
+		}
+		if err := schemapkg.ValidateFields(m.Outputs); err != nil {
+			return fmt.Errorf("method %q outputs: %w", m.Name, err)
 		}
 	}
 	seenArgs := map[string]bool{}

@@ -1,13 +1,15 @@
 package handler
 
-// MethodSpec is one Python method's full description (schema + body).
+import schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
+
+// MethodSpec is one Python method's full description (I/O schema + body).
 //
-// MethodSpec 是一个 Python method 的完整描述（schema + body）。
+// MethodSpec 是一个 Python method 的完整描述（I/O schema + body）。
 type MethodSpec struct {
-	Name         string         `json:"name"`
-	Description  string         `json:"description,omitempty"`
-	Args         []ArgSpec      `json:"args"`
-	ReturnSchema map[string]any `json:"returnSchema,omitempty"`
+	Name        string            `json:"name"`
+	Description string            `json:"description,omitempty"`
+	Inputs      []schemapkg.Field `json:"inputs"`
+	Outputs     []schemapkg.Field `json:"outputs,omitempty"`
 
 	// Body is the Python method body without the def header.
 	// Body 是 method body 字符串，不含 def 头。
@@ -22,21 +24,14 @@ type MethodSpec struct {
 	Timeout int `json:"timeout,omitempty"`
 }
 
-// ArgSpec describes one method argument's JSON-schema shape.
+// InitArgSpec describes one __init__ one-time parameter; Sensitive=true → encrypted at rest
+// + masked on read. This is the handler's instantiation config (API keys, endpoints), NOT
+// method I/O — so it keeps its own typed shape (with Sensitive/Required/Default), not
+// schema.Field.
 //
-// ArgSpec 是一个 method 参数的 JSON-schema 形状。
-type ArgSpec struct {
-	Name        string `json:"name"`
-	Type        string `json:"type"`
-	Description string `json:"description,omitempty"`
-	Required    bool   `json:"required"`
-	Default     any    `json:"default,omitempty"`
-}
-
-// InitArgSpec describes one __init__ one-time parameter; Sensitive=true → encrypted at
-// rest + masked on read.
-//
-// InitArgSpec 是 __init__ 一次性参数的 schema；Sensitive=true → 加密存、读时掩码。
+// InitArgSpec 是 __init__ 一次性参数的 schema；Sensitive=true → 加密存、读时掩码。这是 handler
+// 实例化配置（API key、endpoint），**非** method I/O——故保留自己的类型（带 Sensitive/Required/
+// Default），不用 schema.Field。
 type InitArgSpec struct {
 	Name        string `json:"name"`
 	Type        string `json:"type"`

@@ -9,6 +9,7 @@ import (
 	agentapp "github.com/sunweilin/forgify/backend/internal/app/agent"
 	agentdomain "github.com/sunweilin/forgify/backend/internal/domain/agent"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // configArgs is the shared create/edit config payload (a full snapshot — edit REPLACES).
@@ -18,16 +19,17 @@ type configArgs struct {
 	Prompt        string                    `json:"prompt"`
 	Skill         string                    `json:"skill"`
 	Knowledge     []string                  `json:"knowledge"`
-	Tools         []agentdomain.ToolRef     `json:"tools"`
-	OutputSchema  *agentdomain.OutputSchema `json:"outputSchema"`
-	ModelOverride *modeldomain.ModelRef     `json:"modelOverride"`
+	Tools         []agentdomain.ToolRef `json:"tools"`
+	Inputs        []schemapkg.Field     `json:"inputs"`
+	Outputs       []schemapkg.Field     `json:"outputs"`
+	ModelOverride *modeldomain.ModelRef `json:"modelOverride"`
 	ChangeReason  string                    `json:"changeReason"`
 }
 
 func (c configArgs) toConfig() agentapp.Config {
 	return agentapp.Config{
 		Prompt: c.Prompt, Skill: c.Skill, Knowledge: c.Knowledge, Tools: c.Tools,
-		OutputSchema: c.OutputSchema, ModelOverride: c.ModelOverride, ChangeReason: c.ChangeReason,
+		Inputs: c.Inputs, Outputs: c.Outputs, ModelOverride: c.ModelOverride, ChangeReason: c.ChangeReason,
 	}
 }
 
@@ -37,7 +39,8 @@ const configProps = `
 		"skill": {"type": "string", "description": "Optional skill name to pre-activate (its instructions are injected)."},
 		"knowledge": {"type": "array", "items": {"type": "string"}, "description": "Document IDs attached as background knowledge."},
 		"tools": {"type": "array", "description": "Callables the agent may use: each {ref, name}. ref is fn_… / hd_…method / mcp:server/tool — NEVER ag_ (an agent cannot call another agent).", "items": {"type": "object", "required": ["ref"], "properties": {"ref": {"type": "string"}, "name": {"type": "string"}}}},
-		"outputSchema": {"type": "object", "description": "Final-answer shape: {kind:'free_text'} | {kind:'enum', enums:[...]} | {kind:'json_schema', schema:{...}}."},
+		"inputs": {"type": "array", "description": "Declared task inputs the workflow feeds: each {name, type, description}. type ∈ string|number|boolean|object|array.", "items": {"type": "object"}},
+		"outputs": {"type": "array", "description": "Declared result fields downstream reads: each {name, type, description}. Empty = free-form text answer; otherwise the final answer is a JSON object with these fields.", "items": {"type": "object"}},
 		"modelOverride": {"type": "object", "description": "Optional {apiKeyId, modelId} to override the default agent model.", "properties": {"apiKeyId": {"type": "string"}, "modelId": {"type": "string"}}},
 		"changeReason": {"type": "string", "description": "One-line reason for this change."}`
 

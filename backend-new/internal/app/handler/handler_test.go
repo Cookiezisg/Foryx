@@ -21,6 +21,7 @@ import (
 	handlerstore "github.com/sunweilin/forgify/backend/internal/infra/store/handler"
 	ormpkg "github.com/sunweilin/forgify/backend/internal/pkg/orm"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // --- fakes -----------------------------------------------------------------
@@ -311,7 +312,7 @@ func TestAssembleClass(t *testing.T) {
 		InitBody:       "self.session = requests.Session()",
 		ShutdownBody:   "self.session.close()",
 		InitArgsSchema: []handlerdomain.InitArgSpec{{Name: "api_key", Type: "string", Required: true}},
-		Methods:        []handlerdomain.MethodSpec{{Name: "fetch", Args: []handlerdomain.ArgSpec{{Name: "url", Type: "string", Required: true}}, Body: "return self.session.get(url).json()"}},
+		Methods:        []handlerdomain.MethodSpec{{Name: "fetch", Inputs: []schemapkg.Field{{Name: "url", Type: schemapkg.TypeString}}, Body: "return self.session.get(url).json()"}},
 	}
 	out := AssembleClass(d)
 	for _, want := range []string{"class HandlerImpl:", "def __init__(self, api_key: str):", "def shutdown(self):", "def fetch(self, url: str):", "import requests"} {

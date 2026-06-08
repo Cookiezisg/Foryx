@@ -17,6 +17,7 @@ import (
 	agentstore "github.com/sunweilin/forgify/backend/internal/infra/store/agent"
 	ormpkg "github.com/sunweilin/forgify/backend/internal/pkg/orm"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // fakeLLMClient replays one scripted step of stream events.
@@ -93,11 +94,11 @@ func TestService_CreateRejectsAgentRef(t *testing.T) {
 }
 
 // TestService_InvokeRunsLoopAndRecords: with a fake LLM (no real network), InvokeAgent runs the
-// real ReAct loop, coerces the enum output, and records one execution. This is the whole
-// invoke-with-loop surface, fake-tested (the "选 A" guarantee).
+// real ReAct loop, returns the final output, and records one execution. This is the whole
+// invoke-with-loop surface, fake-tested.
 //
-// TestService_InvokeRunsLoopAndRecords：假 LLM（无网络）下 InvokeAgent 跑真 ReAct loop、规整 enum
-// 输出、落一条 execution。这是 invoke-接-loop 全面，fake 测（「选 A」保证）。
+// TestService_InvokeRunsLoopAndRecords：假 LLM（无网络）下 InvokeAgent 跑真 ReAct loop、返回最终
+// 输出、落一条 execution。这是 invoke-接-loop 全面，fake 测。
 func TestService_InvokeRunsLoopAndRecords(t *testing.T) {
 	svc, ctx := newSvc(t)
 	svc.SetInvokeDeps(InvokeDeps{
@@ -113,7 +114,7 @@ func TestService_InvokeRunsLoopAndRecords(t *testing.T) {
 		Name: "judge",
 		Config: Config{
 			Prompt:       "judge the PR",
-			OutputSchema: &agentdomain.OutputSchema{Kind: agentdomain.OutputSchemaEnum, Enums: []string{"approve", "reject"}},
+			Outputs:      []schemapkg.Field{{Name: "decision", Type: schemapkg.TypeString, Description: "one of: approve, reject"}},
 		},
 	})
 	if err != nil {
@@ -128,7 +129,7 @@ func TestService_InvokeRunsLoopAndRecords(t *testing.T) {
 		t.Fatalf("expected OK, got %+v", res)
 	}
 	if res.Output != "approve" {
-		t.Fatalf("expected coerced 'approve', got %v", res.Output)
+		t.Fatalf("expected output 'approve', got %v", res.Output)
 	}
 	if res.ExecutionID == "" {
 		t.Fatalf("expected an execution to be recorded")
