@@ -7,6 +7,7 @@ import (
 
 	triggerapp "github.com/sunweilin/forgify/backend/internal/app/trigger"
 	triggerdomain "github.com/sunweilin/forgify/backend/internal/domain/trigger"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
@@ -46,15 +47,16 @@ func (h *TriggerHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name        string         `json:"name"`
 		Description string         `json:"description"`
-		Kind        string         `json:"kind"`
-		Config      map[string]any `json:"config"`
+		Kind        string            `json:"kind"`
+		Config      map[string]any    `json:"config"`
+		Outputs     []schemapkg.Field `json:"outputs"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
 	t, err := h.svc.Create(r.Context(), triggerapp.CreateInput{
-		Name: req.Name, Description: req.Description, Kind: req.Kind, Config: req.Config,
+		Name: req.Name, Description: req.Description, Kind: req.Kind, Config: req.Config, Outputs: req.Outputs,
 	})
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
@@ -89,15 +91,16 @@ func (h *TriggerHandler) Get(w http.ResponseWriter, r *http.Request) {
 func (h *TriggerHandler) Edit(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name        *string        `json:"name"`
-		Description *string        `json:"description"`
-		Config      map[string]any `json:"config"`
+		Description *string           `json:"description"`
+		Config      map[string]any    `json:"config"`
+		Outputs     []schemapkg.Field `json:"outputs"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
 	t, err := h.svc.Edit(r.Context(), r.PathValue("id"), triggerapp.EditInput{
-		Name: req.Name, Description: req.Description, Config: req.Config,
+		Name: req.Name, Description: req.Description, Config: req.Config, Outputs: req.Outputs,
 	})
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)

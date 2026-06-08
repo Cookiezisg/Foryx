@@ -8,6 +8,7 @@ import (
 
 	approvalapp "github.com/sunweilin/forgify/backend/internal/app/approval"
 	approvaldomain "github.com/sunweilin/forgify/backend/internal/domain/approval"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
@@ -49,13 +50,14 @@ func (h *ApprovalHandler) Register(mux Registrar) {
 
 func (h *ApprovalHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name            string `json:"name"`
-		Description     string `json:"description"`
-		Template        string `json:"template"`
-		AllowReason     bool   `json:"allowReason"`
-		Timeout         string `json:"timeout"`
-		TimeoutBehavior string `json:"timeoutBehavior"`
-		ChangeReason    string `json:"changeReason"`
+		Name            string            `json:"name"`
+		Description     string            `json:"description"`
+		InputSchema     []schemapkg.Field `json:"inputSchema"`
+		Template        string            `json:"template"`
+		AllowReason     bool              `json:"allowReason"`
+		Timeout         string            `json:"timeout"`
+		TimeoutBehavior string            `json:"timeoutBehavior"`
+		ChangeReason    string            `json:"changeReason"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
@@ -64,6 +66,7 @@ func (h *ApprovalHandler) Create(w http.ResponseWriter, r *http.Request) {
 	f, v, err := h.svc.Create(r.Context(), approvalapp.CreateInput{
 		Name:            req.Name,
 		Description:     req.Description,
+		InputSchema:     req.InputSchema,
 		Template:        req.Template,
 		AllowReason:     req.AllowReason,
 		Timeout:         req.Timeout,
@@ -148,18 +151,19 @@ func (h *ApprovalHandler) postOnApproval(w http.ResponseWriter, r *http.Request)
 
 func (h *ApprovalHandler) edit(w http.ResponseWriter, r *http.Request, id string) {
 	var req struct {
-		Template        string `json:"template"`
-		AllowReason     bool   `json:"allowReason"`
-		Timeout         string `json:"timeout"`
-		TimeoutBehavior string `json:"timeoutBehavior"`
-		ChangeReason    string `json:"changeReason"`
+		InputSchema     []schemapkg.Field `json:"inputSchema"`
+		Template        string            `json:"template"`
+		AllowReason     bool              `json:"allowReason"`
+		Timeout         string            `json:"timeout"`
+		TimeoutBehavior string            `json:"timeoutBehavior"`
+		ChangeReason    string            `json:"changeReason"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
 	v, err := h.svc.Edit(r.Context(), approvalapp.EditInput{
-		ID: id, Template: req.Template, AllowReason: req.AllowReason,
+		ID: id, InputSchema: req.InputSchema, Template: req.Template, AllowReason: req.AllowReason,
 		Timeout: req.Timeout, TimeoutBehavior: req.TimeoutBehavior, ChangeReason: req.ChangeReason,
 	})
 	if err != nil {

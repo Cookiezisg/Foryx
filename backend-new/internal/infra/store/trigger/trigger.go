@@ -30,6 +30,7 @@ var Schema = []string{
 		description  TEXT NOT NULL DEFAULT '',
 		kind         TEXT NOT NULL CHECK (kind IN ('cron','webhook','fsnotify','sensor')),
 		config       TEXT NOT NULL DEFAULT '{}',
+		outputs      TEXT NOT NULL DEFAULT '[]',
 		created_at   DATETIME NOT NULL,
 		updated_at   DATETIME NOT NULL,
 		deleted_at   DATETIME

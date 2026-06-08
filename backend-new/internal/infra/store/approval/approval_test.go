@@ -68,7 +68,7 @@ func TestApproval_TemplateRulesRoundTrip(t *testing.T) {
 	ctx := ctxWS("ws_1")
 	v := &approvaldomain.Version{
 		ID: "apfv_1", ApprovalID: "apf_1", Version: 1,
-		Template: "批准对 {{ payload.user }} 的退款?", AllowReason: true, Timeout: "30d", TimeoutBehavior: "reject",
+		Template: "批准对 {{ input.user }} 的退款?", AllowReason: true, Timeout: "30d", TimeoutBehavior: "reject",
 	}
 	if err := s.SaveVersion(ctx, v); err != nil {
 		t.Fatalf("SaveVersion: %v", err)

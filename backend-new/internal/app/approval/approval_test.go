@@ -36,7 +36,7 @@ func TestCreate_WritesV1Active(t *testing.T) {
 	svc, ctx := newSvc(t)
 	f, v, err := svc.Create(ctx, CreateInput{
 		Name: "email-send", Description: "approve email",
-		Template: "发送给 {{ payload.to }}?", AllowReason: true, Timeout: "30d", TimeoutBehavior: "reject",
+		Template: "发送给 {{ input.to }}?", AllowReason: true, Timeout: "30d", TimeoutBehavior: "reject",
 	})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
@@ -49,7 +49,7 @@ func TestCreate_WritesV1Active(t *testing.T) {
 		t.Fatalf("Get: %+v err=%v", got, err)
 	}
 	av := got.ActiveVersion
-	if av.Template != "发送给 {{ payload.to }}?" || !av.AllowReason || av.Timeout != "30d" || av.TimeoutBehavior != "reject" {
+	if av.Template != "发送给 {{ input.to }}?" || !av.AllowReason || av.Timeout != "30d" || av.TimeoutBehavior != "reject" {
 		t.Fatalf("rules not round-tripped: %+v", av)
 	}
 }
@@ -64,7 +64,7 @@ func TestCreate_EmptyTemplate(t *testing.T) {
 
 func TestCreate_BadTemplateCEL(t *testing.T) {
 	svc, ctx := newSvc(t)
-	_, _, err := svc.Create(ctx, CreateInput{Name: "x", Template: "bad {{ payload.( }}"})
+	_, _, err := svc.Create(ctx, CreateInput{Name: "x", Template: "bad {{ input.( }}"})
 	if !errors.Is(err, approvaldomain.ErrInvalidTemplate) {
 		t.Fatalf("want ErrInvalidTemplate (CEL), got %v", err)
 	}
@@ -111,7 +111,7 @@ func TestCreate_DuplicateName(t *testing.T) {
 func TestEdit_NewVersionPointerMoves(t *testing.T) {
 	svc, ctx := newSvc(t)
 	f, _, _ := svc.Create(ctx, CreateInput{Name: "e", Template: "v1?"})
-	v2, err := svc.Edit(ctx, EditInput{ID: f.ID, Template: "v2 {{ payload.x }}?"})
+	v2, err := svc.Edit(ctx, EditInput{ID: f.ID, Template: "v2 {{ input.x }}?"})
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
@@ -186,11 +186,11 @@ func TestDelete_SoftDeleted(t *testing.T) {
 func TestResolve_ActiveAndPinned(t *testing.T) {
 	svc, ctx := newSvc(t)
 	f, v1, _ := svc.Create(ctx, CreateInput{Name: "rs", Template: "v1?"})
-	if _, err := svc.Edit(ctx, EditInput{ID: f.ID, Template: "v2 {{ payload.x }}?"}); err != nil {
+	if _, err := svc.Edit(ctx, EditInput{ID: f.ID, Template: "v2 {{ input.x }}?"}); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}
 	act, err := svc.Resolve(ctx, f.ID, "")
-	if err != nil || act.Template != "v2 {{ payload.x }}?" {
+	if err != nil || act.Template != "v2 {{ input.x }}?" {
 		t.Fatalf("resolve active: %v %+v", err, act)
 	}
 	pin, err := svc.Resolve(ctx, f.ID, v1.ID)

@@ -8,6 +8,7 @@ import (
 
 	controlapp "github.com/sunweilin/forgify/backend/internal/app/control"
 	controldomain "github.com/sunweilin/forgify/backend/internal/domain/control"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
@@ -69,6 +70,7 @@ func (h *ControlHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name         string               `json:"name"`
 		Description  string               `json:"description"`
+		InputSchema  []schemapkg.Field    `json:"inputSchema"`
 		Branches     []controlBranchInput `json:"branches"`
 		ChangeReason string               `json:"changeReason"`
 	}
@@ -79,6 +81,7 @@ func (h *ControlHandler) Create(w http.ResponseWriter, r *http.Request) {
 	c, v, err := h.svc.Create(r.Context(), controlapp.CreateInput{
 		Name:         req.Name,
 		Description:  req.Description,
+		InputSchema:  req.InputSchema,
 		Branches:     controlBranches(req.Branches),
 		ChangeReason: req.ChangeReason,
 	})
@@ -160,6 +163,7 @@ func (h *ControlHandler) postOnControl(w http.ResponseWriter, r *http.Request) {
 
 func (h *ControlHandler) edit(w http.ResponseWriter, r *http.Request, id string) {
 	var req struct {
+		InputSchema  []schemapkg.Field    `json:"inputSchema"`
 		Branches     []controlBranchInput `json:"branches"`
 		ChangeReason string               `json:"changeReason"`
 	}
@@ -168,7 +172,7 @@ func (h *ControlHandler) edit(w http.ResponseWriter, r *http.Request, id string)
 		return
 	}
 	v, err := h.svc.Edit(r.Context(), controlapp.EditInput{
-		ID: id, Branches: controlBranches(req.Branches), ChangeReason: req.ChangeReason,
+		ID: id, InputSchema: req.InputSchema, Branches: controlBranches(req.Branches), ChangeReason: req.ChangeReason,
 	})
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)

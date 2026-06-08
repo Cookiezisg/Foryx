@@ -23,6 +23,7 @@ import (
 	"time"
 
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // ControlLogic is a control-logic entity; its branches live on the active Version.
@@ -53,25 +54,30 @@ type ControlLogic struct {
 type Version struct {
 	ID                     string    `db:"id,pk"                     json:"id"`
 	WorkspaceID            string    `db:"workspace_id,ws"           json:"-"`
-	ControlID              string    `db:"control_id"                json:"controlId"`
-	Version                int       `db:"version"                   json:"version"`
-	Branches               []Branch  `db:"branches,json"             json:"branches"`
+	ControlID              string            `db:"control_id"                json:"controlId"`
+	Version                int               `db:"version"                   json:"version"`
+	InputSchema            []schemapkg.Field `db:"input_schema,json"         json:"inputSchema"` // declared inputs the workflow node feeds; when/emit read input.*
+	Branches               []Branch          `db:"branches,json"             json:"branches"`
 	ChangeReason           string    `db:"change_reason"             json:"changeReason,omitempty"`
 	ForgedInConversationID *string   `db:"forged_in_conversation_id" json:"forgedInConversationId,omitempty"`
 	CreatedAt              time.Time `db:"created_at,created"        json:"createdAt"`
 	UpdatedAt              time.Time `db:"updated_at,updated"        json:"updatedAt"`
 }
 
-// Branch is one ordered routing arm. The interpreter evaluates When (bool CEL) top to
-// bottom; the first true wins. Emit (optional, field→CEL) reshapes the downstream
-// payload (empty = pass the upstream payload through). Port names the exit the graph
-// wires to a downstream node (a port may loop back to an upstream node = structured
-// loop). The last branch must be When=="true" (catch-all, so an all-false fall-through
-// still has a route).
+// Branch is one ordered routing arm. The interpreter evaluates When (bool CEL over input.*)
+// top to bottom; the first true wins. Emit (optional, field→CEL over input.*) builds this
+// branch's output data (empty = pass input through). Port is the named outcome the workflow
+// graph routes on: an edge with FromPort==this Port carries the branch's output to its
+// downstream node (a port may loop back upstream = structured loop). The last branch must be
+// When=="true" (catch-all, so an all-false fall-through still has a route). The control is
+// thus (input) → (Port, Emit-data); the entity never knows which downstream node a Port
+// connects to — that's the workflow's job.
 //
-// Branch 是一条有序路由臂。解释器自上而下求 When（布尔 CEL），first-true-wins。Emit（可选，
-// 字段→CEL）重塑下游 payload（空=透传上游 payload）。Port 是出口名，图把它连到下游节点（出口
-// 可连回上游=结构化循环）。末条必须 When=="true"（兜底，使全 false 仍有路）。
+// Branch 是一条有序路由臂。解释器自上而下求 When（读 input.* 的布尔 CEL），first-true-wins。Emit
+// （可选，字段→读 input.* 的 CEL）构造本臂输出数据（空=透传 input）。Port 是具名结局，workflow 图据
+// 此路由：FromPort==此 Port 的边把本臂输出带到其下游（出口可连回上游=结构化循环）。末条必须
+// When=="true"（兜底）。故 control = (input) → (Port, Emit 数据)；实体永不知道 Port 连哪个下游——那是
+// workflow 的事。
 type Branch struct {
 	Port string            `json:"port"`
 	When string            `json:"when"`

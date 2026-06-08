@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	approvalapp "github.com/sunweilin/forgify/backend/internal/app/approval"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // --- create_approval -------------------------------------------------------
@@ -16,7 +17,7 @@ type CreateApproval struct{ svc *approvalapp.Service }
 func (t *CreateApproval) Name() string { return "create_approval" }
 
 func (t *CreateApproval) Description() string {
-	return "Create an approval-form entity that a workflow approval node references: a markdown prompt `template` (with `{{ CEL }}` interpolation over `payload`/`ctx`, e.g. `批准对 {{ payload.user }} 的退款 {{ payload.amount }} 元?`) which renders into a human-readable decision point, plus decision rules. `template` is REQUIRED — a button with no explanation is meaningless. `allowReason` toggles an optional free-text note. `timeout` (a duration like `30d` / `2h`; empty = never times out) and `timeoutBehavior` (reject|approve|fail; required when timeout is set) govern what happens if nobody responds. The node has fixed yes/no exits the graph wires to downstream nodes."
+	return "Create an approval-form entity that a workflow approval node references: a markdown prompt `template` (with `{{ input.* }}` interpolation over the inputs the workflow node feeds, e.g. `批准对 {{ input.user }} 的退款 {{ input.amount }} 元?`) which renders into a human-readable decision point, plus decision rules. `template` is REQUIRED — a button with no explanation is meaningless. `allowReason` toggles an optional free-text note. `timeout` (a duration like `30d` / `2h`; empty = never times out) and `timeoutBehavior` (reject|approve|fail; required when timeout is set) govern what happens if nobody responds. The node has fixed yes/no exits the graph wires to downstream nodes."
 }
 
 func (t *CreateApproval) Parameters() json.RawMessage {
@@ -26,7 +27,8 @@ func (t *CreateApproval) Parameters() json.RawMessage {
 		"properties": {
 			"name": {"type": "string", "description": "Unique name within the workspace."},
 			"description": {"type": "string", "description": "One line on what this approval decides."},
-			"template": {"type": "string", "description": "Markdown prompt with {{ CEL }} interpolation over payload/ctx; shown to the user so they know what they're approving."},
+			"inputSchema": {"type": "array", "description": "Declared inputs the workflow node feeds (template reads input.*): each {name, type, description}.", "items": {"type": "object"}},
+			"template": {"type": "string", "description": "Markdown prompt with {{ input.* }} interpolation; shown to the user so they know what they're approving."},
 			"allowReason": {"type": "boolean", "description": "Allow an optional free-text note when deciding."},
 			"timeout": {"type": "string", "description": "Duration like 30d / 2h; empty = never times out."},
 			"timeoutBehavior": {"type": "string", "enum": ["reject", "approve", "fail"], "description": "What happens on timeout; required when timeout is set."},
@@ -54,19 +56,20 @@ func (t *CreateApproval) ValidateInput(args json.RawMessage) error {
 
 func (t *CreateApproval) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var args struct {
-		Name            string `json:"name"`
-		Description     string `json:"description"`
-		Template        string `json:"template"`
-		AllowReason     bool   `json:"allowReason"`
-		Timeout         string `json:"timeout"`
-		TimeoutBehavior string `json:"timeoutBehavior"`
-		ChangeReason    string `json:"changeReason"`
+		Name            string            `json:"name"`
+		Description     string            `json:"description"`
+		InputSchema     []schemapkg.Field `json:"inputSchema"`
+		Template        string            `json:"template"`
+		AllowReason     bool              `json:"allowReason"`
+		Timeout         string            `json:"timeout"`
+		TimeoutBehavior string            `json:"timeoutBehavior"`
+		ChangeReason    string            `json:"changeReason"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("create_approval: bad args: %w", err)
 	}
 	f, v, err := t.svc.Create(ctx, approvalapp.CreateInput{
-		Name: args.Name, Description: args.Description, Template: args.Template,
+		Name: args.Name, Description: args.Description, InputSchema: args.InputSchema, Template: args.Template,
 		AllowReason: args.AllowReason, Timeout: args.Timeout, TimeoutBehavior: args.TimeoutBehavior,
 		ChangeReason: args.ChangeReason,
 	})
@@ -92,7 +95,8 @@ func (t *EditApproval) Parameters() json.RawMessage {
 		"required": ["approvalId", "template"],
 		"properties": {
 			"approvalId": {"type": "string"},
-			"template": {"type": "string", "description": "Markdown prompt with {{ CEL }} interpolation."},
+			"inputSchema": {"type": "array", "description": "Declared inputs (template reads input.*): each {name, type, description}.", "items": {"type": "object"}},
+			"template": {"type": "string", "description": "Markdown prompt with {{ input.* }} interpolation."},
 			"allowReason": {"type": "boolean"},
 			"timeout": {"type": "string", "description": "Duration like 30d / 2h; empty = never."},
 			"timeoutBehavior": {"type": "string", "enum": ["reject", "approve", "fail"]},
@@ -120,18 +124,19 @@ func (t *EditApproval) ValidateInput(args json.RawMessage) error {
 
 func (t *EditApproval) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var args struct {
-		ApprovalID      string `json:"approvalId"`
-		Template        string `json:"template"`
-		AllowReason     bool   `json:"allowReason"`
-		Timeout         string `json:"timeout"`
-		TimeoutBehavior string `json:"timeoutBehavior"`
-		ChangeReason    string `json:"changeReason"`
+		ApprovalID      string            `json:"approvalId"`
+		InputSchema     []schemapkg.Field `json:"inputSchema"`
+		Template        string            `json:"template"`
+		AllowReason     bool              `json:"allowReason"`
+		Timeout         string            `json:"timeout"`
+		TimeoutBehavior string            `json:"timeoutBehavior"`
+		ChangeReason    string            `json:"changeReason"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("edit_approval: bad args: %w", err)
 	}
 	v, err := t.svc.Edit(ctx, approvalapp.EditInput{
-		ID: args.ApprovalID, Template: args.Template, AllowReason: args.AllowReason,
+		ID: args.ApprovalID, InputSchema: args.InputSchema, Template: args.Template, AllowReason: args.AllowReason,
 		Timeout: args.Timeout, TimeoutBehavior: args.TimeoutBehavior, ChangeReason: args.ChangeReason,
 	})
 	if err != nil {

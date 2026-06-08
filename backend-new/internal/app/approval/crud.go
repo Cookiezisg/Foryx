@@ -12,6 +12,7 @@ import (
 	celpkg "github.com/sunweilin/forgify/backend/internal/pkg/cel"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // CreateInput is the create payload: full metadata + the prompt template + decision rules.
@@ -22,6 +23,7 @@ import (
 type CreateInput struct {
 	Name            string
 	Description     string
+	InputSchema     []schemapkg.Field
 	Template        string
 	AllowReason     bool
 	Timeout         string
@@ -34,6 +36,7 @@ type CreateInput struct {
 // EditInput 用一组新 template + 规则写新版本并把 active 指针移到它。
 type EditInput struct {
 	ID              string
+	InputSchema     []schemapkg.Field
 	Template        string
 	AllowReason     bool
 	Timeout         string
@@ -67,7 +70,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*approvaldomain.A
 		ID: formID, Name: in.Name, Description: in.Description,
 		ActiveVersionID: versionID, CreatedAt: now, UpdatedAt: now,
 	}
-	v := newVersion(versionID, formID, 1, in.Template, in.AllowReason, in.Timeout, in.TimeoutBehavior, in.ChangeReason, now)
+	v := newVersion(versionID, formID, 1, in.InputSchema, in.Template, in.AllowReason, in.Timeout, in.TimeoutBehavior, in.ChangeReason, now)
 	if convID, ok := reqctxpkg.GetConversationID(ctx); ok {
 		v.ForgedInConversationID = &convID
 	}
@@ -101,7 +104,7 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*approvaldomain.Versi
 	}
 	now := time.Now().UTC()
 	versionID := idgenpkg.New("apfv")
-	v := newVersion(versionID, in.ID, max+1, in.Template, in.AllowReason, in.Timeout, in.TimeoutBehavior, in.ChangeReason, now)
+	v := newVersion(versionID, in.ID, max+1, in.InputSchema, in.Template, in.AllowReason, in.Timeout, in.TimeoutBehavior, in.ChangeReason, now)
 	if convID, ok := reqctxpkg.GetConversationID(ctx); ok {
 		v.ForgedInConversationID = &convID
 	}
@@ -274,9 +277,9 @@ func (s *Service) validateForm(template, timeout, timeoutBehavior string) error 
 	return nil
 }
 
-func newVersion(id, formID string, n int, template string, allowReason bool, timeout, timeoutBehavior, changeReason string, now time.Time) *approvaldomain.Version {
+func newVersion(id, formID string, n int, inputSchema []schemapkg.Field, template string, allowReason bool, timeout, timeoutBehavior, changeReason string, now time.Time) *approvaldomain.Version {
 	return &approvaldomain.Version{
-		ID: id, ApprovalID: formID, Version: n,
+		ID: id, ApprovalID: formID, Version: n, InputSchema: inputSchema,
 		Template: template, AllowReason: allowReason, Timeout: timeout, TimeoutBehavior: timeoutBehavior,
 		ChangeReason: changeReason, CreatedAt: now, UpdatedAt: now,
 	}

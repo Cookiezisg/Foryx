@@ -14,6 +14,7 @@ import (
 	"time"
 
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // Source kinds. manual is intentionally absent — running a workflow by hand is the
@@ -47,11 +48,12 @@ type Trigger struct {
 	WorkspaceID string         `db:"workspace_id,ws"`
 	Name        string         `db:"name"`
 	Description string         `db:"description"`
-	Kind        string         `db:"kind"`
-	Config      map[string]any `db:"config,json"`
-	CreatedAt   time.Time      `db:"created_at,created"`
-	UpdatedAt   time.Time      `db:"updated_at,updated"`
-	DeletedAt   *time.Time     `db:"deleted_at,deleted"`
+	Kind        string            `db:"kind"`
+	Config      map[string]any    `db:"config,json"`
+	Outputs     []schemapkg.Field `db:"outputs,json"` // declared payload fields delivered to listening workflows (downstream reads these)
+	CreatedAt   time.Time         `db:"created_at,created"`
+	UpdatedAt   time.Time         `db:"updated_at,updated"`
+	DeletedAt   *time.Time        `db:"deleted_at,deleted"`
 
 	// RefCount / Listening are computed at read time from the app's in-memory listen
 	// registry (how many active workflows reference it / whether its listener is hot).

@@ -41,7 +41,7 @@ func TestCreate_WritesV1Active(t *testing.T) {
 	c, v, err := svc.Create(ctx, CreateInput{
 		Name: "router", Description: "route by score",
 		Branches: []controldomain.Branch{
-			{Port: "pass", When: "payload.score >= 0.9", Emit: map[string]string{"ok": "true"}},
+			{Port: "pass", When: "input.score >= 0.9", Emit: map[string]string{"ok": "true"}},
 			catchAll("retry"),
 		},
 	})
@@ -63,7 +63,7 @@ func TestCreate_WritesV1Active(t *testing.T) {
 func TestCreate_InvalidWhenCEL(t *testing.T) {
 	svc, ctx := newSvc(t)
 	_, _, err := svc.Create(ctx, CreateInput{Name: "bad", Branches: []controldomain.Branch{
-		{Port: "x", When: "payload.("}, catchAll("y"),
+		{Port: "x", When: "input.("}, catchAll("y"),
 	}})
 	if !errors.Is(err, controldomain.ErrInvalidCEL) {
 		t.Fatalf("want ErrInvalidCEL, got %v", err)
@@ -73,7 +73,7 @@ func TestCreate_InvalidWhenCEL(t *testing.T) {
 func TestCreate_InvalidEmitCEL(t *testing.T) {
 	svc, ctx := newSvc(t)
 	_, _, err := svc.Create(ctx, CreateInput{Name: "bad2", Branches: []controldomain.Branch{
-		{Port: "x", When: "true", Emit: map[string]string{"k": "payload.("}},
+		{Port: "x", When: "true", Emit: map[string]string{"k": "input.("}},
 	}})
 	if !errors.Is(err, controldomain.ErrInvalidCEL) {
 		t.Fatalf("want ErrInvalidCEL (emit), got %v", err)
@@ -83,7 +83,7 @@ func TestCreate_InvalidEmitCEL(t *testing.T) {
 func TestCreate_NoCatchAll(t *testing.T) {
 	svc, ctx := newSvc(t)
 	_, _, err := svc.Create(ctx, CreateInput{Name: "nc", Branches: []controldomain.Branch{
-		{Port: "x", When: "payload.a > 1"},
+		{Port: "x", When: "input.a > 1"},
 	}})
 	if !errors.Is(err, controldomain.ErrNoCatchAll) {
 		t.Fatalf("want ErrNoCatchAll, got %v", err)
@@ -116,7 +116,7 @@ func TestEdit_NewVersionPointerMoves(t *testing.T) {
 	svc, ctx := newSvc(t)
 	c, _, _ := svc.Create(ctx, CreateInput{Name: "e", Branches: []controldomain.Branch{catchAll("a")}})
 	v2, err := svc.Edit(ctx, EditInput{ID: c.ID, Branches: []controldomain.Branch{
-		{Port: "a", When: "payload.x > 0"}, catchAll("b"),
+		{Port: "a", When: "input.x > 0"}, catchAll("b"),
 	}})
 	if err != nil {
 		t.Fatalf("Edit: %v", err)
@@ -193,7 +193,7 @@ func TestResolve_ActiveAndPinned(t *testing.T) {
 	svc, ctx := newSvc(t)
 	c, v1, _ := svc.Create(ctx, CreateInput{Name: "rs", Branches: []controldomain.Branch{catchAll("a")}})
 	if _, err := svc.Edit(ctx, EditInput{ID: c.ID, Branches: []controldomain.Branch{
-		{Port: "x", When: "payload.n > 0"}, catchAll("b"),
+		{Port: "x", When: "input.n > 0"}, catchAll("b"),
 	}}); err != nil {
 		t.Fatalf("Edit: %v", err)
 	}

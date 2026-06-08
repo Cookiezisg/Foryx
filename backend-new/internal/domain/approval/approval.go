@@ -30,6 +30,7 @@ import (
 	"time"
 
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // ApprovalForm is an approval-rendering entity; its template + rules live on the active Version.
@@ -58,11 +59,12 @@ type Version struct {
 	ID                     string    `db:"id,pk"                     json:"id"`
 	WorkspaceID            string    `db:"workspace_id,ws"           json:"-"`
 	ApprovalID             string    `db:"approval_id"               json:"approvalId"`
-	Version                int       `db:"version"                   json:"version"`
-	Template               string    `db:"template"                  json:"template"`        // markdown，含 {{ CEL }} 插值
-	AllowReason            bool      `db:"allow_reason"              json:"allowReason"`     // 是否允许填备注
-	Timeout                string    `db:"timeout"                   json:"timeout"`         // duration（"30d"）；"" = 永不超时
-	TimeoutBehavior        string    `db:"timeout_behavior"          json:"timeoutBehavior"` // reject|approve|fail（timeout 非空必填）
+	Version                int               `db:"version"                   json:"version"`
+	InputSchema            []schemapkg.Field `db:"input_schema,json"         json:"inputSchema"`     // declared inputs the workflow node feeds; template reads input.*
+	Template               string            `db:"template"                  json:"template"`        // markdown，含 {{ input.* }} 插值
+	AllowReason            bool              `db:"allow_reason"              json:"allowReason"`     // 是否允许填备注
+	Timeout                string            `db:"timeout"                   json:"timeout"`         // duration（"30d"）；"" = 永不超时
+	TimeoutBehavior        string            `db:"timeout_behavior"          json:"timeoutBehavior"` // reject|approve|fail（timeout 非空必填）
 	ChangeReason           string    `db:"change_reason"             json:"changeReason,omitempty"`
 	ForgedInConversationID *string   `db:"forged_in_conversation_id" json:"forgedInConversationId,omitempty"`
 	CreatedAt              time.Time `db:"created_at,created"        json:"createdAt"`

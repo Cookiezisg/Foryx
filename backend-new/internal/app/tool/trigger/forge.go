@@ -7,6 +7,7 @@ import (
 
 	triggerapp "github.com/sunweilin/forgify/backend/internal/app/trigger"
 	triggerdomain "github.com/sunweilin/forgify/backend/internal/domain/trigger"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // --- create_trigger --------------------------------------------------------
@@ -33,7 +34,8 @@ func (t *CreateTrigger) Parameters() json.RawMessage {
 			"name": {"type": "string", "description": "Unique display name."},
 			"description": {"type": "string"},
 			"kind": {"type": "string", "enum": ["cron", "webhook", "fsnotify", "sensor"]},
-			"config": {"type": "object", "description": "Source-specific settings; see the tool description per kind."}
+			"config": {"type": "object", "description": "Source-specific settings; see the tool description per kind."},
+			"outputs": {"type": "array", "description": "Declared payload fields this trigger delivers to listening workflows: each {name, type, description}.", "items": {"type": "object"}}
 		}
 	}`)
 }
@@ -59,14 +61,15 @@ func (t *CreateTrigger) Execute(ctx context.Context, argsJSON string) (string, e
 	var args struct {
 		Name        string         `json:"name"`
 		Description string         `json:"description"`
-		Kind        string         `json:"kind"`
-		Config      map[string]any `json:"config"`
+		Kind        string            `json:"kind"`
+		Config      map[string]any    `json:"config"`
+		Outputs     []schemapkg.Field `json:"outputs"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("create_trigger: bad args: %w", err)
 	}
 	tr, err := t.svc.Create(ctx, triggerapp.CreateInput{
-		Name: args.Name, Description: args.Description, Kind: args.Kind, Config: args.Config,
+		Name: args.Name, Description: args.Description, Kind: args.Kind, Config: args.Config, Outputs: args.Outputs,
 	})
 	if err != nil {
 		return "", fmt.Errorf("create_trigger: %w", err)
@@ -92,7 +95,8 @@ func (t *EditTrigger) Parameters() json.RawMessage {
 			"triggerId": {"type": "string"},
 			"name": {"type": "string"},
 			"description": {"type": "string"},
-			"config": {"type": "object", "description": "Full replacement config for the trigger's kind."}
+			"config": {"type": "object", "description": "Full replacement config for the trigger's kind."},
+			"outputs": {"type": "array", "description": "Declared payload fields delivered to workflows: each {name, type, description}.", "items": {"type": "object"}}
 		}
 	}`)
 }
@@ -115,13 +119,14 @@ func (t *EditTrigger) Execute(ctx context.Context, argsJSON string) (string, err
 		TriggerID   string         `json:"triggerId"`
 		Name        *string        `json:"name"`
 		Description *string        `json:"description"`
-		Config      map[string]any `json:"config"`
+		Config      map[string]any    `json:"config"`
+		Outputs     []schemapkg.Field `json:"outputs"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("edit_trigger: bad args: %w", err)
 	}
 	tr, err := t.svc.Edit(ctx, args.TriggerID, triggerapp.EditInput{
-		Name: args.Name, Description: args.Description, Config: args.Config,
+		Name: args.Name, Description: args.Description, Config: args.Config, Outputs: args.Outputs,
 	})
 	if err != nil {
 		return "", fmt.Errorf("edit_trigger: %w", err)

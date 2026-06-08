@@ -44,6 +44,7 @@ var Schema = []string{
 		workspace_id              TEXT NOT NULL,
 		approval_id               TEXT NOT NULL,
 		version                   INTEGER NOT NULL,
+		input_schema              TEXT NOT NULL DEFAULT '[]',
 		template                  TEXT NOT NULL DEFAULT '',
 		allow_reason              INTEGER NOT NULL DEFAULT 0,
 		timeout                   TEXT NOT NULL DEFAULT '',

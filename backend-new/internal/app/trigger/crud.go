@@ -8,6 +8,7 @@ import (
 	croninfra "github.com/sunweilin/forgify/backend/internal/infra/trigger/cron"
 	celpkg "github.com/sunweilin/forgify/backend/internal/pkg/cel"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // CreateInput is a new trigger's fields.
@@ -18,6 +19,7 @@ type CreateInput struct {
 	Description string
 	Kind        string
 	Config      map[string]any
+	Outputs     []schemapkg.Field
 }
 
 // EditInput patches a trigger; nil pointers / nil Config leave fields unchanged. Kind is
@@ -28,6 +30,7 @@ type EditInput struct {
 	Name        *string
 	Description *string
 	Config      map[string]any
+	Outputs     []schemapkg.Field
 }
 
 // Create validates + persists a new trigger and syncs its relation edges. It does NOT attach
@@ -48,6 +51,7 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*triggerdomain.Tr
 		Description: in.Description,
 		Kind:        in.Kind,
 		Config:      cfg,
+		Outputs:     in.Outputs,
 	}
 	if err := s.repo.SaveTrigger(ctx, t); err != nil {
 		return nil, err
@@ -74,6 +78,9 @@ func (s *Service) Edit(ctx context.Context, id string, in EditInput) (*triggerdo
 	}
 	if in.Config != nil {
 		t.Config = in.Config
+	}
+	if in.Outputs != nil {
+		t.Outputs = in.Outputs
 	}
 	if err := s.validate(t.Kind, t.Config); err != nil {
 		return nil, err

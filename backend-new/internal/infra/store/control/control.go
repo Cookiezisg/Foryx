@@ -44,6 +44,7 @@ var Schema = []string{
 		workspace_id              TEXT NOT NULL,
 		control_id                TEXT NOT NULL,
 		version                   INTEGER NOT NULL,
+		input_schema              TEXT NOT NULL DEFAULT '[]',
 		branches                  TEXT NOT NULL DEFAULT '[]',
 		change_reason             TEXT NOT NULL DEFAULT '',
 		forged_in_conversation_id TEXT,

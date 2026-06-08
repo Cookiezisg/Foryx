@@ -69,7 +69,7 @@ func TestControl_BranchesEmitRoundTrip(t *testing.T) {
 	v := &controldomain.Version{
 		ID: "ctlv_1", ControlID: "ctl_1", Version: 1,
 		Branches: []controldomain.Branch{
-			{Port: "retry", When: "payload.attempt < 3", Emit: map[string]string{"attempt": "payload.attempt + 1"}},
+			{Port: "retry", When: "input.attempt < 3", Emit: map[string]string{"attempt": "input.attempt + 1"}},
 			{Port: "done", When: "true"},
 		},
 	}
@@ -80,7 +80,7 @@ func TestControl_BranchesEmitRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetVersion: %v", err)
 	}
-	if len(got.Branches) != 2 || got.Branches[0].Port != "retry" || got.Branches[0].Emit["attempt"] != "payload.attempt + 1" {
+	if len(got.Branches) != 2 || got.Branches[0].Port != "retry" || got.Branches[0].Emit["attempt"] != "input.attempt + 1" {
 		t.Fatalf("branches/emit not round-tripped: %+v", got.Branches)
 	}
 }

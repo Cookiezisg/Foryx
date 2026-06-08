@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	controlapp "github.com/sunweilin/forgify/backend/internal/app/control"
+	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
 
 // --- create_control --------------------------------------------------------
@@ -26,6 +27,7 @@ func (t *CreateControl) Parameters() json.RawMessage {
 		"properties": {
 			"name": {"type": "string", "description": "Unique name within the workspace."},
 			"description": {"type": "string", "description": "One line on what this routing logic decides."},
+			"inputSchema": {"type": "array", "description": "Declared inputs the workflow node feeds (when/emit read input.*): each {name, type, description}.", "items": {"type": "object"}},
 			"branches": {
 				"type": "array",
 				"description": "Ordered branches; first true when wins; the last branch must be when:\"true\".",
@@ -33,9 +35,9 @@ func (t *CreateControl) Parameters() json.RawMessage {
 					"type": "object",
 					"required": ["port", "when"],
 					"properties": {
-						"port": {"type": "string", "description": "Exit name the graph wires to a downstream node."},
-						"when": {"type": "string", "description": "Boolean CEL guard over payload/ctx, e.g. payload.score >= 0.9."},
-						"emit": {"type": "object", "description": "Optional field->CEL map reshaping the downstream payload, e.g. {\"attempt\": \"payload.attempt + 1\"}.", "additionalProperties": {"type": "string"}}
+						"port": {"type": "string", "description": "Named outcome the workflow routes on (an edge's fromPort matches it)."},
+						"when": {"type": "string", "description": "Boolean CEL guard over input.*, e.g. input.score >= 0.9."},
+						"emit": {"type": "object", "description": "Optional field->CEL map building this branch's output, e.g. {\"attempt\": \"input.attempt + 1\"}.", "additionalProperties": {"type": "string"}}
 					}
 				}
 			},
@@ -63,16 +65,17 @@ func (t *CreateControl) ValidateInput(args json.RawMessage) error {
 
 func (t *CreateControl) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var args struct {
-		Name         string      `json:"name"`
-		Description  string      `json:"description"`
-		Branches     []branchArg `json:"branches"`
-		ChangeReason string      `json:"changeReason"`
+		Name         string            `json:"name"`
+		Description  string            `json:"description"`
+		InputSchema  []schemapkg.Field `json:"inputSchema"`
+		Branches     []branchArg       `json:"branches"`
+		ChangeReason string            `json:"changeReason"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("create_control: bad args: %w", err)
 	}
 	c, v, err := t.svc.Create(ctx, controlapp.CreateInput{
-		Name: args.Name, Description: args.Description,
+		Name: args.Name, Description: args.Description, InputSchema: args.InputSchema,
 		Branches: toBranches(args.Branches), ChangeReason: args.ChangeReason,
 	})
 	if err != nil {
@@ -97,6 +100,7 @@ func (t *EditControl) Parameters() json.RawMessage {
 		"required": ["controlId", "branches"],
 		"properties": {
 			"controlId": {"type": "string"},
+			"inputSchema": {"type": "array", "description": "Declared inputs (when/emit read input.*): each {name, type, description}.", "items": {"type": "object"}},
 			"branches": {
 				"type": "array",
 				"description": "The complete new ordered branch list; last must be when:\"true\".",
@@ -134,15 +138,16 @@ func (t *EditControl) ValidateInput(args json.RawMessage) error {
 
 func (t *EditControl) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var args struct {
-		ControlID    string      `json:"controlId"`
-		Branches     []branchArg `json:"branches"`
-		ChangeReason string      `json:"changeReason"`
+		ControlID    string            `json:"controlId"`
+		InputSchema  []schemapkg.Field `json:"inputSchema"`
+		Branches     []branchArg       `json:"branches"`
+		ChangeReason string            `json:"changeReason"`
 	}
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("edit_control: bad args: %w", err)
 	}
 	v, err := t.svc.Edit(ctx, controlapp.EditInput{
-		ID: args.ControlID, Branches: toBranches(args.Branches), ChangeReason: args.ChangeReason,
+		ID: args.ControlID, InputSchema: args.InputSchema, Branches: toBranches(args.Branches), ChangeReason: args.ChangeReason,
 	})
 	if err != nil {
 		return "", fmt.Errorf("edit_control: %w", err)
