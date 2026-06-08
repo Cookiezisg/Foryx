@@ -10,7 +10,7 @@ audience: [human, ai]
 ---
 # Agent — 配置好的 LLM Worker（Quadrinity 第四元）
 
-> **核心地位**：Agent 是 Forgify「四项全能」(Quadrinity) 的第四元——**配置好的 LLM worker**。它**不写一行代码**，靠**按引用挂载**六件（一个 system prompt、0-1 个 skill 名、若干文档作知识、`fn_`/`hd_`/`mcp` 工具白名单、一个可选 outputSchema、一个可选 model 覆盖）定义能力，以 **ReAct loop** 运行。与对话里临时生成的 subagent 不同，本域的 Agent 是**持久化、版本化、可重用**的专业 worker：可独立 `:invoke` 试跑，也可作为 Workflow 的 agent 节点被引用。
+> **核心地位**：Agent 是 Forgify「四项全能」(Quadrinity) 的第四元——**配置好的 LLM worker**。它**不写一行代码**，靠**按引用挂载**（一个 system prompt、0-1 个 skill 名、若干文档作知识、`fn_`/`hd_`/`mcp` 工具白名单、声明的 `inputs`/`outputs` 字段、一个可选 model 覆盖）定义能力，以 **ReAct loop** 运行。与对话里临时生成的 subagent 不同，本域的 Agent 是**持久化、版本化、可重用**的专业 worker：可独立 `:invoke` 试跑，也可作为 Workflow 的 agent 节点被引用。
 
 ---
 
@@ -39,7 +39,9 @@ audience: [human, ai]
 `id` · `workspace_id`(orm 自动隔离) · `name`(workspace 内 partial-UNIQUE，软删后释放) · `description` · `tags`(json) · **`active_version_id`**(指针) · 时间戳 · `deleted_at`。
 
 ### 2.2 `agent_versions`（`agv_`，append-only + cap 裁剪，**不可变、无 `updated_at`**）
-`id` · `workspace_id` · `agent_id` · **`version`**(单调号，**无 status**) · `prompt`(system prompt) · `skill`(单个 skill 名) · `knowledge`(json，文档 ID 列表) · `tools`(json，`ToolRef{ref,name}` 列表) · `output_schema`(json，nullable) · `model_override`(json，`ModelRef` nullable) · `change_reason` · `forged_in_conversation_id`(relation 边用) · `created_at`。`UNIQUE(agent_id, version)`。
+`id` · `workspace_id` · `agent_id` · **`version`**(单调号，**无 status**) · `prompt`(system prompt) · `skill`(单个 skill 名) · `knowledge`(json，文档 ID 列表) · `tools`(json，`ToolRef{ref,name}` 列表) · **`inputs`**(json，`[]schema.Field`，`TEXT NOT NULL DEFAULT '[]'`) · **`outputs`**(json，`[]schema.Field`，同上) · `model_override`(json，`ModelRef` nullable) · `change_reason` · `forged_in_conversation_id`(relation 边用) · `created_at`。`UNIQUE(agent_id, version)`。
+
+> **I/O 统一**：`inputs`/`outputs` 均为共享 `[]schema.Field`（`internal/pkg/schema`），取代旧 `output_schema` 列与三态 `OutputSchema`/`OutputSchemaKind`(free_text/enum/json_schema) 类型——后者连同 enum 硬约束 + coercion 一并删除。
 
 ### 2.3 `agent_executions`（`agx_`，append-only log，**无软删/无硬删** D1）
 `id` · `workspace_id` · `agent_id` · `version_id` · `model_id`(实际 resolve 出的) · `status`(ok/failed/cancelled/timeout，CHECK) · **`triggered_by`**(chat/workflow/manual，CHECK) · `input`(json) · `output`(json) · `error_message` · `elapsed_ms` · `started_at` · `ended_at` · `conversation_id` · `message_id` · `tool_call_id` · `flowrun_id` · `flowrun_node_id` · `created_at`。
@@ -52,11 +54,11 @@ audience: [human, ai]
 
 Agent 不编写逻辑，而是「挂载」其它领域的实体来定义能力，全部存在 active 版本上：
 
-- **Prompt**：system prompt（worker 身份）。`buildSystemPrompt` 拼 agent 身份 + worker 纪律（「只用给你的工具」）+ outputSchema 指令。
+- **Prompt**：system prompt（worker 身份）。`buildSystemPrompt` 拼 agent 身份 + worker 纪律（「只用给你的工具」）+ outputs 指令。
 - **Skill**：0-1 个 skill 名（预激活）。
 - **Knowledge**：文档 ID 列表。invoke 时经 `KnowledgeProvider.BuildKnowledgePrefix` 渲染成 prompt 前缀，拼到 user message 头部。
 - **Tools**：显式授权的 callable 白名单（`fn_` / `hd_…method` / `mcp:server/tool`）。**禁 `ag_` ref**（员工不调员工，`ValidateTools` 拦 `ag_` 与空 ref）。invoke 时 `filterToolsByWhitelist` 把全局工具池按白名单 `Name()` 过滤；空白名单 = 纯 prompt worker。
-- **Output Schema**：三态 `free_text` / `enum` / `json_schema`。若配置，invoke 时把约束注入 system prompt（`enum` 列出可选值；`json_schema` 给 schema 并要求纯 JSON 输出）；`enum` 模式对最终输出做 best-effort 规整（`coerceEnumOutput`：trim 精确匹配，否则取输出包含的第一个 enum），方便下游 workflow `case` 节点稳定命中。
+- **Inputs / Outputs**：均 `[]schema.Field`（`{name,type,description}`）。`inputs` 声明 workflow 节点喂给本 agent 的字段。`outputs` 非空时，`outputsInstruction` 把这些字段渲成 system prompt 硬约束——指示 LLM 最终答案是**仅含这些字段的单个 JSON object**（output only the JSON）；空 outputs = **自由文本**作答。取代旧三态 `free_text`/`enum`/`json_schema`——enum 硬约束 + `coerceEnumOutput` 规整已删；下游 workflow 路由现由 `control` 实体读 agent 输出字段决定。
 - **Model Override**：`*ModelRef`（apiKeyId + modelId + options）。nil = 默认 `agent` scenario 模型。缺 apiKeyId/modelId 在 create/edit 即被 `ErrInvalidModelOverride` 拦下。execution 记录实际 resolve 出的 `model_id`。
 
 ---
@@ -83,7 +85,7 @@ agent 自己**不拥有** LLM / 工具池 / 知识渲染，三个外部依赖经
 
 ## 5. 锻造（Forge）：全量 Config 替换
 
-create/edit 携带完整 `Config`（`prompt` / `skill` / `knowledge` / `tools` / `outputSchema` / `modelOverride` / `changeReason`）——edit 是**全量替换**、非增量 ops（agent 配置小、整体替换最清爽，区别于 function/handler 的 ops 草稿）。落版本前 `ValidateTools`（禁 `ag_` + 非空 ref）+ `validateModelOverride`（override 设了则 apiKeyId/modelId 都必填）。
+create/edit 携带完整 `Config`（`prompt` / `skill` / `knowledge` / `tools` / `inputs` / `outputs` / `modelOverride` / `changeReason`）——edit 是**全量替换**、非增量 ops（agent 配置小、整体替换最清爽，区别于 function/handler 的 ops 草稿）。落版本前 `ValidateTools`（禁 `ag_` + 非空 ref）+ `validateModelOverride`（override 设了则 apiKeyId/modelId 都必填）+ `schema.ValidateFields`（inputs/outputs 字段名唯一 + 类型合法）。
 
 ---
 

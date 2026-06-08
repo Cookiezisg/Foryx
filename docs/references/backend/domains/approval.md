@@ -31,7 +31,9 @@ audience: [human, ai]
 `id` · `workspace_id`(orm 自动隔离) · `name`(workspace 内 partial-UNIQUE，软删后释放) · `description` · **`active_version_id`** · 时间戳 · `deleted_at`。
 
 ### 2.2 `approval_form_versions`（`apfv_`，append-only + cap 裁剪，无软删）
-`id` · `workspace_id` · `approval_id` · **`version`**(单调号) · **`template`**(markdown，含 `{{ CEL }}`) · **`allow_reason`**(bool) · **`timeout`**("" = 永不超时) · **`timeout_behavior`**(reject/approve/fail) · `change_reason` · `forged_in_conversation_id` · 时间戳。`UNIQUE(approval_id, version)`。
+`id` · `workspace_id` · `approval_id` · **`version`**(单调号) · **`input_schema`**(json，`[]schema.Field`，`TEXT NOT NULL DEFAULT '[]'`) · **`template`**(markdown，含 `{{ input.* }}`) · **`allow_reason`**(bool) · **`timeout`**("" = 永不超时) · **`timeout_behavior`**(reject/approve/fail) · `change_reason` · `forged_in_conversation_id` · 时间戳。`UNIQUE(approval_id, version)`。
+
+> **`input_schema`（统一 I/O 入参）**：`[]schema.Field`（共享 `internal/pkg/schema` 类型，全锻造实体统一），声明 workflow 节点喂给本审批表的输入字段。`template` 的 `{{ … }}` 插值据此读 **`input.*`**。输出是运行时 `{decision, reason}`（在 `apv_` `approvals` 运行时表，**不变**）。
 
 ---
 
@@ -39,8 +41,8 @@ audience: [human, ai]
 
 | 层 | 管什么 | 何时 |
 |---|---|---|
-| **① domain** (`ValidateForm`) | `template` 非空（无说明的审批无意义——用户看到孤零零按钮）· `timeout` 非空时 `timeoutBehavior` ∈ {reject,approve,fail} **且** `timeout` 是合法 duration（`ParseTimeout` 支持 `30d`/`2w`） | create/edit |
-| **② app CEL 模板** (`pkg/cel.CompileTemplate`) | 提取 `template` 里的 `{{ expr }}` 段，各自编译；语法错 / 未知函数（`now()`）→ `ErrInvalidTemplate` | create/edit（快速失败） |
+| **① domain** (`ValidateForm` + `schema.ValidateFields`) | `template` 非空（无说明的审批无意义——用户看到孤零零按钮）· `timeout` 非空时 `timeoutBehavior` ∈ {reject,approve,fail} **且** `timeout` 是合法 duration（`ParseTimeout` 支持 `30d`/`2w`）· inputSchema 字段名唯一 + 类型合法 | create/edit |
+| **② app CEL 模板** (`pkg/cel.CompileTemplate`) | 提取 `template` 里的 `{{ expr }}` 段，各自编译；语法错 / 未知函数（`now()`）→ `ErrInvalidTemplate`；插值根变量 = **`input`**（节点喂入，由 inputSchema 声明） | create/edit（快速失败） |
 
 > `{{ CEL }}` 模板支持是本轮给 `pkg/cel` 加的**地基**（`Template` 类型：`CompileTemplate` 编译校验 + `Render` 运行时渲染）；agent.prompt（波次 4）复用同一套。CEL **不在 domain 编译**（domain 不准 import cel-go，原则 #3）。
 
@@ -48,7 +50,7 @@ audience: [human, ai]
 
 ## 4. 锻造：全量 template + 规则（无 ops）
 
-create/edit 直接传**完整**的 template + allowReason + timeout + timeoutBehavior——表是一个原子整体，无 `ops` 框架。`template` 里 `{{ CEL }}` 引用的字段与具体 workflow 的 payload 形状耦合，故复用主要在同一 workflow 内（同 control）；价值在「编排-锻造分离 + 统一节点心智」。
+create/edit 直接传**完整**的 inputSchema + template + allowReason + timeout + timeoutBehavior——表是一个原子整体，无 `ops` 框架。`template` 里 `{{ input.* }}`（由 `inputSchema` 声明）引用的字段与具体 workflow 的 payload 形状耦合，故复用主要在同一 workflow 内（同 control）；价值在「编排-锻造分离 + 统一节点心智」。
 
 ---
 
@@ -83,13 +85,13 @@ create/edit 直接传**完整**的 template + allowReason + timeout + timeoutBeh
 `approval` 节点 config = `{ approvalRef, yes→下游, no→下游 }`（出口固定 `yes`/`no`，**不由实体定义**）。scheduler 走到 approval 节点：
 
 ```
-取 apf_ 的 pin 版本 → Service.Resolve(id, versionId) 拿 template + 规则
-  → pkg/cel.CompileTemplate(template).Render(已记账 payload/ctx) → 渲染出 markdown
+取 apf_ 的 pin 版本 → Service.Resolve(id, versionId) 拿 inputSchema + template + 规则
+  → 按 inputSchema 把节点入参喂成 input → pkg/cel.CompileTemplate(template).Render({"input": …}) → 渲染出 markdown
   → park：写 signal_awaited 事件 + approvals 运行时行（apv_，status=parked）→ flowrun awaiting_signal
   → 用户决策 / timeout（durable timer，timeoutBehavior 决定 reject/approve/fail）→ 沿 yes/no 出口继续
 ```
 
-**确定性**：插值读已记账值、禁墙钟（`now()`）；渲染结果落 approvals 行，重放直接读、不重算。详 [`17-execution-contract.md`](../../../working/workflow-revamp/17-execution-contract.md) §9。
+**确定性**：插值读已记账的 `input`、禁墙钟（`now()`）；渲染结果落 approvals 行，重放直接读、不重算。详 [`17-execution-contract.md`](../../../working/workflow-revamp/17-execution-contract.md) §9。
 
 ---
 

@@ -40,6 +40,7 @@ type Trigger struct {
     Description string
     Kind        string         // cron | webhook | fsnotify | sensor
     Config      map[string]any // source 专属配置（JSON）
+    Outputs     []schema.Field // 声明扇给监听 workflow 的 payload 字段（下游读这些）；TEXT NOT NULL DEFAULT '[]'
     // 计算字段（读时由内存监听表填，不落库）：
     RefCount    int            // 监听它的 active workflow 数
     Listening   bool           // listener 是否在跑
@@ -137,16 +138,18 @@ listener 响 → ReportFunc(triggerId, Activity{Fired, Payload, ReturnValue, ...
 ```
 payload 最终成 workflow 的 flowrun 初始输入（旧 trigger 节点本就是 no-op 透传 `flowrun.TriggerInput`，搬出图不丢信号）。
 
+> **`Outputs`（声明的 payload 字段）**：`[]schema.Field`（共享 `internal/pkg/schema` 类型，全锻造实体统一 I/O），声明本 trigger fire 时投给监听 workflow 的 payload 字段——下游节点据此知道能读什么（workflow wiring 用）。仅声明、不强制塑形（运行期 payload 由各 source / sensor `output` CEL 实际构造）。**注**：sensor 的 `condition`/`output` CEL 仍读 `payload`/`ctx`（探测返回值），**非** `input`——`input` 根是 control/approval 专属（节点喂给实体的输入）。
+
 ---
 
 ## 7. HTTP 端点
 
 | 方法 | 路径 | 动作 |
 |---|---|---|
-| POST | `/api/v1/triggers` | 创建 |
+| POST | `/api/v1/triggers` | 创建（kind + config + outputs）|
 | GET | `/api/v1/triggers` | 列表（分页）|
 | GET | `/api/v1/triggers/{id}` | 详情（含 refCount/listening）|
-| PATCH | `/api/v1/triggers/{id}` | 改 name/description/config（kind 不可变；config 立即生效）|
+| PATCH | `/api/v1/triggers/{id}` | 改 name/description/config/outputs（kind 不可变；config 立即生效）|
 | DELETE | `/api/v1/triggers/{id}` | 软删（停 listener + 清边）|
 | POST | `/api/v1/triggers/{id}:fire` | 手动触发一次（202）|
 | GET | `/api/v1/triggers/{id}/activations?firedOnly&cursor&limit` | 动作日志（"为什么没触发"）|

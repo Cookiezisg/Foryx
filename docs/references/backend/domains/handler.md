@@ -46,7 +46,9 @@ audience: [human, ai]
 `id` · `workspace_id` · `name` · `description` · `tags` · `active_version_id`(指针) · **`config_encrypted`**(init-args 值，加密存盘) · 时间戳 · `deleted_at`。
 
 ### `handler_versions`（`hdv_`，append-only + cap 裁剪）
-类快照：`imports` · `init_body` · `shutdown_body` · **`methods []MethodSpec`**(多方法，各带 args/returnSchema/body/streaming/timeout) · `init_args_schema []InitArgSpec`(Sensitive→加密) · `dependencies` · `python_version` · `version`(单调号) · env_* · `change_reason` · `forged_in_conversation_id`。`UNIQUE(handler_id, version)`。
+类快照：`imports` · `init_body` · `shutdown_body` · **`methods []MethodSpec`**(多方法，各带 **inputs/outputs**(均 `[]schema.Field`)/body/streaming) · `init_args_schema []InitArgSpec`(Sensitive→加密) · `dependencies` · `python_version` · `version`(单调号) · env_* · `change_reason` · `forged_in_conversation_id`。`UNIQUE(handler_id, version)`。
+
+> **I/O 统一**：`MethodSpec.Inputs`/`.Outputs` 改用共享 `[]schema.Field`（`internal/pkg/schema`：`{name,type,description}`，无 required/default），取代旧 `args []ArgSpec` + `returnSchema map`（`ArgSpec` 类型已删）。**无列改名**——methods 整体是 JSON blob，仅 blob 内字段名变（`args`→`inputs`、`returnSchema`→`outputs`）。`InitArgSpec`（`__init__` 配置，带 Sensitive/Required/Default）**不变**——它是实例化凭证、非 method I/O，保留自有形状。
 
 ### `handler_calls`（`hcl_`，append-only log，无软删 D1）
 每次方法调用审计：`method` · `status`(ok/failed/cancelled/timeout) · **`triggered_by`**(chat/agent/workflow/manual) · input/output/error/计时 · `instance_id`(哪个实例服务的) · conversation/flowrun 关联。
@@ -63,7 +65,7 @@ audience: [human, ai]
 
 ## 5. 锻造（Forge）：ops 累积类草稿 → AssembleClass
 
-ops：`set_meta` / `set_imports` / `set_init` / `set_shutdown` / `set_init_args_schema` / `add_method` / `update_method`(RFC 7396 merge patch) / `delete_method` / `set_dependencies` / `set_python_version`。`AssembleClass` 拼 `class HandlerImpl`(`__init__(self, ...initArgs)` + `shutdown(self)` + 每 method 一 def)。Python `DriverScript`：stdio 行-JSON RPC（init→ready、call→return/error、generator `yield {"progress":...}`→progress、`_` 私有方法不可调）。env 装失败用 utility LLM 改 deps 重试（≤3，复用 [`app/envfix`](envfix.md)）。
+ops：`set_meta` / `set_imports` / `set_init` / `set_shutdown` / `set_init_args_schema`(InitArgSpec) / `add_method` / `update_method`(RFC 7396 merge patch) / `delete_method` / `set_dependencies` / `set_python_version`。`add_method` 的 `method` 携 `inputs`(必，`[]schema.Field`) + `outputs`(可选，`[]schema.Field`) + `body` + `streaming`（method 参数不再带 required/default）：`{"op":"add_method","method":{"name":"fetch","inputs":[{"name":"url","type":"string"}],"outputs":[{"name":"body","type":"object"}],"body":"...","streaming":false}}`。`AssembleClass` 拼 `class HandlerImpl`(`__init__(self, ...initArgs)` + `shutdown(self)` + 每 method 一 def)。Python `DriverScript`：stdio 行-JSON RPC（init→ready、call→return/error、generator `yield {"progress":...}`→progress、`_` 私有方法不可调）。env 装失败用 utility LLM 改 deps 重试（≤3，复用 [`app/envfix`](envfix.md)）。
 
 ---
 

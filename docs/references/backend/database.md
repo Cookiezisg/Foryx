@@ -149,8 +149,8 @@ type Function struct {
 type Version struct {
     ID            string          `gorm:"primaryKey;type:text" json:"id"`
     Code          string          `json:"code"`
-    Parameters    []ParameterSpec `gorm:"serializer:json" json:"parameters"`
-    ReturnSchema  map[string]any  `gorm:"serializer:json" json:"returnSchema"`
+    Inputs        []schema.Field  `db:"inputs,json" json:"inputs"`   // TEXT NOT NULL DEFAULT '[]'
+    Outputs       []schema.Field  `db:"outputs,json" json:"outputs"` // TEXT NOT NULL DEFAULT '[]'
     Dependencies  []string        `gorm:"serializer:json" json:"dependencies"`
     EnvStatus     string          `json:"envStatus"`
     ChangeReason  string          `json:"changeReason"`
@@ -199,7 +199,8 @@ type AgentVersion struct {
     Skill                  string          `db:"skill"`                    // single skill name to pre-activate
     Knowledge              []string        `db:"knowledge,json"`           // document IDs attached as context
     Tools                  []ToolRef       `db:"tools,json"`               // fn_/hd_/mcp refs (no ag_)
-    OutputSchema           *OutputSchema   `db:"output_schema,json"`       // free_text/enum/json_schema; injected into systemPrompt at invoke
+    Inputs                 []schema.Field  `db:"inputs,json"`              // declared task inputs (workflow feeds these); TEXT NOT NULL DEFAULT '[]'
+    Outputs                []schema.Field  `db:"outputs,json"`             // declared result fields; empty = free-form; instructed to answer as JSON object; TEXT NOT NULL DEFAULT '[]'
     ModelOverride          *model.ModelRef `db:"model_override,json"`      // apiKeyId+modelId; nil=default agent scenario
     ChangeReason           string          `db:"change_reason"`
     ForgedInConversationID string          `db:"forged_in_conversation_id"`// relation create(v1)/edit(v>1) edges
@@ -266,22 +267,29 @@ type Approval struct {
 
 ## 3. 逻辑协议 DTOs (Nested Schemas)
 
-### 3.1 Parameter & Method Specs
+### 3.1 Field（统一 I/O）& Method Specs
+`schema.Field`（`internal/pkg/schema`）是**所有锻造实体共享的唯一 I/O 字段类型**——fn/hd/ag 的 inputs/outputs、ctl/apf 的 inputSchema、trg 的 outputs 全用它。刻意极简：无 required / default / enum / 嵌套，精确塑形交运行时 CEL。各处以 `,json` 存为 JSON 数组列（`TEXT NOT NULL DEFAULT '[]'`）。
+
 ```typescript
-interface ParameterSpec {
+interface Field {                                  // pkg/schema.Field — 双向、处处通用
   name: string;
-  type: "string" | "number" | "boolean" | "array" | "object";
+  type: "string" | "number" | "boolean" | "object" | "array";  // 粗类型提示（CEL 动态类型，不硬约束）
+  description?: string;
+}
+interface MethodSpec {                             // handler 类方法（存于 handler_versions.methods JSON blob）
+  name: string;
+  inputs: Field[];                                 // 旧 args（ParameterSpec[]）→ 统一 Field[]
+  outputs?: Field[];                               // 旧 returnSchema（map）→ 统一 Field[]
+  body: string;
+  streaming: boolean;
+}
+interface InitArgSpec {                            // handler __init__ 配置（≠ method I/O，保留自有形状）
+  name: string;
+  type: string;
   description?: string;
   required: boolean;
   default?: any;
-  enum?: any[];
-}
-interface MethodSpec {
-  name: string;
-  args: ParameterSpec[];
-  returnSchema?: Record<string, any>;
-  body: string;
-  streaming: boolean;
+  sensitive: boolean;                              // true → 加密存盘、读时掩码
 }
 ```
 
@@ -356,7 +364,7 @@ type Relation struct {
 
 | 表 | 关键列 | 说明 |
 |---|---|---|
-| `triggers` | id(trg_), workspace_id, name, kind CHECK(cron/webhook/fsnotify/sensor), config(JSON), deleted_at | 实体本体，软删；`idx_triggers_ws_name` = UNIQUE(workspace_id, name) WHERE deleted_at IS NULL |
+| `triggers` | id(trg_), workspace_id, name, kind CHECK(cron/webhook/fsnotify/sensor), config(JSON), **outputs**(`TEXT NOT NULL DEFAULT '[]'`，`[]schema.Field` 声明扇给监听 workflow 的 payload 字段), deleted_at | 实体本体，软删；`idx_triggers_ws_name` = UNIQUE(workspace_id, name) WHERE deleted_at IS NULL |
 | `trigger_firings` | id(trf_), trigger_id, workflow_id, activation_id, payload, dedup_key, status, flowrun_id | durable 收件箱（persist-before-act）；`idx_trf_dedup` = UNIQUE(workflow_id, trigger_id, dedup_key)（**D3 幂等**）；status pending→claimed→started→{skipped,superseded,shed}；单事务 claim（ADR-021）留波次 4 scheduler |
 | `trigger_activations` | id(tra_), trigger_id, kind, fired, return_value, payload, error, detail, firing_count | 动作日志，只增（**D1 不删**）；fired=false 也记 return_value/detail——"为什么没触发"可查 |
 
@@ -389,7 +397,7 @@ type Item struct {
 | 表 | 关键列 | 说明 |
 |---|---|---|
 | `control_logics` | id(ctl_), workspace_id, name, description, active_version_id, deleted_at | 实体本体，软删；`idx_control_logics_ws_name` = UNIQUE(workspace_id, name) WHERE deleted_at IS NULL |
-| `control_logic_versions` | id(ctlv_), control_id, version, branches(JSON `[{port,when,emit}]`), change_reason, forged_in_conversation_id | append-only + cap 50 裁剪（无 deleted_at）；`idx_ctlv_control_version` = UNIQUE(control_id, version) |
+| `control_logic_versions` | id(ctlv_), control_id, version, **input_schema**(`TEXT NOT NULL DEFAULT '[]'`，`[]schema.Field` 声明 workflow 节点喂入的字段；`when`/`emit` 读 `input.*`), branches(JSON `[{port,when,emit}]`), change_reason, forged_in_conversation_id | append-only + cap 50 裁剪（无 deleted_at）；`idx_ctlv_control_version` = UNIQUE(control_id, version) |
 
 ### 4.6 Approval（审批渲染实体，apf_/apfv_）
 > workflow `approval` 节点引用的审批表（markdown prompt 模板 + 决策规则）。AI 工作实体，有版本但**无 sandbox/env/executions**——渲染 + park 是波次 4 运行时事。**前缀 `apf_`/`apfv_` ≠ `apv_`**（`apv_` 是 `approvals` 运行时表）。详 domains/approval.md。2 表，pkg/orm。
@@ -397,7 +405,7 @@ type Item struct {
 | 表 | 关键列 | 说明 |
 |---|---|---|
 | `approval_forms` | id(apf_), workspace_id, name, description, active_version_id, deleted_at | 实体本体，软删；`idx_approval_forms_ws_name` = UNIQUE(workspace_id, name) WHERE deleted_at IS NULL |
-| `approval_form_versions` | id(apfv_), approval_id, version, template(markdown `{{ CEL }}`), allow_reason(bool), timeout, timeout_behavior(reject/approve/fail), change_reason, forged_in_conversation_id | append-only + cap 50 裁剪（无 deleted_at）；`idx_apfv_approval_version` = UNIQUE(approval_id, version) |
+| `approval_form_versions` | id(apfv_), approval_id, version, **input_schema**(`TEXT NOT NULL DEFAULT '[]'`，`[]schema.Field` 声明 workflow 节点喂入的字段；`template` 读 `{{ input.* }}`), template(markdown `{{ CEL }}`), allow_reason(bool), timeout, timeout_behavior(reject/approve/fail), change_reason, forged_in_conversation_id | append-only + cap 50 裁剪（无 deleted_at）；`idx_apfv_approval_version` = UNIQUE(approval_id, version) |
 
 ---
 

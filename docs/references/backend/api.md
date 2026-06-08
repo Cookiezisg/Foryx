@@ -40,6 +40,8 @@ audience: [human, ai]
 ## 2. 四项全能锻造 (The Quadrinity)
 
 ### 2.1 Functions (fn_)
+> **I/O**：create/`:edit` 走 ops——`set_inputs`/`set_outputs`（各取 `[]schema.Field`：`[{name,type,description}]`，取代旧 `set_parameters`/`set_return_schema`）。
+
 | Method | Path | 文件源 |
 |---|---|---|
 | POST | `/api/v1/functions` | `function.go` |
@@ -54,6 +56,8 @@ audience: [human, ai]
 | GET | `/api/v1/function-executions/{execId}` | `function.go` |
 
 ### 2.2 Handlers (hd_)
+> **I/O**：方法 I/O 走 forge op `add_method`——`method.inputs`（必） + `method.outputs`（可选），各 `[]schema.Field`（取代旧 `method.args`/`method.returnSchema`）。`__init__` 配置 `set_init_args_schema`（`InitArgSpec`，带 sensitive/required/default）不变。
+
 | Method | Path | 文件源 |
 |---|---|---|
 | POST | `/api/v1/handlers` | `handler.go` |
@@ -87,11 +91,12 @@ audience: [human, ai]
 | POST | `/api/v1/workflows/{id}/pending:reject` | `workflow.go` |
 
 ### 2.4 Agents (ag_)
-> 第四元「配置好的 LLM worker」：不写代码，按引用挂载六件（skill / 文档 / fn·hd·mcp 工具 / model 覆盖），跑 ReAct loop。线性版本 + 自由 active 指针，无 pending/accept。`:invoke` 是唯一执行入口（落 `agent_executions`）。
+> 第四元「配置好的 LLM worker」：不写代码，按引用挂载（skill / 文档 / fn·hd·mcp 工具 / model 覆盖 + 声明 `inputs`/`outputs`），跑 ReAct loop。线性版本 + 自由 active 指针，无 pending/accept。`:invoke` 是唯一执行入口（落 `agent_executions`）。
+> **I/O**：Config 携 `inputs`/`outputs`（均 `[]schema.Field`，取代旧三态 `outputSchema`）。`outputs` 非空 ⇒ agent 被指示以含这些字段的 JSON object 作答；空 = 自由文本。enum 硬约束/coercion 已删。
 
 | Method | Path | 文件源 | 备注 |
 |---|---|---|---|
-| POST | `/api/v1/agents` | `agent.go` | 扁平创建（name/description/tags + v1 Config），立即生效 |
+| POST | `/api/v1/agents` | `agent.go` | 扁平创建（name/description/tags + v1 Config，含 inputs/outputs），立即生效 |
 | GET | `/api/v1/agents` | `agent.go` | 列表（分页）|
 | GET | `/api/v1/agents/{id}` | `agent.go` | 含 activeVersion |
 | PATCH | `/api/v1/agents/{id}` | `agent.go` | UpdateMeta（name/description/tags，不升版本）|
@@ -104,12 +109,13 @@ audience: [human, ai]
 
 ### 2.5 Triggers (trg_)
 > 独立信号源实体（cron / webhook / fsnotify / sensor），无版本。引用计数生命周期由 workflow 激活/停用驱动（Attach/Detach，波次 4）。
+> **I/O**：create/edit body 含 `outputs`（`[]schema.Field`）——声明 trigger 扇给监听 workflow 的 payload 字段（下游读这些）。
 | Method | Path | 文件源 | 备注 |
 |---|---|---|---|
-| POST | `/api/v1/triggers` | `trigger.go` | 创建（kind + config）|
+| POST | `/api/v1/triggers` | `trigger.go` | 创建（kind + config + outputs）|
 | GET | `/api/v1/triggers` | `trigger.go` | 列表（分页）|
 | GET | `/api/v1/triggers/{id}` | `trigger.go` | 含 refCount/listening |
-| PATCH | `/api/v1/triggers/{id}` | `trigger.go` | 改 name/description/config（kind 不可变、config 立即生效）|
+| PATCH | `/api/v1/triggers/{id}` | `trigger.go` | 改 name/description/config/outputs（kind 不可变、config 立即生效）|
 | DELETE | `/api/v1/triggers/{id}` | `trigger.go` | 软删（停 listener + 清边）|
 | POST | `/api/v1/triggers/{idAction}` | `trigger.go` | (:fire 手动触发一次→202；:iterate 随 askai 波次 6) |
 | GET | `/api/v1/triggers/{id}/activations` | `trigger.go` | 动作日志（?firedOnly，"为什么没触发"）|
@@ -118,29 +124,31 @@ audience: [human, ai]
 
 ### 2.6 Controls (ctl_)
 > workflow `control` 节点引用的路由逻辑实体（when/emit 分支组；详 domains/control.md）。AI 工作实体，有版本、无 `:run`。
+> **I/O**：create/`:edit` body 含 `inputSchema`（`[]schema.Field`）——声明 workflow 节点喂入的字段；`branches[].when`/`emit` 的 CEL 读 `input.*`。Port 是 workflow 路由的具名结局（`fromPort==port` 的边把本臂 emit 输出带到下游，control 不知道连哪个节点）。
 
 | Method | Path | 文件源 | 备注 |
 |---|---|---|---|
-| POST | `/api/v1/controls` | `control.go` | 创建（name + branches）|
+| POST | `/api/v1/controls` | `control.go` | 创建（name + inputSchema + branches）|
 | GET | `/api/v1/controls` | `control.go` | 列表（分页）|
-| GET | `/api/v1/controls/{id}` | `control.go` | 含 active 版分支 |
+| GET | `/api/v1/controls/{id}` | `control.go` | 含 active 版 inputSchema + 分支 |
 | PATCH | `/api/v1/controls/{id}` | `control.go` | 改 name/description（不动版本）|
 | DELETE | `/api/v1/controls/{id}` | `control.go` | 软删 + 清边 |
-| POST | `/api/v1/controls/{idAction}` | `control.go` | (:edit 整组替换写新版本、:revert 移指针；**无 :run**) |
+| POST | `/api/v1/controls/{idAction}` | `control.go` | (:edit 整组替换写新版本〔inputSchema + branches〕、:revert 移指针；**无 :run**) |
 | GET | `/api/v1/controls/{id}/versions` | `control.go` | 分页 |
 | GET | `/api/v1/controls/{id}/versions/{version}` | `control.go` | 整数号或 version id |
 
 ### 2.7 Approvals (apf_)
 > workflow `approval` 节点引用的审批渲染实体（prompt 模板 + 决策规则；详 domains/approval.md）。AI 工作实体，前缀 `apf_`（≠ `apv_`=运行时），无 `:run`。
+> **I/O**：create/`:edit` body 含 `inputSchema`（`[]schema.Field`）——声明 workflow 节点喂入的字段；`template` markdown 用 `{{ input.* }}` 插值。输出是运行时 `{decision, reason}`（在 `approvals` 运行时表，不变）。
 
 | Method | Path | 文件源 | 备注 |
 |---|---|---|---|
-| POST | `/api/v1/approvals` | `approval.go` | 创建（name + template + 规则）|
+| POST | `/api/v1/approvals` | `approval.go` | 创建（name + inputSchema + template + 规则）|
 | GET | `/api/v1/approvals` | `approval.go` | 列表（分页）|
-| GET | `/api/v1/approvals/{id}` | `approval.go` | 含 active 版 template + 规则 |
+| GET | `/api/v1/approvals/{id}` | `approval.go` | 含 active 版 inputSchema + template + 规则 |
 | PATCH | `/api/v1/approvals/{id}` | `approval.go` | 改 name/description（不动版本）|
 | DELETE | `/api/v1/approvals/{id}` | `approval.go` | 软删 + 清边 |
-| POST | `/api/v1/approvals/{idAction}` | `approval.go` | (:edit 整组替换、:revert 移指针；**无 :run**) |
+| POST | `/api/v1/approvals/{idAction}` | `approval.go` | (:edit 整组替换〔inputSchema + template + 规则〕、:revert 移指针；**无 :run**) |
 | GET | `/api/v1/approvals/{id}/versions` | `approval.go` | 分页 |
 | GET | `/api/v1/approvals/{id}/versions/{version}` | `approval.go` | 整数号或 version id |
 
