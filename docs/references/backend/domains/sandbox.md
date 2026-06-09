@@ -57,7 +57,7 @@ type Runtime struct {
 ```
 
 ### 2.2 `Env`（per-owner 隔离环境）
-绑定一个 Runtime 的 venv / node_modules 目录，或对 Docker 镜像的逻辑绑定。`UNIQUE(owner_kind, owner_id)`，`owner_kind ∈ {function,handler,mcp,skill,conversation}`。**无 workspace_id**——通过全局唯一的 owner id（`fn_xxx` / `mcp` owner 等）间接按 workspace 隔离。
+绑定一个 Runtime 的 venv / node_modules 目录，或对 Docker 镜像的逻辑绑定。`UNIQUE(owner_kind, owner_id)`，`owner_kind ∈ {function,handler,mcp,skill,conversation,attachment}`。前五种是 per-entity 跑用户代码；**attachment** 是一个固定共享 owner（`id="extractor"`）的文档抽取 env（pdfplumber / python-docx … 工具链，跨 workspace 复用），R0053 加。**无 workspace_id**——通过全局唯一的 owner id（`fn_xxx` / `mcp` owner / attachment 固定 owner）间接按 workspace 隔离（attachment env 无用户数据故全机共享）。
 ```go
 type Env struct {
     ID, OwnerKind, OwnerID, OwnerName, RuntimeID, Path string

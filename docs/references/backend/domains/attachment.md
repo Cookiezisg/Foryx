@@ -14,7 +14,7 @@ audience: [human, ai]
 > **② sandbox 当本地提取引擎**（不依赖云 OCR/API key，离线）**③ 中立 ContentPart + 各 provider 渲染器**（多家）。
 > **无 RAG**（对齐 document 域决定）：大文档 = 抽文本 + token 限额截断 + 直接注入，非向量检索。
 >
-> **三轮交付**：**R0051 存储核心 ✅** → **R0052 多 provider 注入 ✅（11 家各自渲染 + ToContentParts 桥，本文档 as-built）** → R0053 sandbox 提取（PDF/Office；音频/视频/OCR 留插槽）。
+> **三轮交付**：**R0051 存储核心 ✅** → **R0052 多 provider 注入 ✅（11 家各自渲染）** → **R0053 sandbox 提取 ✅（PDF/Office 主线 python 抽取 + 可插 Extractor 端口；音频/视频/OCR 延后，本文档 as-built）**。
 
 ---
 
@@ -82,19 +82,21 @@ type Attachment struct {
 - **降级即跳过**：无法内联某 part 类型的家在 part switch 静默跳过（**不报错**）；PDF 对非原生家 = 留给 R0053 sandbox 抽文本补。
 - **moonshot** 的 `content` 字段由 `string` 改 `json.RawMessage`（容纳 parts 数组；Kimi 图仅接 base64 / file-id，正是 data-URL）。
 
-**`attachment.ToContentParts(ctx, att_ids, visionCapable) → []llm.ContentPart`**（app 层桥，one user turn）：
-- `image` → `image_url`（data-URL）part，**仅 visionCapable 时**；否则降级为文字提示（模型无视觉）。
+**`attachment.ToContentParts(ctx, att_ids, caps Capabilities) → []llm.ContentPart`**（app 层桥，one user turn）。`Capabilities{Vision, NativeDocs}` 由调用方（chat M5.2）按解析后模型能力传入——本层不持模型目录知识：
+- `image` → `image_url`（data-URL）part，**仅 caps.Vision 时**；否则降级为文字提示（模型无视觉）。
 - `text` → 文件内容内联成 text part（带文件名标注）。
-- `document`(pdf) → `file` part（MediaType + base64 + 文件名）；原生三家渲、其余跳过靠 R0053。
-- `audio`/`video`/`other` → 文字占位（真抽取 = R0053）。
+- `document` → **caps.NativeDocs ?** `file` part（MediaType + base64 + 文件名，原生三家原样读）**:** sandbox 抽取文本内联（§5，token 截断；无 extractor / 抽取失败 → 占位）。
+- `audio`/`video`/`other` → 文字占位（那些 extractor 是未来插件，§5）。
 - 缺失 / blob 不可读的 id 告警跳过（陈旧 id 不让回合失败）；parts 按 `att_ids` 保序（`GetBatch` 的 `WHERE id IN` 不保序，按 id 建索引重排）。
-- `visionCapable` **由调用方（chat M5.2）按解析后模型能力传入**——本层不持模型目录知识；model 目录的 `vision` flag 由 M5.2 接线时补（R0052 不碰目录）。
+- model 目录的 `vision` / `nativeDocs` flag 由 M5.2 接线时补（R0052/R0053 桥已留 `Capabilities` 形参，不碰目录）。
 
-## 5. 提取流水线（R0053，待建）—— sandbox 当本地引擎
-- 路由优先级（抄 LibreChat）：OCR > STT > 文本解析 > 兜底。
-- **主线**：PDF 文本 `pdfplumber` / Office `python-docx`·`openpyxl`·`python-pptx`，**全在 Forgify sandbox 跑 python**（离线、无云 OCR、无 API key）。
-- **token 限额**：`fileTokenLimit`（默认 100K），全量提取、构造 prompt 时截断、保头部。
-- **可插 `Extractor` 端口**：音频(Whisper)/视频/扫描 OCR(tesseract) 都是往此端口插一个 extractor，不动主干——按需补。
+## 5. 提取流水线（R0053，as-built ✅）—— sandbox 当本地引擎
+**何时抽**：`ToContentParts` 中 `document` kind 且 `caps.NativeDocs=false`（模型无原生文档输入）→ 抽文本内联；原生三家（anthropic/openai/gemini）走 file part、不抽。无独立缓存——抽出的 text part 由 chat M5.2 落进 message_blocks，天然「抽一次」。
+- **可插 `Extractor` 端口**：`Extract(ctx, mime, data) (string, error)`；不认的 mime 返 `ErrExtractionUnsupported` → 调用方降级占位。`SandboxExtractor` 是主线实现，依赖 `SandboxRunner` 端口（`EnsureEnv` + `Spawn`，sandboxapp.Service 结构化满足，DIP）。音频(Whisper)/视频/扫描 OCR(tesseract) 后补**独立 extractor**，不动主干。
+- **主线（SandboxExtractor）**：PDF `pdfplumber` / docx `python-docx` / xlsx `openpyxl` / pptx `python-pptx`，**全在 sandbox 跑 python**——`python -c <脚本>`，mime 作 argv[1]、文件字节走 stdin、打印 `{"text"}` 或 `{"error"}`（离线、无云 OCR、无 API key）。
+- **共享 env**：固定全机 owner `{kind: attachment, id: "extractor"}` 的单个 venv（装上述 4 包），跨 workspace 复用（不存用户数据，字节经 stdin/stdout 流过）；首次抽取付 pip install、之后 `EnsureEnv` 幂等快返。为此 **sandbox 加 `attachment` owner kind**（domain 常量 + `sandbox_envs.owner_kind` CHECK）。
+- **token 限额**：`maxExtractedChars = 400_000`（~100K token @ 4 字符/token，对齐 LibreChat `fileTokenLimit`），保头部 + 截断标注。
+- **降级**：mime 不支持 / python 解析失败（损坏文件——脚本以 JSON `{error}` 报告并退出 0）/ 无 extractor → 文字占位，绝不让回合失败；仅解释器坏 / 缺包（spawn `!Ok`）才返错误。
 
 ---
 
@@ -111,8 +113,8 @@ type Attachment struct {
 
 ## 7. 跨域集成 (Interactions)
 - **chat（M5.2）**：消息引用 `att_ids` → `ToContentParts(att_ids, visionCapable)` → 拼用户文本 part → 进 loop/provider；`visionCapable` 由 chat 按解析后模型能力传入。
-- **sandbox（R0053）**：提取引擎（python 提取脚本）。
-- **model（M5.2 接线）**：vision capability flag（R0052 桥已留 `visionCapable` 形参，目录 flag 待 M5.2 补）。
+- **sandbox（R0053 ✅）**：文档抽取引擎——`SandboxExtractor` 经 `SandboxRunner` 端口（EnsureEnv+Spawn）跑 python 脚本；attachment 是 sandbox 新增 env owner kind（固定共享 owner）。
+- **model（M5.2 接线）**：`Capabilities{Vision, NativeDocs}` flag（R0052/R0053 桥已留形参，目录 flag 待 M5.2 补）。
 - **无 RAG**：大文档抽文本 + token 限额 + 直接注入（对齐 document 域无向量检索）。
 - **GC**：boot 或 ticker 定期 `:gc`（M7 接线）。
 

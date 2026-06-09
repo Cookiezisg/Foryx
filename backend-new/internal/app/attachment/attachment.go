@@ -41,22 +41,26 @@ type BlobStore interface {
 //
 // Service 是附件应用 façade。
 type Service struct {
-	repo  attachmentdomain.Repository
-	blobs BlobStore
-	log   *zap.Logger
+	repo      attachmentdomain.Repository
+	blobs     BlobStore
+	extractor Extractor // optional (nil → documents degrade to a placeholder for non-native models)
+	log       *zap.Logger
 }
 
-// New constructs a Service; panics on nil logger, repo, or blobs (all required).
+// New constructs a Service; panics on nil logger, repo, or blobs (all required). extractor is
+// optional — nil means a document sent to a model without native document input degrades to a
+// placeholder instead of being text-extracted.
 //
-// New 构造 Service；nil logger/repo/blobs panic（皆必需）。
-func New(repo attachmentdomain.Repository, blobs BlobStore, log *zap.Logger) *Service {
+// New 构造 Service；nil logger/repo/blobs panic（皆必需）。extractor 可选——nil 时，发给无原生文档
+// 输入模型的文档降级为占位，而非抽文本。
+func New(repo attachmentdomain.Repository, blobs BlobStore, extractor Extractor, log *zap.Logger) *Service {
 	if log == nil {
 		panic("attachmentapp.New: nil logger")
 	}
 	if repo == nil || blobs == nil {
 		panic("attachmentapp.New: repo and blobs are required")
 	}
-	return &Service{repo: repo, blobs: blobs, log: log}
+	return &Service{repo: repo, blobs: blobs, extractor: extractor, log: log}
 }
 
 // Upload validates size, hashes the bytes, stores the blob (dedup), and inserts the metadata row.
@@ -134,28 +138,36 @@ func (s *Service) GC(ctx context.Context) (int, error) {
 	return s.blobs.Sweep(ctx, keep)
 }
 
-// ToContentParts resolves attachment ids into provider-agnostic LLM content parts for one user
-// turn (chat M5.2 prepends the user's own text part, then sends the message; each provider renders
-// the parts into its own wire). The mapping by Kind:
-//   - image    → an image_url part (data-URL) when visionCapable; otherwise a text note (the model
-//     can't see images, so degrade rather than send a part it would reject).
-//   - text     → the file's content inlined as a text part (cheap, universal — every model reads it).
-//   - document → a file part (MediaType + base64 + filename); providers with native PDF input render
-//     it, the rest skip it and rely on sandbox text-extraction (R0053).
-//   - audio/video/other → a text placeholder; real extraction (STT / OCR) is R0053.
+// Capabilities tells ToContentParts what the resolved target model can natively accept, so it can
+// decide whether to hand a file over raw or degrade it. Both flags come from the caller (chat M5.2)
+// via the model catalog — this layer holds no model knowledge.
+//
+// Capabilities 告诉 ToContentParts 解析后的目标模型能原生接受什么，据此决定原样递交还是降级。两个
+// flag 都由调用方（chat M5.2）按模型目录传入——本层不持模型知识。
+type Capabilities struct {
+	Vision     bool // model can see images natively
+	NativeDocs bool // model can read an inline document (PDF) natively (anthropic / openai / gemini)
+}
+
+// ToContentParts resolves attachment ids into provider-agnostic LLM content parts for one user turn
+// (chat M5.2 prepends the user's own text part, then sends; each provider renders the parts into its
+// own wire). Mapping by Kind:
+//   - image    → image_url (data-URL) when caps.Vision; else a text note (degrade — don't send a
+//     part the model would reject).
+//   - text     → the file's content inlined as a text part (cheap, universal).
+//   - document → caps.NativeDocs ? a file part (PDF handed over raw, read natively) : sandbox
+//     text-extracted, token-capped text — with a placeholder note if no extractor / extraction fails.
+//   - audio/video/other → a text placeholder (those extractors are future Extractor plug-ins).
 //
 // Order follows ids. A missing/unreadable blob is skipped with a warning — a stale id must never
-// fail the turn (best-effort, like a dangling mention). visionCapable is supplied by the caller
-// from the resolved model's capability, keeping this layer free of model-catalog knowledge.
+// fail the turn (best-effort, like a dangling mention).
 //
-// ToContentParts 把附件 id 解析成与 provider 无关的 LLM 内容块，供一个 user 回合（chat M5.2 在前面
-// 拼上用户自己的 text part 再发；各家 provider 把这些块渲成自家 wire）。按 Kind 映射：image→image_url
-// （data-URL，仅 visionCapable 时；否则降级为文字提示）；text→文件内容内联成 text part（廉价通用）；
-// document→file part（MediaType+base64+文件名，原生支持 PDF 的家渲、其余跳过靠 R0053 沙箱抽取）；
-// audio/video/other→文字占位（真抽取 STT/OCR 是 R0053）。顺序随 ids；缺失/不可读 blob 告警跳过——
-// 陈旧 id 绝不能让回合失败（尽力而为，如悬空 mention）。visionCapable 由调用方按解析后的模型能力传入，
-// 使本层不持模型目录知识。
-func (s *Service) ToContentParts(ctx context.Context, ids []string, visionCapable bool) ([]llminfra.ContentPart, error) {
+// ToContentParts 把附件 id 解析成与 provider 无关的 LLM 内容块，供一个 user 回合（chat M5.2 前面拼上
+// 用户文本 part 再发；各家渲成自家 wire）。按 Kind 映射：image→image_url（data-URL，仅 caps.Vision；
+// 否则文字提示降级）；text→文件内容内联 text part；document→caps.NativeDocs ? file part（PDF 原样递交、
+// 原生读）: sandbox 抽取文本（token 截断），无 extractor / 抽取失败则占位；audio/video/other→文字占位
+// （那些 extractor 是未来插件）。顺序随 ids；缺失/不可读 blob 告警跳过——陈旧 id 绝不让回合失败。
+func (s *Service) ToContentParts(ctx context.Context, ids []string, caps Capabilities) ([]llminfra.ContentPart, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -187,7 +199,7 @@ func (s *Service) ToContentParts(ctx context.Context, ids []string, visionCapabl
 		}
 		switch a.Kind {
 		case attachmentdomain.KindImage:
-			if visionCapable {
+			if caps.Vision {
 				out = append(out, llminfra.ContentPart{Type: llminfra.PartImageURL, ImageURL: dataURL(a.MimeType, data)})
 			} else {
 				out = append(out, textNote("image %q attached, but the current model has no vision", a.Filename))
@@ -195,13 +207,17 @@ func (s *Service) ToContentParts(ctx context.Context, ids []string, visionCapabl
 		case attachmentdomain.KindText:
 			out = append(out, llminfra.ContentPart{Type: llminfra.PartText, Text: inlineText(a.Filename, data)})
 		case attachmentdomain.KindDocument:
-			out = append(out, llminfra.ContentPart{
-				Type:      llminfra.PartFile,
-				MediaType: a.MimeType,
-				Data:      base64.StdEncoding.EncodeToString(data),
-				Filename:  a.Filename,
-			})
-		default: // audio / video / other — extraction (STT / OCR / parse) is R0053
+			if caps.NativeDocs {
+				out = append(out, llminfra.ContentPart{
+					Type:      llminfra.PartFile,
+					MediaType: a.MimeType,
+					Data:      base64.StdEncoding.EncodeToString(data),
+					Filename:  a.Filename,
+				})
+			} else {
+				out = append(out, s.extractDocPart(ctx, a, data))
+			}
+		default: // audio / video / other — those extractors are future Extractor plug-ins
 			out = append(out, textNote("file %q (%s) attached; content extraction is not yet available", a.Filename, a.Kind))
 		}
 	}
@@ -230,4 +246,54 @@ func inlineText(filename string, data []byte) string {
 // textNote 把降级附件占位渲成 text part。
 func textNote(format string, args ...any) llminfra.ContentPart {
 	return llminfra.ContentPart{Type: llminfra.PartText, Text: "[" + fmt.Sprintf(format, args...) + "]"}
+}
+
+// extractDocPart text-extracts a document for a model that can't read it natively, capping the
+// result to maxExtractedChars. With no extractor configured, or on an unsupported mime / extraction
+// failure, it degrades to a placeholder note — never failing the turn.
+//
+// extractDocPart 为不能原生读文档的模型抽取文本，截断到 maxExtractedChars。无 extractor、或 mime
+// 不支持 / 抽取失败时，降级为占位——绝不让回合失败。
+func (s *Service) extractDocPart(ctx context.Context, a *attachmentdomain.Attachment, data []byte) llminfra.ContentPart {
+	if s.extractor == nil {
+		return textNote("document %q attached, but text extraction is unavailable for this model", a.Filename)
+	}
+	text, err := s.extractor.Extract(ctx, a.MimeType, data)
+	if err != nil {
+		s.log.Warn("attachmentapp.ToContentParts: document extraction failed, degrading",
+			zap.String("attachment_id", a.ID), zap.String("mime", a.MimeType), zap.Error(err))
+		return textNote("document %q attached, but its text could not be extracted", a.Filename)
+	}
+	body, truncated := truncateForLLM(text)
+	suffix := ""
+	if truncated {
+		suffix = ", truncated"
+	}
+	return llminfra.ContentPart{
+		Type: llminfra.PartText,
+		Text: fmt.Sprintf("Attached document %q (text-extracted%s):\n%s", a.Filename, suffix, body),
+	}
+}
+
+// maxExtractedChars caps inlined extracted text (~100K tokens at ~4 chars/token, aligning with
+// LibreChat's default fileTokenLimit). The head is kept — a document leads with its substance.
+//
+// maxExtractedChars 截断内联抽取文本（~4 字符/token 下约 100K token，对齐 LibreChat 默认
+// fileTokenLimit）。保头部——文档开头即正文。
+const maxExtractedChars = 400_000
+
+// truncateForLLM caps s to maxExtractedChars runes, returning the (possibly trimmed) text and
+// whether it was trimmed. A byte-length check short-circuits the common small-file case.
+//
+// truncateForLLM 把 s 截到 maxExtractedChars 个 rune，返回（可能裁过的）文本 + 是否裁过。字节长度
+// 预检短路常见小文件。
+func truncateForLLM(s string) (string, bool) {
+	if len(s) <= maxExtractedChars { // bytes ≥ runes, so within cap by bytes ⇒ within cap by runes
+		return s, false
+	}
+	r := []rune(s)
+	if len(r) <= maxExtractedChars {
+		return s, false
+	}
+	return string(r[:maxExtractedChars]), true
 }

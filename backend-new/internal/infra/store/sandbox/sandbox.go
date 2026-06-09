@@ -42,7 +42,7 @@ var Schema = []string{
 
 	`CREATE TABLE IF NOT EXISTS sandbox_envs (
 		id           TEXT PRIMARY KEY,
-		owner_kind   TEXT NOT NULL CHECK(owner_kind IN ('function','handler','mcp','skill','conversation')),
+		owner_kind   TEXT NOT NULL CHECK(owner_kind IN ('function','handler','mcp','skill','conversation','attachment')),
 		owner_id     TEXT NOT NULL,
 		owner_name   TEXT NOT NULL DEFAULT '',
 		runtime_id   TEXT NOT NULL,

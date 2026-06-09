@@ -16,15 +16,20 @@ import (
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
 )
 
-// Owner kinds — the entity types that can own an isolated env.
+// Owner kinds — the entity types that can own an isolated env. function/handler/mcp/skill/
+// conversation own a per-entity env for user code; attachment owns a single shared, machine-global
+// env (fixed owner id) holding the document-extraction toolchain (pdfplumber / python-docx …).
 //
-// Owner kind —— 可拥有隔离 env 的实体类型。
+// Owner kind —— 可拥有隔离 env 的实体类型。function/handler/mcp/skill/conversation 各自一个
+// per-entity env 跑用户代码；attachment 拥有一个共享、全机唯一的 env（固定 owner id），装文档抽取
+// 工具链（pdfplumber / python-docx …）。
 const (
 	OwnerKindFunction     = "function"
 	OwnerKindHandler      = "handler"
 	OwnerKindMCP          = "mcp"
 	OwnerKindSkill        = "skill"
 	OwnerKindConversation = "conversation"
+	OwnerKindAttachment   = "attachment"
 )
 
 // Owner identifies an Env's owner. ID becomes a directory name and joins PATH at
