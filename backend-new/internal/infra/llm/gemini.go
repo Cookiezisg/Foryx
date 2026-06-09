@@ -268,6 +268,10 @@ func geminiUserParts(m LLMMessage) []geminiPart {
 			parts = append(parts, geminiPart{Text: p.Text})
 		case "image_url":
 			parts = append(parts, geminiImagePart(p.ImageURL))
+		case "file":
+			// PDF / document → inlineData (Gemini reads PDFs natively as inline base64).
+			// PDF/文档 → inlineData（Gemini 原生以内联 base64 读 PDF）。
+			parts = append(parts, geminiPart{InlineData: &geminiInlineData{MimeType: p.MediaType, Data: p.Data}})
 		}
 	}
 	return parts

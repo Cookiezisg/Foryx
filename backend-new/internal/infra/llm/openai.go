@@ -146,6 +146,8 @@ func buildOpenAIUserMsg(m LLMMessage) (oaiMessage, error) {
 			parts = append(parts, oaiContentPart{Type: "text", Text: part.Text})
 		case "image_url":
 			parts = append(parts, oaiContentPart{Type: "image_url", ImageURL: &oaiImageURL{URL: part.ImageURL}})
+		case "file":
+			parts = append(parts, oaiContentPart{Type: "file", File: &oaiFile{Filename: part.Filename, FileData: "data:" + part.MediaType + ";base64," + part.Data}})
 		default:
 			return oaiMessage{}, fmt.Errorf("llm.openai: unknown part type %q: %w", part.Type, ErrBadRequest)
 		}
@@ -371,10 +373,20 @@ type oaiContentPart struct {
 	Type     string       `json:"type"`
 	Text     string       `json:"text,omitempty"`
 	ImageURL *oaiImageURL `json:"image_url,omitempty"`
+	File     *oaiFile     `json:"file,omitempty"`
 }
 
 type oaiImageURL struct {
 	URL string `json:"url"`
+}
+
+// oaiFile carries a document (PDF) inline per OpenAI chat-completions file input:
+// {type:"file", file:{filename, file_data:"data:application/pdf;base64,…"}}.
+//
+// oaiFile 按 OpenAI chat-completions 文件输入内联文档（PDF）。
+type oaiFile struct {
+	Filename string `json:"filename"`
+	FileData string `json:"file_data"`
 }
 
 type oaiToolCall struct {

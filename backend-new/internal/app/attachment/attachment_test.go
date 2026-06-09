@@ -5,8 +5,10 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"errors"
+	"strings"
 	"testing"
 
 	_ "github.com/glebarez/go-sqlite"
@@ -14,6 +16,7 @@ import (
 
 	attachmentdomain "github.com/sunweilin/forgify/backend/internal/domain/attachment"
 	blobfs "github.com/sunweilin/forgify/backend/internal/infra/fs/blob"
+	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	attachmentstore "github.com/sunweilin/forgify/backend/internal/infra/store/attachment"
 	ormpkg "github.com/sunweilin/forgify/backend/internal/pkg/orm"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
@@ -163,5 +166,72 @@ func TestGC_RefcountBySHA(t *testing.T) {
 	}
 	if ok, _ := blobs.Exists(ctx, lone.SHA256); ok {
 		t.Error("orphan blob survived GC")
+	}
+}
+
+func TestToContentParts_ByKind(t *testing.T) {
+	svc, _, ctx := newSvc(t)
+	imgBytes := []byte("\x89PNG pixels")
+	pdfBytes := []byte("%PDF-1.7 body")
+	img, _ := svc.Upload(ctx, "pic.png", "image/png", imgBytes)
+	txt, _ := svc.Upload(ctx, "notes.txt", "text/plain", []byte("hello world"))
+	pdf, _ := svc.Upload(ctx, "doc.pdf", "application/pdf", pdfBytes)
+
+	// Vision-capable: image → image_url (data-URL), text → inlined text, PDF → file part. Order
+	// follows the id slice, not the DB's IN-clause order.
+	parts, err := svc.ToContentParts(ctx, []string{img.ID, txt.ID, pdf.ID}, true)
+	if err != nil {
+		t.Fatalf("ToContentParts: %v", err)
+	}
+	if len(parts) != 3 {
+		t.Fatalf("parts = %d, want 3", len(parts))
+	}
+	if parts[0].Type != llminfra.PartImageURL || !strings.HasPrefix(parts[0].ImageURL, "data:image/png;base64,") {
+		t.Errorf("part[0] = %+v, want image_url data-URL", parts[0])
+	}
+	if parts[1].Type != llminfra.PartText || !strings.Contains(parts[1].Text, "hello world") || !strings.Contains(parts[1].Text, "notes.txt") {
+		t.Errorf("part[1] = %+v, want inlined text with filename", parts[1])
+	}
+	if parts[2].Type != llminfra.PartFile || parts[2].MediaType != "application/pdf" ||
+		parts[2].Filename != "doc.pdf" || parts[2].Data != base64.StdEncoding.EncodeToString(pdfBytes) {
+		t.Errorf("part[2] = %+v, want file part with base64 PDF", parts[2])
+	}
+}
+
+func TestToContentParts_NonVisionDegradesImage(t *testing.T) {
+	svc, _, ctx := newSvc(t)
+	img, _ := svc.Upload(ctx, "pic.png", "image/png", []byte("\x89PNG"))
+
+	parts, err := svc.ToContentParts(ctx, []string{img.ID}, false)
+	if err != nil {
+		t.Fatalf("ToContentParts: %v", err)
+	}
+	if len(parts) != 1 || parts[0].Type != llminfra.PartText {
+		t.Fatalf("parts = %+v, want one text note", parts)
+	}
+	if !strings.Contains(parts[0].Text, "pic.png") || !strings.Contains(parts[0].Text, "vision") {
+		t.Errorf("degraded note = %q, want mention of file + vision", parts[0].Text)
+	}
+}
+
+func TestToContentParts_SkipsMissingPreservingOrder(t *testing.T) {
+	svc, _, ctx := newSvc(t)
+	txt, _ := svc.Upload(ctx, "a.txt", "text/plain", []byte("A"))
+
+	// A stale id between two real ones is skipped; the rest keep their order and the turn survives.
+	parts, err := svc.ToContentParts(ctx, []string{"att_deadbeefdeadbeef", txt.ID}, true)
+	if err != nil {
+		t.Fatalf("ToContentParts: %v", err)
+	}
+	if len(parts) != 1 || parts[0].Type != llminfra.PartText || !strings.Contains(parts[0].Text, "A") {
+		t.Errorf("parts = %+v, want only the live text part", parts)
+	}
+}
+
+func TestToContentParts_EmptyIDs(t *testing.T) {
+	svc, _, ctx := newSvc(t)
+	parts, err := svc.ToContentParts(ctx, nil, true)
+	if err != nil || parts != nil {
+		t.Errorf("empty ids = (%v, %v), want (nil, nil)", parts, err)
 	}
 }

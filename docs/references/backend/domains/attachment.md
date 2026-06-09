@@ -14,7 +14,7 @@ audience: [human, ai]
 > **② sandbox 当本地提取引擎**（不依赖云 OCR/API key，离线）**③ 中立 ContentPart + 各 provider 渲染器**（多家）。
 > **无 RAG**（对齐 document 域决定）：大文档 = 抽文本 + token 限额截断 + 直接注入，非向量检索。
 >
-> **三轮交付**：**R0051 存储核心 ✅（本文档 as-built）** → R0052 多 provider 注入（中立 ContentPart + 渲染器 + vision 门控）→ R0053 sandbox 提取（PDF/Office；音频/视频/OCR 留插槽）。
+> **三轮交付**：**R0051 存储核心 ✅** → **R0052 多 provider 注入 ✅（11 家各自渲染 + ToContentParts 桥，本文档 as-built）** → R0053 sandbox 提取（PDF/Office；音频/视频/OCR 留插槽）。
 
 ---
 
@@ -61,7 +61,7 @@ type Attachment struct {
 
 | Kind | 触发 | 进 LLM 方式（R0052/R0053）|
 |---|---|---|
-| `image` | image/* · png/jpg/gif/webp/heic | vision 块（缩放到模型上限）|
+| `image` | image/* · png/jpg/gif/webp/heic | vision 块（`image_url` data-URL，或 anthropic base64 源 / gemini inlineData / ollama 裸 base64）|
 | `document` | application/pdf · docx/xlsx/pptx/odt/epub | PDF 原生透传(capable 模型) 或 sandbox 抽文本 |
 | `text` | text/* · json/xml/yaml/csv · 代码扩展名 | 内联文本（原生读）|
 | `audio` | audio/* | **R0053 留插槽**：sandbox Whisper 转写（延后）|
@@ -70,10 +70,25 @@ type Attachment struct {
 
 ---
 
-## 4. LLM 注入（R0052，待建）
-- 中立 `ContentPart`（text/image/document）挂到 `llminfra.LLMMessage`；**各 provider 客户端各自渲染**：anthropic `image/document` 块、openai `image_url/input_file`、gemini `inline_data`（11 家收敛 ~3 种 wire）。
-- chat（M5.2）`ResolveToContentParts(att_ids)`：image→缩放+base64 编码、text→内联读、document(pdf)→capable 模型原生透传。
-- **vision capability 门控**：model 目录加 `vision` flag；附图但模型不支持 → 优雅降级/提示。
+## 4. LLM 注入（R0052，as-built ✅）
+
+中立 `ContentPart`（`text` / `image_url` / `file`，挂 `llminfra.LLMMessage.Parts`）→ **11 家 provider 客户端各自渲染成自家官方 wire**。**不共享 wire 基座**——每家自包含（R0014-16「重复 < 错抽象」原则的延续）；逐家查官方文档对齐后实现。`Parts` 非空时各家只渲 `Parts`、忽略 `Content`（chat M5.2 把用户文本作为首个 text part 拼入）。
+
+| part | 原生支持（内联）| openai 兼容家（data-URL）| 特殊 wire |
+|---|---|---|---|
+| **image** | 各家 vision | deepseek/qwen/zhipu/doubao/moonshot/openrouter/custom：`image_url` data-URL | anthropic：base64 源块；gemini：`inlineData`；ollama：原生 `images[]` 裸 base64（剥 data-URL 前缀）|
+| **file (PDF)** | **仅** anthropic `document` 块 / openai `file` / gemini `inlineData` 三家原生内联 | 跳过（降级）| ollama / 中文家：跳过 |
+
+- **降级即跳过**：无法内联某 part 类型的家在 part switch 静默跳过（**不报错**）；PDF 对非原生家 = 留给 R0053 sandbox 抽文本补。
+- **moonshot** 的 `content` 字段由 `string` 改 `json.RawMessage`（容纳 parts 数组；Kimi 图仅接 base64 / file-id，正是 data-URL）。
+
+**`attachment.ToContentParts(ctx, att_ids, visionCapable) → []llm.ContentPart`**（app 层桥，one user turn）：
+- `image` → `image_url`（data-URL）part，**仅 visionCapable 时**；否则降级为文字提示（模型无视觉）。
+- `text` → 文件内容内联成 text part（带文件名标注）。
+- `document`(pdf) → `file` part（MediaType + base64 + 文件名）；原生三家渲、其余跳过靠 R0053。
+- `audio`/`video`/`other` → 文字占位（真抽取 = R0053）。
+- 缺失 / blob 不可读的 id 告警跳过（陈旧 id 不让回合失败）；parts 按 `att_ids` 保序（`GetBatch` 的 `WHERE id IN` 不保序，按 id 建索引重排）。
+- `visionCapable` **由调用方（chat M5.2）按解析后模型能力传入**——本层不持模型目录知识；model 目录的 `vision` flag 由 M5.2 接线时补（R0052 不碰目录）。
 
 ## 5. 提取流水线（R0053，待建）—— sandbox 当本地引擎
 - 路由优先级（抄 LibreChat）：OCR > STT > 文本解析 > 兜底。
@@ -95,9 +110,9 @@ type Attachment struct {
 ---
 
 ## 7. 跨域集成 (Interactions)
-- **chat（M5.2）**：消息引用 `att_ids` → `ResolveToContentParts` → 进 loop/provider。
+- **chat（M5.2）**：消息引用 `att_ids` → `ToContentParts(att_ids, visionCapable)` → 拼用户文本 part → 进 loop/provider；`visionCapable` 由 chat 按解析后模型能力传入。
 - **sandbox（R0053）**：提取引擎（python 提取脚本）。
-- **model（R0052）**：vision capability flag。
+- **model（M5.2 接线）**：vision capability flag（R0052 桥已留 `visionCapable` 形参，目录 flag 待 M5.2 补）。
 - **无 RAG**：大文档抽文本 + token 限额 + 直接注入（对齐 document 域无向量检索）。
 - **GC**：boot 或 ticker 定期 `:gc`（M7 接线）。
 

@@ -195,7 +195,7 @@ func toOpenRouterMsgs(msgs []LLMMessage, system string) ([]orMessage, error) {
 func toOpenRouterMsg(m LLMMessage) (orMessage, error) {
 	switch m.Role {
 	case RoleUser:
-		return orMessage{Role: "user", Content: orJSONString(m.Content)}, nil
+		return buildOpenRouterUserMsg(m)
 	case RoleAssistant:
 		return buildOpenRouterAssistantMsg(m), nil
 	case RoleTool:
@@ -231,6 +231,43 @@ func toOpenRouterTools(defs []ToolDef) []orTool {
 		out[i] = orTool{Type: "function", Function: orFuncDef{Name: d.Name, Description: d.Description, Parameters: d.Parameters}}
 	}
 	return out
+}
+
+type orContentPart struct {
+	Type     string      `json:"type"`
+	Text     string      `json:"text,omitempty"`
+	ImageURL *orImageURL `json:"image_url,omitempty"`
+}
+type orImageURL struct {
+	URL string `json:"url"`
+}
+
+// buildOpenRouterUserMsg renders a user turn: plain text, or multimodal content parts (text +
+// image_url data-URL; OpenRouter is OpenAI-compatible and routes images to the target model). A
+// PDF "file" part is skipped here — OpenRouter's document parsing needs a per-request plugin we
+// don't enable; the attachment layer extracts PDFs to text instead.
+//
+// buildOpenRouterUserMsg 渲染 user 回合：纯文本，或多模态内容块（text + image_url data-URL；
+// OpenRouter OpenAI 兼容、把图路由到目标模型）。PDF "file" part 跳过——其文档解析需逐请求插件、
+// 本端不开；附件层改为抽成文本。
+func buildOpenRouterUserMsg(m LLMMessage) (orMessage, error) {
+	if len(m.Parts) == 0 {
+		return orMessage{Role: "user", Content: orJSONString(m.Content)}, nil
+	}
+	parts := make([]orContentPart, 0, len(m.Parts))
+	for _, part := range m.Parts {
+		switch part.Type {
+		case "text":
+			parts = append(parts, orContentPart{Type: "text", Text: part.Text})
+		case "image_url":
+			parts = append(parts, orContentPart{Type: "image_url", ImageURL: &orImageURL{URL: part.ImageURL}})
+		}
+	}
+	raw, err := json.Marshal(parts)
+	if err != nil {
+		return orMessage{}, fmt.Errorf("llm.openrouter: marshal parts: %w", err)
+	}
+	return orMessage{Role: "user", Content: raw}, nil
 }
 
 func orJSONString(s string) json.RawMessage {

@@ -151,7 +151,7 @@ func emitmoonshotChunk(chunk moonshotChunk, state *moonshotToolState, yield func
 func tomoonshotMsgs(msgs []LLMMessage, system string) ([]moonshotMessage, error) {
 	var out []moonshotMessage
 	if system != "" {
-		out = append(out, moonshotMessage{Role: "system", Content: system})
+		out = append(out, moonshotMessage{Role: "system", Content: moonshotJSONString(system)})
 	}
 	for _, m := range msgs {
 		mm, err := tomoonshotMsg(m)
@@ -166,18 +166,65 @@ func tomoonshotMsgs(msgs []LLMMessage, system string) ([]moonshotMessage, error)
 func tomoonshotMsg(m LLMMessage) (moonshotMessage, error) {
 	switch m.Role {
 	case RoleUser:
-		return moonshotMessage{Role: "user", Content: m.Content}, nil
+		return buildmoonshotUserMsg(m)
 	case RoleAssistant:
 		return buildmoonshotAssistantMsg(m), nil
 	case RoleTool:
-		return moonshotMessage{Role: "tool", Content: m.Content, ToolCallID: m.ToolCallID}, nil
+		return moonshotMessage{Role: "tool", Content: moonshotJSONString(m.Content), ToolCallID: m.ToolCallID}, nil
 	default:
 		return moonshotMessage{}, fmt.Errorf("llm.moonshot: unknown role %q: %w", m.Role, ErrBadRequest)
 	}
 }
 
+type moonshotContentPart struct {
+	Type     string            `json:"type"`
+	Text     string            `json:"text,omitempty"`
+	ImageURL *moonshotImageURL `json:"image_url,omitempty"`
+}
+type moonshotImageURL struct {
+	URL string `json:"url"`
+}
+
+// buildmoonshotUserMsg renders a user turn: plain text, or multimodal content parts (text +
+// image_url for the Kimi vision model). Kimi accepts an image only as base64 (a data-URL) or a
+// file-id — ours are data-URLs. A PDF "file" part is skipped (Kimi uses a separate file upload);
+// the attachment layer extracts it to text.
+//
+// buildmoonshotUserMsg 渲染 user 回合：纯文本，或多模态内容块（text + image_url，供 Kimi 视觉模型）。
+// Kimi 图仅接 base64（data-URL）或 file-id——我们正是 data-URL。PDF "file" part 跳过（Kimi 走独立
+// 文件上传）；附件层抽成文本。
+func buildmoonshotUserMsg(m LLMMessage) (moonshotMessage, error) {
+	if len(m.Parts) == 0 {
+		return moonshotMessage{Role: "user", Content: moonshotJSONString(m.Content)}, nil
+	}
+	parts := make([]moonshotContentPart, 0, len(m.Parts))
+	for _, part := range m.Parts {
+		switch part.Type {
+		case "text":
+			parts = append(parts, moonshotContentPart{Type: "text", Text: part.Text})
+		case "image_url":
+			parts = append(parts, moonshotContentPart{Type: "image_url", ImageURL: &moonshotImageURL{URL: part.ImageURL}})
+		}
+	}
+	raw, err := json.Marshal(parts)
+	if err != nil {
+		return moonshotMessage{}, fmt.Errorf("llm.moonshot: marshal parts: %w", err)
+	}
+	return moonshotMessage{Role: "user", Content: raw}, nil
+}
+
+// moonshotJSONString wraps a plain string as a JSON string for the content field (raw JSON, so it
+// can hold either a string or a multimodal parts array).
+//
+// moonshotJSONString 把纯字符串包成 content 字段的 JSON 字符串（content 为原始 JSON，可为字符串或
+// 多模态 parts 数组）。
+func moonshotJSONString(s string) json.RawMessage {
+	b, _ := json.Marshal(s)
+	return b
+}
+
 func buildmoonshotAssistantMsg(m LLMMessage) moonshotMessage {
-	mm := moonshotMessage{Role: "assistant", Content: m.Content}
+	mm := moonshotMessage{Role: "assistant", Content: moonshotJSONString(m.Content)}
 	for _, tc := range m.ToolCalls {
 		args := json.RawMessage(tc.Arguments)
 		// Stub malformed historical tool args with "{}" so a strict provider does not 400 on
@@ -261,7 +308,7 @@ type moonshotThinking struct {
 
 type moonshotMessage struct {
 	Role       string             `json:"role"`
-	Content    string             `json:"content"`
+	Content    json.RawMessage    `json:"content,omitempty"` // string, or a multimodal parts array
 	ToolCalls  []moonshotToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string             `json:"tool_call_id,omitempty"`
 }

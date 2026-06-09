@@ -9,6 +9,7 @@ import (
 	"iter"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // ollamaProvider speaks Ollama's /v1/chat/completions OpenAI-compat API, fully
@@ -262,7 +263,7 @@ func toOllamaMsgs(msgs []LLMMessage, system string) ([]ollamaMessage, error) {
 func toOllamaMsg(m LLMMessage) (ollamaMessage, error) {
 	switch m.Role {
 	case RoleUser:
-		return ollamaMessage{Role: "user", Content: m.Content}, nil
+		return buildOllamaUserMsg(m), nil
 	case RoleAssistant:
 		return buildOllamaAssistantMsg(m), nil
 	case RoleTool:
@@ -270,6 +271,47 @@ func toOllamaMsg(m LLMMessage) (ollamaMessage, error) {
 	default:
 		return ollamaMessage{}, fmt.Errorf("llm.ollama: unknown role %q: %w", m.Role, ErrBadRequest)
 	}
+}
+
+// buildOllamaUserMsg renders a user turn for Ollama: text → content, images → the native base64
+// `images` array (Ollama's multimodal format for models like llava). The data-URL prefix is
+// stripped to raw base64. Ollama has no document/PDF input — a "file" part is skipped; the
+// attachment layer extracts it to text.
+//
+// buildOllamaUserMsg 渲染 Ollama 的 user 回合：text → content，图 → 原生 base64 `images` 数组
+// （Ollama 多模态格式，供 llava 等）。剥 data-URL 前缀取裸 base64。Ollama 无文档/PDF 输入——"file"
+// part 跳过；附件层抽成文本。
+func buildOllamaUserMsg(m LLMMessage) ollamaMessage {
+	if len(m.Parts) == 0 {
+		return ollamaMessage{Role: "user", Content: m.Content}
+	}
+	om := ollamaMessage{Role: "user"}
+	var text strings.Builder
+	for _, part := range m.Parts {
+		switch part.Type {
+		case "text":
+			text.WriteString(part.Text)
+		case "image_url":
+			om.Images = append(om.Images, ollamaStripDataURL(part.ImageURL))
+		}
+	}
+	om.Content = text.String()
+	return om
+}
+
+// ollamaStripDataURL returns the raw base64 payload of a data-URL ("data:<mime>;base64,<data>"),
+// or the input unchanged when it isn't one (Ollama wants raw base64, not a data-URL).
+//
+// ollamaStripDataURL 返回 data-URL 的裸 base64 负载；非 data-URL 原样返回（Ollama 要裸 base64）。
+func ollamaStripDataURL(s string) string {
+	if len(s) > 5 && s[:5] == "data:" {
+		for i := 0; i < len(s); i++ {
+			if s[i] == ',' {
+				return s[i+1:]
+			}
+		}
+	}
+	return s
 }
 
 func buildOllamaAssistantMsg(m LLMMessage) ollamaMessage {
@@ -378,6 +420,7 @@ type ollamaStreamOptions struct {
 type ollamaMessage struct {
 	Role       string           `json:"role"`
 	Content    string           `json:"content"`
+	Images     []string         `json:"images,omitempty"` // base64 images (Ollama's native multimodal array)
 	ToolCalls  []ollamaToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string           `json:"tool_call_id,omitempty"`
 }

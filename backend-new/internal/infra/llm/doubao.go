@@ -220,7 +220,7 @@ func todoubaoMsgs(msgs []LLMMessage, system string) ([]doubaoMessage, error) {
 func todoubaoMsg(m LLMMessage) (doubaoMessage, error) {
 	switch m.Role {
 	case RoleUser:
-		return doubaoMessage{Role: "user", Content: doubaoJSONString(m.Content)}, nil
+		return builddoubaoUserMsg(m)
 	case RoleAssistant:
 		return builddoubaoAssistantMsg(m), nil
 	case RoleTool:
@@ -258,6 +258,41 @@ func todoubaoTools(defs []ToolDef) []doubaoTool {
 		out[i] = doubaoTool{Type: "function", Function: doubaoFuncDef{Name: d.Name, Description: d.Description, Parameters: d.Parameters}}
 	}
 	return out
+}
+
+type doubaoContentPart struct {
+	Type     string          `json:"type"`
+	Text     string          `json:"text,omitempty"`
+	ImageURL *doubaoImageURL `json:"image_url,omitempty"`
+}
+type doubaoImageURL struct {
+	URL string `json:"url"`
+}
+
+// builddoubaoUserMsg renders a user turn: plain text, or multimodal content parts (text +
+// image_url data-URL for Doubao-vision; Volcengine Ark is OpenAI-compatible). PDF "file" parts
+// are skipped — no inline document input; the attachment layer extracts those to text.
+//
+// builddoubaoUserMsg 渲染 user 回合：纯文本，或多模态内容块（text + image_url data-URL，供
+// Doubao 视觉；Volcengine Ark OpenAI 兼容）。PDF "file" part 跳过——无内联文档输入；附件层抽成文本。
+func builddoubaoUserMsg(m LLMMessage) (doubaoMessage, error) {
+	if len(m.Parts) == 0 {
+		return doubaoMessage{Role: "user", Content: doubaoJSONString(m.Content)}, nil
+	}
+	parts := make([]doubaoContentPart, 0, len(m.Parts))
+	for _, part := range m.Parts {
+		switch part.Type {
+		case "text":
+			parts = append(parts, doubaoContentPart{Type: "text", Text: part.Text})
+		case "image_url":
+			parts = append(parts, doubaoContentPart{Type: "image_url", ImageURL: &doubaoImageURL{URL: part.ImageURL}})
+		}
+	}
+	raw, err := json.Marshal(parts)
+	if err != nil {
+		return doubaoMessage{}, fmt.Errorf("llm.doubao: marshal parts: %w", err)
+	}
+	return doubaoMessage{Role: "user", Content: raw}, nil
 }
 
 func doubaoJSONString(s string) json.RawMessage {

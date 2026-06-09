@@ -250,7 +250,8 @@ func buildCustomUserMsg(m LLMMessage) (customMessage, error) {
 		case "image_url":
 			parts = append(parts, customContentPart{Type: "image_url", ImageURL: &customImageURL{URL: part.ImageURL}})
 		default:
-			return customMessage{}, fmt.Errorf("llm.custom: unknown part type %q: %w", part.Type, ErrBadRequest)
+			// Unsupported part type (e.g. PDF "file"): skip; the attachment layer extracts it to text.
+			// 不支持的 part 类型（如 PDF "file"）：跳过；附件层抽成文本。
 		}
 	}
 	raw, err := json.Marshal(parts)

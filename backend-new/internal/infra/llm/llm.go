@@ -103,14 +103,38 @@ type LLMMessage struct {
 	ReasoningSignature string
 }
 
-// ContentPart is one element of a multi-modal user message (text or image_url).
+// ContentPart is one element of a multi-modal user message. Type selects the shape:
+//   - PartText     → Text
+//   - PartImageURL → ImageURL holds a data-URL ("data:<mime>;base64,<data>") for a local
+//     attachment, or a remote https URL. Each provider parses/forwards it natively.
+//   - PartFile     → MediaType + base64 Data + Filename, for a document (PDF) sent inline.
 //
-// ContentPart 是多模态 user 消息中的一个内容元素（text 或 image_url）。
+// Each provider renders these into its own wire (no shared base — infra/llm keeps every
+// provider self-contained; a provider that can't carry a part type degrades on its own).
+//
+// ContentPart 是多模态 user 消息的一个元素。Type 选形态：PartText→Text；PartImageURL→ImageURL 为
+// data-URL（本地附件）或远程 https URL，各家自行解析/透传；PartFile→MediaType + base64 Data +
+// Filename，文档（PDF）内联。每家 provider 各自渲成自己的 wire（无共享基座——各家自包含；无法承载
+// 某 part 类型的家各自优雅降级）。
 type ContentPart struct {
-	Type     string
-	Text     string
-	ImageURL string
+	Type      string
+	Text      string
+	ImageURL  string
+	MediaType string
+	Data      string
+	Filename  string
 }
+
+// ContentPart.Type values. PartImageURL keeps the legacy "image_url" wire name (the existing
+// per-provider switch convention); PartFile is the document/PDF carrier.
+//
+// ContentPart.Type 取值。PartImageURL 沿用历史 "image_url" 线缆名（既有各家 switch 约定）；
+// PartFile 是文档/PDF 载体。
+const (
+	PartText     = "text"
+	PartImageURL = "image_url"
+	PartFile     = "file"
+)
 
 // LLMToolCall is one tool invocation in an assistant message; Arguments is a JSON object string.
 //

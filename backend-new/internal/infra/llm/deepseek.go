@@ -230,7 +230,7 @@ func toDeepSeekMsgs(msgs []LLMMessage, system string) ([]dsMessage, error) {
 func toDeepSeekMsg(m LLMMessage) (dsMessage, error) {
 	switch m.Role {
 	case RoleUser:
-		return dsMessage{Role: "user", Content: dsJSONString(m.Content)}, nil
+		return buildDeepSeekUserMsg(m)
 	case RoleAssistant:
 		return buildDeepSeekAssistantMsg(m), nil
 	case RoleTool:
@@ -265,6 +265,41 @@ func toDeepSeekTools(defs []ToolDef) []dsTool {
 		out[i] = dsTool{Type: "function", Function: dsFuncDef{Name: d.Name, Description: d.Description, Parameters: d.Parameters}}
 	}
 	return out
+}
+
+type dsContentPart struct {
+	Type     string      `json:"type"`
+	Text     string      `json:"text,omitempty"`
+	ImageURL *dsImageURL `json:"image_url,omitempty"`
+}
+type dsImageURL struct {
+	URL string `json:"url"`
+}
+
+// buildDeepSeekUserMsg renders a user turn: plain text, or multimodal content parts (text +
+// image_url, image carried as a data-URL for vision models). A part type this provider can't
+// carry inline (e.g. a PDF "file") is skipped — the attachment layer extracts those to text.
+//
+// buildDeepSeekUserMsg 渲染 user 回合：纯文本，或多模态内容块（text + image_url，图为 data-URL，
+// 供视觉模型）。本 provider 无法内联承载的 part（如 PDF "file"）跳过——附件层为它抽成文本。
+func buildDeepSeekUserMsg(m LLMMessage) (dsMessage, error) {
+	if len(m.Parts) == 0 {
+		return dsMessage{Role: "user", Content: dsJSONString(m.Content)}, nil
+	}
+	parts := make([]dsContentPart, 0, len(m.Parts))
+	for _, part := range m.Parts {
+		switch part.Type {
+		case "text":
+			parts = append(parts, dsContentPart{Type: "text", Text: part.Text})
+		case "image_url":
+			parts = append(parts, dsContentPart{Type: "image_url", ImageURL: &dsImageURL{URL: part.ImageURL}})
+		}
+	}
+	raw, err := json.Marshal(parts)
+	if err != nil {
+		return dsMessage{}, fmt.Errorf("llm.deepseek: marshal parts: %w", err)
+	}
+	return dsMessage{Role: "user", Content: raw}, nil
 }
 
 func dsJSONString(s string) json.RawMessage {

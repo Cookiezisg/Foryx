@@ -310,6 +310,14 @@ func buildAnthropicUserMsg(m LLMMessage) anthropicMessage {
 					Data:      extractBase64Data(part.ImageURL),
 				},
 			})
+		case "file":
+			// PDF / document: same {type:base64, media_type, data} source as image,
+			// carried in a document block. Anthropic reads PDFs natively (text + page images).
+			// PDF/文档：与图同款 source，装在 document 块；Anthropic 原生读 PDF（文本+页图）。
+			blocks = append(blocks, anthropicContent{
+				Type:   "document",
+				Source: &anthropicImageSource{Type: "base64", MediaType: part.MediaType, Data: part.Data},
+			})
 		}
 	}
 	return anthropicMessage{Role: "user", Content: blocks}

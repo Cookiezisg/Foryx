@@ -191,7 +191,7 @@ func toQwenMsgs(msgs []LLMMessage, system string) ([]qwenMessage, error) {
 func toQwenMsg(m LLMMessage) (qwenMessage, error) {
 	switch m.Role {
 	case RoleUser:
-		return qwenMessage{Role: "user", Content: qwenJSONString(m.Content)}, nil
+		return buildQwenUserMsg(m)
 	case RoleAssistant:
 		return buildQwenAssistantMsg(m), nil
 	case RoleTool:
@@ -229,6 +229,41 @@ func toQwenTools(defs []ToolDef) []qwenTool {
 		out[i] = qwenTool{Type: "function", Function: qwenFuncDef{Name: d.Name, Description: d.Description, Parameters: d.Parameters}}
 	}
 	return out
+}
+
+type qwenContentPart struct {
+	Type     string        `json:"type"`
+	Text     string        `json:"text,omitempty"`
+	ImageURL *qwenImageURL `json:"image_url,omitempty"`
+}
+type qwenImageURL struct {
+	URL string `json:"url"`
+}
+
+// buildQwenUserMsg renders a user turn: plain text, or multimodal content parts (text + image_url
+// data-URL for Qwen-VL). PDF "file" parts are skipped — Qwen has no inline document input (it uses
+// a separate file-id flow); the attachment layer extracts those to text.
+//
+// buildQwenUserMsg 渲染 user 回合：纯文本，或多模态内容块（text + image_url data-URL，供 Qwen-VL）。
+// PDF "file" part 跳过——Qwen 无内联文档输入（走独立 file-id）；附件层为它抽成文本。
+func buildQwenUserMsg(m LLMMessage) (qwenMessage, error) {
+	if len(m.Parts) == 0 {
+		return qwenMessage{Role: "user", Content: qwenJSONString(m.Content)}, nil
+	}
+	parts := make([]qwenContentPart, 0, len(m.Parts))
+	for _, part := range m.Parts {
+		switch part.Type {
+		case "text":
+			parts = append(parts, qwenContentPart{Type: "text", Text: part.Text})
+		case "image_url":
+			parts = append(parts, qwenContentPart{Type: "image_url", ImageURL: &qwenImageURL{URL: part.ImageURL}})
+		}
+	}
+	raw, err := json.Marshal(parts)
+	if err != nil {
+		return qwenMessage{}, fmt.Errorf("llm.qwen: marshal parts: %w", err)
+	}
+	return qwenMessage{Role: "user", Content: raw}, nil
 }
 
 func qwenJSONString(s string) json.RawMessage {
