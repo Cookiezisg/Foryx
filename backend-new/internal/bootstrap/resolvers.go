@@ -77,20 +77,26 @@ func (r *modelResolver) resolve(ctx context.Context, scenario string, override *
 // consumers expect. One core, four typed accessors — no resolution logic is duplicated.
 //
 // ModelResolvers 把同一个解析核暴露成 LLM 消费者各自期望的四种 Bundle 形状。一核四口——解析逻辑不重复。
-type ModelResolvers struct{ core *modelResolver }
+type ModelResolvers struct {
+	core   *modelResolver
+	lookup ModelInfoLookup // for chat's content capabilities (vision/native-docs per resolved model)
+}
 
 // NewModelResolvers builds the shared core from the workspace picker, the apikey credential
-// resolver, and the llm factory.
+// resolver, and the llm factory; lookup supplies chat's per-model content capabilities.
 //
-// NewModelResolvers 由 workspace picker、apikey 凭证解析、llm factory 构造共享核。
-func NewModelResolvers(picker modeldomain.ModelPicker, keys CredsResolver, factory *llminfra.Factory) ModelResolvers {
-	return ModelResolvers{core: &modelResolver{picker: picker, keys: keys, factory: factory}}
+// NewModelResolvers 由 workspace picker、apikey 凭证解析、llm factory 构造共享核；lookup 供 chat 的
+// per-model 内容能力。
+func NewModelResolvers(picker modeldomain.ModelPicker, keys CredsResolver, factory *llminfra.Factory, lookup ModelInfoLookup) ModelResolvers {
+	return ModelResolvers{core: &modelResolver{picker: picker, keys: keys, factory: factory}, lookup: lookup}
 }
 
 // Chat / ContextmgrUtility / Subagent / Agent return the resolver each Service's port wants.
 //
 // Chat / ContextmgrUtility / Subagent / Agent 返回各 Service 端口要的 resolver。
-func (m ModelResolvers) Chat() chatapp.ModelResolver { return chatResolver{m.core} }
+func (m ModelResolvers) Chat() chatapp.ModelResolver {
+	return chatResolver{core: m.core, lookup: m.lookup}
+}
 func (m ModelResolvers) ContextmgrUtility() contextmgrapp.UtilityResolver {
 	return contextmgrResolver{m.core}
 }
@@ -99,7 +105,10 @@ func (m ModelResolvers) Agent() agentapp.LLMResolver         { return agentResol
 
 // --- chat (dialogue + utility; Caps carries the model's content abilities) ---
 
-type chatResolver struct{ core *modelResolver }
+type chatResolver struct {
+	core   *modelResolver
+	lookup ModelInfoLookup
+}
 
 var _ chatapp.ModelResolver = chatResolver{}
 
@@ -116,12 +125,13 @@ func (r chatResolver) bundle(ctx context.Context, scenario string, override *mod
 	if err != nil {
 		return chatapp.Bundle{}, err
 	}
-	// Caps stays zero ({Vision:false, NativeDocs:false}) — per-model vision/native-docs flags are
-	// deferred to model-domain capability work; until then chat renders attachments conservatively.
+	// Caps comes from the resolved model's catalog entry (vision / native-docs); an unknown model
+	// yields zero caps, so chat renders attachments conservatively rather than over-claiming.
 	//
-	// Caps 留零（{Vision:false, NativeDocs:false}）——per-model vision/native-docs flag 延后到 model
-	// 域 capability 工作；在那之前 chat 保守渲染附件。
-	return chatapp.Bundle{Client: client, Request: req, Provider: provider}, nil
+	// Caps 取自解析出的模型目录项（vision / native-docs）；未知模型得零 caps，chat 保守渲染附件而非
+	// 过度声明。
+	caps := r.lookup.contentCaps(ctx, provider, req.ModelID)
+	return chatapp.Bundle{Client: client, Request: req, Caps: caps, Provider: provider}, nil
 }
 
 // --- contextmgr (utility model for the compaction summary) ---

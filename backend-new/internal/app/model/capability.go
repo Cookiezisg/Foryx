@@ -30,6 +30,8 @@ type CapabilityView struct {
 	DisplayName   string        `json:"displayName"`
 	ContextWindow int           `json:"contextWindow"`
 	MaxOutput     int           `json:"maxOutput"`
+	Vision        bool          `json:"vision"`     // accepts image input natively
+	NativeDocs    bool          `json:"nativeDocs"` // accepts an inline document (PDF) natively
 	Knobs         []llmpkg.Knob `json:"knobs"`
 }
 
@@ -86,6 +88,8 @@ func (s *CapabilityService) List(ctx context.Context) ([]CapabilityView, error) 
 				DisplayName:   m.DisplayName,
 				ContextWindow: m.ContextWindow,
 				MaxOutput:     m.MaxOutput,
+				Vision:        m.Vision,
+				NativeDocs:    m.NativeDocs,
 				Knobs:         m.Knobs,
 			})
 		}

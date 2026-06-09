@@ -457,12 +457,12 @@ func dsKnobs() []Knob {
 // deepseekSpecs 是 DeepSeek 静态目录，最具体前缀在前。V4 线（1M/384K）靠请求参数控思考；
 // deepseek-chat/reasoner 是指向 deepseek-v4-flash 的兼容别名。数值据 DeepSeek 定价 2026-06。
 var deepseekSpecs = []modelSpec{
-	{"deepseek-v4-pro", 1_000_000, 384_000, dsKnobs()},
-	{"deepseek-v4-flash", 1_000_000, 384_000, dsKnobs()},
-	{"deepseek-v4", 1_000_000, 384_000, dsKnobs()},
-	{"deepseek-reasoner", 1_000_000, 384_000, dsKnobs()},
-	{"deepseek-chat", 1_000_000, 384_000, dsKnobs()},
-	{"deepseek", 128_000, 64_000, dsKnobs()},
+	{"deepseek-v4-pro", 1_000_000, 384_000, dsKnobs(), false, false},
+	{"deepseek-v4-flash", 1_000_000, 384_000, dsKnobs(), false, false},
+	{"deepseek-v4", 1_000_000, 384_000, dsKnobs(), false, false},
+	{"deepseek-reasoner", 1_000_000, 384_000, dsKnobs(), false, false},
+	{"deepseek-chat", 1_000_000, 384_000, dsKnobs(), false, false},
+	{"deepseek", 128_000, 64_000, dsKnobs(), false, false},
 }
 
 // DescribeModels parses DeepSeek's id-only /models body against the static catalog.

@@ -308,10 +308,12 @@ audience: [human, ai]
   "apiKeyId": "aki_…", "keyName": "我的 Claude", "provider": "anthropic",
   "modelId": "claude-opus-4-8", "displayName": "claude-opus-4-8",
   "contextWindow": 1000000, "maxOutput": 128000,
+  "vision": true, "nativeDocs": true,
   "knobs": [{ "key": "thinking", "label": "Thinking", "type": "enum",
               "values": ["adaptive", "disabled"], "default": "adaptive" }]
 }] }
 ```
+- `vision`/`nativeDocs`（M7 model-caps）：模型是否原生接受图片输入 / 内联 PDF。与 ctx/out 同源于各 provider 静态 spec 表（provider 自描述）；chat 据此决定附件原生渲染 vs 文本抽取降级。现表：anthropic/gemini = vision+docs；openai = vision；kimi-k2.5/k2.6 = vision；deepseek/qwen/zhipu/doubao 列出的文本旗舰 = 否（其 vision 在独立 -vl/-V/-vision SKU，未入目录——之后加 spec 条目即启用）。
 - `knobs[]` 是「容器统一、内容全原生」的可渲染描述符：`type ∈ enum|bool|int`；`key`/`values` 是各家 wire 词表，绝不归一。各家原生旋钮：openai `reasoning_effort`+`verbosity`；anthropic `thinking`(adaptive/disabled…)+`effort`(low..max,xhigh)；gemini `thinkingLevel`(Gemini-3 枚举) 或 `thinkingBudget`(Gemini-2.5 整数)；deepseek `thinking`+`reasoning_effort`(high/max)；qwen `enable_thinking`+`thinking_budget`；ollama `think`+`num_ctx`。
 
 **`PUT /api/v1/workspaces/{id}/default-models/{scenario}`** — 设 workspace 某 scenario（`dialogue`/`utility`/`agent`）默认模型；body 是 ModelRef，`options` 为原生旋钮 k-v。返回更新后的 workspace。

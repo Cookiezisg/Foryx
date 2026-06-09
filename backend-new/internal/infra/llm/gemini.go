@@ -540,11 +540,18 @@ func (p *geminiProvider) DescribeModels(raw string) ([]ModelInfo, error) {
 		if id == "" {
 			continue
 		}
+		// Every gemini-* generative model is natively multimodal (image + inline PDF); embedding /
+		// aqa models are not (and are never picked for chat anyway).
+		//
+		// 每个 gemini-* 生成模型都原生多模态（图 + 内联 PDF）；embedding / aqa 模型不是（也从不被选作对话）。
+		multimodal := strings.HasPrefix(id, "gemini")
 		out = append(out, ModelInfo{
 			ID:            id,
 			DisplayName:   id,
 			ContextWindow: m.InputTokenLimit,
 			MaxOutput:     m.OutputTokenLimit,
+			Vision:        multimodal,
+			NativeDocs:    multimodal,
 			Knobs:         geminiKnobsFor(id),
 		})
 	}

@@ -415,13 +415,13 @@ func qwenThinkingKnobs() []Knob {
 // qwenSpecs 是 Qwen 静态目录，最具体前缀在前。qwen3 线靠 enable_thinking+thinking_budget
 // 控思考；qwen-long/qwen-max 无思考。数值据 DashScope 文档 2026-06。
 var qwenSpecs = []modelSpec{
-	{"qwen3-max", 262144, 32768, qwenThinkingKnobs()},
-	{"qwen3.5-plus", 1000000, 65536, qwenThinkingKnobs()},
-	{"qwen-plus", 1000000, 32768, qwenThinkingKnobs()},
-	{"qwen-flash", 1000000, 32768, qwenThinkingKnobs()},
-	{"qwen-turbo", 131072, 16384, qwenThinkingKnobs()},
-	{"qwen-long", 10000000, 32768, nil},
-	{"qwen-max", 32768, 8192, nil},
+	{"qwen3-max", 262144, 32768, qwenThinkingKnobs(), false, false},
+	{"qwen3.5-plus", 1000000, 65536, qwenThinkingKnobs(), false, false},
+	{"qwen-plus", 1000000, 32768, qwenThinkingKnobs(), false, false},
+	{"qwen-flash", 1000000, 32768, qwenThinkingKnobs(), false, false},
+	{"qwen-turbo", 131072, 16384, qwenThinkingKnobs(), false, false},
+	{"qwen-long", 10000000, 32768, nil, false, false},
+	{"qwen-max", 32768, 8192, nil, false, false},
 }
 
 // DescribeModels parses Qwen's id-only /models body against the static catalog.

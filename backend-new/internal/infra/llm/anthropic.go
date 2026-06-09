@@ -517,18 +517,18 @@ func anthropicKnobs(thinkingValues, effortValues []string) []Knob {
 // （+ effort 含 xhigh）；4.6 / Sonnet-4.6 增 enabled；更老的模型 enabled/disabled 无 effort。数值据
 // Anthropic model overview 2026-06。
 var anthropicSpecs = []modelSpec{
-	{"claude-opus-4-8", 1000000, 128000, anthropicKnobs([]string{"adaptive", "disabled"}, []string{"low", "medium", "high", "xhigh", "max"})},
-	{"claude-opus-4-7", 1000000, 128000, anthropicKnobs([]string{"adaptive", "disabled"}, []string{"low", "medium", "high", "xhigh", "max"})},
-	{"claude-opus-4-6", 1000000, 128000, anthropicKnobs([]string{"adaptive", "enabled", "disabled"}, []string{"low", "medium", "high", "max"})},
-	{"claude-sonnet-4-6", 1000000, 64000, anthropicKnobs([]string{"adaptive", "enabled", "disabled"}, []string{"low", "medium", "high", "max"})},
-	{"claude-haiku-4-5", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
-	{"claude-opus-4-5", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
-	{"claude-sonnet-4-5", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
-	{"claude-opus-4-1", 200000, 32000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
-	{"claude-opus-4", 200000, 32000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
-	{"claude-sonnet-4", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
-	{"claude-haiku-4", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
-	{"claude", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil)},
+	{"claude-opus-4-8", 1000000, 128000, anthropicKnobs([]string{"adaptive", "disabled"}, []string{"low", "medium", "high", "xhigh", "max"}), true, true},
+	{"claude-opus-4-7", 1000000, 128000, anthropicKnobs([]string{"adaptive", "disabled"}, []string{"low", "medium", "high", "xhigh", "max"}), true, true},
+	{"claude-opus-4-6", 1000000, 128000, anthropicKnobs([]string{"adaptive", "enabled", "disabled"}, []string{"low", "medium", "high", "max"}), true, true},
+	{"claude-sonnet-4-6", 1000000, 64000, anthropicKnobs([]string{"adaptive", "enabled", "disabled"}, []string{"low", "medium", "high", "max"}), true, true},
+	{"claude-haiku-4-5", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil), true, true},
+	{"claude-opus-4-5", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil), true, true},
+	{"claude-sonnet-4-5", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil), true, true},
+	{"claude-opus-4-1", 200000, 32000, anthropicKnobs([]string{"enabled", "disabled"}, nil), true, true},
+	{"claude-opus-4", 200000, 32000, anthropicKnobs([]string{"enabled", "disabled"}, nil), true, true},
+	{"claude-sonnet-4", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil), true, true},
+	{"claude-haiku-4", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil), true, true},
+	{"claude", 200000, 64000, anthropicKnobs([]string{"enabled", "disabled"}, nil), true, true},
 }
 
 // DescribeModels parses Anthropic's /v1/models id list ({"data":[{"id":...}]}) against the static

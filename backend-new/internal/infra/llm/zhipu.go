@@ -405,16 +405,16 @@ func zhipuThinkingKnobs() []Knob {
 // zhipuSpecs 是智谱静态目录，最具体前缀在前。GLM-4.5+ thinking 默认 enabled 且暴露旋钮；
 // glm-4-long/glm-4-flash 早于 thinking 无旋钮。数值据智谱 BigModel 文档 2026-06-04。
 var zhipuSpecs = []modelSpec{
-	{"glm-5.1", 200000, 128000, zhipuThinkingKnobs()},
-	{"glm-5-turbo", 200000, 128000, zhipuThinkingKnobs()},
-	{"glm-5", 200000, 128000, zhipuThinkingKnobs()},
-	{"glm-4.7-flashx", 200000, 128000, zhipuThinkingKnobs()},
-	{"glm-4.7-flash", 200000, 128000, zhipuThinkingKnobs()},
-	{"glm-4.7", 200000, 128000, zhipuThinkingKnobs()},
-	{"glm-4.6", 200000, 128000, zhipuThinkingKnobs()},
-	{"glm-4.5", 131072, 96000, zhipuThinkingKnobs()},
-	{"glm-4-long", 1000000, 4096, nil},
-	{"glm-4-flash", 131072, 16000, nil},
+	{"glm-5.1", 200000, 128000, zhipuThinkingKnobs(), false, false},
+	{"glm-5-turbo", 200000, 128000, zhipuThinkingKnobs(), false, false},
+	{"glm-5", 200000, 128000, zhipuThinkingKnobs(), false, false},
+	{"glm-4.7-flashx", 200000, 128000, zhipuThinkingKnobs(), false, false},
+	{"glm-4.7-flash", 200000, 128000, zhipuThinkingKnobs(), false, false},
+	{"glm-4.7", 200000, 128000, zhipuThinkingKnobs(), false, false},
+	{"glm-4.6", 200000, 128000, zhipuThinkingKnobs(), false, false},
+	{"glm-4.5", 131072, 96000, zhipuThinkingKnobs(), false, false},
+	{"glm-4-long", 1000000, 4096, nil, false, false},
+	{"glm-4-flash", 131072, 16000, nil, false, false},
 }
 
 // DescribeModels parses Zhipu's id-only /models body against the static catalog.

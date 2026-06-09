@@ -86,9 +86,11 @@ type CapabilityService struct { probes apikeydomain.ProbeReader; … }
 type CapabilityView struct {
     APIKeyID, KeyName, Provider, ModelID, DisplayName string
     ContextWindow, MaxOutput                          int
+    Vision, NativeDocs                                bool       // M7 model-caps：原生图片 / 内联 PDF（与 ctx/out 同源 spec 表）
     Knobs                                             []llm.Knob // 复用 llm 描述符，不另造同形结构
 }
 ```
+> **M7 model-caps**：`ModelInfo`/`CapabilityView` 加 `Vision`/`NativeDocs`，住各 provider 静态 spec 表（provider 自描述，与 ctx/out 同源；gemini 解析时按 `gemini-*` 前缀判）。bootstrap 一个 `ModelInfoLookup` 同时供 chat 的 `Bundle.Caps`（附件原生渲染门控）+ contextmgr 的 `WindowResolver`（压缩预算）。现表：anthropic/gemini = vision+docs，openai/kimi-k2.x = vision；deepseek/qwen/zhipu/doubao 列出的文本旗舰 = 否（vision 在独立 SKU，未入目录）。
 
 ### 3.3 模型知识下沉 provider 自包含
 **不存在跨家 `pkg/modelcatalog`**。窗口 / 上限 / 旋钮由各家 `infra/llm` provider 经 `DescribeModels(rawProbe)` 自描述：

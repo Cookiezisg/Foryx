@@ -489,15 +489,15 @@ func oaiKnobs(effortDefault string, efforts ...string) []Knob {
 // openaiSpecs 是 OpenAI 静态目录（能力数字 + 原生旋钮），最具体前缀在前。/v1/models 仅返回 id，
 // 故规格在此、随软件更新维护。数值据 OpenAI model 页 2026-06。
 var openaiSpecs = []modelSpec{
-	{"gpt-5.5", 1_050_000, 128_000, oaiKnobs("medium", "none", "low", "medium", "high", "xhigh")},
-	{"gpt-5.4-mini", 400_000, 128_000, oaiKnobs("none", "none", "low", "medium", "high", "xhigh")},
-	{"gpt-5.4", 1_050_000, 128_000, oaiKnobs("none", "none", "low", "medium", "high", "xhigh")},
-	{"gpt-5.1", 400_000, 128_000, oaiKnobs("none", "none", "low", "medium", "high")},
-	{"gpt-5", 400_000, 128_000, oaiKnobs("medium", "minimal", "low", "medium", "high")},
-	{"o3", 200_000, 100_000, []Knob{enumKnob("reasoning_effort", "Reasoning effort", []string{"low", "medium", "high"}, "medium")}},
-	{"o4", 200_000, 100_000, []Knob{enumKnob("reasoning_effort", "Reasoning effort", []string{"low", "medium", "high"}, "medium")}},
-	{"gpt-4.1", 1_047_576, 32_768, nil},
-	{"gpt-4o", 128_000, 16_384, nil},
+	{"gpt-5.5", 1_050_000, 128_000, oaiKnobs("medium", "none", "low", "medium", "high", "xhigh"), true, false},
+	{"gpt-5.4-mini", 400_000, 128_000, oaiKnobs("none", "none", "low", "medium", "high", "xhigh"), true, false},
+	{"gpt-5.4", 1_050_000, 128_000, oaiKnobs("none", "none", "low", "medium", "high", "xhigh"), true, false},
+	{"gpt-5.1", 400_000, 128_000, oaiKnobs("none", "none", "low", "medium", "high"), true, false},
+	{"gpt-5", 400_000, 128_000, oaiKnobs("medium", "minimal", "low", "medium", "high"), true, false},
+	{"o3", 200_000, 100_000, []Knob{enumKnob("reasoning_effort", "Reasoning effort", []string{"low", "medium", "high"}, "medium")}, true, false},
+	{"o4", 200_000, 100_000, []Knob{enumKnob("reasoning_effort", "Reasoning effort", []string{"low", "medium", "high"}, "medium")}, true, false},
+	{"gpt-4.1", 1_047_576, 32_768, nil, true, false},
+	{"gpt-4o", 128_000, 16_384, nil, true, false},
 }
 
 // DescribeModels parses OpenAI's id-only /v1/models body and resolves each id against the static

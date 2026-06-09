@@ -454,11 +454,11 @@ func doubaoKnobs(thinkingValues []string) []Knob {
 // doubaoSpecs 是静态目录（最具体前缀在前）。方舟无 /models 端点，DescribeModels 无可枚举对象——目录
 // 本身即事实源。seed 族：256K context；仅 doubao-seed-1-6 支持 thinking "auto"。数值据火山方舟文档 2026-06-04。
 var doubaoSpecs = []modelSpec{
-	{"doubao-seed-1-6", 256000, 32000, doubaoKnobs([]string{"enabled", "disabled", "auto"})},
-	{"doubao-seed-1-8", 256000, 64000, doubaoKnobs([]string{"enabled", "disabled"})},
-	{"doubao-seed-2-0", 256000, 128000, doubaoKnobs([]string{"enabled", "disabled"})},
-	{"doubao-seed-character", 128000, 32000, nil},
-	{"doubao-seed", 256000, 32000, doubaoKnobs([]string{"enabled", "disabled"})},
+	{"doubao-seed-1-6", 256000, 32000, doubaoKnobs([]string{"enabled", "disabled", "auto"}), false, false},
+	{"doubao-seed-1-8", 256000, 64000, doubaoKnobs([]string{"enabled", "disabled"}), false, false},
+	{"doubao-seed-2-0", 256000, 128000, doubaoKnobs([]string{"enabled", "disabled"}), false, false},
+	{"doubao-seed-character", 128000, 32000, nil, false, false},
+	{"doubao-seed", 256000, 32000, doubaoKnobs([]string{"enabled", "disabled"}), false, false},
 }
 
 // DescribeModels returns the static catalog; raw is ignored since Ark has no /models endpoint.

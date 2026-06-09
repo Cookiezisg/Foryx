@@ -145,6 +145,8 @@ type ModelInfo struct {
 	DisplayName   string `json:"displayName"`
 	ContextWindow int    `json:"contextWindow"`
 	MaxOutput     int    `json:"maxOutput"`
+	Vision        bool   `json:"vision"`     // accepts image input natively (OpenAI-compat image_url path)
+	NativeDocs    bool   `json:"nativeDocs"` // accepts an inline document (PDF) natively
 	Knobs         []Knob `json:"knobs"`
 }
 

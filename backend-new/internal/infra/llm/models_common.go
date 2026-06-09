@@ -13,10 +13,12 @@ import (
 // modelSpec 是某家对一个模型族的静态知识：能力数字 + 原生可调旋钮，按 modelID 前缀匹配（列表
 // 顺序定优先——最具体前缀列在前）。贫 /models 家依赖它；富 /models 家在载荷缺数字时拿它兜底。
 type modelSpec struct {
-	prefix string
-	ctx    int
-	out    int
-	knobs  []Knob
+	prefix     string
+	ctx        int
+	out        int
+	knobs      []Knob
+	vision     bool // model accepts image input natively (via the OpenAI-compat image_url path)
+	nativeDocs bool // model accepts an inline document (PDF) natively
 }
 
 // matchSpec returns the first spec whose prefix matches modelID (case-insensitive).
@@ -98,6 +100,8 @@ func describeFromSpecs(specs []modelSpec, raw string) []ModelInfo {
 			ContextWindow: s.ctx,
 			MaxOutput:     s.out,
 			Knobs:         s.knobs,
+			Vision:        s.vision,
+			NativeDocs:    s.nativeDocs,
 		})
 	}
 	return out

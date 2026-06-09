@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	modelapp "github.com/sunweilin/forgify/backend/internal/app/model"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	conversationdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
@@ -27,9 +28,20 @@ func (c *fakeCreds) ResolveCredentialsByID(_ context.Context, apiKeyID string) (
 	return apikeydomain.Credentials{Provider: "mock", Key: "secret", BaseURL: "http://mock"}, nil
 }
 
+// fakeCaps is a CapabilityLister with one usable (mock, default_model) entry carrying caps.
+type fakeCaps struct{}
+
+func (fakeCaps) List(context.Context) ([]modelapp.CapabilityView, error) {
+	return []modelapp.CapabilityView{{
+		Provider: "mock", ModelID: "default_model",
+		ContextWindow: 100000, MaxOutput: 8000, Vision: true, NativeDocs: true,
+	}}, nil
+}
+
 func newResolvers() (ModelResolvers, *fakePicker, *fakeCreds) {
 	pk, cr := &fakePicker{}, &fakeCreds{}
-	return NewModelResolvers(pk, cr, llminfra.NewFactory()), pk, cr
+	lookup := NewModelInfoLookup(fakeCaps{})
+	return NewModelResolvers(pk, cr, llminfra.NewFactory(), lookup), pk, cr
 }
 
 func TestModelResolvers_ScenarioRouting(t *testing.T) {
@@ -119,5 +131,28 @@ func TestConversationSummary_Adapter(t *testing.T) {
 	}
 	if !store.setCalled || store.setS != "new summary" || store.setSeq != 99 {
 		t.Fatalf("SetSummary not passed through: %+v", store)
+	}
+}
+
+func TestModelInfoLookup_WindowAndCaps(t *testing.T) {
+	lookup := NewModelInfoLookup(fakeCaps{})
+
+	// One lookup, two consumers — WindowResolver (contextmgr) reads the budget...
+	wr := lookup.WindowResolver()
+	if w, o := wr.ContextBudget(context.Background(), "mock", "default_model"); w != 100000 || o != 8000 {
+		t.Fatalf("ContextBudget(known) = (%d,%d), want (100000,8000)", w, o)
+	}
+	if w, o := wr.ContextBudget(context.Background(), "mock", "unknown"); w != 0 || o != 0 {
+		t.Fatalf("ContextBudget(unknown) must be (0,0) so contextmgr skips, got (%d,%d)", w, o)
+	}
+
+	// ...and chat's Bundle.Caps reads vision/native-docs from the same lookup.
+	rs, _, _ := newResolvers()
+	b, err := rs.Chat().ResolveChat(context.Background(), nil)
+	if err != nil {
+		t.Fatalf("ResolveChat: %v", err)
+	}
+	if !b.Caps.Vision || !b.Caps.NativeDocs {
+		t.Fatalf("chat Caps must come from the lookup, got %+v", b.Caps)
 	}
 }
