@@ -44,6 +44,7 @@ var Schema = []string{
 		id              TEXT PRIMARY KEY,
 		workspace_id    TEXT NOT NULL,
 		conversation_id TEXT NOT NULL,
+		subagent_id     TEXT NOT NULL DEFAULT '',
 		role            TEXT NOT NULL CHECK(role IN ('user','assistant')),
 		status          TEXT NOT NULL DEFAULT 'completed' CHECK(status IN ('pending','streaming','completed','error','cancelled')),
 		stop_reason     TEXT NOT NULL DEFAULT '',

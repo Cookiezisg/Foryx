@@ -12,6 +12,7 @@ import (
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	messagesdomain "github.com/sunweilin/forgify/backend/internal/domain/messages"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
+	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
 // toolResultContent is the tool_result node payload (the loop's slice of the messages
@@ -74,6 +75,12 @@ func runTools(
 // loop 层接入（待 ask 通道就绪，波次 6）。
 func runOneTool(ctx context.Context, t toolapp.Tool, tc messagesdomain.ToolCallData, log *zap.Logger) messagesdomain.Block {
 	argsJSON, _ := json.Marshal(tc.Arguments)
+	// Seed this call's id so a tool can learn its own tool_call block id (the Subagent tool
+	// anchors the subagent's message subtree under it, E3).
+	//
+	// 埋本次调用的 id，使工具能得知自己的 tool_call block id（Subagent 工具据此把 subagent 的
+	// message 子树锚在其下，E3）。
+	ctx = reqctxpkg.SetToolCallID(ctx, tc.ID)
 	output, errMsg, ok := executeTool(ctx, t, tc.Name, argsJSON, log)
 
 	status := messagesdomain.StatusCompleted

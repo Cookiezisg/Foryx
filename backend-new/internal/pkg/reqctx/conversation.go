@@ -17,6 +17,7 @@ type (
 	conversationIDKey struct{}
 	subagentIDKey     struct{}
 	messageIDKey      struct{}
+	toolCallIDKey     struct{}
 )
 
 // SetConversationID returns a copy of ctx carrying the conversation id. Seeded by the
@@ -90,5 +91,26 @@ func SetMessageID(ctx context.Context, id string) context.Context {
 // GetMessageID 取 message id；缺失或空时 ok=false。
 func GetMessageID(ctx context.Context) (string, bool) {
 	id, ok := ctx.Value(messageIDKey{}).(string)
+	return id, ok && id != ""
+}
+
+// SetToolCallID seeds the id of the tool_call a tool is executing under. The loop plants it
+// right before a tool's Execute so a tool can know its own call's block id — the anchor a
+// Subagent tool needs so the subagent run's message subtree nests under the spawning tool_call
+// (E3). Absent outside a tool execution.
+//
+// SetToolCallID 埋当前正在执行的工具所属 tool_call 的 id。loop 在工具 Execute 前埋下，使工具能知道
+// 自己这次调用的 block id——Subagent 工具需要的锚点，使 subagent run 的 message 子树挂在派它的
+// tool_call 下（E3）。工具执行之外无此值。
+func SetToolCallID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, toolCallIDKey{}, id)
+}
+
+// GetToolCallID returns the tool_call id the current tool is executing under; ok=false outside
+// a tool execution.
+//
+// GetToolCallID 取当前工具执行所属的 tool_call id；工具执行之外 ok=false。
+func GetToolCallID(ctx context.Context) (string, bool) {
+	id, ok := ctx.Value(toolCallIDKey{}).(string)
 	return id, ok && id != ""
 }

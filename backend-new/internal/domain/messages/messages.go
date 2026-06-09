@@ -175,21 +175,32 @@ type ToolCallData struct {
 // text Block）；FinalizeMessage 以终态 + token 记账 + blocks 收一个 assistant 回合。loop 永不
 // 碰表——它内存产 Block 并推流；落盘是 host 的事（WriteFinalize 缝，loop.Host）。
 type Message struct {
-	ID             string         `db:"id,pk" json:"id"` // msg_<16hex>
-	ConversationID string         `db:"conversation_id" json:"conversationId"`
-	WorkspaceID    string         `db:"workspace_id,ws" json:"-"` // D2 物理隔离；orm 自动填/过滤
-	Role           string         `db:"role" json:"role"`         // RoleUser | RoleAssistant
-	Status         string         `db:"status" json:"status"`     // Status* (assistant 回合开始前为 pending)
-	StopReason     string         `db:"stop_reason" json:"stopReason,omitempty"`
-	ErrorCode      string         `db:"error_code" json:"errorCode,omitempty"`
-	ErrorMessage   string         `db:"error_message" json:"errorMessage,omitempty"`
-	InputTokens    int            `db:"input_tokens" json:"inputTokens"`
-	OutputTokens   int            `db:"output_tokens" json:"outputTokens"`
-	Provider       string         `db:"provider" json:"provider,omitempty"` // 溯源：产此回合的 provider
-	ModelID        string         `db:"model_id" json:"modelId,omitempty"`  // 溯源：产此回合的模型
-	Attrs          map[string]any `db:"attrs,json" json:"attrs,omitempty"`  // attachments / mentions 快照（freeze-on-send）
-	CreatedAt      time.Time      `db:"created_at,created" json:"createdAt"`
-	UpdatedAt      time.Time      `db:"updated_at,updated" json:"updatedAt"`
+	ID             string `db:"id,pk" json:"id"` // msg_<16hex>
+	ConversationID string `db:"conversation_id" json:"conversationId"`
+	WorkspaceID    string `db:"workspace_id,ws" json:"-"` // D2 物理隔离；orm 自动填/过滤
+	// SubagentID marks a turn produced by a subagent run (recursive sub-conversation, M5.2+):
+	// "" for a top-level turn; the subagent run id otherwise. chat's LoadHistory excludes
+	// SubagentID != "" so a subagent's internal trace never pollutes the parent's LLM history
+	// (the parent only sees the spawning tool_call + its tool_result). ListMessages still returns
+	// them so a reload can rebuild the subagent subtree (the spawning tool_call id rides Attrs).
+	//
+	// SubagentID 标记由 subagent run 产出的回合（递归子对话，M5.2+）：顶层回合 ""；否则 subagent
+	// run id。chat 的 LoadHistory 排除 SubagentID != ""，使 subagent 内部 trace 绝不污染父的 LLM
+	// 历史（父只见派它的 tool_call + 其 tool_result）。ListMessages 仍返回它们，使 reload 能重建
+	// subagent 子树（派它的 tool_call id 走 Attrs）。
+	SubagentID   string         `db:"subagent_id" json:"subagentId,omitempty"`
+	Role         string         `db:"role" json:"role"`     // RoleUser | RoleAssistant
+	Status       string         `db:"status" json:"status"` // Status* (assistant 回合开始前为 pending)
+	StopReason   string         `db:"stop_reason" json:"stopReason,omitempty"`
+	ErrorCode    string         `db:"error_code" json:"errorCode,omitempty"`
+	ErrorMessage string         `db:"error_message" json:"errorMessage,omitempty"`
+	InputTokens  int            `db:"input_tokens" json:"inputTokens"`
+	OutputTokens int            `db:"output_tokens" json:"outputTokens"`
+	Provider     string         `db:"provider" json:"provider,omitempty"` // 溯源：产此回合的 provider
+	ModelID      string         `db:"model_id" json:"modelId,omitempty"`  // 溯源：产此回合的模型
+	Attrs        map[string]any `db:"attrs,json" json:"attrs,omitempty"`  // attachments / mentions 快照（freeze-on-send）
+	CreatedAt    time.Time      `db:"created_at,created" json:"createdAt"`
+	UpdatedAt    time.Time      `db:"updated_at,updated" json:"updatedAt"`
 
 	// Blocks is the turn's content tree, hydrated by the store on read and supplied by the
 	// caller on write — never a column (db:"-"). On a user turn it's the lone text block; on

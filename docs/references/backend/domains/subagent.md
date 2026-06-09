@@ -4,78 +4,103 @@ type: reference
 status: active
 owner: @weilin
 created: 2026-04-22
-reviewed: 2026-06-02
+reviewed: 2026-06-09
 review-due: 2026-09-01
 audience: [human, ai]
 ---
-# Subagent Domain — 递归派生与子智能体通信原理
+# Subagent — 递归子对话 (Recursive Sub-conversation)
 
-> **核心职责**：Subagent 是 Forgify 实现 **“分治策略”** 的核心。它允许一个对话中的 Agent 作为一个特殊的工具，递归地“派生”出一个新的、临时的子智能体来处理特定的、可拆解的子任务，从而在不污染主对话历史的情况下完成重度任务。
+> **核心地位**：subagent 是 LLM 用 `Subagent`（Task）工具派出的**隔离子 agent**——给它一段自包含任务、它跑完返回结果。**≈ 递归的 chat**：复用共享 ReAct 引擎（`app/loop`），**无自己的表**（回合作为 sub-message 落**父对话**的 `messages` 表、带 `SubagentID` 标记），**承袭父的 effective model**，**不能再派 subagent**（深度 1）。
+>
+> **不是 Quadrinity 实体**：subagent 无 DB 实体、无 catalog/relation/REST——它是运行时机制，3 个内置类型硬编码。消费者：skill 的 fork 模式（`SubagentRunner` 端口）+ `Subagent` 工具（LLM 直接派）。
+>
+> **本文 = R0058 as-built**。旧 DOC-123 的 **cv_xxx 子对话 / 深度限 2 / AgentState 沙箱 / 4 个虚构错误码**全是幻想，已删（见 §6）。
 
 ---
 
-## 1. 物理模型 (Data Anatomy)
+## 1. 消费契约：`SubagentRunner.Spawn`
 
-Subagent 不设独立实体表，它是对 `Conversation` 域和 `Chat` 域的 **“特殊投影”**。
-
-### 1.1 `SubagentRun` (逻辑 DTO)
-```typescript
-interface SubagentRun {
-    id: string;              // 同 msg_ID，作为子回合标识
-    conversationId: string;  // 指向一个隐式的、临时的子对话 ID
-    parentBlockId: string;   // 物理锚点：指向父对话中的 tool_call 块
-    type: string;            // 子智能体预设名（如 "researcher"）
-    status: string;          // running|completed|failed
-}
+```go
+// domain/skill.SubagentRunner（subagentapp.Service 满足）
+Spawn(ctx context.Context, agentType, prompt string) (result string, err error)
 ```
+**同步**：跑完返最终文本。两个消费者共用：
+- **skill fork**：`context:fork` 的 skill 把渲染后的正文派给 subagent（`app/skill/activate.go`）。
+- **`Subagent` 工具**：LLM 直接派（`app/tool/subagent`）。
+
+`subagent==nil` 时 skill fork 降级 `SKILL_SUBAGENT_UNAVAILABLE`（M7 注入前）。
 
 ---
 
-## 2. 核心原理 (Principles)
+## 2. host：混血（agentHost + chatHost）
 
-### 2.1 Virtual Conversation Isolation (虚拟对话隔离)
-当 LLM 调 `Subagent(task)` 时：
-1. **静默开窗**：系统在后端创建一个隐式的、不出现在列表中的 `cv_xxx` 对话。
-2. **上下文隔离**：子智能体只接收 `task` 描述，不感知父对话的完整历史（除非显式传入）。
-3. **副作用隔离**：子智能体可以调工具、写临时文件，但所有操作都在其专属的子 Context 下。
+subagent 跑 `loop.Run`，host 是**混血**：
 
-### 2.2 Parent-Child Anchoring (父子锚点关联)
-这是 Forgify V1.2 的关键架构改进：
-- **物理引用**：子智能体的每一个消息，其 `parent_block_id` 均指向父对话中那个发起的 `tool_call`。
-- **渲染递归**：前端通过 SSE 收到消息时，若发现 `parentBlockId` 非空，会自动将其嵌套在对应的工具调用气泡中展现。
+| loop.Host 方法 | subagentHost | 像 |
+|---|---|---|
+| `LoadHistory` | 只返任务 prompt 一条 user 消息（隔离运行、无父线程） | agentHost |
+| `Tools` | 按类型过滤的**静态白名单**（无 lazy/search_tools/AutoActivator） | agentHost |
+| `WriteFinalize` | **Detached** 落 sub-message（SubagentID）+ blocks + 推 message_stop | chatHost |
 
-### 2.3 Inheritance Policy (设置承袭)
-子智能体不是“白板”，它会自动继承父对话的特定属性：
-- **Model Override**：若父对话指定了用 GPT-4o，子任务自动跟进。
-- **Locale**：回复语言自动保持一致。
-- **AgentState**：子任务拥有独立的临时沙箱环境。
+不实现 `AutoActivator`/`ReminderProvider`/`StepRecorder`。
 
 ---
 
-## 3. 生命周期 (Lifecycle)
+## 3. 持久化：写父对话 + `SubagentID` 标记（R0058 拍板）
 
-1. **派生 (Spawning)**：LLM 调 `Subagent` 工具。
-2. **初始化 (Seeding)**：后端创建子 Ctx，注入 Subagent 专用 System Prompt。
-3. **自主执行 (Acting)**：子智能体在其独立循环内运行 N 回合。
-4. **合流 (Summarizing)**：子任务终结，将最终结论作为 `tool_result` 返回给父 Agent。
-5. **销毁 (GC)**：子对话标记为隐式，在父对话删除或超时后彻底物理清理。
+subagent 的回合作为 **sub-message 落父对话的 `messages` 表**（**无 cv_xxx 子对话**）：
+- `Message.SubagentID` = subagent run id（`subagt_`）；顶层回合 `""`。
+- `Message.Attrs["parentBlockId"]` = 派它的 tool_call 的 block id（reload 树锚点）。
+- blocks 经 loop 落 `message_blocks`（`MessageID` = sub-message id；E3 流嵌套见 §4）。
+- **chat `LoadHistory` 排除 `SubagentID != ""`**：subagent 内部 trace **不进父 LLM 历史**，父只见派它的 tool_call + 其 **tool_result**（= subagent 最终答案 `result.LastMessage`，由 `Subagent` 工具 Execute 返回、loop 落成 tool_result）。
+- **`ListMessages`（REST）仍返回 sub-message**：刷新页面能重建 subagent 子树。
 
----
-
-## 4. 跨域集成 (Interactions)
-
-- **Chat**：作为 `Subagent` 工具的底层驱动。
-- **Eventlog**：驱动层级化、嵌套式的内容推流。
-- **Model**：决定子智能体的“智力分布”。
-- **Todo**：子智能体可以被授权读写父对话的任务清单。
+> token：sub-message 的 input/output token 计入对话 `GET /usage` 总和（subagent 成本是对话成本一部分）。
 
 ---
 
-## 5. 错误字典 (Sentinels)
+## 4. E3 流嵌套（live/reload 一致）
 
-| Sentinel | HTTP | Wire Code | 场景 |
+subagent 全程进 messages SSE，**复用父 loop 的 Bridge**（subagent 跑在 `Subagent` 工具 Execute 的 ctx 内、已带 `loop.WithBridge` + 同 `conversation:<id>` scope）：
+- subagent **自己的 message 节点**：`Open{type:"message", ParentID:<派它的 tool_call id>}`（挂 tool_call 下）→ message_stop=`Close{Result: 终态元数据}`。content 带 `subagent:true`（前端分组）。
+- subagent 的 block 节点：loop 以 `reqctx.SetMessageID(subMsgID)` 跑 → `Open.ParentID = subMsgID`（挂 sub-message 下）。
+- 树：`tool_call(Subagent) → message(subagent) → reasoning/text/tool_call→tool_result`，旁边 `tool_result`（= 最终答案）。
+
+**tool_call id 来源**：loop `runOneTool` 执行工具前 `reqctx.SetToolCallID(ctx, tc.ID)`，`Subagent` 工具内 Spawn 经 `GetToolCallID` 读出作锚（fork skill 不在 tool_call 下时为空 → 挂 conversation 根，仍合法）。
+
+---
+
+## 5. 类型 / model / 防递归
+
+### 5.1 内置 3 类型（registry，硬编码）
+| 类型 | system prompt | AllowedTools（白名单） | DefaultMaxTurns |
 |---|---|---|---|
-| `ErrRecursionTooDeep`| 400 | `RECURSION_LIMIT` | 尝试在子智能体里再开子智能体（深度默认限 2）。 |
-| `ErrSubagentCrash` | 502 | `SUBAGENT_ERROR` | 子进程崩溃或 LLM 停止响应。 |
-| `ErrTaskAmbiguous` | 422 | `INVALID_REQUEST` | 给子智能体的指令不足以开辟任务。 |
-| `ErrToolAccessDenied`| 403 | `PERM_DENIED` | 子智能体尝试调用未授权的高危工具。 |
+| **Explore** | 只读代码侦察（定位文件/定义/用法） | Read, LS, Glob, Grep | 30 |
+| **Plan** | 调研 + 出实现计划（不改动） | Read, LS, Glob, Grep, WebFetch, WebSearch | 25 |
+| **general-purpose** | 聚焦任务端到端 | nil = 父全集 | 25 |
+
+`filterTools` = 白名单交集（空=全部）**且总剔 `Subagent`**（递归守卫）。
+
+### 5.2 model 承袭
+subagent 自有 `ModelResolver.Resolve(ctx)→Bundle`，M7 适配器 = `model.Resolve(ScenarioDialogue, nil, picker)`（workspace dialogue 默认 = 父常见无 override 时的 effective model）。**显式 conv.ModelOverride 承袭延后**（会越 reqctx 的 pkg→domain 边界，单用户 override 罕见）。
+
+### 5.3 防递归（深度 1，双保险）
+- ①`filterTools` 总剔 `Subagent` 工具 → subagent 的工具集不含它。
+- ②`Subagent` 工具 Execute + `Spawn` 见 `reqctx.GetSubagentID(ctx)` 在 → 拒。
+
+subagent 内**不能再派 subagent**。reqctx `SubagentID` 种子同时给 todo 作用域 `(conversation, subagent?)`。
+
+---
+
+## 6. 错误 / 契约边界
+
+- **无 HTTP error-code**：派发失败（坏类型 / 模型解析错 / 递归）由 `Subagent` 工具 Execute 作 **error 半边**返回 → loop 渲成 tool_result 串给 LLM（工具级失败、不冒泡 HTTP）。
+- **无 REST / catalog / relation**（运行时机制、非实体）。
+- **DB**：仅 `messages.subagent_id` 列（R0058）；无新表。
+- **废（旧 DOC-123 幻想）**：~~cv_xxx 子对话~~（实写父对话 + parentBlock 锚）、~~深度限 2~~（实为 1）、~~AgentState 沙箱~~（实为 ctx 隔离 + `agentstate.New()`）、~~`ErrRecursionTooDeep`/`ErrSubagentCrash`/`ErrTaskAmbiguous`/`ErrToolAccessDenied`~~（4 个虚构码，工具失败软返）。
+
+---
+
+## 7. 装配（M7）
+
+`subagent.New(Deps{Messages, Resolver, Tools, Bridge})` → 注入 skill 的 `SubagentRunner`（当前 nil 降级）+ `Subagent` 工具入 Toolset。`agentstate` 子 run 独立新建（防污染父 SeenFiles）。

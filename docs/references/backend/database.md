@@ -127,6 +127,7 @@ type Message struct {
     ID             string         `db:"id,pk"`              // msg_<16hex>
     ConversationID string         `db:"conversation_id"`
     WorkspaceID    string         `db:"workspace_id,ws"`
+    SubagentID     string         `db:"subagent_id"`       // ''=顶层；非空=subagent run（R0058）；chat LoadHistory 排除非空（不污染父历史）
     Role           string         `db:"role"`              // CHECK(user|assistant)；无 system/tool 行
     Status         string         `db:"status"`            // CHECK(5 态) DEFAULT 'completed'
     StopReason     string         `db:"stop_reason"`

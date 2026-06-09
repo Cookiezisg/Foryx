@@ -68,6 +68,7 @@ chat **不重写循环**——它实现 `loop.Host` 接口（`chatHost`），把
 - **user 回合**：freeze 的 `<mentions>` 快照（§8，从 `Attrs` 渲染）前置 + text block → content；附件 id（落在 `Attrs`）→ `attachment.ToContentParts(ids, Capabilities{Vision,NativeDocs})` 渲成多模态 `Parts`（按当前模型能力门控；渲染失败降级纯文本）。
 - **assistant 回合**：`loop.BlocksToAssistantLLM`（hot/warm/cold 投影，archived/compaction 丢）。
 - **在飞的 assistant 回合**（本次生成、status=streaming 无 block）被跳过。
+- **subagent sub-message**（`SubagentID != ""`，R0058）被跳过——subagent 的内部 trace 落在本对话（供 reload 树）但**不进父 LLM 历史**，父只见派它的 tool_call + 其 tool_result（subagent 最终答案）。
 
 ### 4.2 System Prompt（Section 容器）
 每回合现拼，`<section name="...">` 包装，cache-friendly 顺序（不变静态在前、动态居中、规则殿后）：

@@ -49,6 +49,7 @@ type Message struct {                 // 一个对话回合（user 发言 / assi
     ID             string         `db:"id,pk"`              // msg_<16hex>
     ConversationID string         `db:"conversation_id"`
     WorkspaceID    string         `db:"workspace_id,ws"`    // D2 物理隔离；orm 自动填/过滤
+    SubagentID     string         `db:"subagent_id"`        // ""=顶层；非空=subagent run（R0058）。chat LoadHistory 排除 != ""（不污染父历史）；ListMessages 仍返回（reload 重建子树，锚 = Attrs.parentBlockId）
     Role           string         `db:"role"`               // user | assistant（无 system/tool 行）
     Status         string         `db:"status"`             // Status*（assistant 回合开始前为 pending）
     StopReason     string         `db:"stop_reason"`

@@ -490,6 +490,37 @@ func TestUsage_SumTokens(t *testing.T) {
 	}
 }
 
+func TestLoadHistory_ExcludesSubagent(t *testing.T) {
+	bridge := newRecordBridge()
+	svc, store := newSvc(t, &fakeClient{script: textTurn()}, bridge)
+	ctx := ctxWS("ws_1")
+
+	// A normal user turn + a subagent sub-message (SubagentID set) in the same conversation.
+	u := &messagesdomain.Message{ID: "msg_1", ConversationID: "cv_1", Role: messagesdomain.RoleUser, Status: messagesdomain.StatusCompleted}
+	if err := store.CreateMessage(ctx, u, []messagesdomain.Block{{Type: messagesdomain.BlockTypeText, Content: "parent question"}}); err != nil {
+		t.Fatalf("user: %v", err)
+	}
+	sub := &messagesdomain.Message{ID: "msg_2", ConversationID: "cv_1", SubagentID: "subagt_x", Role: messagesdomain.RoleAssistant, Status: messagesdomain.StatusCompleted}
+	if err := store.CreateMessage(ctx, sub, []messagesdomain.Block{{Type: messagesdomain.BlockTypeText, Content: "subagent internal trace"}}); err != nil {
+		t.Fatalf("sub: %v", err)
+	}
+
+	h := &chatHost{svc: svc, conversationID: "cv_1", assistantMsgID: "msg_none"}
+	hist, err := h.LoadHistory(ctx)
+	if err != nil {
+		t.Fatalf("LoadHistory: %v", err)
+	}
+	// Only the parent user turn — the subagent sub-message is excluded from the parent's LLM history.
+	if len(hist) != 1 || hist[0].Role != llminfra.RoleUser || hist[0].Content != "parent question" {
+		t.Fatalf("history should contain only the parent turn, got %+v", hist)
+	}
+	for _, m := range hist {
+		if strings.Contains(m.Content, "subagent internal") {
+			t.Fatal("subagent trace leaked into the parent's LLM history")
+		}
+	}
+}
+
 func TestSystemPromptPreview(t *testing.T) {
 	svc, _ := newSvc(t, &fakeClient{script: textTurn()}, newRecordBridge())
 	prompt, err := svc.SystemPromptPreview(ctxWS("ws_1"), "cv_1")

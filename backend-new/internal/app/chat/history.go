@@ -40,6 +40,15 @@ func (h *chatHost) LoadHistory(ctx context.Context) ([]llminfra.LLMMessage, erro
 	}
 
 	for _, m := range thread {
+		// A subagent's sub-messages live in this conversation (persisted for the reload tree)
+		// but are NOT part of the parent's LLM history — the parent only sees the spawning
+		// tool_call + its tool_result (the subagent's final answer). Exclude them here.
+		//
+		// subagent 的 sub-message 落在本对话（为 reload 树持久化），但**不是**父的 LLM 历史——父只见
+		// 派它的 tool_call + 其 tool_result（subagent 最终答案）。此处排除。
+		if m.SubagentID != "" {
+			continue
+		}
 		switch m.Role {
 		case messagesdomain.RoleUser:
 			out = append(out, h.userMessage(ctx, m))
