@@ -7,41 +7,38 @@ import (
 	"go.uber.org/zap"
 
 	notificationapp "github.com/sunweilin/forgify/backend/internal/app/notification"
-	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
-// NotificationHandler serves the notification center: REST (list / unread-count /
-// mark-read / mark-all-read) backed by the DB, plus the live notifications SSE stream.
+// NotificationHandler serves the notification center's REST surface (list / unread-count /
+// mark-read / mark-all-read) backed by the DB. The live notifications SSE subscription is served
+// by StreamHandler alongside the other two streams (one place for all three, E1).
 //
-// NotificationHandler 提供通知中心：REST（list / unread-count / mark-read / mark-all-read）
-// 走 DB，加上实时 notifications SSE 流。
+// NotificationHandler 提供通知中心的 REST 面（list / unread-count / mark-read / mark-all-read）走 DB。
+// 实时 notifications SSE 订阅由 StreamHandler 与另两条流统一提供（三流一处，E1）。
 type NotificationHandler struct {
-	svc    *notificationapp.Service
-	bridge streamdomain.Bridge // notifications stream (subscribe)
-	log    *zap.Logger
+	svc *notificationapp.Service
+	log *zap.Logger
 }
 
-// NewNotificationHandler constructs the handler. bridge is the notifications stream
-// (injected at boot, M7); nil disables the SSE endpoint's subscribe.
+// NewNotificationHandler constructs the handler.
 //
-// NewNotificationHandler 构造 handler。bridge 是 notifications 流（boot 装配，M7）。
-func NewNotificationHandler(svc *notificationapp.Service, bridge streamdomain.Bridge, log *zap.Logger) *NotificationHandler {
+// NewNotificationHandler 构造 handler。
+func NewNotificationHandler(svc *notificationapp.Service, log *zap.Logger) *NotificationHandler {
 	if log == nil {
 		log = zap.NewNop()
 	}
-	return &NotificationHandler{svc: svc, bridge: bridge, log: log.Named("handlers.notification")}
+	return &NotificationHandler{svc: svc, log: log.Named("handlers.notification")}
 }
 
-// Register wires the endpoints onto mux.
+// Register wires the REST endpoints onto mux (the SSE stream is StreamHandler's).
 //
-// Register 把端点挂到 mux。
+// Register 把 REST 端点挂到 mux（SSE 流归 StreamHandler）。
 func (h *NotificationHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/notifications", h.List)
 	mux.HandleFunc("GET /api/v1/notifications/unread-count", h.UnreadCount)
 	mux.HandleFunc("PUT /api/v1/notifications/{id}/read", h.MarkRead)
 	mux.HandleFunc("POST /api/v1/notifications/read-all", h.MarkAllRead)
-	mux.HandleFunc("GET /api/v1/notifications/stream", h.Subscribe)
 }
 
 // List handles GET /api/v1/notifications — newest-first, keyset-paginated.
@@ -95,30 +92,4 @@ func (h *NotificationHandler) MarkAllRead(w http.ResponseWriter, r *http.Request
 		return
 	}
 	responsehttpapi.NoContent(w)
-}
-
-// Subscribe handles GET /api/v1/notifications/stream — the live SSE subscription.
-// fromSeq comes from Last-Event-ID (or ?fromSeq) and resumes durable frames from the
-// replay ring; too old → 410, the client refetches history via List.
-//
-// Subscribe 处理 GET /api/v1/notifications/stream —— 实时 SSE 订阅。fromSeq 取自
-// Last-Event-ID（或 ?fromSeq），从 replay 环续传 durable 帧；太旧 → 410，客户端经 List 重取。
-func (h *NotificationHandler) Subscribe(w http.ResponseWriter, r *http.Request) {
-	var fromSeq int64
-	if v := r.Header.Get("Last-Event-ID"); v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-			fromSeq = n
-		}
-	} else if v := r.URL.Query().Get("fromSeq"); v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-			fromSeq = n
-		}
-	}
-	ch, cancel, err := h.bridge.Subscribe(r.Context(), fromSeq)
-	if err != nil {
-		responsehttpapi.FromDomainError(w, h.log, err)
-		return
-	}
-	defer cancel()
-	responsehttpapi.StreamSSE(w, r, nil, ch, responsehttpapi.WriteStreamEnvelope)
 }
