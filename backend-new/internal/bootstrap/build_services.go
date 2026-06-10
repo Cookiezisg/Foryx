@@ -137,6 +137,7 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	mcp.SetEntitiesBridge(bus.entities) // SSE-C: CallTool tees progress to the server's run terminal
 	conv := conversationapp.New(st.conversation, notif, log)
 	trg := triggerapp.NewService(st.trigger, mux, NewSensorInvoker(fn, hd, mcp), log)
+	trg.SetEntitiesBridge(bus.entities)                        // SSE-C: every fan-out emits a fire signal to the trigger panel
 	wf := workflowapp.NewService(st.workflow, nil, notif, log) // resolver set below
 
 	// --- subagent + skill: subagent reads the toolset lazily via the holder ---

@@ -2,11 +2,14 @@ package trigger
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"time"
 
 	"go.uber.org/zap"
 
+	entitystreamapp "github.com/sunweilin/forgify/backend/internal/app/entitystream"
+	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 	triggerdomain "github.com/sunweilin/forgify/backend/internal/domain/trigger"
 	triggerinfra "github.com/sunweilin/forgify/backend/internal/infra/trigger"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
@@ -81,6 +84,32 @@ func (s *Service) fanOut(ctx context.Context, triggerID, kind string, workflows 
 	}); err != nil {
 		s.log.Warn("triggerapp: append activation failed", zapTrigger(triggerID), zapErr(err))
 	}
+
+	// SSE-C: every fan-out (all sources — cron/webhook/fsnotify/sensor/manual — pass through
+	// here) emits one fire signal scoped to the trigger, so the trigger panel shows its activity
+	// live. Durable record = the Activation/Firing rows; this is the live view.
+	//
+	// SSE-C：每次扇出（所有来源——cron/webhook/fsnotify/sensor/manual——都经此处）发一条 trigger scope 的
+	// fire 信号，使 trigger 面板实时显示活动。耐久记录 = Activation/Firing 行；这是 live 视图。
+	entitystreamapp.Signal(ctx, s.entities, streamdomain.Scope{Kind: streamdomain.KindTrigger, ID: triggerID},
+		entitystreamapp.NodeFire, jsonContent(map[string]any{
+			"activationId": actID,
+			"kind":         kind,
+			"fired":        act.Fired,
+			"firingCount":  fired,
+			"error":        act.Error,
+		}))
+}
+
+// jsonContent marshals v into a node Content payload (nil on the never-expected failure).
+//
+// jsonContent 把 v marshal 成节点 Content（不应失败；失败降级 nil）。
+func jsonContent(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return b
 }
 
 // FireManual fires a trigger by hand (the fire_trigger tool / a test "ping it now"): it

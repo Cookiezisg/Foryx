@@ -15,6 +15,7 @@ import (
 
 	"go.uber.org/zap"
 
+	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 	triggerdomain "github.com/sunweilin/forgify/backend/internal/domain/trigger"
 	triggerinfra "github.com/sunweilin/forgify/backend/internal/infra/trigger"
 	croninfra "github.com/sunweilin/forgify/backend/internal/infra/trigger/cron"
@@ -48,8 +49,16 @@ type Service struct {
 	listeners map[string]*listenEntry // key: triggerID
 
 	relations RelationSyncer
+	entities  streamdomain.Bridge // entities stream (SSE-C); nil → no trigger-panel firing feed
 	log       *zap.Logger
 }
+
+// SetEntitiesBridge installs the entities stream post-construction (SSE-C): every fan-out emits a
+// fire signal scoped to the trigger, so the trigger panel shows firings live.
+//
+// SetEntitiesBridge 装配后装入 entities 流（SSE-C）：每次扇出发一条 trigger scope 的 fire 信号，使 trigger
+// 面板实时显示触发。
+func (s *Service) SetEntitiesBridge(b streamdomain.Bridge) { s.entities = b }
 
 // NewService constructs the Service and wires the four listeners to s.onReport. mux is shared
 // with the HTTP server (webhook routes mount on it); invoker resolves sensor targets
