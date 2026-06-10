@@ -132,6 +132,12 @@ type SpawnOpts struct {
 	Stdin     []byte            `json:"-"`
 	Timeout   time.Duration     `json:"timeoutMs,omitempty"`
 	LongLived bool              `json:"longLived,omitempty"`
+	// StreamErr (optional) tees the child's stderr to a live sink as it runs — the seam a tool
+	// (e.g. run_function) uses to stream the function's print() output as progress. nil = capture only.
+	//
+	// StreamErr（可选）把子进程 stderr 实时 tee 到 sink——工具（如 run_function）据此把函数 print() 输出作为
+	// 进度流出的接缝。nil = 仅捕获。
+	StreamErr io.Writer `json:"-"`
 }
 
 // ExecutionResult is a finished one-shot spawn; Ok=false means a non-zero exit

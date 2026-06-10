@@ -25,7 +25,7 @@
 | B3 | call_handler | `OnProgress`（method `yield`） |
 | B4 | WebFetch | 内层 LLM 摘要链（边生成边流） |
 | B5 | invoke_agent | 子 ReAct loop block 流式嵌 tool_call 下（`SetMessageID(ctx, toolCallID)`，用 ctx 已有 bridge）；**持久化落 agent_executions.transcript 自包含、不碰 messages 表**（用户定调）——execution 经 `ToolCallID` 关联回 tool_call，前端 reload 从 execution 重水合。**不抄 subagent 的 sub-message 模式** |
-| B6 | **install_mcp_server** ✅ | `ensureEnv` 的 `EnsureEnv(...,nil)` → 传 ProgressFunc 写 `ToolProgress`（装 runtime npx/uvx/docker pull 实时流）。run_function（stdout=结果、仅 stderr 可流、需 SpawnOptions 加 writer）+ mcp 动态（go-sdk v0.8 有 `ProgressNotificationHandler`、但需 token→ToolProgress 关联 + 多数 server 不发 progress）= infra 项，价值边际，评估后定 |
+| B6 | install_mcp_server ✅ · run_function ✅ · mcp 动态 ✅ | **install**：`ensureEnv` 传 ProgressFunc 写 ToolProgress（装 runtime 实时流）。**run_function**：driver 把用户 `print()` 重定向 stderr（**顺带修了 print 破坏结果 JSON 的 bug**）+ `SpawnOptions.StreamErr` tee（三层穿透 domain/app/infra）+ adapter 接 ToolProgress。**mcp 动态**：go-sdk `ProgressNotificationHandler`（client 级）+ token→sink 注册表（atomic 计数 token）；**infra 零 app 依赖**——`WithProgress` ctx 助手传 `func(string)` 回调（DIP），dynamic 工具层建 ToolProgress + 设 ctx 回调 |
 
 每 phase：建 + 测 + 独立 commit。
 

@@ -65,6 +65,11 @@ type SpawnOptions struct {
 	Cwd   string
 	Env   []string
 	Stdin []byte
+	// StreamErr (optional) receives stderr live as it is produced, in addition to the captured
+	// buffer — the seam a tool uses to stream a child's progress output. nil = capture only.
+	//
+	// StreamErr（可选）在捕获 buffer 之外实时接收 stderr——工具据此流式推子进程进度输出的接缝。nil = 仅捕获。
+	StreamErr io.Writer
 }
 
 // SpawnOnce runs cmd to completion; a non-zero exit → Ok=false, an infra failure
@@ -86,7 +91,15 @@ func SpawnOnce(ctx context.Context, opts SpawnOptions) (*sandboxdomain.Execution
 
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
+	// Tee stderr to the live sink (if any) so a tool can stream the child's progress output while
+	// still capturing the full buffer for the result.
+	//
+	// 把 stderr 同时喂实时 sink（若有），使工具能流式推子进程进度输出，同时仍捕获完整 buffer 供结果用。
+	if opts.StreamErr != nil {
+		cmd.Stderr = io.MultiWriter(&stderr, opts.StreamErr)
+	} else {
+		cmd.Stderr = &stderr
+	}
 
 	setupProcessGroup(cmd)
 	cmd.Cancel = func() error { return killProcessGroup(cmd) }

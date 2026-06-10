@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
+	loopapp "github.com/sunweilin/forgify/backend/internal/app/loop"
 	mcpapp "github.com/sunweilin/forgify/backend/internal/app/mcp"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	mcpinfra "github.com/sunweilin/forgify/backend/internal/infra/mcp"
 )
 
 // dynamicTool wraps one tool of one installed server as a standard tool.Tool. Name is
@@ -37,5 +39,13 @@ func (t *dynamicTool) Parameters() json.RawMessage { return t.schema }
 func (t *dynamicTool) ValidateInput(json.RawMessage) error { return nil }
 
 func (t *dynamicTool) Execute(ctx context.Context, argsJSON string) (string, error) {
+	// Stream the MCP server's progress notifications (if it emits any) live under this tool_call;
+	// the final tool result is still the return value. nil-safe off a streamed turn (no-op → plain call).
+	//
+	// 把 MCP server 的进度通知（若发）实时流在本 tool_call 下；最终结果仍是返回值。非流式 turn 下 nil 安全
+	// （no-op → 普通调用）。
+	prog := loopapp.ToolProgress(ctx)
+	defer prog.Close()
+	ctx = mcpinfra.WithProgress(ctx, prog.Print)
 	return t.svc.CallTool(ctx, t.serverID, t.toolName, json.RawMessage(argsJSON))
 }

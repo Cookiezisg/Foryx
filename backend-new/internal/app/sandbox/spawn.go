@@ -33,11 +33,12 @@ func (s *Service) Spawn(ctx context.Context, owner sandboxdomain.Owner, opts san
 	}
 
 	return sandboxinfra.SpawnOnce(spawnCtx, sandboxinfra.SpawnOptions{
-		Cmd:   cmd,
-		Args:  args,
-		Cwd:   cwd,
-		Env:   env,
-		Stdin: opts.Stdin,
+		Cmd:       cmd,
+		Args:      args,
+		Cwd:       cwd,
+		Env:       env,
+		Stdin:     opts.Stdin,
+		StreamErr: opts.StreamErr,
 	})
 }
 

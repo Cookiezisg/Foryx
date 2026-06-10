@@ -16,8 +16,10 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -64,6 +66,15 @@ type client struct {
 	log     *zap.Logger
 	session *mcpsdk.ClientSession
 	stderr  *ringBuffer
+
+	// progress correlates an MCP server's progress notifications back to the in-flight CallTool
+	// that opted in (via a per-call token) so they can be forwarded to that call's sink. The go-sdk
+	// progress handler is session-global, hence this token→sink map. progSeq mints the tokens.
+	//
+	// progress 把 MCP server 的进度通知按 per-call token 关联回那次 opt-in 的 CallTool，转发到该调用的
+	// sink。go-sdk 的进度 handler 是 session 级全局，故用此 token→sink 表。progSeq 发 token。
+	progress sync.Map // token string → func(string)
+	progSeq  atomic.Int64
 }
 
 // NewClient constructs an unstarted Client; Initialize runs the MCP handshake over the spec's
@@ -82,7 +93,8 @@ func NewClient(spec ClientSpec, log *zap.Logger) Client {
 //
 // Initialize 构造对应 transport（stdio IOTransport vs remote）并走握手。
 func (c *client) Initialize(ctx context.Context) error {
-	sdkClient := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "forgify", Version: "1.2.0"}, nil)
+	sdkClient := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "forgify", Version: "1.2.0"},
+		&mcpsdk.ClientOptions{ProgressNotificationHandler: c.onProgress})
 
 	var transport mcpsdk.Transport
 	if c.spec.isRemote() {
@@ -166,7 +178,20 @@ func (c *client) CallTool(ctx context.Context, name string, args json.RawMessage
 		}
 	}
 
-	res, err := c.session.CallTool(ctx, &mcpsdk.CallToolParams{Name: name, Arguments: argsMap})
+	params := &mcpsdk.CallToolParams{Name: name, Arguments: argsMap}
+	// If the caller opted into progress (the chat tool layer put a sink in ctx), register a per-call
+	// token so this server's progress notifications stream to that sink for the call's duration.
+	//
+	// 若调用方 opt-in 进度（chat 工具层在 ctx 放了 sink），登记 per-call token，使本 server 的进度通知在
+	// 调用期间流到该 sink。
+	if sink := progressFrom(ctx); sink != nil {
+		token := strconv.FormatInt(c.progSeq.Add(1), 10)
+		c.progress.Store(token, sink)
+		defer c.progress.Delete(token)
+		params.SetProgressToken(token)
+	}
+
+	res, err := c.session.CallTool(ctx, params)
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			return "", fmt.Errorf("mcp.Client.CallTool %s/%s: %w: %v",

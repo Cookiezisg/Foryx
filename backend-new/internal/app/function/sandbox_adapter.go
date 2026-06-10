@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	loopapp "github.com/sunweilin/forgify/backend/internal/app/loop"
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
@@ -61,10 +62,18 @@ func (a *SandboxAdapter) Run(ctx context.Context, owner sandboxdomain.Owner, fun
 		return nil, fmt.Errorf("functionapp.SandboxAdapter.Run: marshal input: %w", err)
 	}
 
+	// Stream the function's own print() output (routed to stderr by the driver) live under the
+	// run_function tool_call; the JSON result still lands on stdout. nil-safe off a streamed turn.
+	//
+	// 把函数自己的 print() 输出（driver 引到 stderr）实时流在 run_function tool_call 下；JSON 结果仍走 stdout。
+	// 非流式 turn 下 nil 安全。
+	prog := loopapp.ToolProgress(ctx)
+	defer prog.Close()
 	res, spawnErr := a.svc.Spawn(ctx, owner, sandboxdomain.SpawnOpts{
-		Cmd:   "python",
-		Args:  []string{mainPy},
-		Stdin: inputJSON,
+		Cmd:       "python",
+		Args:      []string{mainPy},
+		Stdin:     inputJSON,
+		StreamErr: prog,
 	})
 	if spawnErr != nil {
 		return nil, fmt.Errorf("functionapp.SandboxAdapter.Run: %w", spawnErr)
@@ -116,12 +125,26 @@ func (a *SandboxAdapter) versionDir(functionID, versionID string) string {
 	return filepath.Join(a.dataDir, "functions", functionID, "versions", versionID)
 }
 
+// driverTemplate redirects the function's stdout to stderr for the duration of the call, then
+// prints the JSON result to the real stdout. This keeps stdout a clean single JSON document (so
+// res.Stdout parses) AND routes the function's own print()s to stderr — which the tool layer
+// streams live as progress under the run_function tool_call. (Before this, a print() corrupted the
+// result by interleaving on stdout.)
+//
+// driverTemplate 在调用期间把函数 stdout 重定向到 stderr，再把 JSON 结果打到真正的 stdout。这既让
+// stdout 保持单一干净 JSON（res.Stdout 可解析），又把函数自己的 print() 引到 stderr——工具层将其作为
+// run_function tool_call 下的实时进度流出。（此前 print() 会在 stdout 上交错、破坏结果。）
 const driverTemplate = `
 
 if __name__ == "__main__":
     import json as _json, sys as _sys
     _input = _json.load(_sys.stdin)
-    _result = {FUNC_NAME}(**_input)
+    _real_stdout = _sys.stdout
+    _sys.stdout = _sys.stderr
+    try:
+        _result = {FUNC_NAME}(**_input)
+    finally:
+        _sys.stdout = _real_stdout
     print(_json.dumps(_result))
 `
 
