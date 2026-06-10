@@ -172,18 +172,19 @@ type (
 // Deps 是 chat 注入的协作者（DIP）。分组使 New 可读；M7 填真实现、测试填 fake。可选 provider 为
 // nil 时该 System Prompt 段降级为空（chat 不硬要求 memory/catalog/documents 接线）。
 type Deps struct {
-	Conversations ConversationReader
-	Resolver      ModelResolver
-	Attachments   AttachmentRenderer
-	Toolset       toolapp.Toolset
-	Memory        MemoryProvider
-	Catalog       CatalogProvider
-	Documents     DocumentRenderer
-	Todo          TodoReminder
-	Bridge        streamdomain.Bridge        // messages stream instance; nil → no live push (REST history still works)
-	Titler        ConversationTitler         // auto-title writer (R0057); nil → no auto-titling
-	Notifier      notificationdomain.Emitter // auto-title notification (R0057); nil → no notify
-	Compactor     Compactor                  // context compaction (R0059); nil → no compaction
+	Conversations  ConversationReader
+	Resolver       ModelResolver
+	Attachments    AttachmentRenderer
+	Toolset        toolapp.Toolset
+	Memory         MemoryProvider
+	Catalog        CatalogProvider
+	Documents      DocumentRenderer
+	Todo           TodoReminder
+	Bridge         streamdomain.Bridge        // messages stream instance; nil → no live push (REST history still works)
+	EntitiesBridge streamdomain.Bridge        // entities stream (SSE-C): loop mirrors forge tool_call deltas here; nil → no entity-panel live fill
+	Titler         ConversationTitler         // auto-title writer (R0057); nil → no auto-titling
+	Notifier       notificationdomain.Emitter // auto-title notification (R0057); nil → no notify
+	Compactor      Compactor                  // context compaction (R0059); nil → no compaction
 }
 
 // Compactor compacts a conversation when it nears the model's context window (contextmgr M5.3).

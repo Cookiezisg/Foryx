@@ -6,6 +6,7 @@ import (
 
 	"go.uber.org/zap"
 
+	entitystreamapp "github.com/sunweilin/forgify/backend/internal/app/entitystream"
 	loopapp "github.com/sunweilin/forgify/backend/internal/app/loop"
 	messagesdomain "github.com/sunweilin/forgify/backend/internal/domain/messages"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
@@ -76,6 +77,11 @@ func (s *Service) processTask(conversationID string, q *convQueue, t task) {
 	base = reqctxpkg.SetMessageID(base, t.assistantMsgID)
 	base = reqctxpkg.WithAgentState(base, q.agentState)
 	base = loopapp.WithBridge(base, s.deps.Bridge)
+	// SSE-C: seed the entities Bridge so the loop mirrors a forge tool_call's content delta onto the
+	// entities stream (the entity panel fills in live as the LLM forges).
+	//
+	// SSE-C：种 entities Bridge，使 loop 把 forge tool_call 的内容 delta 镜像到 entities 流（LLM 锻造时实体面板实时填充）。
+	base = entitystreamapp.WithBridge(base, s.deps.EntitiesBridge)
 
 	ctx, cancel := context.WithCancel(base)
 	q.mu.Lock()

@@ -41,7 +41,7 @@ func TestStreamLLM_ForgeDoubleWritesToEntities(t *testing.T) {
 		t.Fatalf("want 4 entities frames (open + 2 delta + close), got %d: %+v", len(ent.events), ent.events)
 	}
 	open, ok := ent.events[0].Frame.(streamdomain.Open)
-	if !ok || open.Node.Type != nodeForge {
+	if !ok || open.Node.Type != entitystreamapp.NodeForge {
 		t.Fatalf("frame[0] not a forge Open: %+v", ent.events[0])
 	}
 	if ent.events[0].Scope.Kind != streamdomain.KindFunction || ent.events[0].Scope.ID != "tc1" {

@@ -183,18 +183,19 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 		Windows:       lookup.WindowResolver(),
 	}, log)
 	chat := chatapp.New(st.messages, chatapp.Deps{
-		Conversations: conv,
-		Resolver:      resolvers.Chat(),
-		Attachments:   NewAttachmentRenderer(att),
-		Toolset:       toolset,
-		Memory:        mem,
-		Catalog:       cat,
-		Documents:     NewDocumentRenderer(doc),
-		Todo:          todo,
-		Bridge:        bus.messages,
-		Titler:        conv,
-		Notifier:      notif,
-		Compactor:     ctxmgr,
+		Conversations:  conv,
+		Resolver:       resolvers.Chat(),
+		Attachments:    NewAttachmentRenderer(att),
+		Toolset:        toolset,
+		Memory:         mem,
+		Catalog:        cat,
+		Documents:      NewDocumentRenderer(doc),
+		Todo:           todo,
+		Bridge:         bus.messages,
+		EntitiesBridge: bus.entities,
+		Titler:         conv,
+		Notifier:       notif,
+		Compactor:      ctxmgr,
 	}, log)
 
 	// --- durable workflow interpreter ---

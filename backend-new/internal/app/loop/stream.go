@@ -58,14 +58,11 @@ type toolAccum struct {
 	forge *entitystreamapp.Writer
 }
 
-// nodeForge is the entities-stream node type for a forge activity (an entity's content being
-// written). Open content = forgeOpenContent; delta = the raw arg chunks; close result = the final
-// args. (run / fire node types live with their producers — SSE-C C2+/C5.)
+// forgeOpenContent is the entities-stream forge node's open-frame content. (Node type =
+// entitystream.NodeForge; delta = raw arg chunks; close result = the final args.)
 //
-// nodeForge 是 entities 流「锻造活动」节点型（某实体正被写出的内容）。open 内容=forgeOpenContent；
-// delta=裸 arg chunk；close 结果=最终 args。（run / fire 节点型随各自 producer——SSE-C C2+/C5。）
-const nodeForge = "forge"
-
+// forgeOpenContent 是 entities 流 forge 节点的 open 帧内容。（节点型 = entitystream.NodeForge；delta =
+// 裸 arg chunk；close 结果 = 最终 args。）
 type forgeOpenContent struct {
 	Op string `json:"op"` // "create" | "edit"
 }
@@ -165,7 +162,7 @@ func streamLLM(
 				if spec, ok := forgeOf(event.ToolName); ok {
 					a.forge = entitystreamapp.New(ctx, entBridge,
 						streamdomain.Scope{Kind: spec.Kind, ID: event.ToolID},
-						nodeForge, jsonContent(forgeOpenContent{Op: spec.Op}))
+						entitystreamapp.NodeForge, jsonContent(forgeOpenContent{Op: spec.Op}))
 				}
 			}
 

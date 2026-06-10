@@ -30,6 +30,15 @@ import (
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 )
 
+// The three entities-stream node types (Node.Type), one per activity:
+//
+// 三种 entities 流节点型（Node.Type），每种一类活动：
+const (
+	NodeForge = "forge" // an entity's content being written (loop mirrors a create/edit tool_call)
+	NodeRun   = "run"   // an entity's execution intermediate (a Service tees stdout / yields / a sub-loop)
+	NodeFire  = "fire"  // a trigger firing — a point Signal
+)
+
 type bridgeKey struct{}
 
 // WithBridge seeds the entities Bridge into ctx so a loop / Service that already threads ctx can
