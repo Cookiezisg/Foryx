@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	loopapp "github.com/sunweilin/forgify/backend/internal/app/loop"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
@@ -300,17 +301,34 @@ func (t *WebFetch) summarise(ctx context.Context, source, prompt, content string
 	if err != nil {
 		return "", err
 	}
-	out, err := llminfra.Generate(ctx, client, llminfra.Request{
+	// Consume the raw stream (NOT Generate — its retry would re-emit the partial summary on retry;
+	// the llm package doc forbids retry for emitting callers) and tee each text delta to a live
+	// `progress` block under the tool_call, so the user watches the summary get written token by
+	// token. nil-safe off a streamed turn (no frames, identical return).
+	//
+	// 直接消费裸 stream（不用 Generate——它的 retry 会在重试时重发已出的半截摘要；llm 包注释禁止 emit 调用方
+	// 套 retry），把每个 text delta 实时 tee 到 tool_call 下的 `progress` 块，使用户逐字看摘要被写出来。非流式
+	// turn 下 nil 安全（无帧、返回一致）。
+	prog := loopapp.ToolProgress(ctx)
+	defer prog.Close()
+	req := llminfra.Request{
 		ModelID:  modelID,
 		Key:      creds.Key,
 		BaseURL:  creds.BaseURL,
 		Options:  ref.Options,
 		Messages: []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: buildSummaryPrompt(source, prompt, content)}},
-	})
-	if err != nil {
-		return "", err
 	}
-	return strings.TrimSpace(out), nil
+	var sb strings.Builder
+	for event := range client.Stream(ctx, req) {
+		switch event.Type {
+		case llminfra.EventText:
+			sb.WriteString(event.Delta)
+			prog.Print(event.Delta)
+		case llminfra.EventError:
+			return "", event.Err
+		}
+	}
+	return strings.TrimSpace(sb.String()), nil
 }
 
 func buildSummaryPrompt(source, prompt, content string) string {
