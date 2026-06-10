@@ -50,3 +50,17 @@ type Node struct {
 	Type    string          `json:"type"`
 	Content json.RawMessage `json:"content,omitempty"`
 }
+
+// JSONContent marshals v into a Node.Content payload, degrading to nil on the never-expected
+// failure (these are flat producer structs) rather than aborting a stream. The one shared helper
+// every producer (loop / chat / subagent / mcp / trigger …) uses to build node content.
+//
+// JSONContent 把 v marshal 成 Node.Content payload，（这些都是扁平 producer 结构）不应失败、失败降级
+// nil 而非中断流。所有 producer（loop / chat / subagent / mcp / trigger…）造节点内容共用的唯一 helper。
+func JSONContent(v any) json.RawMessage {
+	b, err := json.Marshal(v)
+	if err != nil {
+		return nil
+	}
+	return b
+}

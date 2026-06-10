@@ -2,7 +2,6 @@ package subagent
 
 import (
 	"context"
-	"encoding/json"
 
 	"go.uber.org/zap"
 
@@ -44,7 +43,7 @@ type messageStopContent struct {
 func (s *Service) emitMessageStart(ctx context.Context, conversationID, msgID, parentID string) {
 	s.publishFrame(ctx, conversationID, msgID, streamdomain.Open{
 		ParentID: parentID,
-		Node:     streamdomain.Node{Type: nodeTypeMessage, Content: jsonContent(messageOpenContent{Role: messagesdomain.RoleAssistant, Subagent: true})},
+		Node:     streamdomain.Node{Type: nodeTypeMessage, Content: streamdomain.JSONContent(messageOpenContent{Role: messagesdomain.RoleAssistant, Subagent: true})},
 	})
 }
 
@@ -57,7 +56,7 @@ func (s *Service) emitMessageStop(ctx context.Context, conversationID string, m 
 		Error:  m.ErrorMessage,
 		Result: &streamdomain.Node{
 			Type: nodeTypeMessage,
-			Content: jsonContent(messageStopContent{
+			Content: streamdomain.JSONContent(messageStopContent{
 				Role:         messagesdomain.RoleAssistant,
 				Status:       m.Status,
 				StopReason:   m.StopReason,
@@ -85,12 +84,4 @@ func (s *Service) publishFrame(ctx context.Context, conversationID, nodeID strin
 	}); err != nil {
 		s.log.Warn("subagentapp: messages stream push failed", zap.String("nodeId", nodeID), zap.Error(err))
 	}
-}
-
-func jsonContent(v any) json.RawMessage {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil
-	}
-	return b
 }

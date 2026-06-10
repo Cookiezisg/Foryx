@@ -13,7 +13,7 @@ package trigger
 const (
 	SensorTargetFunction = "function"
 	SensorTargetHandler  = "handler"
-	SensorTargetMCP      = "mcp" // an installed mcp server's tool (TargetID=server name, Method=tool name)
+	SensorTargetMCP      = "mcp" // an installed mcp server's tool (TargetID=mcp_ entity id, Method=tool name)
 )
 
 // MinSensorIntervalSec floors the probe cadence — a tiny interval would hammer the
@@ -28,7 +28,7 @@ const MinSensorIntervalSec = 5
 // SensorConfig 是解析后的 sensor source 配置。
 type SensorConfig struct {
 	TargetKind  string // function | handler | mcp — what to invoke
-	TargetID    string // fn_… / hd… / mcp server name
+	TargetID    string // entity id: fn_… / hd… / mcp_…（relation equip 边 + CallTool 都按 id 寻址）
 	Method      string // handler: method name · mcp: tool name (function is the whole unit)
 	IntervalSec int    // probe cadence in seconds (>= MinSensorIntervalSec)
 	Condition   string // CEL bool expr over `payload` (= the invoke return value)

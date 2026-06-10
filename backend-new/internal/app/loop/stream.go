@@ -152,7 +152,7 @@ func streamLLM(
 			accums[event.ToolIndex] = a
 			if event.ToolID != "" {
 				em.open(ctx, event.ToolID, msgID, messagesdomain.BlockTypeToolCall,
-					jsonContent(toolCallContent{Name: event.ToolName}))
+					streamdomain.JSONContent(toolCallContent{Name: event.ToolName}))
 				// SSE-C: a forge tool_call's args ARE an entity's content being written — mirror the
 				// delta onto the entities stream (scope = a forge session keyed by the tool_call id;
 				// the front end correlates to the entity via the streamed args + the tool_result).
@@ -162,7 +162,7 @@ func streamLLM(
 				if spec, ok := forgeOf(event.ToolName); ok {
 					a.forge = entitystreamapp.New(ctx, entBridge,
 						streamdomain.Scope{Kind: spec.Kind, ID: event.ToolID},
-						entitystreamapp.NodeForge, jsonContent(forgeOpenContent{Op: spec.Op}))
+						entitystreamapp.NodeForge, streamdomain.JSONContent(forgeOpenContent{Op: spec.Op}))
 				}
 			}
 
@@ -238,26 +238,14 @@ func streamLLM(
 	return
 }
 
-// jsonContent marshals v to a node Content payload; a marshal failure (never expected for
-// these flat structs) degrades to nil rather than aborting the stream.
-//
-// jsonContent 把 v marshal 成节点 Content；marshal 失败（这些扁平结构不会发生）降级为 nil 而非中断流。
-func jsonContent(v any) json.RawMessage {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil
-	}
-	return b
-}
-
 func textSnapshot(s string) *streamdomain.Node {
-	return &streamdomain.Node{Type: messagesdomain.BlockTypeText, Content: jsonContent(textContent{Content: s})}
+	return &streamdomain.Node{Type: messagesdomain.BlockTypeText, Content: streamdomain.JSONContent(textContent{Content: s})}
 }
 
 func reasonSnapshot(r reasonAccum) *streamdomain.Node {
 	return &streamdomain.Node{
 		Type:    messagesdomain.BlockTypeReasoning,
-		Content: jsonContent(reasoningContent{Content: r.buf.String(), Signature: r.signature}),
+		Content: streamdomain.JSONContent(reasoningContent{Content: r.buf.String(), Signature: r.signature}),
 	}
 }
 
@@ -266,7 +254,7 @@ func toolCallSnapshot(a *toolAccum) *streamdomain.Node {
 	argsJSON, _ := json.Marshal(args)
 	return &streamdomain.Node{
 		Type: messagesdomain.BlockTypeToolCall,
-		Content: jsonContent(toolCallContent{
+		Content: streamdomain.JSONContent(toolCallContent{
 			Name:      a.name,
 			Arguments: string(argsJSON),
 			Summary:   fields.Summary,

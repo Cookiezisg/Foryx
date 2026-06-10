@@ -11,6 +11,7 @@ import (
 
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	messagesdomain "github.com/sunweilin/forgify/backend/internal/domain/messages"
+	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -103,7 +104,7 @@ func runOneTool(ctx context.Context, t toolapp.Tool, tc messagesdomain.ToolCallD
 
 	em := newEmitter(ctx, log)
 	blockID := idgenpkg.New("blk")
-	em.open(ctx, blockID, tc.ID, messagesdomain.BlockTypeToolResult, jsonContent(toolResultContent{Content: output}))
+	em.open(ctx, blockID, tc.ID, messagesdomain.BlockTypeToolResult, streamdomain.JSONContent(toolResultContent{Content: output}))
 	em.close(ctx, blockID, status, nil, errMsg)
 
 	errVal := ""

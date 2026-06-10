@@ -2,7 +2,6 @@ package chat
 
 import (
 	"context"
-	"encoding/json"
 
 	"go.uber.org/zap"
 
@@ -61,13 +60,13 @@ type messageStopContent struct {
 // 客户端立即看到。无 bridge 时 no-op（REST 历史仍有）。
 func (s *Service) emitUserMessage(ctx context.Context, conversationID string, m *messagesdomain.Message, text string) {
 	s.publishFrame(ctx, conversationID, m.ID, streamdomain.Open{
-		Node: streamdomain.Node{Type: nodeTypeMessage, Content: jsonContent(messageOpenContent{Role: messagesdomain.RoleUser})},
+		Node: streamdomain.Node{Type: nodeTypeMessage, Content: streamdomain.JSONContent(messageOpenContent{Role: messagesdomain.RoleUser})},
 	})
 	s.publishFrame(ctx, conversationID, m.ID, streamdomain.Close{
 		Status: messagesdomain.StatusCompleted,
 		Result: &streamdomain.Node{
 			Type:    nodeTypeMessage,
-			Content: jsonContent(messageUserContent{Role: messagesdomain.RoleUser, Content: text, AttachmentIDs: attachmentIDsOf(m)}),
+			Content: streamdomain.JSONContent(messageUserContent{Role: messagesdomain.RoleUser, Content: text, AttachmentIDs: attachmentIDsOf(m)}),
 		},
 	})
 }
@@ -79,7 +78,7 @@ func (s *Service) emitUserMessage(ctx context.Context, conversationID string, m 
 // （其 Open.ParentID = msgID）。
 func (s *Service) emitMessageStart(ctx context.Context, conversationID, msgID string) {
 	s.publishFrame(ctx, conversationID, msgID, streamdomain.Open{
-		Node: streamdomain.Node{Type: nodeTypeMessage, Content: jsonContent(messageOpenContent{Role: messagesdomain.RoleAssistant})},
+		Node: streamdomain.Node{Type: nodeTypeMessage, Content: streamdomain.JSONContent(messageOpenContent{Role: messagesdomain.RoleAssistant})},
 	})
 }
 
@@ -95,7 +94,7 @@ func (s *Service) emitMessageStop(ctx context.Context, conversationID string, m 
 		Error:  m.ErrorMessage,
 		Result: &streamdomain.Node{
 			Type: nodeTypeMessage,
-			Content: jsonContent(messageStopContent{
+			Content: streamdomain.JSONContent(messageStopContent{
 				Role:         messagesdomain.RoleAssistant,
 				Status:       m.Status,
 				StopReason:   m.StopReason,
@@ -124,16 +123,4 @@ func (s *Service) publishFrame(ctx context.Context, conversationID, nodeID strin
 	}); err != nil {
 		s.log.Warn("chatapp: messages stream push failed", zap.String("nodeId", nodeID), zap.Error(err))
 	}
-}
-
-// jsonContent marshals v to a node Content payload; a marshal failure (never expected for these
-// flat structs) degrades to nil rather than blocking the frame.
-//
-// jsonContent 把 v marshal 成节点 Content；marshal 失败（这些扁平结构不会发生）降级为 nil 而非阻塞帧。
-func jsonContent(v any) json.RawMessage {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil
-	}
-	return b
 }

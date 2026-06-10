@@ -51,7 +51,7 @@ func (s *Service) CallTool(ctx context.Context, serverID, tool string, args json
 	//
 	// 把进度通知 tee 到 entities run 终端（实体面板，全 caller），叠在调用方已放 ctx 的 sink（动态工具的
 	// chat sink）之上。懒节点——不发进度的 server 不开任何帧。
-	runTerm := entitystreamapp.New(ctx, s.entities, streamdomain.Scope{Kind: streamdomain.KindMCP, ID: serverID}, entitystreamapp.NodeRun, jsonContent(map[string]any{"tool": tool}))
+	runTerm := entitystreamapp.New(ctx, s.entities, streamdomain.Scope{Kind: streamdomain.KindMCP, ID: serverID}, entitystreamapp.NodeRun, streamdomain.JSONContent(map[string]any{"tool": tool}))
 	if s.entities != nil {
 		prev := mcpinfra.ProgressFrom(cctx)
 		cctx = mcpinfra.WithProgress(cctx, func(line string) {
@@ -161,15 +161,4 @@ func (s *Service) recordResult(id string, callErr error) {
 			st.Status = mcpdomain.StatusReady
 		}
 	}
-}
-
-// jsonContent marshals v into a node Content payload (nil on the never-expected failure).
-//
-// jsonContent 把 v marshal 成节点 Content（不应失败；失败降级 nil）。
-func jsonContent(v any) json.RawMessage {
-	b, err := json.Marshal(v)
-	if err != nil {
-		return nil
-	}
-	return b
 }

@@ -99,7 +99,7 @@ func (w *ToolProgressWriter) Close() {
 		return
 	}
 	text := w.snap.String()
-	snap := &streamdomain.Node{Type: messagesdomain.BlockTypeProgress, Content: jsonContent(progressContent{Text: text})}
+	snap := &streamdomain.Node{Type: messagesdomain.BlockTypeProgress, Content: streamdomain.JSONContent(progressContent{Text: text})}
 	w.em.close(w.ctx, w.blockID, messagesdomain.StatusCompleted, snap, "")
 	// Hand the finished progress block to the loop (if it set up a capture) so it persists with the
 	// turn — parented to the tool_call, mirroring the tool_result. The LLM history projection is a
