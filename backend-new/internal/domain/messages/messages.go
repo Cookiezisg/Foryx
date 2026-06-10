@@ -63,6 +63,18 @@ const (
 	// BlockTypeCompaction 标记上下文压缩摘要（contextmgr M5.3）；loop 从 LLM 历史丢弃它，
 	// 内容已在 conversation.summary。
 	BlockTypeCompaction = "compaction"
+
+	// BlockTypeProgress is a tool's live intermediate progress (bash output, env-fix log, …),
+	// streamed under its tool_call (Open.ParentID = tool_call id) via loop.ToolProgress. It is
+	// STREAM-ONLY: never written to message_blocks, never in LLM history — so it is deliberately
+	// absent from IsValidBlockType and the store CHECK (those gate persisted blocks). The final
+	// answer always lands in the tool_result block; progress is UI-only and lossy.
+	//
+	// BlockTypeProgress 是工具的实时中间过程（bash 输出、env-fix log…），经 loop.ToolProgress 流在其
+	// tool_call 下（Open.ParentID=tool_call id）。**仅流不持久**：绝不写 message_blocks、绝不进 LLM
+	// 历史——故刻意不在 IsValidBlockType / store CHECK 内（那俩闸的是持久化块）。最终答案永远落 tool_result
+	// 块；progress 纯 UI、可丢。
+	BlockTypeProgress = "progress"
 )
 
 // IsValidBlockType reports whether t is a known block type (store CHECK / contract对账).
