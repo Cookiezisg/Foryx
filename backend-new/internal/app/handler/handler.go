@@ -26,6 +26,7 @@ import (
 	notificationdomain "github.com/sunweilin/forgify/backend/internal/domain/notification"
 	relationdomain "github.com/sunweilin/forgify/backend/internal/domain/relation"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
+	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 	handlerinfra "github.com/sunweilin/forgify/backend/internal/infra/handler"
 )
 
@@ -75,8 +76,16 @@ type Service struct {
 	manager     *instanceManager
 	notif       notificationdomain.Emitter // nil-tolerant
 	relations   RelationSyncer             // nil disables relation hooks
+	entities    streamdomain.Bridge        // entities stream (SSE-C); nil → no entity-panel run terminal
 	log         *zap.Logger
 }
+
+// SetEntitiesBridge installs the entities stream post-construction (SSE-C): Call tees a streaming
+// method's yields onto the handler's run terminal for the entity panel, regardless of caller.
+//
+// SetEntitiesBridge 装配后装入 entities 流（SSE-C）：Call 把流式 method 的 yield tee 到 handler 的 run 终端
+// 供实体面板，与谁触发无关。
+func (s *Service) SetEntitiesBridge(b streamdomain.Bridge) { s.entities = b }
 
 // NewService wires the service; nil repo / provisioner / runner / encryptor / log is a
 // wiring bug (log degrades to no-op).

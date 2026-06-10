@@ -2,13 +2,16 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
 
 	"go.uber.org/zap"
 
+	entitystreamapp "github.com/sunweilin/forgify/backend/internal/app/entitystream"
 	handlerdomain "github.com/sunweilin/forgify/backend/internal/domain/handler"
+	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 	handlerinfra "github.com/sunweilin/forgify/backend/internal/infra/handler"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
@@ -47,18 +50,43 @@ func (s *Service) Call(ctx context.Context, in CallInput) (any, error) {
 		return nil, fmt.Errorf("handlerapp.Call: %w", err)
 	}
 
-	startedAt := time.Now().UTC()
-	var result any
-	if in.OnProgress != nil {
-		result, err = inst.Client.StreamCall(ctx, in.Method, in.Args, in.OnProgress)
-	} else {
-		result, err = inst.Client.Call(ctx, in.Method, in.Args)
+	// Tee the method's yields onto the handler's entities run terminal (entity panel, all callers)
+	// in addition to the caller's progress sink (messages, chat). Always StreamCall — doCall is safe
+	// for a non-streaming method (no yields → onProgress never fires → plain return).
+	//
+	// 把 method 的 yield tee 到 handler 的 entities run 终端（实体面板，全 caller）+ 调用方的进度 sink
+	// （messages，chat）。一律 StreamCall——doCall 对非流式 method 安全（无 yield → onProgress 不触发 → 正常返回）。
+	runTerm := entitystreamapp.New(ctx, s.entities, streamdomain.Scope{Kind: streamdomain.KindHandler, ID: h.ID}, entitystreamapp.NodeRun, nil)
+	onProgress := func(v any) {
+		if in.OnProgress != nil {
+			in.OnProgress(v)
+		}
+		_, _ = runTerm.Write(yieldBytes(v))
 	}
+	startedAt := time.Now().UTC()
+	result, err := inst.Client.StreamCall(ctx, in.Method, in.Args, onProgress)
 	endedAt := time.Now().UTC()
+	if err != nil {
+		runTerm.Close("error", nil)
+	} else {
+		runTerm.Close("completed", nil)
+	}
 
 	callErr := s.mapCallErr(ctx, err)
 	s.recordCall(ctx, h, inst, in, startedAt, endedAt, result, callErr, ctx.Err())
 	return result, callErr
+}
+
+// yieldBytes renders a streaming method's yield (any) as one line for the entities run terminal:
+// a string goes verbatim, anything else as compact JSON.
+//
+// yieldBytes 把流式 method 的 yield（any）渲成 entities run 终端的一行：string 原样，其余 compact JSON。
+func yieldBytes(v any) []byte {
+	if s, ok := v.(string); ok {
+		return []byte(s + "\n")
+	}
+	b, _ := json.Marshal(v)
+	return append(b, '\n')
 }
 
 // mapCallErr maps infra client errors to domain errors for HTTP status mapping.

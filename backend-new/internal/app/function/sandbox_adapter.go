@@ -4,14 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
 
+	entitystreamapp "github.com/sunweilin/forgify/backend/internal/app/entitystream"
 	loopapp "github.com/sunweilin/forgify/backend/internal/app/loop"
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
+	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 )
 
 // SandboxAdapter satisfies SandboxRunner by delegating spawn + cleanup to sandboxapp
@@ -23,15 +26,19 @@ import (
 // 数据根目录，满足 SandboxRunner。env 物化不在此——走 envfix.Provisioner（其 SandboxPort 直接
 // 是 sandboxapp.Service）。
 type SandboxAdapter struct {
-	svc     *sandboxapp.Service
-	dataDir string
+	svc      *sandboxapp.Service
+	dataDir  string
+	entities streamdomain.Bridge // entities stream (SSE-C); nil → no entity-panel run terminal
 }
 
-// NewSandboxAdapter binds the adapter to a sandbox service + the function data root.
+// NewSandboxAdapter binds the adapter to a sandbox service + the function data root. entities (the
+// entities stream Bridge, nil-tolerant) carries a run's live stderr to the function panel's terminal
+// regardless of who triggered the run (chat / REST / workflow / sensor).
 //
-// NewSandboxAdapter 把 adapter 绑到 sandbox service + function 数据根。
-func NewSandboxAdapter(svc *sandboxapp.Service, dataDir string) *SandboxAdapter {
-	return &SandboxAdapter{svc: svc, dataDir: dataDir}
+// NewSandboxAdapter 把 adapter 绑到 sandbox service + function 数据根。entities（entities 流 Bridge，允许
+// nil）把一次运行的实时 stderr 送到 function 面板终端——不论谁触发（chat / REST / workflow / sensor）。
+func NewSandboxAdapter(svc *sandboxapp.Service, dataDir string, entities streamdomain.Bridge) *SandboxAdapter {
+	return &SandboxAdapter{svc: svc, dataDir: dataDir, entities: entities}
 }
 
 var _ SandboxRunner = (*SandboxAdapter)(nil)
@@ -62,21 +69,30 @@ func (a *SandboxAdapter) Run(ctx context.Context, owner sandboxdomain.Owner, fun
 		return nil, fmt.Errorf("functionapp.SandboxAdapter.Run: marshal input: %w", err)
 	}
 
-	// Stream the function's own print() output (routed to stderr by the driver) live under the
-	// run_function tool_call; the JSON result still lands on stdout. nil-safe off a streamed turn.
+	// Tee the function's own print() output (the driver routes it to stderr; the JSON result still
+	// lands on clean stdout) to BOTH: the messages stream under the run_function tool_call (chat
+	// view, ToolProgress) AND the entities stream's run terminal scoped to this function (panel
+	// view, all callers). Both nil-safe.
 	//
-	// 把函数自己的 print() 输出（driver 引到 stderr）实时流在 run_function tool_call 下；JSON 结果仍走 stdout。
-	// 非流式 turn 下 nil 安全。
+	// 把函数自己的 print() 输出（driver 引到 stderr；JSON 结果仍走干净 stdout）**双写**：messages 流 run_function
+	// tool_call 下（对话视图，ToolProgress）+ entities 流锚到本 function 的 run 终端（面板视图，全 caller）。皆 nil 安全。
 	prog := loopapp.ToolProgress(ctx)
 	defer prog.Close()
+	runTerm := entitystreamapp.New(ctx, a.entities, streamdomain.Scope{Kind: streamdomain.KindFunction, ID: functionID}, entitystreamapp.NodeRun, nil)
 	res, spawnErr := a.svc.Spawn(ctx, owner, sandboxdomain.SpawnOpts{
 		Cmd:       "python",
 		Args:      []string{mainPy},
 		Stdin:     inputJSON,
-		StreamErr: prog,
+		StreamErr: io.MultiWriter(prog, runTerm),
 	})
 	if spawnErr != nil {
+		runTerm.Close("error", nil)
 		return nil, fmt.Errorf("functionapp.SandboxAdapter.Run: %w", spawnErr)
+	}
+	if res.Ok {
+		runTerm.Close("completed", nil)
+	} else {
+		runTerm.Close("error", nil)
 	}
 
 	out := &functiondomain.ExecutionResult{ElapsedMs: res.Duration.Milliseconds()}

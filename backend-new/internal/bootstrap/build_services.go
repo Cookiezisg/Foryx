@@ -127,8 +127,9 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	doc := documentapp.New(st.document, notif, log)
 	todo := todoapp.New(st.todo, bus.messages, log)
 	att := attachmentapp.New(st.attachment, st.blob, attachmentapp.NewSandboxExtractor(sbx), log)
-	fn := functionapp.NewService(st.function, prov, functionapp.NewSandboxAdapter(sbx, dataDir), notif, log)
+	fn := functionapp.NewService(st.function, prov, functionapp.NewSandboxAdapter(sbx, dataDir, bus.entities), notif, log)
 	hd := handlerapp.NewService(st.handler, prov, handlerapp.NewSandboxAdapter(sbx, dataDir), inf.encryptor, handlerapp.DefaultClientFactory, notif, log)
+	hd.SetEntitiesBridge(bus.entities) // SSE-C: Call tees method yields to the handler's run terminal
 	ag := agentapp.NewService(st.agent, notif, log)
 	ctl := controlapp.NewService(st.control, notif, log)
 	apf := approvalapp.NewService(st.approval, notif, log)
