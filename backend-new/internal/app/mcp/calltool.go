@@ -134,6 +134,13 @@ func (s *Service) ListCalls(ctx context.Context, filter mcpdomain.CallFilter) ([
 	return s.repo.ListCalls(ctx, filter)
 }
 
+// GetCall returns one call-log record (AI :triage reads it to diagnose a failed mcp invocation).
+//
+// GetCall 返回一条调用日志记录（AI :triage 读它诊断一次失败的 mcp 调用）。
+func (s *Service) GetCall(ctx context.Context, id string) (*mcpdomain.Call, error) {
+	return s.repo.GetCall(ctx, id)
+}
+
 // recordResult bumps per-server health counters; consecutive failures/successes flip
 // degraded/ready. Holds s.mu.
 //

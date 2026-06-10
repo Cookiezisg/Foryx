@@ -67,6 +67,14 @@ func (r *fakeRepo) SaveCall(_ context.Context, c *mcpdomain.Call) error {
 	r.calls = append(r.calls, c)
 	return nil
 }
+func (r *fakeRepo) GetCall(_ context.Context, id string) (*mcpdomain.Call, error) {
+	for _, c := range r.calls {
+		if c.ID == id {
+			return c, nil
+		}
+	}
+	return nil, mcpdomain.ErrCallNotFound
+}
 func (r *fakeRepo) ListCalls(_ context.Context, _ mcpdomain.CallFilter) ([]*mcpdomain.Call, string, error) {
 	return r.calls, "", nil
 }

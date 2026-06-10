@@ -2,9 +2,11 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
+	ormpkg "github.com/sunweilin/forgify/backend/internal/pkg/orm"
 )
 
 func (s *Store) SaveCall(ctx context.Context, c *mcpdomain.Call) error {
@@ -12,6 +14,17 @@ func (s *Store) SaveCall(ctx context.Context, c *mcpdomain.Call) error {
 		return fmt.Errorf("mcpstore.SaveCall: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) GetCall(ctx context.Context, id string) (*mcpdomain.Call, error) {
+	c, err := s.calls.Get(ctx, id)
+	if errors.Is(err, ormpkg.ErrNotFound) {
+		return nil, mcpdomain.ErrCallNotFound
+	}
+	if err != nil {
+		return nil, fmt.Errorf("mcpstore.GetCall: %w", err)
+	}
+	return c, nil
 }
 
 func (s *Store) ListCalls(ctx context.Context, filter mcpdomain.CallFilter) ([]*mcpdomain.Call, string, error) {

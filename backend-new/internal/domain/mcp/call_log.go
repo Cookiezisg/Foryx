@@ -79,11 +79,12 @@ type CallFilter struct {
 	Limit       int
 }
 
-// CallRepository is the call-log slice of Repository (Save on every invocation; List feeds the
-// server panel's run history).
+// CallRepository is the call-log slice of Repository (Save on every invocation; Get fetches one
+// for triage; List feeds the server panel's run history).
 //
-// CallRepository 是 Repository 的 call-log 切片（每次调用 Save；List 喂 server 面板的运行历史）。
+// CallRepository 是 Repository 的 call-log 切片（每次调用 Save；Get 取一条供 triage；List 喂 server 面板的运行历史）。
 type CallRepository interface {
 	SaveCall(ctx context.Context, c *Call) error
+	GetCall(ctx context.Context, id string) (*Call, error)
 	ListCalls(ctx context.Context, filter CallFilter) ([]*Call, string, error)
 }

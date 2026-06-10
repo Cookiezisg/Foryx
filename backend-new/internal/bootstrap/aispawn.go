@@ -13,7 +13,9 @@ import (
 	conversationapp "github.com/sunweilin/forgify/backend/internal/app/conversation"
 	functionapp "github.com/sunweilin/forgify/backend/internal/app/function"
 	handlerapp "github.com/sunweilin/forgify/backend/internal/app/handler"
+	mcpapp "github.com/sunweilin/forgify/backend/internal/app/mcp"
 	schedulerapp "github.com/sunweilin/forgify/backend/internal/app/scheduler"
+	triggerapp "github.com/sunweilin/forgify/backend/internal/app/trigger"
 	errorsdomain "github.com/sunweilin/forgify/backend/internal/domain/errors"
 	mentiondomain "github.com/sunweilin/forgify/backend/internal/domain/mention"
 )
@@ -56,16 +58,18 @@ func (a aispawnSender) SendSeed(ctx context.Context, conversationID, content str
 const maxTriageRenderBytes = 6000
 
 // executionRenderer resolves any execution record by its id prefix (S15 ID constitution) and
-// serializes it for triage — function / handler / agent / flowrun. Adding a type (mcp `mcl_`,
-// trigger firing `tfi_`) is one more case + that service's single-record read.
+// serializes it for triage — function / handler / agent / flowrun / mcp call / trigger activation.
+// Adding a type is one more case + that service's single-record read.
 //
-// executionRenderer 按 id 前缀（S15 ID 宪法）解析任意执行记录并为 triage 序列化——function/handler/agent/flowrun。
-// 加类型（mcp `mcl_`、触发 `tfi_`）= 多一个 case + 那个 service 的单条读取。
+// executionRenderer 按 id 前缀（S15 ID 宪法）解析任意执行记录并为 triage 序列化——function/handler/agent/flowrun/
+// mcp 调用/trigger activation。加类型 = 多一个 case + 那个 service 的单条读取。
 type executionRenderer struct {
 	fn  *functionapp.Service
 	hd  *handlerapp.Service
 	ag  *agentapp.Service
 	sch *schedulerapp.Service
+	mcp *mcpapp.Service
+	trg *triggerapp.Service
 }
 
 func (r executionRenderer) Render(ctx context.Context, executionID string) (string, error) {
@@ -95,6 +99,18 @@ func (r executionRenderer) Render(ctx context.Context, executionID string) (stri
 			return "", err
 		}
 		return renderExecution("workflow run", map[string]any{"run": run, "nodes": nodes}), nil
+	case "mcl": // mcp tool call
+		rec, err := r.mcp.GetCall(ctx, executionID)
+		if err != nil {
+			return "", err
+		}
+		return renderExecution("mcp tool call", rec), nil
+	case "tra": // trigger activation (the "did it fire, why/why not" action log)
+		rec, err := r.trg.GetActivation(ctx, executionID)
+		if err != nil {
+			return "", err
+		}
+		return renderExecution("trigger activation", rec), nil
 	default:
 		return "", errorsdomain.New(errorsdomain.KindInvalid, "UNTRIAGEABLE_EXECUTION",
 			"id prefix "+prefix+"_ is not a triageable execution type")
@@ -121,7 +137,7 @@ func newAispawn(s *services, log *zap.Logger) *aispawnapp.Service {
 	return aispawnapp.New(
 		aispawnConvStarter{conv: s.conversation},
 		aispawnSender{chat: s.chat},
-		executionRenderer{fn: s.function, hd: s.handler, ag: s.agent, sch: s.scheduler},
+		executionRenderer{fn: s.function, hd: s.handler, ag: s.agent, sch: s.scheduler, mcp: s.mcp, trg: s.trigger},
 		log,
 	)
 }

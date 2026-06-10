@@ -165,4 +165,5 @@ var (
 	ErrEnvMissing            = errorsdomain.New(errorsdomain.KindUnprocessable, "MCP_ENV_MISSING", "required environment variables missing")
 	ErrRegistryEntryNotFound = errorsdomain.New(errorsdomain.KindNotFound, "MCP_REGISTRY_NOT_FOUND", "mcp registry entry not found")
 	ErrNoRunnablePackage     = errorsdomain.New(errorsdomain.KindUnprocessable, "MCP_NO_RUNNABLE_PACKAGE", "no package with a supported runtime (node/python/docker/dotnet) and no remote endpoint")
+	ErrCallNotFound          = errorsdomain.New(errorsdomain.KindNotFound, "MCP_CALL_NOT_FOUND", "mcp call not found")
 )
