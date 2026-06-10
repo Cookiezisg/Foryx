@@ -272,4 +272,17 @@ var (
 	// ErrInvalidLifecycle: an illegal lifecycle value or transition.
 	// ErrInvalidLifecycle：非法 lifecycle 值或转换。
 	ErrInvalidLifecycle = errorsdomain.New(errorsdomain.KindUnprocessable, "WORKFLOW_INVALID_LIFECYCLE", "invalid workflow lifecycle state or transition")
+
+	// ErrNoTriggerEntry: an execution-lifecycle action (activate / stage) needs the workflow's entry
+	// trigger node(s) to bind a listener, but the active graph has none (a manual-only graph can only
+	// be :trigger-ed by hand, never armed to listen).
+	// ErrNoTriggerEntry：执行生命周期动作（activate / stage）要靠 workflow 的入口 trigger 节点挂监听，但
+	// active 图里没有（纯手动图只能手动 :trigger、无从挂监听）。
+	ErrNoTriggerEntry = errorsdomain.New(errorsdomain.KindUnprocessable, "WORKFLOW_NO_TRIGGER_ENTRY", "workflow has no entry trigger node to listen on")
+
+	// ErrAlreadyActive: stage (one-shot arm) was called on a workflow that is already active — it is
+	// continuously listening, so a one-shot arm is meaningless (deactivate it first to stage).
+	// ErrAlreadyActive：对已 active 的 workflow 调 stage（一次性待命）——它已在持续监听，一次性待命无意义
+	// （先 deactivate 再 stage）。
+	ErrAlreadyActive = errorsdomain.New(errorsdomain.KindConflict, "WORKFLOW_ALREADY_ACTIVE", "workflow is already active; deactivate before staging a one-shot run")
 )

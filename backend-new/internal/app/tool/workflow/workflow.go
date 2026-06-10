@@ -1,12 +1,13 @@
-// Package workflow provides the LLM system tools for the user's workflow library: search /
-// get / create / edit / revert / delete / capability_check. These are lazy tools
-// (Toolset.Lazy) — surfaced via search_tools, not resident. There is NO trigger_workflow or
-// execution-query tool here: those consume the durable scheduler (later wave), out of scope.
+// Package workflow provides the LLM system tools for the user's workflow library. Two groups:
+// the FORGE/QUERY tools that edit the graph — search / get / create / edit / revert / delete /
+// capability_check (forge.go, query.go); and the EXECUTION-LIFECYCLE tools that drive its runtime —
+// trigger / stage / activate / deactivate / kill (exec.go, D1, over the durable scheduler + trigger
+// binder). All are lazy tools (Toolset.Lazy) — surfaced via search_tools, not resident.
 //
-// Package workflow 提供操作用户 workflow 库的 LLM system tool：search / get / create / edit /
-// revert / delete / capability_check。这些是懒加载工具（Toolset.Lazy）——经 search_tools 浮现、
-// 非常驻。此处无 trigger_workflow / execution-query 工具：那些消费 durable 调度器（后续波次），
-// 超出范围。
+// Package workflow 提供操作用户 workflow 库的 LLM system tool。两组：编辑图的 FORGE/QUERY 工具——
+// search / get / create / edit / revert / delete / capability_check（forge.go, query.go）；驱动其运行时的
+// 执行生命周期工具——trigger / stage / activate / deactivate / kill（exec.go，D1，基于 durable 调度器 +
+// trigger binder）。全是懒加载工具（Toolset.Lazy）——经 search_tools 浮现、非常驻。
 package workflow
 
 import (
@@ -28,6 +29,12 @@ func WorkflowTools(svc *workflowapp.Service) []toolapp.Tool {
 		&RevertWorkflow{svc: svc},
 		&DeleteWorkflow{svc: svc},
 		&CapabilityCheckWorkflow{svc: svc},
+		// execution lifecycle (D1)
+		&TriggerWorkflow{svc: svc},
+		&StageWorkflow{svc: svc},
+		&ActivateWorkflow{svc: svc},
+		&DeactivateWorkflow{svc: svc},
+		&KillWorkflow{svc: svc},
 	}
 }
 

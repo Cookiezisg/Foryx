@@ -44,6 +44,12 @@ type Repository interface {
 	// Skip 丢弃新 firing）。按 workspace 隔离。
 	CountRunningByWorkflow(ctx context.Context, workflowID string) (int, error)
 
+	// ListRunningByWorkflow returns a workflow's currently-running runs — the kill set (kill_workflow
+	// cancels each, interrupting any in-flight advance via ctx then marking it cancelled). Workspace-scoped.
+	// ListRunningByWorkflow 返一个 workflow 当前 running 的 run——kill 集（kill_workflow 逐个取消：经 ctx
+	// 打断在途 advance、再标 cancelled）。按 workspace 隔离。
+	ListRunningByWorkflow(ctx context.Context, workflowID string) ([]*FlowRun, error)
+
 	// MarkRunTerminal sets a run's terminal status (completed/failed) + error + completed_at.
 	// MarkRunTerminal 置 run 终态（completed/failed）+ error + completed_at。
 	MarkRunTerminal(ctx context.Context, id, status, errMsg string) error

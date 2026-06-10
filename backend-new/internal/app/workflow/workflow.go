@@ -91,6 +91,35 @@ type RelationSyncer interface {
 	PurgeEntity(ctx context.Context, kind, id string) error
 }
 
+// Binder is the trigger listen-registry slice the execution-lifecycle actions drive (DIP →
+// *triggerapp.Service): Attach engages a continuous listener (activate), AttachOnce a one-shot
+// (stage), Detach disengages (deactivate / kill). Keyed by the entry trigger entity ref (trg_).
+//
+// Binder 是执行生命周期动作驱动的 trigger 监听注册切片（DIP → *triggerapp.Service）：Attach 挂持续监听
+// （激活）、AttachOnce 挂一次性（试运行）、Detach 摘（关掉激活 / 杀掉）。按入口 trigger 实体 ref（trg_）键。
+type Binder interface {
+	Attach(ctx context.Context, triggerID, workflowID string) error
+	AttachOnce(ctx context.Context, triggerID, workflowID string) error
+	Detach(triggerID, workflowID string)
+}
+
+// Runner is the durable-scheduler slice the execution-lifecycle actions drive (DIP →
+// *schedulerapp.Service via a bootstrap adapter): StartRun fires one run now (trigger), KillWorkflow
+// hard-stops every in-flight run (kill). Defined with primitive params (not scheduler.StartInput) so
+// this package never imports the scheduler.
+//
+// Runner 是执行生命周期动作驱动的 durable 调度器切片（DIP → 经 bootstrap adapter 接 *schedulerapp.Service）：
+// StartRun 立即跑一次（触发）、KillWorkflow 硬停所有在途 run（杀掉）。用原生参数（非 scheduler.StartInput）
+// 定义，使本包绝不 import 调度器。
+type Runner interface {
+	StartRun(ctx context.Context, workflowID string, payload map[string]any) (string, error)
+	KillWorkflow(ctx context.Context, workflowID string) (int, error)
+	// CountRunning reports a workflow's in-flight run count — deactivate uses it to pick draining
+	// (runs still finishing) vs inactive (clean stop).
+	// CountRunning 报告 workflow 在途 run 数——deactivate 据此选 draining（还在收尾）vs inactive（干净停）。
+	CountRunning(ctx context.Context, workflowID string) (int, error)
+}
+
 // Service orchestrates the workflow graph domain.
 //
 // Service 编排 workflow 图 domain。
@@ -99,6 +128,8 @@ type Service struct {
 	resolver  RefResolver                // nil → CapabilityCheck/pin run structural-only
 	notif     notificationdomain.Emitter // nil-tolerant
 	relations RelationSyncer             // nil disables relation hooks
+	binder    Binder                     // nil → execution-lifecycle actions unavailable
+	runner    Runner                     // nil → execution-lifecycle actions unavailable
 	log       *zap.Logger
 }
 
@@ -127,6 +158,15 @@ func (s *Service) SetResolver(r RefResolver) { s.resolver = r }
 //
 // SetRelationSyncer 装配后注入 relation Service（避 init 环）。
 func (s *Service) SetRelationSyncer(r RelationSyncer) { s.relations = r }
+
+// SetExecutionPorts installs the trigger binder + scheduler runner post-construction — the two
+// collaborators the execution-lifecycle actions (activate/stage/deactivate/trigger/kill) need.
+// Wired at assembly (M7) after both services exist; avoids the workflow ↔ scheduler/trigger DI cycle.
+//
+// SetExecutionPorts 装配后注入 trigger binder + scheduler runner——执行生命周期动作
+// （activate/stage/deactivate/trigger/kill）所需的两个协作者。装配时（M7）两服务齐备后接；避 workflow ↔
+// scheduler/trigger 的 DI 环。
+func (s *Service) SetExecutionPorts(b Binder, r Runner) { s.binder, s.runner = b, r }
 
 // publish emits a workflow lifecycle notification; nil emitter is a no-op.
 //

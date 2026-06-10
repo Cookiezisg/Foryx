@@ -31,6 +31,11 @@ func (s *Service) Advance(ctx context.Context, flowrunID string) error {
 	if run.Status != flowrundomain.StatusRunning {
 		return nil // already terminal — nothing to do
 	}
+	// Register a cancellable child ctx for this drive so KillWorkflow can interrupt a node blocked
+	// mid-flight (a long agent). On a normal finish release() just deregisters.
+	// 为本次驱动注册可取消子 ctx，使 KillWorkflow 能打断卡在节点中的运行（长 agent）。正常结束时 release() 只注销。
+	ctx, release := s.trackInflight(ctx, flowrunID)
+	defer release()
 	ver, err := s.workflows.GetVersion(ctx, run.VersionID)
 	if err != nil {
 		return fmt.Errorf("schedulerapp.Advance: pinned version %s: %w", run.VersionID, err)
@@ -45,6 +50,14 @@ func (s *Service) Advance(ctx context.Context, flowrunID string) error {
 	}
 
 	for {
+		// Bail if this drive was interrupted (KillWorkflow cancelled our ctx, or the app is shutting
+		// down). Not an error: the durable state is authoritative — kill already marked the run
+		// cancelled; a shutdown leaves it running for the next boot's Recover to re-walk.
+		// 若本次驱动被打断（KillWorkflow 取消了 ctx，或 app 关停）则退出。非错误：durable 状态为准——kill
+		// 已标 run cancelled；shutdown 留 run running 待下次 boot 的 Recover 重走。
+		if ctx.Err() != nil {
+			return nil
+		}
 		rows, err := s.runs.GetNodes(ctx, flowrunID)
 		if err != nil {
 			return err
@@ -112,7 +125,7 @@ func (s *Service) finalize(ctx context.Context, run *flowrundomain.FlowRun, flow
 			return nil // waiting on a signal — the run stays running
 		}
 	}
-	if err := s.runs.MarkRunTerminal(ctx, run.ID, flowrundomain.StatusCompleted, ""); err != nil {
+	if err := s.markRunTerminal(ctx, run, flowrundomain.StatusCompleted, ""); err != nil {
 		return fmt.Errorf("schedulerapp.finalize: %w", err)
 	}
 	return nil
@@ -124,7 +137,7 @@ func (s *Service) finalize(ctx context.Context, run *flowrundomain.FlowRun, flow
 // failRun 把整个 run 标 failed（用于引擎级失败如循环溢出；节点 activity 失败走 failNode，它还写
 // failed 节点行）。
 func (s *Service) failRun(ctx context.Context, run *flowrundomain.FlowRun, msg string) error {
-	if err := s.runs.MarkRunTerminal(ctx, run.ID, flowrundomain.StatusFailed, msg); err != nil {
+	if err := s.markRunTerminal(ctx, run, flowrundomain.StatusFailed, msg); err != nil {
 		return fmt.Errorf("schedulerapp.failRun: %w", err)
 	}
 	return nil

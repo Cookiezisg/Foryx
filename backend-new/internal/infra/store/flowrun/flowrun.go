@@ -54,7 +54,7 @@ var Schema = []string{
 		pinned_refs   TEXT NOT NULL DEFAULT '{}',
 		trigger_id    TEXT NOT NULL DEFAULT '',
 		firing_id     TEXT NOT NULL DEFAULT '',
-		status        TEXT NOT NULL CHECK (status IN ('running','completed','failed')),
+		status        TEXT NOT NULL CHECK (status IN ('running','completed','failed','cancelled')),
 		replay_count  INTEGER NOT NULL DEFAULT 0,
 		error         TEXT NOT NULL DEFAULT '',
 		started_at    DATETIME NOT NULL,
@@ -206,8 +206,25 @@ func (s *Store) CountRunningByWorkflow(ctx context.Context, workflowID string) (
 	return int(n), nil
 }
 
+// ListRunningByWorkflow returns one workflow's running runs in the current workspace — the kill set.
+//
+// ListRunningByWorkflow 返当前 workspace 内某 workflow 的 running run——kill 集。
+func (s *Store) ListRunningByWorkflow(ctx context.Context, workflowID string) ([]*flowrundomain.FlowRun, error) {
+	rows, err := s.runs.WhereEq("workflow_id", workflowID).WhereEq("status", flowrundomain.StatusRunning).Find(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("flowrunstore.ListRunningByWorkflow: %w", err)
+	}
+	return rows, nil
+}
+
+// MarkRunTerminal flips a run to a terminal status — GUARDED on it still being running (first-wins).
+// kill, finalize (completed), and failRun can race on the same run; whoever updates first wins, the
+// loser's UPDATE matches 0 rows and is a no-op (a completed run is never clobbered to cancelled, etc.).
+//
+// MarkRunTerminal 把 run 翻成终态——守卫在它仍 running（first-wins）。kill、finalize（completed）、
+// failRun 可能撞同一 run；先 UPDATE 者赢，输家匹配 0 行 no-op（completed run 绝不被刷成 cancelled 等）。
 func (s *Store) MarkRunTerminal(ctx context.Context, id, status, errMsg string) error {
-	_, err := s.runs.WhereEq("id", id).Updates(ctx, map[string]any{
+	_, err := s.runs.WhereEq("id", id).WhereEq("status", flowrundomain.StatusRunning).Updates(ctx, map[string]any{
 		"status":       status,
 		"error":        errMsg,
 		"completed_at": time.Now().UTC(),

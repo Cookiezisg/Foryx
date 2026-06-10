@@ -25,13 +25,16 @@ import (
 )
 
 // listenEntry is the in-memory registration for one trigger whose listener is hot: which
-// workspace it belongs to, its source kind, and the set of active workflows referencing it.
+// workspace it belongs to, its source kind, the set of workflows referencing it, and the subset
+// of those that are ONE-SHOT (staged via AttachOnce) — auto-detached after their single fire.
 //
-// listenEntry 是某个 listener 正热的 trigger 的内存注册：所属 workspace、source 种类、引用它的 active workflow 集。
+// listenEntry 是某个 listener 正热的 trigger 的内存注册：所属 workspace、source 种类、引用它的 workflow 集、
+// 以及其中**一次性**（经 AttachOnce 试运行）的子集——单次扇出后自动 Detach。
 type listenEntry struct {
 	workspaceID string
 	kind        string
 	workflows   map[string]bool
+	once        map[string]bool // workflowID → drop after one fire (stage_workflow)
 }
 
 // Service is the unified trigger surface.

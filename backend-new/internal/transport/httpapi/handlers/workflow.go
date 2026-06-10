@@ -15,13 +15,13 @@ import (
 )
 
 // WorkflowHandler hosts the workflow graph HTTP endpoints. The version model is linear with
-// a free-moving active pointer — no pending/accept endpoints. There is NO :trigger and no
-// execution-history endpoint: those consume the durable scheduler (later wave). The :iterate
-// verb (R0065) opens an AI conversation to edit this workflow via aispawn.
+// a free-moving active pointer — no pending/accept endpoints. The execution-lifecycle verbs
+// (:trigger / :stage / :activate / :deactivate / :kill, D1) drive the durable scheduler + trigger
+// binder. The :iterate verb (R0065) opens an AI conversation to edit this workflow via aispawn.
 //
 // WorkflowHandler 持 workflow 图 HTTP 端点。版本模型线性 + 可自由移动的 active 指针——无
-// pending/accept 端点。无 :trigger、无 execution-history 端点：那些消费 durable 调度器（后续
-// 波次）。:iterate 动词（R0065）经 aispawn 开一个 AI 对话来编辑本 workflow。
+// pending/accept 端点。执行生命周期动词（:trigger / :stage / :activate / :deactivate / :kill，D1）
+// 驱动 durable 调度器 + trigger binder。:iterate 动词（R0065）经 aispawn 开一个 AI 对话来编辑本 workflow。
 type WorkflowHandler struct {
 	svc     *workflowapp.Service
 	aispawn *aispawnapp.Service
@@ -133,10 +133,12 @@ func (h *WorkflowHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // postOnWorkflow dispatches POST /workflows/{id}:<action>
-// (:edit / :revert / :activate / :deactivate / :capability-check). No :trigger.
+// (:edit / :revert / :capability-check / :iterate + the execution-lifecycle verbs
+// :trigger / :stage / :activate / :deactivate / :kill).
 //
 // postOnWorkflow 派发 POST /workflows/{id}:<action>
-// （:edit / :revert / :activate / :deactivate / :capability-check）。无 :trigger。
+// （:edit / :revert / :capability-check / :iterate + 执行生命周期动词
+// :trigger / :stage / :activate / :deactivate / :kill）。
 func (h *WorkflowHandler) postOnWorkflow(w http.ResponseWriter, r *http.Request) {
 	id, action, ok := idAndAction(r, "idAction")
 	if !ok {
@@ -148,10 +150,16 @@ func (h *WorkflowHandler) postOnWorkflow(w http.ResponseWriter, r *http.Request)
 		h.edit(w, r, id)
 	case "revert":
 		h.revert(w, r, id)
+	case "trigger":
+		h.trigger(w, r, id)
+	case "stage":
+		h.stage(w, r, id)
 	case "activate":
-		h.setLifecycle(w, r, id, workflowdomain.LifecycleActive)
+		h.activate(w, r, id)
 	case "deactivate":
-		h.setLifecycle(w, r, id, workflowdomain.LifecycleInactive)
+		h.deactivate(w, r, id)
+	case "kill":
+		h.kill(w, r, id)
 	case "capability-check":
 		h.capabilityCheck(w, r, id)
 	case "iterate":
@@ -199,18 +207,75 @@ func (h *WorkflowHandler) revert(w http.ResponseWriter, r *http.Request, id stri
 	responsehttpapi.Success(w, http.StatusOK, v)
 }
 
-// setLifecycle backs :activate / :deactivate (a user action). Draining is a system-driven
-// state the scheduler sets, so it has no dedicated user verb.
+// trigger backs :trigger — run the workflow once now with an optional payload. 202 Accepted
+// (the run is dispatched; the flowrun id is returned for follow-up).
 //
-// setLifecycle 支撑 :activate / :deactivate（用户动作）。draining 是调度器设的系统状态，故无专门
-// 用户动词。
-func (h *WorkflowHandler) setLifecycle(w http.ResponseWriter, r *http.Request, id, state string) {
-	wf, err := h.svc.SetLifecycle(r.Context(), id, state, workflowdomain.ActorUser)
+// trigger 支撑 :trigger——带可选 payload 立即跑一次。202 Accepted（run 已派发；返 flowrun id 供追踪）。
+func (h *WorkflowHandler) trigger(w http.ResponseWriter, r *http.Request, id string) {
+	var req struct {
+		Payload map[string]any `json:"payload"`
+	}
+	if err := decodeJSONOptional(r, &req); err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	runID, err := h.svc.Trigger(r.Context(), id, req.Payload)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusAccepted, map[string]any{"flowrunId": runID})
+}
+
+// stage backs :stage — arm the workflow for one run on its next real trigger fire, then auto-disarm.
+//
+// stage 支撑 :stage——给 workflow 待命，下一次真实触发跑一次、随即自动撤防。
+func (h *WorkflowHandler) stage(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.Stage(r.Context(), id); err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, map[string]any{"staged": true})
+}
+
+// activate backs :activate — bring the workflow online (start listening to its trigger) + flip
+// lifecycle to active. Engages the trigger listener, unlike the old DB-only flag flip.
+//
+// activate 支撑 :activate——让 workflow 上线（开始监听其 trigger）+ 翻 lifecycle 为 active。挂上 trigger
+// 监听，区别于旧的只翻 DB 标志。
+func (h *WorkflowHandler) activate(w http.ResponseWriter, r *http.Request, id string) {
+	wf, err := h.svc.Activate(r.Context(), id)
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
 	responsehttpapi.Success(w, http.StatusOK, wf)
+}
+
+// deactivate backs :deactivate — take the workflow offline gracefully (stop listening; in-flight
+// runs finish). Lands in draining if runs are still flying, else inactive.
+//
+// deactivate 支撑 :deactivate——优雅下线（停监听；在途 run 跑完）。仍有 run 在飞则落 draining，否则 inactive。
+func (h *WorkflowHandler) deactivate(w http.ResponseWriter, r *http.Request, id string) {
+	wf, err := h.svc.Deactivate(r.Context(), id)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, wf)
+}
+
+// kill backs :kill — hard-stop the workflow (stop listening + cancel every in-flight run). Returns
+// how many runs were killed.
+//
+// kill 支撑 :kill——硬停 workflow（停监听 + 取消所有在途 run）。返被杀 run 数。
+func (h *WorkflowHandler) kill(w http.ResponseWriter, r *http.Request, id string) {
+	killed, err := h.svc.Kill(r.Context(), id)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, map[string]any{"killed": killed})
 }
 
 func (h *WorkflowHandler) capabilityCheck(w http.ResponseWriter, r *http.Request, id string) {

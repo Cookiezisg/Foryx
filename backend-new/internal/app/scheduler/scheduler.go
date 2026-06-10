@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"sync"
 
 	"go.uber.org/zap"
 
@@ -104,9 +105,24 @@ type RunStore interface {
 	SeedRunOnTx(ctx context.Context, tx *ormpkg.DB, run *flowrundomain.FlowRun, trig *flowrundomain.FlowRunNode) error
 }
 
-// Service is the durable interpreter. inbox may be nil (manual-only). log defaults to nop.
+// LifecycleReconciler lets the interpreter settle a workflow's graceful-drain when its last in-flight
+// run ends: a workflow the user :deactivated while runs were still flying sits in `draining`; when
+// the final run settles the interpreter flips it to inactive. nil → no reconcile (manual/test). DIP:
+// satisfied by *workflowapp.Service.
 //
-// Service 是 durable 解释器。inbox 可空（纯手动）。log 默认 nop。
+// LifecycleReconciler 让解释器在某 workflow 最后一个在途 run 结束时结算其优雅排空：用户在仍有 run 在飞时
+// :deactivate 的 workflow 处于 draining；最后一个 run 结算时解释器把它翻成 inactive。nil → 不 reconcile
+// （手动/测试）。DIP：由 *workflowapp.Service 实现。
+type LifecycleReconciler interface {
+	MarkInactiveIfDrained(ctx context.Context, workflowID string) error
+}
+
+// Service is the durable interpreter. inbox may be nil (manual-only). log defaults to nop. inflight
+// holds a CancelFunc per actively-advancing run so KillWorkflow can interrupt a run blocked mid-node
+// (e.g. inside a long agent) — see kill.go.
+//
+// Service 是 durable 解释器。inbox 可空（纯手动）。log 默认 nop。inflight 为每个正在 advance 的 run 持一个
+// CancelFunc，使 KillWorkflow 能打断卡在节点中（如长 agent）的 run——见 kill.go。
 type Service struct {
 	runs      RunStore
 	workflows WorkflowReader
@@ -115,7 +131,11 @@ type Service struct {
 	dispatch  Dispatcher
 	inbox     FiringInbox
 	entities  streamdomain.Bridge // entities stream (SSE-C); nil → no workflow-panel run terminal
+	recon     LifecycleReconciler // nil → no drain reconcile
 	log       *zap.Logger
+
+	inflightMu sync.Mutex
+	inflight   map[string]context.CancelFunc // flowrunID → cancel its in-progress advance
 }
 
 // SetEntitiesBridge installs the entities stream post-construction (SSE-C): Advance emits a node
@@ -123,6 +143,13 @@ type Service struct {
 //
 // SetEntitiesBridge 装配后装入 entities 流（SSE-C）：Advance 每节点发一条进度信号，使 workflow 面板实时显示运行推进。
 func (s *Service) SetEntitiesBridge(b streamdomain.Bridge) { s.entities = b }
+
+// SetLifecycleReconciler installs the drain reconciler post-construction (avoids a DI cycle:
+// workflow ← scheduler). nil-tolerant — left unset in manual-only/test wiring.
+//
+// SetLifecycleReconciler 构造后装入排空 reconciler（避开 DI 环：workflow ← scheduler）。nil-tolerant
+// ——手动/测试装配不设。
+func (s *Service) SetLifecycleReconciler(r LifecycleReconciler) { s.recon = r }
 
 // NewService wires the interpreter. runs/workflows/control/approval/dispatch are required; inbox is
 // optional (nil = manual-only); log nil → nop.
@@ -135,7 +162,7 @@ func NewService(runs RunStore, workflows WorkflowReader, control ControlResolver
 	if log == nil {
 		log = zap.NewNop()
 	}
-	return &Service{runs: runs, workflows: workflows, control: control, approval: approval, dispatch: dispatch, inbox: inbox, log: log}
+	return &Service{runs: runs, workflows: workflows, control: control, approval: approval, dispatch: dispatch, inbox: inbox, log: log, inflight: map[string]context.CancelFunc{}}
 }
 
 // decodeGraph parses a version's Graph JSON blob into the typed graph the interpreter walks.

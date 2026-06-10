@@ -320,7 +320,7 @@ func (s *Service) CheckTimeouts(ctx context.Context, now time.Time) error {
 		if p.CreatedAt.Add(d).After(now) {
 			continue // not yet due
 		}
-		if err := s.settleTimeout(ctx, p, form.TimeoutBehavior); err != nil {
+		if err := s.settleTimeout(ctx, run, p, form.TimeoutBehavior); err != nil {
 			s.log.Warn("schedulerapp.CheckTimeouts: settle", zap.String("flowrun", p.FlowRunID), zap.Error(err))
 		}
 	}
@@ -331,13 +331,13 @@ func (s *Service) CheckTimeouts(ctx context.Context, now time.Time) error {
 // fails the run.
 //
 // settleTimeout 按 behavior 落定一个到期 parked 节点（first-wins），再重驱或失败 run。
-func (s *Service) settleTimeout(ctx context.Context, p *flowrundomain.FlowRunNode, behavior string) error {
+func (s *Service) settleTimeout(ctx context.Context, run *flowrundomain.FlowRun, p *flowrundomain.FlowRunNode, behavior string) error {
 	if behavior == approvaldomain.TimeoutFail {
 		won, err := s.runs.ResolveParkedNode(ctx, p.FlowRunID, p.NodeID, flowrundomain.NodeFailed, map[string]any{"reason": "approval timed out"})
 		if err != nil || !won {
 			return err
 		}
-		return s.runs.MarkRunTerminal(ctx, p.FlowRunID, flowrundomain.StatusFailed, fmt.Sprintf("approval %s timed out", p.NodeID))
+		return s.markRunTerminal(ctx, run, flowrundomain.StatusFailed, fmt.Sprintf("approval %s timed out", p.NodeID))
 	}
 	decision := workflowdomain.ApprovalPortNo
 	if behavior == approvaldomain.TimeoutApprove {

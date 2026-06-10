@@ -223,6 +223,23 @@ func (s *Store) UpdateWorkflowMeta(ctx context.Context, workflowID string, upd w
 	return nil
 }
 
+// MarkInactiveIfDraining flips draining→inactive (+ active=false) conditionally on the row still
+// being draining. 0 rows matched (already off draining / gone) is the expected no-op of an
+// idempotent reconcile, NOT ErrNotFound.
+//
+// MarkInactiveIfDraining 条件把 draining→inactive（+ active=false），条件是行仍 draining。0 行匹配
+// （已离开 draining / 不存在）是幂等 reconcile 的预期 no-op，**非** ErrNotFound。
+func (s *Store) MarkInactiveIfDraining(ctx context.Context, workflowID string) error {
+	_, err := s.wfs.WhereEq("id", workflowID).WhereEq("lifecycle_state", workflowdomain.LifecycleDraining).Updates(ctx, map[string]any{
+		"lifecycle_state": workflowdomain.LifecycleInactive,
+		"active":          false,
+	})
+	if err != nil {
+		return fmt.Errorf("workflowstore.MarkInactiveIfDraining: %w", err)
+	}
+	return nil
+}
+
 // --- versions --------------------------------------------------------------
 
 func (s *Store) SaveVersion(ctx context.Context, v *workflowdomain.Version) error {

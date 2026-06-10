@@ -25,14 +25,18 @@ import (
 
 // Run statuses. A run is running until terminal; "等人审批" is a NODE state (NodeParked), not a
 // run state — "which runs await a human" is derived from parked flowrun_nodes rows, not a header
-// column.
+// column. cancelled is the kill terminal: a user hard-stopped the workflow (kill_workflow / :kill),
+// distinct from failed (an activity errored) — it carries no engine fault, the run was simply
+// terminated by hand.
 //
 // Run 状态。run 终态前一直 running；「等人审批」是**节点**状态（NodeParked）、不是 run 状态——
-// 「哪些 run 在等人」从 parked 的 flowrun_nodes 行派生，不在头上冗余。
+// 「哪些 run 在等人」从 parked 的 flowrun_nodes 行派生，不在头上冗余。cancelled 是 kill 终态：用户
+// 硬停了 workflow（kill_workflow / :kill），区别于 failed（activity 出错）——它不带引擎故障，run 只是被手动终止。
 const (
 	StatusRunning   = "running"
 	StatusCompleted = "completed"
 	StatusFailed    = "failed"
+	StatusCancelled = "cancelled"
 )
 
 // Node statuses. Rows are written TERMINAL-ONLY (no transient "running" row): an action runs and

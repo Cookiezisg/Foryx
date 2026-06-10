@@ -95,7 +95,7 @@ func (s *Service) failNode(ctx context.Context, run *flowrundomain.FlowRun, node
 	if _, err := s.writeNode(ctx, run, node, iter, flowrundomain.NodeFailed, nil, reason); err != nil {
 		return "", err
 	}
-	if err := s.runs.MarkRunTerminal(ctx, run.ID, flowrundomain.StatusFailed, fmt.Sprintf("node %s: %s", node.ID, reason)); err != nil {
+	if err := s.markRunTerminal(ctx, run, flowrundomain.StatusFailed, fmt.Sprintf("node %s: %s", node.ID, reason)); err != nil {
 		return "", fmt.Errorf("schedulerapp: mark run failed: %w", err)
 	}
 	return flowrundomain.NodeFailed, nil

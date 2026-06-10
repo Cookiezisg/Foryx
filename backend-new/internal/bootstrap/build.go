@@ -160,6 +160,15 @@ func (a *App) Boot(ctx context.Context) {
 	if err := a.svc.scheduler.Recover(ctx); err != nil {
 		a.log.Warn("bootstrap: scheduler recover failed", zap.Error(err))
 	}
+	// D1: the trigger listen-registry is in-memory, so re-engage the listener for every active
+	// workflow (the "replay active references on boot" the trigger lifecycle expects). Same ctx
+	// workspace as handler/mcp Boot above.
+	//
+	// D1：trigger 监听注册表是内存的，故为每个 active workflow 重挂监听（trigger 生命周期期待的「boot 重放
+	// active 引用」）。与上面 handler/mcp Boot 同一 ctx workspace。
+	if err := a.svc.workflow.ReattachActive(ctx); err != nil {
+		a.log.Warn("bootstrap: workflow reattach-active failed", zap.Error(err))
+	}
 
 	// Firing-drain ticker: trigger listeners persist Firings to the durable inbox; the scheduler
 	// claims + advances them here on a fixed cadence, and sweeps approval/timer timeouts.

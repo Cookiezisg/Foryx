@@ -16,14 +16,17 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// TestWorkflowTools_Wiring asserts the 7 tools are constructed with the expected names and
-// each satisfies the 5-method Tool interface.
+// TestWorkflowTools_Wiring asserts all 12 tools are constructed with the expected names and
+// each satisfies the 5-method Tool interface: 7 forge/query + 5 execution-lifecycle (D1).
 func TestWorkflowTools_Wiring(t *testing.T) {
 	tools := WorkflowTools(nil) // nil svc OK: we only inspect Name() here
 	want := map[string]bool{
 		"search_workflow": false, "get_workflow": false, "create_workflow": false,
 		"edit_workflow": false, "revert_workflow": false, "delete_workflow": false,
 		"capability_check_workflow": false,
+		// execution lifecycle (D1)
+		"trigger_workflow": false, "stage_workflow": false, "activate_workflow": false,
+		"deactivate_workflow": false, "kill_workflow": false,
 	}
 	if len(tools) != len(want) {
 		t.Fatalf("want %d tools, got %d", len(want), len(tools))
@@ -65,6 +68,18 @@ func TestValidateInput_RequiredFields(t *testing.T) {
 		{"capcheck no id", &CapabilityCheckWorkflow{}, `{}`, true},
 		{"capcheck ok", &CapabilityCheckWorkflow{}, `{"workflowId":"wf_1"}`, false},
 		{"search any", &SearchWorkflow{}, `{}`, false},
+		// execution lifecycle (D1)
+		{"trigger no id", &TriggerWorkflow{}, `{"payload":{}}`, true},
+		{"trigger ok", &TriggerWorkflow{}, `{"workflowId":"wf_1","payload":{"x":1}}`, false},
+		{"trigger ok no payload", &TriggerWorkflow{}, `{"workflowId":"wf_1"}`, false},
+		{"stage no id", &StageWorkflow{}, `{}`, true},
+		{"stage ok", &StageWorkflow{}, `{"workflowId":"wf_1"}`, false},
+		{"activate no id", &ActivateWorkflow{}, `{}`, true},
+		{"activate ok", &ActivateWorkflow{}, `{"workflowId":"wf_1"}`, false},
+		{"deactivate no id", &DeactivateWorkflow{}, `{}`, true},
+		{"deactivate ok", &DeactivateWorkflow{}, `{"workflowId":"wf_1"}`, false},
+		{"kill no id", &KillWorkflow{}, `{}`, true},
+		{"kill ok", &KillWorkflow{}, `{"workflowId":"wf_1"}`, false},
 	}
 	for _, c := range cases {
 		err := c.tool.ValidateInput([]byte(c.args))

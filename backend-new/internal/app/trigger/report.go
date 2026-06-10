@@ -69,6 +69,9 @@ func (s *Service) fanOut(ctx context.Context, triggerID, kind string, workflows 
 			}
 			fired++
 		}
+		// stage_workflow: a one-shot listener fires exactly once, then auto-disarms.
+		// stage_workflow：一次性监听者只扇出一次，随即自动撤防。
+		s.detachOneShots(triggerID, workflows)
 	}
 	if err := s.repo.AppendActivation(ctx, &triggerdomain.Activation{
 		ID:          actID,
@@ -125,6 +128,29 @@ func (s *Service) FireManual(ctx context.Context, triggerID string) error {
 		DedupKey: triggerID + "|manual|" + strconv.FormatInt(time.Now().UnixNano(), 10),
 	})
 	return nil
+}
+
+// detachOneShots drops every one-shot (staged) workflow among `workflows` that just received this
+// fire — read the once set under the lock, then Detach each (Detach re-locks). A staged arm thus
+// runs on exactly the next fire, then disarms (possibly taking the listener 1→0 and stopping it).
+//
+// detachOneShots 摘掉 `workflows` 中刚收到本次扇出的每个一次性（试运行）workflow——在锁内读 once 集，
+// 再逐个 Detach（Detach 自己重新加锁）。一个试运行待命因此恰在下一次扇出时运行、随即撤防（可能把 listener
+// 1→0 停掉）。
+func (s *Service) detachOneShots(triggerID string, workflows []string) {
+	s.mu.RLock()
+	var drop []string
+	if e, ok := s.listeners[triggerID]; ok {
+		for _, wf := range workflows {
+			if e.once[wf] {
+				drop = append(drop, wf)
+			}
+		}
+	}
+	s.mu.RUnlock()
+	for _, wf := range drop {
+		s.Detach(triggerID, wf)
+	}
 }
 
 func zapTrigger(id string) zap.Field { return zap.String("triggerId", id) }

@@ -209,6 +209,19 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	sched := schedulerapp.NewService(st.flowrun, wf, ctl, apf, NewDispatcher(fn, hd, mcp, ag), st.trigger, log)
 	sched.SetEntitiesBridge(bus.entities) // SSE-C: Advance streams node progress to the workflow panel
 
+	// D1 execution lifecycle: workflow drives the trigger binder (activate/stage/deactivate/kill engage
+	// or release the listener) + the scheduler runner (trigger/kill drive runs); the scheduler drives
+	// workflow's drain reconciler (a draining workflow goes inactive when its last run settles).
+	// runnerAdapter bridges the primitive Runner port onto scheduler.StartInput so workflow never
+	// imports the scheduler. Re-attach of active workflows on boot is App.Boot's job.
+	//
+	// D1 执行生命周期：workflow 驱动 trigger binder（激活/试运行/关激活/杀 挂或摘监听）+ 调度器 runner
+	// （触发/杀 驱动 run）；调度器驱动 workflow 的排空 reconciler（draining workflow 最后一个 run 结算→inactive）。
+	// runnerAdapter 把原生 Runner 端口桥到 scheduler.StartInput，使 workflow 绝不 import 调度器。boot 时重挂
+	// active workflow 是 App.Boot 的事。
+	wf.SetExecutionPorts(trg, runnerAdapter{sched: sched})
+	sched.SetLifecycleReconciler(wf)
+
 	// === post-construction injection ===
 	// agent's ReAct deps: LLM resolver + the (lazy) tool universe + knowledge-doc prefix builder.
 	ag.SetInvokeDeps(agentapp.InvokeDeps{

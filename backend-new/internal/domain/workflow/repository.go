@@ -70,6 +70,15 @@ type Repository interface {
 	// 中 nil 字段保持不动。
 	UpdateWorkflowMeta(ctx context.Context, workflowID string, upd MetaUpdate) error
 
+	// MarkInactiveIfDraining flips a draining workflow to inactive (+ active=false), conditionally on
+	// it still being draining — the scheduler calls this when a draining workflow's last in-flight run
+	// settles (graceful-drain complete). A no-op if the workflow already moved off draining (the user
+	// re-activated it, or it was never draining). Idempotent; not an error if 0 rows match.
+	// MarkInactiveIfDraining 把 draining 的 workflow 翻成 inactive（+ active=false），条件是它仍 draining
+	// ——调度器在 draining workflow 最后一个在途 run 结算时调（优雅排空完成）。若 workflow 已离开 draining
+	// （用户重新激活、或本就非 draining）则 no-op。幂等；0 行匹配不算错。
+	MarkInactiveIfDraining(ctx context.Context, workflowID string) error
+
 	// --- versions (immutable, cap-trimmed) ---
 
 	SaveVersion(ctx context.Context, v *Version) error
