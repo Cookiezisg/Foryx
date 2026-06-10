@@ -13,15 +13,18 @@ audience: [human, ai]
 
 ## Monitor a stream live
 
+All three subscribe endpoints live on `StreamHandler`, are workspace-scoped, and stream the
+complete unfiltered feed (the client filters by conversation/entity).
+
 ```bash
-# Event log (agent conversation stream)
-curl -N -H "X-User-ID: local-user" http://localhost:8080/api/v1/eventlog
+# Messages (agent conversation stream — text/reasoning/tool_call/tool_result)
+curl -N -H "X-Forgify-Workspace-ID: <wsId>" http://localhost:8080/api/v1/messages/stream
 
-# Notifications (entity change events)
-curl -N -H "X-User-ID: local-user" http://localhost:8080/api/v1/notifications
+# Notifications (durable inbox — entity change events)
+curl -N -H "X-Forgify-Workspace-ID: <wsId>" http://localhost:8080/api/v1/notifications/stream
 
-# Forge stream (function/handler/workflow generation)
-curl -N -H "X-User-ID: local-user" http://localhost:8080/api/v1/forge
+# Entities (forge pipeline progress)
+curl -N -H "X-Forgify-Workspace-ID: <wsId>" http://localhost:8080/api/v1/entities/stream
 ```
 
 ## Check sequence gaps
@@ -30,7 +33,7 @@ SSE messages carry an `id:` field with sequence numbers. Gaps indicate dropped e
 
 ## Check buffer overflow
 
-If you see `410` responses, the event buffer was exceeded. Default buffer is 512 events per stream per user. Investigate the emission rate or increase `SSEBufferSize` in config.
+If you see `410` responses, the resume cursor was evicted from the replay ring. The buffer holds the most recent durable events (`seq > 0`) per stream per **workspace** — currently 256 (`stream.New(bufSize)` in bootstrap). Investigate the emission rate or raise `bufSize`.
 
 ## Testend stream view
 

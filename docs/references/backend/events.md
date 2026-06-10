@@ -10,13 +10,13 @@ audience: [human, ai]
 ---
 # Events Design — SSE 物理发射全量契约 (100% Coverage)
 
-> **法律级声明**：本文档通过扫描 `backend/internal/app` 下所有 `Publish` 和 `Emit` 调用生成。包含 100% 的 SSE 事件及其物理源。
+> **as-built（2026-06-10 改名对账）**：SSE 三流 2026-06-03 改名 `eventlog→messages`、`forge→entities`、`notifications` 不变（CLAUDE.md E1）。**订阅端点统一在 `StreamHandler`**：`GET /api/v1/{messages,entities,notifications}/stream`——**workspace 级、后端不过滤**（始终发完整 delta，前端常驻全连 + 按对话/实体自滤）、`Last-Event-ID`/`?fromSeq` 续传、`410 SEQ_TOO_OLD`。下表事件/载荷是**目标设计**：§1 block 生命周期生产侧 ✅ 已在 `app/loop` 落地；§3 forge **双写 entities 流**的生产侧待建（B/C 层，逐 tool）。物理源路径列含旧 backend 残留，随覆盖阶段 events.md 全量重写校准。
 
 ---
 
-## 1. Eventlog 流 (`/api/v1/eventlog`)
+## 1. Messages 流 (`/api/v1/messages/stream`)
 
-用于消息树实时渲染。由 `eventlog.Emitter` 触发。
+完整对话流，消息树实时渲染：assistant **文本** + **reasoning（thinking）** + **tool_call**（请求 / 中间过程 / result）逐 block 流式。由 `app/loop` 经 messages bus 实时推（`loop.WithBridge` 埋 ctx；tool 中间过程在 tool 内部经 ctx-bridge 自发——B 层逐 tool）。
 
 | Event | 触发位置 | 载荷关键字段 (TS) |
 |---|---|---|
@@ -68,9 +68,9 @@ audience: [human, ai]
 
 ---
 
-## 3. Forge 流 (`/api/v1/forge`)
+## 3. Entities 流 (`/api/v1/entities/stream`)
 
-锻造流水线。由 `forge.Publisher` 触发。
+锻造流水线进度（全实体流式总线）。**双写**：forge 工具把进度同时写 messages 流（tool_call 下的中间过程，§1）+ 本流（独立锻造流，给前端实体面板）。**生产侧待建**（Layer C，逐 tool）。
 
 ### 3.1 物理事件序列 (By Code Path)
 | Event | 常用物理路径 | 载荷详情 |
@@ -87,5 +87,5 @@ audience: [human, ai]
 
 ## 4. 传输规范重申
 1. **线缆分隔**：每条消息后紧跟 `\n\n`。
-2. **Buffer 限制**：每用户缓存最近 1000 条 `durable` 事件（`seq > 0`）。
+2. **Buffer 限制**：每 **workspace** 缓存最近 `durable` 事件（`seq > 0`，`stream.New(bufSize)`，当前 256）；续传游标越出环 → `410 SEQ_TOO_OLD`，客户端重取历史后重连。
 3. **Tick 吞吐**：`ephemeral` (seq=0) 消息不进入 Buffer，高频发射（最高 100Hz），前端应使用 `requestAnimationFrame` 节流。

@@ -63,7 +63,7 @@
 
 ## SSE 协议（E 系列）
 
-- **E1 三条流限制**：全系统仅允许 `eventlog`, `notifications`, `forge` 三条 SSE，永不再加。
+- **E1 三条流限制**：全系统仅允许 `messages`, `notifications`, `entities` 三条 SSE，永不再加。前端启动即常驻全连；三流 **workspace 级、后端不过滤**（始终发完整 delta，前端按对话/实体自滤）；订阅端点统一在 `StreamHandler`（`GET /api/v1/{messages,entities,notifications}/stream`）。
 - **E2 Ephemeral Ticks**：`flowrun:tick` 事件必须标记为 `seq=0`，不入 Buffer，不产生背压。
 - **E3 Eventlog 递归**：支持 `parentBlockId` 嵌套，前端以此渲染 Subagent 树。
 

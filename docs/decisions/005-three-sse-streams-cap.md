@@ -21,11 +21,13 @@ SSE connection count proliferates as features grow. Early design had many per-re
 
 Exactly three SSE streams, never more (E1 standard):
 
-1. **Event log** `GET /api/v1/eventlog` — 5 events × 7 block types; agent conversation stream
-2. **Notifications** `GET /api/v1/notifications` — global entity change notifications; open vocabulary
-3. **Forge stream** `GET /api/v1/forge` — 4 events × 3 kinds (function/handler/workflow); closed enum
+1. **Messages** `GET /api/v1/messages/stream` — agent conversation stream (text/reasoning/tool_call/tool_result block lifecycle)
+2. **Notifications** `GET /api/v1/notifications/stream` — global entity change notifications; open vocabulary
+3. **Entities** `GET /api/v1/entities/stream` — forge pipeline progress (fn/hd/wf/ag/document/skill); closed enum
 
-All three are per-`user_id`. New features must fit into these three streams. Adding a fourth stream requires a new ADR.
+All three are per-`workspace`. New features must fit into these three streams. Adding a fourth stream requires a new ADR.
+
+> **Rename (2026-06-03, names only — the 3-stream cap stands)**: `eventlog → messages`, `forge → entities`, `notifications` unchanged; `user_id → workspace` (R0018). Subscribe endpoints unified under `StreamHandler` at `/api/v1/{messages,entities,notifications}/stream` (workspace-scoped, unfiltered, `Last-Event-ID` resume, 410 on evicted cursor). Original bullets above updated to the as-built names/endpoints.
 
 ## Rejected Alternatives
 
