@@ -28,15 +28,23 @@ const (
 	MentionHandler  MentionType = "handler"
 	MentionWorkflow MentionType = "workflow"
 	MentionAgent    MentionType = "agent"
+	// trigger / control / approval are forge entities too — mentionable so the AI :iterate verb
+	// (R0065) can seed them by reference, exactly like the five above.
+	//
+	// trigger / control / approval 也是 forge 实体——可 @，使 AI :iterate（R0065）能像上面五个一样按引用种入它们。
+	MentionTrigger  MentionType = "trigger"
+	MentionControl  MentionType = "control"
+	MentionApproval MentionType = "approval"
 )
 
-// IsValidMentionType reports whether t is one of the 5 mentionable kinds. Consumers
+// IsValidMentionType reports whether t is one of the mentionable forge kinds. Consumers
 // (chat) validate incoming MentionInput against it.
 //
-// IsValidMentionType 报告 t 是否 5 种可 @ 类型之一。消费方（chat）据此校验 MentionInput。
+// IsValidMentionType 报告 t 是否可 @ 的 forge 类型之一。消费方（chat）据此校验 MentionInput。
 func IsValidMentionType(t MentionType) bool {
 	switch t {
-	case MentionDocument, MentionFunction, MentionHandler, MentionWorkflow, MentionAgent:
+	case MentionDocument, MentionFunction, MentionHandler, MentionWorkflow, MentionAgent,
+		MentionTrigger, MentionControl, MentionApproval:
 		return true
 	}
 	return false

@@ -6,33 +6,36 @@ import (
 
 	"go.uber.org/zap"
 
+	aispawnapp "github.com/sunweilin/forgify/backend/internal/app/aispawn"
 	controlapp "github.com/sunweilin/forgify/backend/internal/app/control"
 	controldomain "github.com/sunweilin/forgify/backend/internal/domain/control"
+	mentiondomain "github.com/sunweilin/forgify/backend/internal/domain/mention"
 	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
 // ControlHandler hosts the control-logic HTTP endpoints. The version model is linear
 // with a free-moving active pointer — no pending/accept endpoints, no :run (a control
-// logic is evaluated by the workflow interpreter, never invoked standalone). No :iterate
-// (R0065 only wired the five entities with mention resolvers; control has none yet).
+// logic is evaluated by the workflow interpreter, never invoked standalone). The :iterate
+// verb (R0065) opens an AI conversation to edit this control logic via aispawn.
 //
 // ControlHandler 持 control 逻辑 HTTP 端点。版本模型线性 + 可自由移动的 active 指针——无
-// pending/accept 端点、无 :run（control 逻辑由 workflow 解释器求值，绝不独立调用）。无 :iterate
-// （R0065 只接了有 mention resolver 的五个实体；control 暂无）。
+// pending/accept 端点、无 :run（control 逻辑由 workflow 解释器求值，绝不独立调用）。:iterate 动词
+// （R0065）经 aispawn 开一个 AI 对话来编辑本 control 逻辑。
 type ControlHandler struct {
-	svc *controlapp.Service
-	log *zap.Logger
+	svc     *controlapp.Service
+	aispawn *aispawnapp.Service
+	log     *zap.Logger
 }
 
 // NewControlHandler constructs the handler.
 //
 // NewControlHandler 构造 handler。
-func NewControlHandler(svc *controlapp.Service, log *zap.Logger) *ControlHandler {
+func NewControlHandler(svc *controlapp.Service, aispawn *aispawnapp.Service, log *zap.Logger) *ControlHandler {
 	if log == nil {
 		log = zap.NewNop()
 	}
-	return &ControlHandler{svc: svc, log: log.Named("handlers.control")}
+	return &ControlHandler{svc: svc, aispawn: aispawn, log: log.Named("handlers.control")}
 }
 
 // Register wires the endpoints onto mux.
@@ -156,6 +159,8 @@ func (h *ControlHandler) postOnControl(w http.ResponseWriter, r *http.Request) {
 		h.edit(w, r, id)
 	case "revert":
 		h.revert(w, r, id)
+	case "iterate":
+		iterateEntity(w, r, h.log, h.aispawn, mentiondomain.MentionControl, id)
 	default:
 		http.NotFound(w, r)
 	}

@@ -5,7 +5,9 @@ import (
 
 	"go.uber.org/zap"
 
+	aispawnapp "github.com/sunweilin/forgify/backend/internal/app/aispawn"
 	triggerapp "github.com/sunweilin/forgify/backend/internal/app/trigger"
+	mentiondomain "github.com/sunweilin/forgify/backend/internal/domain/mention"
 	triggerdomain "github.com/sunweilin/forgify/backend/internal/domain/trigger"
 	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
@@ -21,15 +23,16 @@ import (
 // Edit 是普通 PATCH（config 立即生效）；:fire 手动触发。activation 日志回答「为什么没触发」。
 // 引用计数监听生命周期由 workflow 激活/停用驱动（波次 4），不在此暴露。
 type TriggerHandler struct {
-	svc *triggerapp.Service
-	log *zap.Logger
+	svc     *triggerapp.Service
+	aispawn *aispawnapp.Service
+	log     *zap.Logger
 }
 
-func NewTriggerHandler(svc *triggerapp.Service, log *zap.Logger) *TriggerHandler {
+func NewTriggerHandler(svc *triggerapp.Service, aispawn *aispawnapp.Service, log *zap.Logger) *TriggerHandler {
 	if log == nil {
 		log = zap.NewNop()
 	}
-	return &TriggerHandler{svc: svc, log: log.Named("handlers.trigger")}
+	return &TriggerHandler{svc: svc, aispawn: aispawn, log: log.Named("handlers.trigger")}
 }
 
 func (h *TriggerHandler) Register(mux Registrar) {
@@ -133,6 +136,8 @@ func (h *TriggerHandler) postOnTrigger(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		responsehttpapi.Success(w, http.StatusAccepted, map[string]any{"fired": true, "triggerId": id})
+	case "iterate":
+		iterateEntity(w, r, h.log, h.aispawn, mentiondomain.MentionTrigger, id)
 	default:
 		http.NotFound(w, r)
 	}

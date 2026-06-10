@@ -6,33 +6,35 @@ import (
 
 	"go.uber.org/zap"
 
+	aispawnapp "github.com/sunweilin/forgify/backend/internal/app/aispawn"
 	approvalapp "github.com/sunweilin/forgify/backend/internal/app/approval"
 	approvaldomain "github.com/sunweilin/forgify/backend/internal/domain/approval"
+	mentiondomain "github.com/sunweilin/forgify/backend/internal/domain/mention"
 	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
 // ApprovalHandler hosts the approval-form HTTP endpoints. Linear version model with a
 // free-moving active pointer — no pending/accept endpoints, no :run (an approval form is
-// rendered + parked by the workflow interpreter, never invoked standalone). No :iterate
-// (R0065 only wired the five entities with mention resolvers; approval forms have none yet).
+// rendered + parked by the workflow interpreter, never invoked standalone). The :iterate
+// verb (R0065) opens an AI conversation to edit this approval form via aispawn.
 //
 // ApprovalHandler 持审批表 HTTP 端点。线性版本 + 自由 active 指针——无 pending/accept 端点、无 :run
-// （审批表由 workflow 解释器渲染 + park，绝不独立调用）。无 :iterate（R0065 只接了有 mention resolver
-// 的五个实体；审批表暂无）。
+// （审批表由 workflow 解释器渲染 + park，绝不独立调用）。:iterate 动词（R0065）经 aispawn 开一个 AI 对话来编辑本审批表。
 type ApprovalHandler struct {
-	svc *approvalapp.Service
-	log *zap.Logger
+	svc     *approvalapp.Service
+	aispawn *aispawnapp.Service
+	log     *zap.Logger
 }
 
 // NewApprovalHandler constructs the handler.
 //
 // NewApprovalHandler 构造 handler。
-func NewApprovalHandler(svc *approvalapp.Service, log *zap.Logger) *ApprovalHandler {
+func NewApprovalHandler(svc *approvalapp.Service, aispawn *aispawnapp.Service, log *zap.Logger) *ApprovalHandler {
 	if log == nil {
 		log = zap.NewNop()
 	}
-	return &ApprovalHandler{svc: svc, log: log.Named("handlers.approval")}
+	return &ApprovalHandler{svc: svc, aispawn: aispawn, log: log.Named("handlers.approval")}
 }
 
 // Register wires the endpoints onto mux.
@@ -145,6 +147,8 @@ func (h *ApprovalHandler) postOnApproval(w http.ResponseWriter, r *http.Request)
 		h.edit(w, r, id)
 	case "revert":
 		h.revert(w, r, id)
+	case "iterate":
+		iterateEntity(w, r, h.log, h.aispawn, mentiondomain.MentionApproval, id)
 	default:
 		http.NotFound(w, r)
 	}

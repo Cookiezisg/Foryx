@@ -262,12 +262,15 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	cat.RegisterSource(skill.AsCatalogSource())
 	cat.RegisterSource(doc.AsCatalogSource())
 
-	// chat @mention resolvers (freeze-on-send snapshot, five mentionable kinds).
+	// chat @mention resolvers (freeze-on-send snapshot, eight mentionable forge kinds).
 	chat.RegisterMentionResolver(doc.AsMentionResolver())
 	chat.RegisterMentionResolver(fn.AsMentionResolver())
 	chat.RegisterMentionResolver(hd.AsMentionResolver())
 	chat.RegisterMentionResolver(wf.AsMentionResolver())
 	chat.RegisterMentionResolver(ag.AsMentionResolver())
+	chat.RegisterMentionResolver(trg.AsMentionResolver())
+	chat.RegisterMentionResolver(ctl.AsMentionResolver())
+	chat.RegisterMentionResolver(apf.AsMentionResolver())
 
 	s := &services{
 		workspace: ws, apikey: keys, modelCaps: modelCaps, relation: rel, catalog: cat,
