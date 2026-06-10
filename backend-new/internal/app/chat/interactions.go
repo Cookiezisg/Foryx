@@ -15,16 +15,16 @@ import (
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
-// Resolution actions for a parked interaction (R0064). danger: approve | deny; ask (D2): accept |
-// decline; both: cancel (abort the turn).
+// Resolution verbs live in loopapp (the shared HITL protocol home); re-exported here so chat code
+// reads naturally.
 //
-// parked 交互的决议动作（R0064）。danger：approve | deny；ask（D2）：accept | decline；两者：cancel（放弃回合）。
+// 决议动词在 loopapp（共享 HITL 协议的家）；此处转出使 chat 代码读着自然。
 const (
-	ResolveApprove = "approve" // danger: run the gated tool
-	ResolveDeny    = "deny"    // danger: skip it, feed the denial back to the model
-	ResolveAccept  = "accept"  // ask: submit the answer (D2)
-	ResolveDecline = "decline" // ask: refuse to answer, feed back (D2)
-	ResolveCancel  = "cancel"  // either: abandon the whole parked turn
+	ResolveApprove = loopapp.ResolveApprove
+	ResolveDeny    = loopapp.ResolveDeny
+	ResolveAccept  = loopapp.ResolveAccept
+	ResolveDecline = loopapp.ResolveDecline
+	ResolveCancel  = loopapp.ResolveCancel
 )
 
 // Errors for the resolve path (bubble to HTTP via errorsdomain → Kind→status + wire code).

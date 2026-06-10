@@ -48,6 +48,7 @@ func (h *AgentHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/agents/{id}/versions/{version}", h.GetVersion)
 	mux.HandleFunc("GET /api/v1/agents/{id}/executions", h.ListExecutions)
 	mux.HandleFunc("GET /api/v1/agent-executions/{execId}", h.GetExecution)
+	mux.HandleFunc("POST /api/v1/agent-executions/{execId}/interactions/{toolCallId}", h.ResolveExecution)
 }
 
 // agentConfigRequest is the mounted config carried by create/edit HTTP bodies.
@@ -289,4 +290,27 @@ func (h *AgentHandler) GetExecution(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	responsehttpapi.Success(w, http.StatusOK, e)
+}
+
+// ResolveExecution resolves a parked agent run's pending interaction (R0064): danger approve | deny,
+// ask accept | decline, or cancel — body {"action": "...", "answer": "..."?}. The run resumes
+// synchronously (the agent loop is not queued like chat); the response carries its next state.
+//
+// ResolveExecution 决议一个 parked agent 运行的待决交互（R0064）：danger approve|deny、ask accept|decline、
+// 或 cancel——body {"action":"...","answer":"..."?}。运行同步恢复（agent loop 不像 chat 那样排队）；响应带下一态。
+func (h *AgentHandler) ResolveExecution(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Action string `json:"action"`
+		Answer string `json:"answer"`
+	}
+	if err := decodeJSON(r, &req); err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	res, err := h.svc.ResumeExecution(r.Context(), r.PathValue("execId"), r.PathValue("toolCallId"), req.Action, req.Answer)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, res)
 }

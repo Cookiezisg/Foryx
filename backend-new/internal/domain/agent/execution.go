@@ -14,6 +14,16 @@ const (
 	ExecutionStatusFailed    = "failed"
 	ExecutionStatusCancelled = "cancelled"
 	ExecutionStatusTimeout   = "timeout"
+	// ExecutionStatusParked is a non-terminal status: the agent run paused for human input — a
+	// dangerous tool awaiting approval or an ask_user call (durable human-in-the-loop, R0064). The
+	// Transcript holds a pending tool_result placeholder; resolving it (ResumeExecution) re-drives
+	// the run from the transcript. Only an interactively-invoked run (chat / manual) parks; a
+	// workflow run never does (no interactive approver).
+	//
+	// ExecutionStatusParked 是非终态：agent 运行为等人输入而暂停——危险工具等批准或 ask_user 调用（durable
+	// 人在环 R0064）。Transcript 含 pending tool_result 占位；决议它（ResumeExecution）据 transcript 重驱运行。
+	// 仅交互调起（chat / manual）会 park；workflow 运行绝不（无交互审批人）。
+	ExecutionStatusParked = "parked"
 )
 
 // TriggeredBy records which execution body invoked the agent — the axis is "who ran it", not
@@ -106,4 +116,14 @@ type ExecutionRepository interface {
 	GetExecutionByID(ctx context.Context, id string) (*Execution, error)
 	ListExecutions(ctx context.Context, filter ExecutionFilter) ([]*Execution, string, error)
 	ComputeAggregates(ctx context.Context, filter ExecutionFilter) (ExecutionAggregates, error)
+
+	// UpdateExecution rewrites a parked run's terminal fields in place when it resumes (R0064):
+	// status / output / transcript / error / elapsed / endedAt by id. Used only by ResumeExecution
+	// to advance a `parked` row to its next state (completed, failed, or parked again). A partial
+	// update — never touches the immutable provenance columns.
+	//
+	// UpdateExecution 在一个 parked 运行恢复时原地重写其终态字段（R0064）：按 id 更新 status / output /
+	// transcript / error / elapsed / endedAt。仅 ResumeExecution 用于把 `parked` 行推进到下一态（completed /
+	// failed / 再次 parked）。部分更新——绝不碰不可变溯源列。
+	UpdateExecution(ctx context.Context, e *Execution) error
 }

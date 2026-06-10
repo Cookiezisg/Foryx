@@ -66,6 +66,17 @@ type InvokeResult struct {
 	TokensOut   int    `json:"tokensOut"`
 	ErrorMsg    string `json:"errorMsg,omitempty"`
 	ElapsedMs   int64  `json:"elapsedMs"`
+
+	// Parked + ParkRequests (R0064): set when the run paused for human input (Status=parked). The
+	// caller surfaces the pending interactions — the invoke_agent tool propagates them up so a chat
+	// turn parks (nested HITL); a standalone invoker resolves via ResumeExecution. The durable form
+	// is the parked Execution's transcript (a pending tool_result placeholder).
+	//
+	// Parked + ParkRequests（R0064）：运行为等人输入暂停（Status=parked）时置。调用方露出待决交互——invoke_agent
+	// 工具上传使 chat 回合 park（嵌套人在环）；独立调用方经 ResumeExecution 决议。耐久形态是 parked Execution 的
+	// transcript（pending tool_result 占位）。
+	Parked       bool                  `json:"parked,omitempty"`
+	ParkRequests []loopapp.ParkRequest `json:"-"`
 }
 
 const defaultInvokeMaxTurns = 10
@@ -105,21 +116,7 @@ func (s *Service) InvokeAgent(ctx context.Context, in InvokeInput) (*InvokeResul
 		Status:    agentdomain.ExecutionStatusOK,
 		ElapsedMs: endedAt.Sub(startedAt).Milliseconds(),
 	}
-	if runErr != nil {
-		res.Status = agentdomain.ExecutionStatusFailed
-		res.ErrorMsg = runErr.Error()
-	} else {
-		res.OK = result.Status != messagesdomain.StatusError
-		if !res.OK {
-			res.Status = agentdomain.ExecutionStatusFailed
-			res.ErrorMsg = "agent loop error"
-		}
-		res.Output = result.LastMessage
-		res.StopReason = result.StopReason
-		res.Steps = result.Steps
-		res.TokensIn = result.TokensIn
-		res.TokensOut = result.TokensOut
-	}
+	applyLoopResult(res, result, runErr)
 
 	res.ExecutionID = s.recordExecution(ctx, in, a, v, res, modelID, result.Blocks, startedAt, endedAt)
 	return res, nil
@@ -163,12 +160,24 @@ func (s *Service) runLoop(ctx context.Context, a *agentdomain.Agent, v *agentdom
 		return loopapp.Result{}, "", fmt.Errorf("resolve LLM: %w", err)
 	}
 
-	host := &agentHost{
+	base := &agentHost{
 		userPrompt: userMsg,
 		tools:      tools,
 		replay:     in.ReplaySteps,
 		recorder:   in.Recorder,
 		log:        s.log,
+	}
+	// Human-in-the-loop parking is enabled only for an INTERACTIVELY-invoked run (chat / manual),
+	// where a user is present to approve a dangerous call or answer an ask_user (R0064). A workflow
+	// run gets the plain host (no ParkHandler) — it never parks (no interactive approver; the
+	// workflow's own approval node is the human gate there).
+	//
+	// 人在环 park 仅对**交互调起**的运行（chat / manual）启用——有用户在场批准危险调用或作答 ask_user（R0064）。
+	// workflow 运行用基础 host（无 ParkHandler）——绝不 park（无交互审批人；那里的人工门是 workflow 自己的
+	// approval 节点）。
+	var host loopapp.Host = base
+	if in.TriggeredBy == agentdomain.TriggeredByChat || in.TriggeredBy == agentdomain.TriggeredByManual {
+		host = &parkableAgentHost{agentHost: base}
 	}
 
 	req := bundle.Request
@@ -178,10 +187,7 @@ func (s *Service) runLoop(ctx context.Context, a *agentdomain.Agent, v *agentdom
 	if maxTurns <= 0 {
 		maxTurns = defaultInvokeMaxTurns
 	}
-	remaining := maxTurns - len(in.ReplaySteps)
-	if remaining < 1 {
-		remaining = 1
-	}
+	remaining := max(maxTurns-len(in.ReplaySteps), 1)
 
 	// Chat surfacing (E3): invoked as a tool in a chat turn, nest the agent's streamed blocks under
 	// the invoke_agent tool_call so the front end shows the run inline as the tool's intermediate.
@@ -297,6 +303,18 @@ type agentHost struct {
 	recorder   StepRecorder
 	log        *zap.Logger
 }
+
+// parkableAgentHost adds loop.ParkHandler to agentHost — its presence opts an interactively-invoked
+// run into human-in-the-loop parking (R0064). AllowsTool returns false: an agent has no always-allow
+// whitelist, so every dangerous tool call parks for approval (ask_user parks regardless).
+//
+// parkableAgentHost 给 agentHost 加 loop.ParkHandler——其存在让交互调起的运行 opt-in 人在环 park（R0064）。
+// AllowsTool 恒 false：agent 无 always-allow 白名单，故每个危险工具调用都 park 等批准（ask_user 一律 park）。
+type parkableAgentHost struct {
+	*agentHost
+}
+
+func (*parkableAgentHost) AllowsTool(string) bool { return false }
 
 func (h *agentHost) LoadHistory(_ context.Context) ([]llminfra.LLMMessage, error) {
 	history := []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: h.userPrompt}}

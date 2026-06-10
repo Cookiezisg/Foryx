@@ -110,6 +110,9 @@ var (
 	ErrToolRefBlank         = errorsdomain.New(errorsdomain.KindUnprocessable, "AGENT_TOOL_REF_BLANK", "agent tool ref must not be blank")
 	ErrInvalidModelOverride = errorsdomain.New(errorsdomain.KindUnprocessable, "AGENT_INVALID_MODEL_OVERRIDE", "invalid modelOverride (apiKeyId and modelId both required)")
 	ErrExecutionNotFound    = errorsdomain.New(errorsdomain.KindNotFound, "AGENT_EXECUTION_NOT_FOUND", "agent execution not found")
+	ErrExecutionNotParked   = errorsdomain.New(errorsdomain.KindConflict, "AGENT_EXECUTION_NOT_PARKED", "agent execution is not awaiting human input")
+	ErrInteractionNotFound  = errorsdomain.New(errorsdomain.KindNotFound, "AGENT_INTERACTION_NOT_FOUND", "no pending interaction with that tool call id in this execution")
+	ErrBadResolveAction     = errorsdomain.New(errorsdomain.KindInvalid, "AGENT_BAD_RESOLVE_ACTION", "unknown resolve action for this interaction kind")
 )
 
 // Repository is the persistence port for the Agent domain. No GetPending / AcceptVersion —

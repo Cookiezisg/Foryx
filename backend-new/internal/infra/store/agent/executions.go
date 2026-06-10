@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -12,6 +13,40 @@ import (
 func (s *Store) SaveExecution(ctx context.Context, e *agentdomain.Execution) error {
 	if err := s.execs.Create(ctx, e); err != nil {
 		return fmt.Errorf("agentstore.SaveExecution: %w", err)
+	}
+	return nil
+}
+
+// UpdateExecution rewrites a parked run's terminal fields in place when it resumes (R0064) —
+// status / output / transcript / error / elapsed / ended_at by id (partial Updates, auto workspace
+// filter in the WHERE). Never an append: the transcript column is overwritten with the full
+// resumed sequence. output is JSON-marshalled (the `,json` column); a nil-result row stays 'null'.
+//
+// UpdateExecution 在 parked 运行恢复时原地重写终态字段（R0064）——按 id 更新 status / output / transcript /
+// error / elapsed / ended_at（部分 Updates，WHERE 带自动 workspace 过滤）。非追加：transcript 列被恢复后的完整
+// 序列覆盖。output 走 JSON marshal（`,json` 列）；nil 结果保持 'null'。
+func (s *Store) UpdateExecution(ctx context.Context, e *agentdomain.Execution) error {
+	output, err := json.Marshal(e.Output)
+	if err != nil {
+		return fmt.Errorf("agentstore.UpdateExecution: marshal output: %w", err)
+	}
+	transcript := e.Transcript
+	if len(transcript) == 0 {
+		transcript = json.RawMessage("[]")
+	}
+	n, err := s.execs.WhereEq("id", e.ID).Updates(ctx, map[string]any{
+		"status":        e.Status,
+		"output":        string(output),
+		"transcript":    string(transcript),
+		"error_message": e.ErrorMessage,
+		"elapsed_ms":    e.ElapsedMs,
+		"ended_at":      e.EndedAt,
+	})
+	if err != nil {
+		return fmt.Errorf("agentstore.UpdateExecution: %w", err)
+	}
+	if n == 0 {
+		return agentdomain.ErrExecutionNotFound
 	}
 	return nil
 }

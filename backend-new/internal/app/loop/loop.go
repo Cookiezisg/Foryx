@@ -124,6 +124,20 @@ const (
 	ParkKindDanger = "danger"
 )
 
+// Resolution verbs — how a human resolves a parked interaction (R0064). Shared by every parking
+// host (chat / agent) so the wire contract is one vocabulary. danger: approve | deny; ask:
+// accept | decline; either: cancel (abandon the run).
+//
+// 决议动词——人如何决议一个 parked 交互（R0064）。每个 parking host（chat / agent）共用，使线缆契约是一套词表。
+// danger：approve | deny；ask：accept | decline；两者：cancel（放弃运行）。
+const (
+	ResolveApprove = "approve" // danger: run the gated tool
+	ResolveDeny    = "deny"    // danger: skip it, feed the denial back to the model
+	ResolveAccept  = "accept"  // ask: submit the answer
+	ResolveDecline = "decline" // ask: refuse to answer, feed back
+	ResolveCancel  = "cancel"  // either: abandon the whole parked run
+)
+
 // Result is the terminal summary of one Run.
 //
 // Result 是一次 Run 的终态汇总。
