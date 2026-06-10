@@ -70,7 +70,8 @@ func (t *CreateHandler) Execute(ctx context.Context, argsJSON string) (string, e
 	if err != nil {
 		return "", fmt.Errorf("create_handler: %w", err)
 	}
-	sink := &forgeSink{}
+	sink := newForgeSink(ctx)
+	defer sink.Close()
 	h, v, err := t.svc.Create(ctx, handlerapp.CreateInput{Ops: ops, ChangeReason: args.ChangeReason, Progress: sink})
 	if err != nil {
 		return "", fmt.Errorf("create_handler: %w", err)
@@ -131,7 +132,8 @@ func (t *EditHandler) Execute(ctx context.Context, argsJSON string) (string, err
 		}
 		ops = parsed
 	}
-	sink := &forgeSink{}
+	sink := newForgeSink(ctx)
+	defer sink.Close()
 	v, err := t.svc.Edit(ctx, handlerapp.EditInput{ID: args.HandlerID, Ops: ops, ChangeReason: args.ChangeReason, Progress: sink})
 	if err != nil {
 		return "", fmt.Errorf("edit_handler: %w", err)

@@ -68,7 +68,8 @@ func (t *CreateFunction) Execute(ctx context.Context, argsJSON string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("create_function: %w", err)
 	}
-	sink := &forgeSink{}
+	sink := newForgeSink(ctx)
+	defer sink.Close()
 	f, v, err := t.svc.Create(ctx, functionapp.CreateInput{Ops: ops, ChangeReason: args.ChangeReason, Progress: sink})
 	if err != nil {
 		return "", fmt.Errorf("create_function: %w", err)
@@ -129,7 +130,8 @@ func (t *EditFunction) Execute(ctx context.Context, argsJSON string) (string, er
 		}
 		ops = parsed
 	}
-	sink := &forgeSink{}
+	sink := newForgeSink(ctx)
+	defer sink.Close()
 	v, err := t.svc.Edit(ctx, functionapp.EditInput{ID: args.FunctionID, Ops: ops, ChangeReason: args.ChangeReason, Progress: sink})
 	if err != nil {
 		return "", fmt.Errorf("edit_function: %w", err)
