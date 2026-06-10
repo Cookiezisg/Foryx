@@ -64,16 +64,19 @@ const (
 	// 内容已在 conversation.summary。
 	BlockTypeCompaction = "compaction"
 
-	// BlockTypeProgress is a tool's live intermediate progress (bash output, env-fix log, …),
-	// streamed under its tool_call (Open.ParentID = tool_call id) via loop.ToolProgress. It is
-	// STREAM-ONLY: never written to message_blocks, never in LLM history — so it is deliberately
-	// absent from IsValidBlockType and the store CHECK (those gate persisted blocks). The final
-	// answer always lands in the tool_result block; progress is UI-only and lossy.
+	// BlockTypeProgress is a tool's intermediate progress (bash output, env-fix log, a handler
+	// method's yields …), streamed live under its tool_call (Open.ParentID = tool_call id) via
+	// loop.ToolProgress AND persisted with the turn so the front end can replay it after a reload.
+	// It is a first-class persisted block (in IsValidBlockType + the store CHECK), but the LLM
+	// history projection (BlocksToAssistantLLM) is a type whitelist — text/reasoning/tool_call/
+	// tool_result — so a progress block is never fed back to the model. The durable answer the LLM
+	// reads is still the tool_result; progress is durable UI detail.
 	//
-	// BlockTypeProgress 是工具的实时中间过程（bash 输出、env-fix log…），经 loop.ToolProgress 流在其
-	// tool_call 下（Open.ParentID=tool_call id）。**仅流不持久**：绝不写 message_blocks、绝不进 LLM
-	// 历史——故刻意不在 IsValidBlockType / store CHECK 内（那俩闸的是持久化块）。最终答案永远落 tool_result
-	// 块；progress 纯 UI、可丢。
+	// BlockTypeProgress 是工具的中间过程（bash 输出、env-fix log、handler method 的 yield…），经
+	// loop.ToolProgress 在其 tool_call 下（Open.ParentID=tool_call id）实时流，**并随回合持久化**，使前端
+	// 刷新后可重放。它是一等持久块（进 IsValidBlockType + store CHECK），但 LLM 历史投影
+	// （BlocksToAssistantLLM）是类型白名单——text/reasoning/tool_call/tool_result——故 progress 块永不回喂
+	// 模型。LLM 读的耐久答案仍是 tool_result；progress 是耐久的 UI 细节。
 	BlockTypeProgress = "progress"
 )
 
@@ -82,7 +85,7 @@ const (
 // IsValidBlockType 报告 t 是否已知块型（供 store CHECK / 契约对账）。
 func IsValidBlockType(t string) bool {
 	switch t {
-	case BlockTypeText, BlockTypeReasoning, BlockTypeToolCall, BlockTypeToolResult, BlockTypeCompaction:
+	case BlockTypeText, BlockTypeReasoning, BlockTypeToolCall, BlockTypeToolResult, BlockTypeCompaction, BlockTypeProgress:
 		return true
 	}
 	return false

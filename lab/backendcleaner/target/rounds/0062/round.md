@@ -4,14 +4,17 @@
 
 **现状（亲验）**：`emitter`（open/delta/close）是 loop 私有、tool 够不着；`progress` 块型 events.md §1 早列、domain 里漏了；subagent 是唯一先例（block 树经 `Open.ParentID` 嵌在 tool_call 下，E3）。
 
-## 机制 keystone（B0，所有 tool 地基）
+## 机制 keystone（B0 + B0.5，所有 tool 地基）
 
-1. **domain/messages**：补 `BlockTypeProgress = "progress"`——**stream-only、永不持久化**（tool 中间过程不入 message_blocks / 不入 LLM 历史）→ **不进 IsValidBlockType、不动 DDL CHECK**（那是持久化块的闸）。
+> **B0.5 修正（用户定调「请求/中间态/结果都要持久化」）**：progress 从最初设计的「仅流不持久」改为**一等持久块**——随回合落 message_blocks、刷新可重放；但 LLM 历史投影（`BlocksToAssistantLLM`）是类型白名单（text/reasoning/tool_call/tool_result），故 progress **持久但永不回喂模型**（无 token 爆炸）。
+
+1. **domain/messages**：`BlockTypeProgress = "progress"` 进 `IsValidBlockType` + store DDL `type CHECK`（一等持久块）。
 2. **loop 开 tool-facing 口**：public `loop.ToolProgress(ctx) *ToolProgressWriter`
    - 复用 `newEmitter(ctx)`（bridge from `WithBridge` + conversation scope）+ `reqctx.GetToolCallID`（parentID）
-   - 实现 `io.Writer`：首 Write 懒开 `progress` block（`Open.ParentID = toolCallID`）+ delta；`Close()` 发快照（delta 可丢、快照是重连真相）
-   - **nil 安全**：无 bridge / 无 toolCallID（REST / 测试 / 非流 host）→ 全 no-op，tool 在任何路径都正确
-3. 测试：fake bridge 验 open(parentID=toolCall)/delta/close 序列 + 无 bridge no-op + io.Writer 语义。
+   - 实现 `io.Writer`：首 Write 懒开 `progress` block（`Open.ParentID = toolCallID`）+ delta；`Close()` 发快照 + **把成块交给 ctx 捕获槽**（`progressCapture`）
+   - **nil 安全**：无 bridge / 无 toolCallID（REST / 测试 / 非流 host）→ 全 no-op
+3. **loop 持久化**：`runOneTool` 埋 `progressCapture` 进 ctx → tool 跑完收 `[progress…, tool_result]`（progress 在前=时序）；`runTools` 拍平。progress 随 `allBlocks`→`FinalizeMessage` 落库（`parent=tc.ID`，同 tool_result 兄弟）。`extendHistory` 白名单天然排除 progress 出 LLM。
+4. 测试：ToolProgress 流序 + nil no-op + io.Writer 语义；`runOneTool` 持久化 [progress,result]/沉默工具仅 result。
 
 ## 逐 tool 接（B1–B6，全复用 B0）
 
@@ -28,7 +31,7 @@
 
 ## 验证 + 文档（PLAYBOOK ④）
 - `go build ./...` + loop/各 tool 测试 + 全模块 0 FAIL。
-- messages.md（progress 块 stream-only）+ events.md §1 as-built + contract-changes（progress 块型 + 逐 tool 流式，前端渲在 tool_call 下）+ 各 domain doc 注流式。**database 不变**（progress 不持久化）。
+- messages.md（progress 块：持久但 LLM 白名单排除）+ **database.md**（message_blocks type CHECK 加 `progress`）+ events.md §1 as-built + contract-changes（progress 块型 + 逐 tool 流式+持久化，前端渲在 tool_call 下）+ 各 domain doc 注流式。
 
 ## C 层（B 后，独立轮）
 forge 双写 entities 生产侧——锻造工具进度同写 entities 流（给前端实体面板），entities 流不再空。

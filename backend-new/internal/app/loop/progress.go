@@ -98,8 +98,24 @@ func (w *ToolProgressWriter) Close() {
 	if w.blockID == "" {
 		return
 	}
-	snap := &streamdomain.Node{Type: messagesdomain.BlockTypeProgress, Content: jsonContent(progressContent{Text: w.snap.String()})}
+	text := w.snap.String()
+	snap := &streamdomain.Node{Type: messagesdomain.BlockTypeProgress, Content: jsonContent(progressContent{Text: text})}
 	w.em.close(w.ctx, w.blockID, messagesdomain.StatusCompleted, snap, "")
+	// Hand the finished progress block to the loop (if it set up a capture) so it persists with the
+	// turn — parented to the tool_call, mirroring the tool_result. The LLM history projection is a
+	// type whitelist, so persisting it never feeds it back to the model.
+	//
+	// 把完成的 progress 块交给 loop（若设了捕获槽）随回合持久化——挂在 tool_call 下（同 tool_result）。LLM
+	// 历史投影是类型白名单，故持久化绝不回喂模型。
+	if pcap := progressCaptureFrom(w.ctx); pcap != nil {
+		pcap.add(messagesdomain.Block{
+			ID:            w.blockID,
+			Type:          messagesdomain.BlockTypeProgress,
+			Content:       text,
+			ParentBlockID: w.parentID,
+			Status:        messagesdomain.StatusCompleted,
+		})
+	}
 	w.blockID = ""
 }
 
@@ -108,4 +124,41 @@ func (w *ToolProgressWriter) Close() {
 // progressContent 是 progress 块的快照载荷。
 type progressContent struct {
 	Text string `json:"text"`
+}
+
+// progressCapture collects the progress blocks produced under one tool call so runOneTool can fold
+// them into the turn's persisted blocks. A parallel tool batch gives each call its own capture, so
+// the mutex only guards a single tool emitting from multiple goroutines.
+//
+// progressCapture 收集一次 tool 调用下产出的 progress 块，供 runOneTool 折进回合的持久化 blocks。并行
+// 批里每个调用各有自己的 capture，故 mutex 只护单个 tool 从多 goroutine 发的情况。
+type progressCapture struct {
+	mu     sync.Mutex
+	blocks []messagesdomain.Block
+}
+
+func (c *progressCapture) add(b messagesdomain.Block) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.blocks = append(c.blocks, b)
+}
+
+func (c *progressCapture) take() []messagesdomain.Block {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.blocks
+}
+
+type progressCaptureKey struct{}
+
+// withProgressCapture seeds a capture so progress blocks emitted under this ctx persist.
+//
+// withProgressCapture 埋一个 capture，使本 ctx 下发的 progress 块得以持久化。
+func withProgressCapture(ctx context.Context, c *progressCapture) context.Context {
+	return context.WithValue(ctx, progressCaptureKey{}, c)
+}
+
+func progressCaptureFrom(ctx context.Context) *progressCapture {
+	c, _ := ctx.Value(progressCaptureKey{}).(*progressCapture)
+	return c
 }

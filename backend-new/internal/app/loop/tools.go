@@ -41,12 +41,16 @@ func runTools(
 	if len(calls) == 0 {
 		return nil
 	}
-	blocks := make([]messagesdomain.Block, len(calls))
+	// Per-call block lists (progress* + tool_result), index-aligned so a parallel batch's writes
+	// don't race on order; flattened in call order at the end.
+	//
+	// 每调用一组 block（progress* + tool_result），按下标对齐使并行批写入不竞争顺序；末尾按调用序拍平。
+	perCall := make([][]messagesdomain.Block, len(calls))
 
 	for _, batch := range partitionByExecutionGroup(calls) {
 		if len(batch.items) == 1 {
 			item := batch.items[0]
-			blocks[item.idx] = runOneTool(ctx, byName[item.tc.Name], item.tc, log)
+			perCall[item.idx] = runOneTool(ctx, byName[item.tc.Name], item.tc, log)
 			continue
 		}
 		var wg sync.WaitGroup
@@ -57,10 +61,14 @@ func runTools(
 				// Each goroutine writes its own pre-assigned index — no shared-slot race, no lock.
 				//
 				// 每个 goroutine 只写自己预分配的下标——无共享槽竞争、无需锁。
-				blocks[it.idx] = runOneTool(ctx, byName[it.tc.Name], it.tc, log)
+				perCall[it.idx] = runOneTool(ctx, byName[it.tc.Name], it.tc, log)
 			}(item)
 		}
 		wg.Wait()
+	}
+	var blocks []messagesdomain.Block
+	for _, bs := range perCall {
+		blocks = append(blocks, bs...)
 	}
 	return blocks
 }
@@ -73,14 +81,19 @@ func runTools(
 // runOneTool 执行一次 tool 调用、返回其 tool_result block，并实时推 block 生命周期。LLM 自报的
 // danger 已随 tool_call 节点上行（纯信任，M2.2：此处无门控）；将来 dangerous 调用的确认暂停在
 // loop 层接入（待 ask 通道就绪，波次 6）。
-func runOneTool(ctx context.Context, t toolapp.Tool, tc messagesdomain.ToolCallData, log *zap.Logger) messagesdomain.Block {
+func runOneTool(ctx context.Context, t toolapp.Tool, tc messagesdomain.ToolCallData, log *zap.Logger) []messagesdomain.Block {
 	argsJSON, _ := json.Marshal(tc.Arguments)
 	// Seed this call's id so a tool can learn its own tool_call block id (the Subagent tool
-	// anchors the subagent's message subtree under it, E3).
+	// anchors the subagent's message subtree under it, E3) and ToolProgress nests its progress
+	// block under it. The capture lets a tool's live progress (bash output, env-fix log, …)
+	// persist with the turn alongside the tool_result.
 	//
-	// 埋本次调用的 id，使工具能得知自己的 tool_call block id（Subagent 工具据此把 subagent 的
-	// message 子树锚在其下，E3）。
+	// 埋本次调用的 id，使工具能得知自己的 tool_call block id（Subagent 据此把 subagent message 子树锚其下，
+	// E3；ToolProgress 据此把 progress 块嵌其下）。capture 使工具的实时进度（bash 输出、env-fix log…）随回合
+	// 与 tool_result 一并持久化。
 	ctx = reqctxpkg.SetToolCallID(ctx, tc.ID)
+	pcap := &progressCapture{}
+	ctx = withProgressCapture(ctx, pcap)
 	output, errMsg, ok := executeTool(ctx, t, tc.Name, argsJSON, log)
 
 	status := messagesdomain.StatusCompleted
@@ -97,7 +110,7 @@ func runOneTool(ctx context.Context, t toolapp.Tool, tc messagesdomain.ToolCallD
 	if !ok {
 		errVal = errMsg
 	}
-	return messagesdomain.Block{
+	result := messagesdomain.Block{
 		ID:            blockID,
 		Type:          messagesdomain.BlockTypeToolResult,
 		Content:       output,
@@ -105,6 +118,12 @@ func runOneTool(ctx context.Context, t toolapp.Tool, tc messagesdomain.ToolCallD
 		Error:         errVal,
 		Attrs:         map[string]any{"tool": tc.Name},
 	}
+	// Progress blocks (emitted during Execute) precede the tool_result — chronological + correct
+	// sibling order under the tool_call. Usually empty (most tools emit no progress).
+	//
+	// progress 块（Execute 期间发的）排在 tool_result 前——时序 + tool_call 下正确的兄弟序。通常为空
+	// （多数工具不发进度）。
+	return append(pcap.take(), result)
 }
 
 // executeTool runs ValidateInput then Execute and shapes the (output, errMsg, ok) tuple.

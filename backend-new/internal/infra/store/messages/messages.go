@@ -67,7 +67,7 @@ var Schema = []string{
 		message_id      TEXT NOT NULL,
 		parent_block_id TEXT NOT NULL DEFAULT '',
 		seq             INTEGER NOT NULL,
-		type            TEXT NOT NULL CHECK(type IN ('text','reasoning','tool_call','tool_result','compaction')),
+		type            TEXT NOT NULL CHECK(type IN ('text','reasoning','tool_call','tool_result','compaction','progress')),
 		attrs           TEXT NOT NULL DEFAULT 'null',
 		content         TEXT NOT NULL DEFAULT '',
 		status          TEXT NOT NULL CHECK(status IN ('pending','streaming','completed','error','cancelled')),
