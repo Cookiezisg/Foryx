@@ -204,17 +204,19 @@ func IsValidLifecycle(s string) bool {
 }
 
 // Concurrency policies decide what the scheduler does when a run is requested while one is
-// already in flight. serial waits; Skip drops the new request; BufferOne keeps only the
-// latest pending; BufferAll queues every request; AllowAll runs them concurrently.
+// already in flight. serial waits; skip drops the new request; buffer_one keeps only the
+// latest pending; buffer_all queues every request; allow_all runs them concurrently
+// (buffer_* are v2 placeholders — treated as allow_all so firings are never silently lost).
 //
-// Concurrency 策略决定有运行在途时再请求运行调度器怎么办。serial 等待；Skip 丢弃新请求；BufferOne
-// 仅留最新待处理；BufferAll 全排队；AllowAll 并发跑。
+// Concurrency 策略决定有运行在途时再请求运行调度器怎么办。serial 等待；skip 丢弃新请求；buffer_one
+// 仅留最新待处理；buffer_all 全排队；allow_all 并发跑（buffer_* 是 v2 占位——按 allow_all 处理，
+// firing 绝不静默丢失）。
 const (
 	ConcurrencySerial    = "serial"
-	ConcurrencySkip      = "Skip"
-	ConcurrencyBufferOne = "BufferOne"
-	ConcurrencyBufferAll = "BufferAll"
-	ConcurrencyAllowAll  = "AllowAll"
+	ConcurrencySkip      = "skip"
+	ConcurrencyBufferOne = "buffer_one"
+	ConcurrencyBufferAll = "buffer_all"
+	ConcurrencyAllowAll  = "allow_all"
 )
 
 // IsValidConcurrency reports whether s is one of the five concurrency policies.

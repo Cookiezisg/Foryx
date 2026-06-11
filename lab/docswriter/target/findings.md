@@ -65,6 +65,16 @@
 - **wontfix（记录为设计事实，写进 domains 文档）**：ctx 取消标 crashed 重启单例（协议正确性）；`HANDLER_CLIENT_*` 冒泡 HTTP（502 语义对）；Search 全表载入（本地规模取舍）；agent tokens/steps 不持久化（无 ALTER 机制，留观测议题）；ForgedInConversationID 类型微分叉（不值得动 DDL）。
 - **文档**：`domains/{function,handler,agent}.md` 三篇 0 障碍级详解 + seed `api.md`/`database.md`/`events.md` 三索引（三实体条目）+ reqctx.md 补 flowrun 行。
 
+## F-9 P3 亲审批（durable 引擎六模块，用户裁决 2026-06-11：全修）✅ 已修
+
+亲读 ~11000 行（flowrun/workflow domain+store、scheduler 全 7 文件、trigger 全链含 infra 4 listener、control/approval、bootstrap、transport）。引擎核心设计是全库最好的一块（record-once / first-wins 全链一致 / claim 单事务 / walk 统一 join 规则 / kill 先标后取消）。Findings：
+
+- **P3-1（🔴 致命真 bug，实证锤死）后台路径裸 ctx → 自动化链路全死**：`a.Boot(context.Background())` + drainLoop（Background 派生）调 ws-scoped 查询（ListPendingFirings / ListParkedNodes / ListAllHandlers / ListActiveWorkflows）→ `MISSING_WORKSPACE_ID`。后果：DrainFirings 每 5s 失败（**cron/webhook/fsnotify/sensor 自动触发完全不工作**）、CheckTimeouts 同死（**审批超时永不结算**）、ReattachActive 死（**重启后 active workflow 监听全丢**）、handler/mcp Boot 预热死。实证：临时单测证明 `ListParkedNodes(Background)` 报错而显式 CrossWorkspace 的 `ListRunningRuns` 正常。为何测试绿：全部测试用带 ws 的 ctx；真实 Boot 路径无覆盖。讽刺：同一约定在 Recover（per-run 播种）/onReport（Detached(wsID)）做对了，drainLoop/Boot 漏了。**修**：`bootstrap.forEachWorkspace`（workspaces 是全局表、裸 ctx 可列）——Boot 的 handler/mcp/ReattachActive 与 drainLoop 每 tick 的 DrainFirings/CheckTimeouts 全部逐 workspace 以 `Detached(wsID)` 重放；**守护测试** `bootstrap/background_ctx_test.go` 锁死契约（裸 ctx 必败 + Detached 必通）。
+- **P3-2（🟡）webhook/fsnotify/sensor DedupKey 全空**（只有 cron 有）→ `idx_trf_dedup`（D3）对三源形同虚设。**修**：webhook=sha256(body)+分钟桶（秒级网络重试折叠、跨分钟合法重复放行——UNIQUE 永久故键必须含时间）；fsnotify=path+op+秒桶（编辑器保存突发折叠）；sensor=probe 秒时刻（一探至多一条/工作流）。
+- **P3-3（🟡）Concurrency 线缆值大小写混杂**（'serial','Skip','BufferOne','BufferAll','AllowAll'）。**修**：统一 snake（serial/skip/buffer_one/buffer_all/allow_all）+ DDL CHECK + 全注释同步（未上线零包袱，本地库重建）。
+- **小项**：FlowRun.Status 注释漏 cancelled（修）；buffer_* v2 占位按 allow_all（注释+文档写明）；5s 轮询收件箱是单进程本地的合理取舍（文档记）。
+- **文档**：`foundation/scheduler-flowrun.md`（引擎 0 障碍级——记忆化模型/walk 算法/run 生命周期/后台播种铁律）+ `domains/{workflow,trigger,control,approval}.md` 四篇 + 三索引 P3 增量（修正 workflow `:kill`/`:capability-check` 端点遗漏）。
+
 ## F-5 detached context 散手搓 → 加 `reqctx.Detached` helper ✅ 已修
 
 - **模块**：P1 reqctx（横切：~15 个 app/infra 站点）

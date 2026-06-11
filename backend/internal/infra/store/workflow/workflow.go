@@ -34,7 +34,7 @@ var Schema = []string{
 		tags              TEXT NOT NULL DEFAULT '[]',
 		active            INTEGER NOT NULL DEFAULT 0,
 		lifecycle_state   TEXT NOT NULL DEFAULT 'inactive' CHECK (lifecycle_state IN ('active','draining','inactive')),
-		concurrency       TEXT NOT NULL DEFAULT 'serial' CHECK (concurrency IN ('serial','Skip','BufferOne','BufferAll','AllowAll')),
+		concurrency       TEXT NOT NULL DEFAULT 'serial' CHECK (concurrency IN ('serial','skip','buffer_one','buffer_all','allow_all')),
 		needs_attention   INTEGER NOT NULL DEFAULT 0,
 		attention_reason  TEXT NOT NULL DEFAULT '',
 		last_action_by    TEXT NOT NULL DEFAULT 'user',

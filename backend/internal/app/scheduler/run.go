@@ -221,11 +221,11 @@ const (
 )
 
 // overlapDecision applies the workflow's concurrency policy to a new firing. v1 implements serial
-// (defer while a run is in flight), Skip (drop), and AllowAll (always run). BufferOne/BufferAll are
-// v2 — treated as AllowAll so firings are never silently lost.
+// (defer while a run is in flight), skip (drop), and allow_all (always run). buffer_one/buffer_all
+// are v2 — treated as allow_all so firings are never silently lost.
 //
-// overlapDecision 对新 firing 应用 workflow 并发策略。v1 实现 serial（有 run 在途则推迟）、Skip（丢）、
-// AllowAll（总跑）。BufferOne/BufferAll 是 v2——按 AllowAll 处理使 firing 绝不静默丢失。
+// overlapDecision 对新 firing 应用 workflow 并发策略。v1 实现 serial（有 run 在途则推迟）、skip（丢）、
+// allow_all（总跑）。buffer_one/buffer_all 是 v2——按 allow_all 处理使 firing 绝不静默丢失。
 func (s *Service) overlapDecision(ctx context.Context, f *triggerdomain.Firing) (overlapAction, string, error) {
 	w, err := s.workflows.GetWorkflow(ctx, f.WorkflowID)
 	if err != nil {
@@ -245,7 +245,7 @@ func (s *Service) overlapDecision(ctx context.Context, f *triggerdomain.Firing) 
 		}
 		return overlapRun, "", nil
 	default:
-		return overlapRun, "", nil // AllowAll / BufferOne / BufferAll(v2) → run
+		return overlapRun, "", nil // allow_all / buffer_one / buffer_all(v2) → run
 	}
 }
 

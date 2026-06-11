@@ -111,7 +111,7 @@ type FlowRun struct {
 	PinnedRefs  map[string]string `db:"pinned_refs,json"    json:"pinnedRefs"`          // BuildPinClosure {entity_id: active_version_id}
 	TriggerID   string            `db:"trigger_id"          json:"triggerId,omitempty"` // entry trg_ (empty for a manual :trigger)
 	FiringID    string            `db:"firing_id"           json:"firingId,omitempty"`  // source trf_ (single-tx claim)
-	Status      string            `db:"status"              json:"status"`              // running | completed | failed
+	Status      string            `db:"status"              json:"status"`              // running | completed | failed | cancelled
 	ReplayCount int               `db:"replay_count"        json:"replayCount"`         // :replay increments; NOT a generation
 	Error       string            `db:"error"               json:"error,omitempty"`     // terminal-failed reason
 	StartedAt   time.Time         `db:"started_at,created"  json:"startedAt"`

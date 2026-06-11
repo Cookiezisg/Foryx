@@ -182,24 +182,28 @@ func (l *Listener) dispatch(ev notifyfsnotify.Event) {
 				continue
 			}
 		}
+		// Dedup key: path + op + a second bucket — an editor's burst of duplicate events for one
+		// save collapses per workflow; a later real change (next second on) fires again.
+		// 去重键：path + op + 秒桶——编辑器一次保存的重复事件突发按 workflow 折叠；之后（下一秒起）
+		// 的真实变化照常触发。
 		l.fire(spec.TriggerID, map[string]any{
 			"firedAt":   time.Now(),
 			"path":      ev.Name,
 			"eventKind": ev.Op.String(),
-		})
+		}, ev.Name+"|"+ev.Op.String()+"|"+time.Now().UTC().Format("20060102150405"))
 	}
 }
 
 // fire reports a fired action under a recover so a panicking handler doesn't kill the loop.
 //
 // fire 在 recover 下报告一次触发，handler panic 不拖垮 event loop。
-func (l *Listener) fire(triggerID string, payload map[string]any) {
+func (l *Listener) fire(triggerID string, payload map[string]any, dedup string) {
 	defer func() {
 		if r := recover(); r != nil {
 			l.log.Error("fsnotify report panic", zap.String("triggerID", triggerID), zap.Any("recover", r))
 		}
 	}()
-	l.report(triggerID, triggerinfra.Activity{Fired: true, Payload: payload})
+	l.report(triggerID, triggerinfra.Activity{Fired: true, Payload: payload, DedupKey: dedup})
 }
 
 // parseEvents normalizes a config "events" array into fsnotify Op masks; empty = all.

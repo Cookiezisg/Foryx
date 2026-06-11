@@ -196,6 +196,16 @@ func (l *Listener) handleWebhook(fullPath string) http.HandlerFunc {
 			}
 		}
 
+		// Dedup key: body hash + a minute bucket. A network-level retry of the SAME request
+		// (seconds apart) collapses onto one Firing per workflow (idx_trf_dedup), while a
+		// legitimately repeated identical payload later (next minute on) fires again — the
+		// UNIQUE is forever, so the key must not be the bare hash.
+		// 去重键：body 哈希 + 分钟桶。同一请求的网络级重试（秒级间隔）按 workflow 折叠成一条
+		// Firing（idx_trf_dedup）；之后（下一分钟起）合法重复的相同 payload 照常触发——UNIQUE
+		// 是永久的，键不能只是裸哈希。
+		sum := sha256.Sum256(body)
+		dedup := hex.EncodeToString(sum[:8]) + "|" + time.Now().UTC().Format("200601021504")
+
 		// Fire async + recover so the handler stays responsive on a slow/panicking onFire.
 		// 异步 fire + recover，handler 不被慢/panic 拖累。
 		triggerID := reg.TriggerID
@@ -205,7 +215,7 @@ func (l *Listener) handleWebhook(fullPath string) http.HandlerFunc {
 					l.log.Error("webhook report panic", zap.String("triggerID", triggerID), zap.Any("recover", rec))
 				}
 			}()
-			l.report(triggerID, triggerinfra.Activity{Fired: true, Payload: payload})
+			l.report(triggerID, triggerinfra.Activity{Fired: true, Payload: payload, DedupKey: dedup})
 		}()
 		w.WriteHeader(http.StatusAccepted)
 		_, _ = w.Write([]byte(`{"accepted":true}`))

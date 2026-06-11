@@ -11,7 +11,7 @@ audience: [human, ai]
 
 # HTTP API —— 端点登记
 
-> 全部端点的单一事实源（method · path · 语义一行）。随评审逐域填入；当前已落：function · handler · agent。
+> 全部端点的单一事实源（method · path · 语义一行）。随评审逐域填入；当前已落：function · handler · agent · workflow · flowrun · trigger · control · approval。
 > 通则（N 系列）：统一 Envelope `{"data":...}` / `{"error":{code,message,details}}`；线缆 camelCase；List 全部 `?cursor&limit` 分页；非 CRUD 动作 `:action`；执行动词 `:run`(fn) `:call`(hd) `:invoke`(ag) `:trigger`(wf)；`:iterate` = 开 AI 编辑对话（全实体共享 aispawn）。
 
 ## function（`/api/v1/functions`）
@@ -69,3 +69,41 @@ audience: [human, ai]
 | `GET /agents/{id}/versions` · `/versions/{version}` | 版本 |
 | `GET /agents/{id}/executions` | 执行日志分页（同款过滤） |
 | `GET /agent-executions/{execId}` | 单执行详情（含完整 transcript） |
+
+## workflow（`/api/v1/workflows`）
+
+| Method · Path | 语义 |
+|---|---|
+| `POST /workflows` · `GET /workflows` · `GET /workflows/{id}` · `PATCH /workflows/{id}` · `DELETE /workflows/{id}` | CRUD（PATCH=meta 不升版本） |
+| `POST /workflows/{id}:trigger` | 立即跑一次（任何 lifecycle 下可跑），body `{payload, entryNode?}`，返 flowrun id |
+| `POST /workflows/{id}:stage` | 待命恰一次真实触发后自动撤防（已 active → 409） |
+| `POST /workflows/{id}:activate` / `:deactivate` | 上线（挂监听+active）/ 优雅下线（摘监听+inactive 或 draining） |
+| `POST /workflows/{id}:kill` | 硬停：摘监听 + 取消全部在途 run + inactive，返被杀数 |
+| `POST /workflows/{id}:edit` / `:revert` | 图 ops 锻造新版本 / 移 active 指针 |
+| `POST /workflows/{id}:capability-check` | ref 解析体检（实体在吗/kind 对吗/port·method 在吗） |
+| `POST /workflows/{id}:iterate` | 开 AI 编辑对话 |
+| `GET /workflows/{id}/versions[/{version}]` | 版本 |
+
+## flowrun（`/api/v1/flowruns`）
+
+| Method · Path | 语义 |
+|---|---|
+| `GET /flowruns` | 运行历史分页（`?workflowId`） |
+| `POST /flowruns` | 手动起 run（= workflow `:trigger` 的等价入口） |
+| `GET /flowruns/{id}` | run 头 + 全部节点行（完整记忆化） |
+| `POST /flowruns/{id}:replay` | 修复失败 run：清 failed 行 + 重走（completed 复用） |
+| `GET /flowrun-inbox` | 审批收件箱（= 全部 parked 节点行） |
+| `POST /flowruns/{id}/approvals/{node}:decide` | 人工审批决策 `{decision: yes|no, reason?}`（first-wins，输家 422） |
+
+## trigger（`/api/v1/triggers`）
+
+| Method · Path | 语义 |
+|---|---|
+| `POST /triggers` · `GET /triggers` · `GET /triggers/{id}` · `PATCH /triggers/{id}` · `DELETE /triggers/{id}` | CRUD（PATCH=Edit，热更监听中的 listener） |
+| `POST /triggers/{id}:fire` | 手动催一次（扇给当前监听者） |
+| `POST /triggers/{id}:iterate` | 开 AI 编辑对话 |
+| `GET /triggers/{id}/activations` · `GET /trigger-activations/{actId}` | 活动审计（触没触发都有记录） |
+
+## control / approval（`/api/v1/controls` · `/api/v1/approvals`）
+
+两域同构：CRUD + `POST {id}:edit / :revert / :iterate` + `GET {id}/versions[/{version}]`。approval 的运行时决策端点在 flowrun 侧（见上）。

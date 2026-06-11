@@ -164,7 +164,13 @@ func (l *Listener) probe(ctx context.Context, triggerID string, sc triggerdomain
 		l.report(triggerID, triggerinfra.Activity{Fired: false, ReturnValue: rv, Error: outErr.Error(), Detail: "output eval error"})
 		return
 	}
-	l.report(triggerID, triggerinfra.Activity{Fired: true, ReturnValue: rv, Payload: toMap(payloadAny)})
+	// Dedup key: the probe instant (second granularity) — one probe = at most one firing per
+	// workflow even if the report path re-materializes; the next probe naturally gets a new key.
+	// 去重键：probe 时刻（秒粒度）——一次 probe 每 workflow 至多一条 firing；下一次 probe 天然换新键。
+	l.report(triggerID, triggerinfra.Activity{
+		Fired: true, ReturnValue: rv, Payload: toMap(payloadAny),
+		DedupKey: triggerID + "|" + time.Now().UTC().Format("20060102150405"),
+	})
 }
 
 // toMap coerces a CEL output value into a payload map; a non-map result is wrapped under "value".

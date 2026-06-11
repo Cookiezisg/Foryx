@@ -22,6 +22,7 @@ import (
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	loggerinfra "github.com/sunweilin/forgify/backend/internal/infra/logger"
 	ormpkg "github.com/sunweilin/forgify/backend/internal/pkg/orm"
+	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 	handlershttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/handlers"
 	routerhttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/router"
 )
@@ -215,21 +216,30 @@ func (a *App) Boot(ctx context.Context) {
 	}
 	registerSandboxStack(a.svc.sandbox)
 	a.svc.sandbox.RestoreOrCleanupOnBoot(ctx)
-	a.svc.handler.Boot(ctx)
-	a.svc.mcp.Boot(ctx)
 	a.svc.trigger.Start()
 	if err := a.svc.scheduler.Recover(ctx); err != nil {
 		a.log.Warn("bootstrap: scheduler recover failed", zap.Error(err))
 	}
-	// D1: the trigger listen-registry is in-memory, so re-engage the listener for every active
-	// workflow (the "replay active references on boot" the trigger lifecycle expects). Same ctx
-	// workspace as handler/mcp Boot above.
+	// Background entry points run OFF any request, so ctx carries no workspace — but
+	// handler/mcp Boot and ReattachActive read workspace-scoped tables (the orm ,ws filter
+	// would reject a bare ctx with MISSING_WORKSPACE_ID). The ONE convention for background
+	// work: seed a Detached workspace ctx per workspace and replay the entry point in each
+	// (same family as Recover's per-run seeding and onReport's Detached(wsID)).
 	//
-	// D1：trigger 监听注册表是内存的，故为每个 active workflow 重挂监听（trigger 生命周期期待的「boot 重放
-	// active 引用」）。与上面 handler/mcp Boot 同一 ctx workspace。
-	if err := a.svc.workflow.ReattachActive(ctx); err != nil {
-		a.log.Warn("bootstrap: workflow reattach-active failed", zap.Error(err))
-	}
+	// 后台入口在任何请求之外跑，ctx 不带 workspace——而 handler/mcp Boot 与 ReattachActive 读
+	// workspace 隔离表（orm 的 ,ws 过滤会以 MISSING_WORKSPACE_ID 拒裸 ctx）。后台工作的唯一惯例：
+	// 逐 workspace 种 Detached ctx、在每个里重放入口（与 Recover 的 per-run 播种、onReport 的
+	// Detached(wsID) 同族）。
+	a.forEachWorkspace(ctx, func(wsCtx context.Context) {
+		a.svc.handler.Boot(wsCtx)
+		a.svc.mcp.Boot(wsCtx)
+		// D1: the trigger listen-registry is in-memory, so re-engage the listener for every
+		// active workflow ("replay active references on boot").
+		// D1：trigger 监听注册表是内存的，为每个 active workflow 重挂监听（boot 重放 active 引用）。
+		if err := a.svc.workflow.ReattachActive(wsCtx); err != nil {
+			a.log.Warn("bootstrap: workflow reattach-active failed", zap.Error(err))
+		}
+	})
 
 	// Firing-drain ticker: trigger listeners persist Firings to the durable inbox; the scheduler
 	// claims + advances them here on a fixed cadence, and sweeps approval/timer timeouts.
@@ -238,9 +248,31 @@ func (a *App) Boot(ctx context.Context) {
 	go a.drainLoop(tickCtx)
 }
 
-// drainLoop periodically drains pending firings and checks timeouts until the app shuts down.
+// forEachWorkspace runs fn once per workspace, each in a Detached ctx seeded with that
+// workspace's id. The workspaces table is global (no ,ws column), so listing works on a bare
+// ctx; everything inside fn is then properly isolated. Listing fresh per call keeps a
+// workspace created after boot participating in the next tick.
 //
-// drainLoop 周期 drain 待处理 firing + 检查超时，直到 app 关停。
+// forEachWorkspace 对每个 workspace 跑一次 fn，各自在种了该 workspace id 的 Detached ctx 里。
+// workspaces 表是全局表（无 ,ws 列），裸 ctx 可列；fn 内部随之正确隔离。每次调用现列，使 boot 后
+// 新建的 workspace 在下一个 tick 即参与。
+func (a *App) forEachWorkspace(ctx context.Context, fn func(wsCtx context.Context)) {
+	workspaces, err := a.svc.workspace.List(ctx)
+	if err != nil {
+		a.log.Warn("bootstrap: list workspaces for background work", zap.Error(err))
+		return
+	}
+	for _, ws := range workspaces {
+		fn(reqctxpkg.Detached(ws.ID))
+	}
+}
+
+// drainLoop periodically drains pending firings and checks timeouts until the app shuts down —
+// per workspace per tick (the firings/parked-nodes tables are workspace-scoped; CheckTimeouts'
+// contract is "the caller ticks it per workspace").
+//
+// drainLoop 周期 drain 待处理 firing + 检查超时，直到 app 关停——每 tick 逐 workspace（firings /
+// parked-nodes 表按 workspace 隔离；CheckTimeouts 的契约就是「调用方逐 workspace tick」）。
 func (a *App) drainLoop(ctx context.Context) {
 	t := time.NewTicker(drainInterval)
 	defer t.Stop()
@@ -249,12 +281,14 @@ func (a *App) drainLoop(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case now := <-t.C:
-			if err := a.svc.scheduler.DrainFirings(ctx); err != nil {
-				a.log.Warn("bootstrap: drain firings", zap.Error(err))
-			}
-			if err := a.svc.scheduler.CheckTimeouts(ctx, now.UTC()); err != nil {
-				a.log.Warn("bootstrap: check timeouts", zap.Error(err))
-			}
+			a.forEachWorkspace(ctx, func(wsCtx context.Context) {
+				if err := a.svc.scheduler.DrainFirings(wsCtx); err != nil {
+					a.log.Warn("bootstrap: drain firings", zap.Error(err))
+				}
+				if err := a.svc.scheduler.CheckTimeouts(wsCtx, now.UTC()); err != nil {
+					a.log.Warn("bootstrap: check timeouts", zap.Error(err))
+				}
+			})
 		}
 	}
 }
