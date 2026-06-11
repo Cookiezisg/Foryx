@@ -15,7 +15,7 @@
 
 ## 文档地图
 
-> **V0.2 → V-next 重置**：契约层（API / DB / events / error-codes / 36 domain）、前端文档、ADR、how-to、working/archive 已**清空**——后端重写完成、即将覆盖回，前端将重建，文档按新结构**重生成**。前版完整文档归档在 **`version-0.2`** 分支（`git checkout version-0.2 -- docs/...` 取回）。
+> **V0.2 → V-next 重置**：docs 内容已**清空**、目录骨架按 `GOVERNANCE.md` 规范**重建为空占位**（每个文件夹一个 `.gitkeep` 说明职责，待按新结构填充）。仅 `concepts/architecture.md`（架构）+ `GOVERNANCE.md` + `INDEX.md`（组织）留内容。前版完整文档在 **`version-0.2`** 分支（`git checkout version-0.2 -- docs/...` 取回）。
 
 | 用途 | 路径 |
 |---|---|

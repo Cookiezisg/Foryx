@@ -8,21 +8,33 @@
 |---|---|
 | System architecture, phase roadmap, vision | `concepts/architecture.md` |
 | Engineering rules + work discipline (S/T/N/D/E series) | `../CLAUDE.md` |
-| Doc governance (types, mutability, sync rules) | `GOVERNANCE.md` |
+| Doc governance + directory spec | `GOVERNANCE.md` |
 
-## Status — docs reset (V0.2 → V-next)
+## Structure — skeleton restored, content pending (V0.2 → V-next)
 
-The reference layer (API / DB / events / error-codes / 36 backend domains / frontend slices),
-the ADRs (`decisions/`), the how-to guides, and the working/archive notes were **cleared** at the
-V0.2 → V-next reset: the backend rewrite is complete and about to be covered back, and the frontend
-will be rebuilt — docs will be **regenerated against the new structure** as it lands.
+The tree below is the canonical organization (per `GOVERNANCE.md`). The reference / decision /
+how-to / working / archive / superpowers folders are **empty placeholders** (`.gitkeep`, each
+stating what it holds) — content is regenerated against the new structure as the rewrite covers
+back and the frontend is rebuilt.
 
-Only the two survivors are kept here: `concepts/architecture.md` (the north star) and `GOVERNANCE.md`
-(how docs are organized).
+```
+docs/
+├── INDEX.md          ← this file (AI entry point)
+├── GOVERNANCE.md     ← doc types, frontmatter, directory spec
+├── concepts/         ← architecture.md (only surviving content doc)
+├── references/       ← must-stay-in-sync-with-code specs (empty)
+│   ├── backend/      ← api / database / events / error-codes / changelog + domains/
+│   └── frontend/     ← fsd-layers / entity-types / cross-cutting + slices/
+├── decisions/        ← ADRs (empty)
+├── how-to/           ← operational playbooks (empty)
+├── working/          ← in-progress research, 90-day max (empty)
+├── archive/          ← read-only graveyard (empty)
+└── superpowers/      ← Superpowers skill artifacts: plans/ + specs/ (empty)
+```
 
-**The previous version's complete docs are archived on the `version-0.2` git branch.** Recover any
-of them with, e.g., `git checkout version-0.2 -- docs/references/backend`.
+**Previous version's complete docs** are on the **`version-0.2`** git branch —
+`git checkout version-0.2 -- docs/...` recovers any of them.
 
 ## Authority Hierarchy
 
-`CLAUDE.md` > `concepts/architecture.md` > `GOVERNANCE.md`
+`CLAUDE.md` > `references/` > `concepts/` > `working/` > `archive/`
