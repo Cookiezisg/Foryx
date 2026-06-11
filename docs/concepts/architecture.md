@@ -164,11 +164,10 @@ trigger 是**独立信号源实体**：
 
 | 里程碑 | 形态 | 状态 |
 |---|---|---|
-| 后端 clean-room 重写（`backend-new/`，4 层架构 + Quadrinity + durable 引擎 + 全实体） | 编译/装配/启动/服务全通 | ✅ 当前 |
-| 覆盖回 `backend/`（`backend-new` → `backend`，module path 已是最终值） | 单一后端 | ⬜ 下一步 |
-| 前端重建（FSD 架构、对接新契约） | 桌面 app 联调 | ⬜ 下一步 |
+| 后端（`backend/`，4 层架构 + Quadrinity + durable 引擎 + 全实体） | 编译/装配/启动/服务全通；单一后端 | ✅ 当前 |
+| 前端重建（FSD 架构、对接 `backend` 契约） | 桌面 app 联调 | ⬜ 下一步 |
 
-> 前版（覆盖回前的快照）归档在 `version-0.2` git 分支。重写过程的轮次历史只在 git，不在本文档（**零历史包袱**）。
+> 旧版快照归档在 `version-0.2` git 分支。历史只在 git，不在本文档（**零历史包袱**）。
 
 ---
 

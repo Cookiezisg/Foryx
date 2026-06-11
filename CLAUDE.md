@@ -11,7 +11,7 @@
 - **本地优先 Agentic Workflow Platform**，目标 **Wails 桌面 app**、**单进程单用户**、SQLite 落盘（**不做 SaaS**）。
 - **核心心智**：**Quadrinity（四项全能）** 实体（Function/Handler/Agent/Workflow）+ **Durable Execution**（节点结果记忆化 + 解释器幂等重走）。
 - **架构**：4 层 Clean Architecture，依赖单向 `transport → app → (domain ∪ infra/store) → infra/db`。地基自研：`pkg/orm`（去 GORM）+ `glebarez/go-sqlite`（纯 Go、无 CGO）。
-- **当前状态**：后端 clean-room 重写完成（`backend-new/`，全实体 + durable 引擎，编译/装配/启动全通）；**下一步**：覆盖回 `backend/` + 前端按 FSD 重建。
+- **当前状态**：后端 `backend/` 全实体 + durable 引擎，编译/装配/启动/服务全通（单一后端）；**下一步**：前端按 FSD 重建、对接 `backend` 契约。
 
 ## 文档地图
 
@@ -81,8 +81,9 @@
 
 - **T5 Pipeline 优先**：大功能必须提供 `test/<axis>/` 下的集成测试（smoke / api / cross / sse / lifecycle / errcodes）。
 - **T6 Fake LLM**：默认测试用 `fake_llm`，0 Token 消耗。
-- **每次改动必过**：后端 `go build ./...`（5 平台）+ `go vet` + `gofmt` 净 + 相关包单测全绿。并发/取消相关测试带 `-race`。
-- **文档门禁**：`lint-docs`（GOVERNANCE §11——frontmatter / reference-sync / ADR 不可变 / 孤儿链接 / INDEX≤50 行）；规格已定、待构建体系恢复后落地。在此之前以「文档纪律」收尾清单人肉把关。
+- **`make verify`（pre-push 门禁，host 平台）**：`gofmt` 净 + `go vet` + `go build` + 单测 + 文档门禁全绿。并发/取消测试带 `-race`。
+- **`make docs`（文档门禁）**：`cmd/docs` 跑 GOVERNANCE §11 全套（frontmatter / 类型 / 生命周期 / INDEX≤50 / 孤儿链接）。
+- **跨平台 release**：`cd backend && go run ./cmd/setup --all` 拉全 5 平台 mise embed 后跨平台 `go build`（go:embed 要求目标平台二进制在场）——不在日常 verify 内。
 - 前端门禁（TS / ESLint / FSD 架构检查）随前端重建接入。
 
 ---
@@ -93,7 +94,7 @@
 - **DIP 注入**：`shared` 层不准依赖上层；**workspace 注入** + 401 拦截由 `app` 层经 Provider 注入。
 - **视觉灵魂**：明亮、通透、轻盈。`--row-h: 32px` 紧凑布局；`tool_call` 与 `reasoning` 默认折叠。
 - **i18n**：严禁在 TSX 硬编码中英文；文案走 `t("key")`、登记在 `locales/` 下。
-- 对接 backend-new 契约（三条 SSE 流常驻订阅；camelCase 线缆；统一 Envelope）。
+- 对接 `backend` 契约（三条 SSE 流常驻订阅；camelCase 线缆；统一 Envelope）。
 
 ---
 
