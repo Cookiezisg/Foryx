@@ -12,11 +12,20 @@ package ask
 import (
 	"context"
 	"encoding/json"
-	"errors"
+	"fmt"
 	"strings"
 
 	humanloopapp "github.com/sunweilin/forgify/backend/internal/app/humanloop"
+	errorspkg "github.com/sunweilin/forgify/backend/internal/pkg/errors"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
+)
+
+// Input sentinels — errorspkg.New like every sentinel; surfaced to the LLM as a tool-result string.
+//
+// 输入 sentinel——同所有 sentinel 用 errorspkg.New；经 tool-result 串给 LLM。
+var (
+	ErrMessageRequired   = errorspkg.New(errorspkg.KindInvalid, "ASK_MESSAGE_REQUIRED", "message is required")
+	ErrNoInteractiveUser = errorspkg.New(errorspkg.KindUnavailable, "ASK_NO_INTERACTIVE_USER", "ask_user is only available in an interactive conversation; proceed without asking")
 )
 
 // Tool is the ask_user tool. It carries no state — the broker arrives via ctx.
@@ -53,10 +62,10 @@ type input struct {
 func (*Tool) ValidateInput(raw json.RawMessage) error {
 	var in input
 	if err := json.Unmarshal(raw, &in); err != nil {
-		return errors.New("invalid arguments: " + err.Error())
+		return fmt.Errorf("ask_user.ValidateInput: %w", err)
 	}
 	if strings.TrimSpace(in.Message) == "" {
-		return errors.New("message is required")
+		return ErrMessageRequired
 	}
 	return nil
 }
@@ -75,7 +84,7 @@ func (*Tool) Execute(ctx context.Context, args string) (string, error) {
 	if broker == nil {
 		// Non-interactive run (workflow / sensor / standalone): there is no user to ask.
 		// 非交互运行（workflow / sensor / standalone）：无用户可问。
-		return "", errors.New("ask_user is only available in an interactive conversation; proceed without asking")
+		return "", ErrNoInteractiveUser
 	}
 
 	convID, _ := reqctxpkg.GetConversationID(ctx)

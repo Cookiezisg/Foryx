@@ -3,7 +3,6 @@ package document
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 
@@ -41,7 +40,7 @@ func (t *SearchDocuments) ValidateInput(args json.RawMessage) error {
 		return fmt.Errorf("search_documents: bad args: %w", err)
 	}
 	if strings.TrimSpace(a.Query) == "" {
-		return errors.New("search_documents: query is required")
+		return ErrQueryRequired
 	}
 	if a.Limit < 0 || a.Limit > 50 {
 		return fmt.Errorf("search_documents: limit must be 0..50, got %d", a.Limit)

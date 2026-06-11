@@ -20,6 +20,7 @@ import (
 var (
 	ErrEmptyOldString = errorspkg.New(errorspkg.KindInvalid, "FS_EMPTY_OLD_STRING", "old_string is required and must be non-empty")
 	ErrEditNoOp       = errorspkg.New(errorspkg.KindInvalid, "FS_EDIT_NOOP", "old_string and new_string must be different")
+	ErrEmptyNewString = errorspkg.New(errorspkg.KindInvalid, "FS_NEW_STRING_REQUIRED", "new_string field is required (use empty string to delete the matched text)")
 )
 
 const editDescription = `Exact literal string replace in a file (not regex; whitespace/case matter). Read the file first. old_string must be unique unless replace_all; strip Read's line-num prefix.`
@@ -85,7 +86,7 @@ func (t *Edit) ValidateInput(args json.RawMessage) error {
 		return ErrEmptyOldString
 	}
 	if a.NewString == nil {
-		return errors.New("new_string field is required (use empty string to delete the matched text)")
+		return ErrEmptyNewString
 	}
 	if *a.OldString == *a.NewString {
 		return ErrEditNoOp

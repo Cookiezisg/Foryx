@@ -17,6 +17,18 @@ package memory
 import (
 	memoryapp "github.com/sunweilin/forgify/backend/internal/app/memory"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	errorspkg "github.com/sunweilin/forgify/backend/internal/pkg/errors"
+)
+
+// Input-validation sentinels shared across the memory tools' ValidateInput (presence
+// checks). errorspkg.New like every sentinel; surfaced to the LLM as a tool-result string.
+//
+// memory 工具 ValidateInput 的输入校验 sentinel（必填检查）。同所有 sentinel 用 errorspkg.New；
+// 经 tool-result 串给 LLM。
+var (
+	ErrEmptyName        = errorspkg.New(errorspkg.KindInvalid, "MEMORY_EMPTY_NAME", "name is required")
+	ErrEmptyDescription = errorspkg.New(errorspkg.KindInvalid, "MEMORY_EMPTY_DESCRIPTION", "description is required")
+	ErrEmptyContent     = errorspkg.New(errorspkg.KindInvalid, "MEMORY_EMPTY_CONTENT", "content is required")
 )
 
 // MemoryTools constructs the memory system tools over one Service.

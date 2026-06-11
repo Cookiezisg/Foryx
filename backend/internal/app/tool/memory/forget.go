@@ -38,7 +38,7 @@ func (t *ForgetMemory) ValidateInput(args json.RawMessage) error {
 		return fmt.Errorf("forget_memory: bad args: %w", err)
 	}
 	if strings.TrimSpace(a.Name) == "" {
-		return errors.New("forget_memory: name is required")
+		return ErrEmptyName
 	}
 	return nil
 }

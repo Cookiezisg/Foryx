@@ -14,6 +14,17 @@ package document
 import (
 	documentapp "github.com/sunweilin/forgify/backend/internal/app/document"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	errorspkg "github.com/sunweilin/forgify/backend/internal/pkg/errors"
+)
+
+// Input-validation sentinels shared across the document tools' ValidateInput. The id check
+// is one shared code (delete/move/read/edit), not per-tool duplicates.
+//
+// document 工具 ValidateInput 的输入校验 sentinel。id 检查共用一个码（delete/move/read/edit），不各自重复。
+var (
+	ErrIDRequired    = errorspkg.New(errorspkg.KindInvalid, "DOCUMENT_ID_REQUIRED", "id is required")
+	ErrNameRequired  = errorspkg.New(errorspkg.KindInvalid, "DOCUMENT_NAME_REQUIRED", "name is required")
+	ErrQueryRequired = errorspkg.New(errorspkg.KindInvalid, "DOCUMENT_QUERY_REQUIRED", "query is required")
 )
 
 // DocumentTools constructs the 7 document system tools over one Service.

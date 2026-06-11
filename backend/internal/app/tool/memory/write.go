@@ -51,13 +51,13 @@ func (t *WriteMemory) ValidateInput(args json.RawMessage) error {
 		return fmt.Errorf("write_memory: bad args: %w", err)
 	}
 	if strings.TrimSpace(a.Name) == "" {
-		return errors.New("write_memory: name is required")
+		return ErrEmptyName
 	}
 	if strings.TrimSpace(a.Description) == "" {
-		return errors.New("write_memory: description is required")
+		return ErrEmptyDescription
 	}
 	if a.Content == "" {
-		return errors.New("write_memory: content is required")
+		return ErrEmptyContent
 	}
 	return nil
 }

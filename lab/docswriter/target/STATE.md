@@ -20,7 +20,7 @@
 
 ## 账本
 - `standards.md`：STD-1（错误处理，已全量统一）· STD-2（数据访问 / orm）
-- `findings.md`：F-1 ✅（错误构造分裂→全量统一）· F-2 ✅（websearch 随 F-1）· **F-3 内联 validation（open，Phase 3 去重收尾）**
+- `findings.md`：F-1 ✅（错误构造分裂→全量统一）· F-2 ✅（websearch 随 F-1）· F-3 ✅（22 处内联 validation 去重统一，7 agent 读码）
 - 索引：`error-codes.md` 已 seed（框架 + Kind + 命名空间）；逐域码随模块填。其余（api/database/events/changelog）随评审填
 
 ## Full coverage

@@ -47,7 +47,7 @@ audience: [human, ai]
 | `WORKFLOW_` / `FLOWRUN_` | workflow / flowrun | `SHELL_` | shell tool |
 | `TRIGGER_` / `CONTROL_` / `APPROVAL_` | 图节点 | `TOOLSET_` | search_tools |
 | `SKILL_` / `MCP_` / `DOCUMENT_` | 挂载/协议 | `TODO_` | todo |
-| `CONVERSATION_` / `CHAT_` / `MESSAGE_` | 对话运行时 | `MEMORY_` | memory |
+| `CONVERSATION_` / `CHAT_` / `MESSAGE_` | 对话运行时 | `MEMORY_` / `ASK_` | memory / ask 工具 |
 | `ORM_` | pkg/orm（兜底，domain 翻译成具体码） | `CRYPTO_` / `HANDLER_`（infra） | infra 原语 |
 | `MALFORMED_CURSOR` / `MISSING_WORKSPACE_ID` / `MISSING_CONVERSATION_ID` / `FSPATH_*` | pkg 原语 | | |
 

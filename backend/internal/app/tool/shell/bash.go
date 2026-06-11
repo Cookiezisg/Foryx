@@ -32,7 +32,7 @@ var (
 	// ErrInvalidTimeout: timeout outside [0, maxTimeoutMS].
 	//
 	// ErrInvalidTimeout：timeout 不在 [0, maxTimeoutMS]。
-	ErrInvalidTimeout = fmt.Errorf("timeout must be between 0 and %d ms", maxTimeoutMS)
+	ErrInvalidTimeout = errorspkg.New(errorspkg.KindInvalid, "SHELL_INVALID_TIMEOUT", fmt.Sprintf("timeout must be between 0 and %d ms", maxTimeoutMS))
 )
 
 const bashDescription = `Run a shell command (POSIX sh on Unix, cmd.exe /c on Windows). Output is combined stdout+stderr, capped at 256KB, with an exit-code footer. There is no persistent working directory — pass absolute paths, or prefix a single command with "cd /abs/dir && ..." (cd does NOT carry across calls). Set run_in_background for long-running commands, then poll with BashOutput and stop with KillShell.`

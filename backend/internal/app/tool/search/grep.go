@@ -3,11 +3,11 @@ package search
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
-	errorspkg "github.com/sunweilin/forgify/backend/internal/pkg/errors"
 	"os"
 	"strings"
+
+	errorspkg "github.com/sunweilin/forgify/backend/internal/pkg/errors"
 
 	"go.uber.org/zap"
 
@@ -31,6 +31,12 @@ var (
 	//
 	// ErrPathRequired：path 缺失——没有当前目录可作默认。
 	ErrPathRequired = errorspkg.New(errorspkg.KindInvalid, "SEARCH_PATH_REQUIRED", "path is required (absolute or ~; the agent has no current directory)")
+
+	// ErrNegativeLimit: a numeric limit (limit / -A / -B / -C / head_limit) given negative.
+	// Shared by LS / Glob / Grep — one code for the same physical violation.
+	//
+	// ErrNegativeLimit：数字上限（limit / -A / -B / -C / head_limit）传了负数。LS / Glob / Grep 共用——同一物理违例归一个码。
+	ErrNegativeLimit = errorspkg.New(errorspkg.KindInvalid, "SEARCH_NEGATIVE_LIMIT", "a numeric limit must be non-negative")
 )
 
 const (
@@ -166,7 +172,7 @@ func (t *Grep) ValidateInput(args json.RawMessage) error {
 		return ErrInvalidOutputMode
 	}
 	if a.After < 0 || a.Before < 0 || a.Around < 0 || a.HeadLimit < 0 {
-		return errors.New("-A / -B / -C / head_limit must be non-negative")
+		return ErrNegativeLimit
 	}
 	return nil
 }

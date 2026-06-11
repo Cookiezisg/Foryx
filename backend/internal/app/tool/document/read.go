@@ -38,7 +38,7 @@ func (t *ReadDocument) ValidateInput(args json.RawMessage) error {
 		return fmt.Errorf("read_document: bad args: %w", err)
 	}
 	if strings.TrimSpace(a.ID) == "" {
-		return errors.New("read_document: id is required")
+		return ErrIDRequired
 	}
 	return nil
 }

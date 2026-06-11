@@ -3,7 +3,6 @@ package shell
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 )
@@ -41,7 +40,7 @@ func (t *KillShell) ValidateInput(args json.RawMessage) error {
 		return fmt.Errorf("KillShell: bad args: %w", err)
 	}
 	if strings.TrimSpace(a.BashID) == "" {
-		return errors.New("KillShell: bash_id is required")
+		return ErrEmptyBashID
 	}
 	return nil
 }

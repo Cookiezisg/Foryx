@@ -42,7 +42,7 @@ func (t *CreateDocument) ValidateInput(args json.RawMessage) error {
 		return fmt.Errorf("create_document: bad args: %w", err)
 	}
 	if strings.TrimSpace(a.Name) == "" {
-		return errors.New("create_document: name is required")
+		return ErrNameRequired
 	}
 	return nil
 }

@@ -42,7 +42,7 @@ func (t *EditDocument) ValidateInput(args json.RawMessage) error {
 		return fmt.Errorf("edit_document: bad args: %w", err)
 	}
 	if strings.TrimSpace(a.ID) == "" {
-		return errors.New("edit_document: id is required")
+		return ErrIDRequired
 	}
 	return nil
 }

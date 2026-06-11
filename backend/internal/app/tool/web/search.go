@@ -41,6 +41,11 @@ const (
 // ErrEmptyQuery：query 缺失或为空。
 var ErrEmptyQuery = errorspkg.New(errorspkg.KindInvalid, "WEBSEARCH_EMPTY_QUERY", "query is required and must be non-empty")
 
+// ErrNegativeLimit: limit must be >= 0.
+//
+// ErrNegativeLimit：limit 不可为负。
+var ErrNegativeLimit = errorspkg.New(errorspkg.KindInvalid, "WEBSEARCH_NEGATIVE_LIMIT", "limit must be non-negative")
+
 const searchDescription = `Web search via the workspace's configured search key (BYOK: Brave/Serper/Tavily/Bocha — one explicit key). Returns JSON {query,source,results:[{title,url,snippet}],truncated}. If no search key is configured, returns setup guidance.`
 
 var searchSchema = json.RawMessage(`{
@@ -114,7 +119,7 @@ func (t *WebSearch) ValidateInput(args json.RawMessage) error {
 		return ErrEmptyQuery
 	}
 	if a.Limit < 0 {
-		return errors.New("limit must be non-negative")
+		return ErrNegativeLimit
 	}
 	return nil
 }

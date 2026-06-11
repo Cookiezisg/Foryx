@@ -11,10 +11,16 @@ import (
 	"strings"
 
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
+	errorspkg "github.com/sunweilin/forgify/backend/internal/pkg/errors"
 	fspathpkg "github.com/sunweilin/forgify/backend/internal/pkg/fspath"
 	pathguardpkg "github.com/sunweilin/forgify/backend/internal/pkg/pathguard"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
+
+// ErrEmptyContent: write called without content (nil); use "" to create an empty file.
+//
+// ErrEmptyContent：write 未给 content（nil）；用 "" 建空文件。
+var ErrEmptyContent = errorspkg.New(errorspkg.KindInvalid, "FS_CONTENT_REQUIRED", "content field is required (use empty string to create an empty file)")
 
 const defaultFileMode os.FileMode = 0o644
 
@@ -68,7 +74,7 @@ func (t *Write) ValidateInput(args json.RawMessage) error {
 		return ErrEmptyFilePath
 	}
 	if a.Content == nil {
-		return errors.New("content field is required (use empty string to create an empty file)")
+		return ErrEmptyContent
 	}
 	return nil
 }

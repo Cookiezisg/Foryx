@@ -28,6 +28,6 @@
 ## F-3 内联 validation 错误重复样板（Phase 3，open）
 
 - **现状**：~22 处内联 `return errors.New("x is required")`（memory/ask/document/filesystem/search/shell 等 tool 的 ValidateInput）——非命名 sentinel，是逐工具重复的输入校验样板。
-- **要点（去重，不盲配码）**：部分**与已有 sentinel 重复**——如 `shell/kill.go` 的 "bash_id is required" ≈ `shell.ErrEmptyBashID`；盲转成一次性码会把冗余焊死。
-- **建议修法**：转 `errorspkg.New` 时**先去重**（复用已有 sentinel）+ 重复"x required"模式考虑共享 helper，而非 22 个一次性码。属 tool 层标准化。
-- **状态**：**open（Phase 3，全量统一收尾）**
+- **已做（7 agent 并行读码理解业务 + 去重，2026-06-11）**：22 处全转 `errorspkg.New`，**先去重不盲配码**——shell/kill 复用 `ErrEmptyBashID`、search 3 处 "limit must be non-negative" → 1 个 `ErrNegativeLimit`、document 4 处 "id is required" → 1 个 `ErrIDRequired`、memory 3 处共享 `ErrEmpty*`；ask 的 malformed-JSON 对齐全库 `fmt.Errorf("…: %w")` 包裹惯例（**不配码**——它是包裹非 sentinel）；顺带把 `shell.ErrInvalidTimeout`（还在 fmt.Errorf）也转了。
+- **故意保留**：`web/fetch.go:163` "stopped after 10 redirects" 是 `http.Client.CheckRedirect` 回调的内部控制流、非面向 LLM 的 sentinel → 留 std `errors.New`（全库唯一一处）。
+- **状态**：**✅ 已修**（Phase 3，全量统一彻底收尾）

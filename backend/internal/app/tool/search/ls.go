@@ -77,7 +77,7 @@ func (t *LS) ValidateInput(args json.RawMessage) error {
 		return ErrPathRequired
 	}
 	if a.Limit < 0 {
-		return errors.New("limit must be non-negative")
+		return ErrNegativeLimit
 	}
 	return nil
 }
