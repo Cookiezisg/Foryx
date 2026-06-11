@@ -33,7 +33,7 @@
 4. **后端契约是事实源**：`reference` 文档 = 代码的精确投影；前端按 FSD 架构对接已定型的后端契约（前端重建中）。
 5. **端到端推演先行**：开工前必走完整数据流 + 列出跨域依赖（relation 边）。
 6. **反校验剧场**：只保留有物理价值的校验（JSON、必填、CHECK/UNIQUE）；不加多余 null-check。
-7. **零历史包袱**：项目未上线，禁止维护任何兼容性、禁止任何历史演化描述。修改一步到位、只留当前物理事实；历史从 git 取。
+7. **零历史包袱 + 状态即重述**：项目未上线，禁止维护兼容性、禁止历史演化描述，只留当前物理事实（历史从 git 取）。**状态文档**（本文件 / `architecture.md` / `GOVERNANCE.md`）改任何状态/事实 = **整体重述当前状态、非追加**——绝不在旧内容旁堆新句、不留旧状态痕迹（见末「文档纪律」节 + GOVERNANCE §1.7）。
 8. **复用优先、不造轮子**：动工前先盘点 `pkg/*` 与 `infra/*` 既有能力——能复用就复用；业务层将手搓的样板本应由地基提供时（如 orm 补 UNIQUE 冲突翻译），**强化地基**而非模块内重抄。错误抽象与重复样板比多写一行更糟。
 9. **📌 文档与代码物理同步（最高优先级）**：每个代码改动必须在**同一提交**伴随对应文档的 1:1 更新——**文档落后于代码 = 严重 Bug，与编译失败同级**。完整执行规则见本文件末「**文档纪律（强制）**」节 + [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md)。
 
@@ -116,16 +116,18 @@
 | 新增/改 error code | `references/backend/error-codes.md` + 对应 `domains/<域>.md` |
 | 新增/改 SSE 事件 | `references/backend/events.md` + 对应 `domains/<域>.md` |
 | 架构决策（选型/取舍） | `decisions/` 新建一篇 ADR |
-| 完成里程碑 | `concepts/architecture.md` 路线表 + changelog |
+| 架构 / 实体 / 引擎 / 路线状态变更 | **整体重述** `concepts/architecture.md` 相关节（非追加） |
+| 工程规则 / 设计原则 / N·D·E·S·T 变更 | **整体重述** 本文件相关节（非追加） |
 | 前端实体类型 / FSD 规则变更 | `references/frontend/{entity-types,fsd-layers}.md` |
 
-非穷举——判据始终是「`reference` 文档必须 = 代码」。
+非穷举。**两种 mode 不混**：`reference` 文档 = 精确同步（逐字吻合代码）；`architecture.md` / 本文件 = **整体重述**（相关节重写到当前状态、删尽旧状态，绝不追加堆叠）——见 GOVERNANCE §1.7。
 
 ## 收尾清单（声明任何代码改动「完成」前逐条勾，任一未过 = 未完成）
 
 1. ☐ 碰了上表的东西？→ 对应文档**同提交**更新了？
 2. ☐ 改的 `reference` 文档与代码**逐字**对得上（端点/字段/码/事件 一一吻合）？
-3. ☐ 新文档 frontmatter 合法（`type`/`status`/`id`）、放对目录（GOVERNANCE §5）？
-4. ☐ 删/移文档后无孤儿链接（`INDEX.md` 及他处指向它的都修了）？
-5. ☐ 没编辑 `decisions/` 里的 ADR（不可变，只能新建 supersede）？
-6. ☐ working 文档落地了（结论提取进 concepts/references + 填 `landed-into` + 移 `archive/`）？
+3. ☐ 改的是状态文档（architecture / 本文件 / GOVERNANCE）？→ 是**整体重述到当前状态**（没在旧内容旁追加、没留旧状态痕迹）？
+4. ☐ 新文档 frontmatter 合法（`type`/`status`/`id`）、放对目录（GOVERNANCE §5）？
+5. ☐ 删/移文档后无孤儿链接（`INDEX.md` 及他处指向它的都修了）？
+6. ☐ 没编辑 `decisions/` 里的 ADR（不可变，只能新建 supersede）？
+7. ☐ working 文档落地了（结论提取进 concepts/references + 填 `landed-into` + 移 `archive/`）？

@@ -42,6 +42,7 @@ audience: [human, ai]
 4. **写 Why 不写 What**：What 看代码/结构即知；文档的价值在解释**为什么这样设计**、有哪些取舍与边界。
 5. **高密度**：表格优先、要点优先、删一切 fluff（「本节将介绍…」之类）。本规范自身即范例。
 6. **中文**：所有文档正文用**中文**；代码标识符、路径、wire code、frontmatter 字段名保持原文。
+7. **状态即重述（state 文档整体重述、非追加）**：描述「当前状态」的 `concept` 文档（`architecture.md` / `CLAUDE.md` / 本规范）每次变更**必须整体重述到当前事实**——改一个状态/事实 = 重写相关部分，使全文读起来像「一直如此」，旧状态**不留痕迹**（历史在 git）。**绝不在旧内容旁追加**；只增不删 = 文档腐烂之源。两种更新 mode 不混：`reference` 文档按 **§1.1 精确同步**（投影代码），`concept`/state 文档按**本条整体重述**。
 
 ---
 
@@ -146,11 +147,12 @@ draft → active → superseded → archived
 | 新增/改 error code | `references/backend/error-codes.md` + 对应 `domains/<域>.md` |
 | 新增/改 SSE 事件 | `references/backend/events.md` + 对应 `domains/<域>.md` |
 | 架构决策（选型/取舍） | `decisions/` 新建一篇 ADR |
-| 完成一个 Phase / 里程碑 | `concepts/architecture.md` 路线表 + `references/.../changelog.md` |
+| 架构 / 分层 / 实体 / 引擎 / 路线状态变更 | **整体重述** `concepts/architecture.md` 相关节（§1.7，非追加） |
+| 工程规则 / 设计原则 / 契约宪法（N·D·E·S·T）变更 | **整体重述** `CLAUDE.md` 相关节（§1.7，非追加） |
 | 前端实体类型变更 | `references/frontend/entity-types.md` |
 | FSD 层级规则变更 | `references/frontend/fsd-layers.md` + `CLAUDE.md` 前端节 |
 
-表中没列到、但「代码改了而某 `reference` 文档因此失真」的，**同样适用**——上表是高频清单、非穷举；判据始终是 §1.1 parity。
+**两种更新 mode 不混（§1.1 vs §1.7）**：`reference` 文档行 = **精确同步**（增量改到逐字吻合代码）；`architecture.md` / `CLAUDE.md` 行 = **整体重述**（把相关节重写到当前状态、删尽旧状态，绝不在旁追加）。表为高频清单、非穷举——「代码改了而某文档因此失真」一律适用。
 
 ---
 
@@ -159,7 +161,7 @@ draft → active → superseded → archived
 - **语言**：正文中文；标识符/路径/wire code/frontmatter 键保持原文。
 - **密度**：表格 > 列表 > 段落。删除 meta 废话、礼貌性过渡、「显然」「众所周知」。
 - **只写 Why**：解释设计动机、取舍、边界、坑。What（有哪些字段/端点）让结构自述或链向 reference。
-- **零历史叙述**：不写「原来…后来改成…」。当前事实 only；演化进 git / `decisions/` / `archive/`。
+- **零历史叙述 + 重述维护**：不写「原来…后来改成…」，当前事实 only（演化进 git / `decisions/` / `archive/`）。维护 state 文档（architecture.md / CLAUDE.md / 本规范）时**整体重述、非追加**（§1.7）——改个状态就把相关节重写到当前，**不在旁边堆新句、不留旧状态**。
 - **交叉引用**：用相对链接指向权威源（`[api.md](../references/backend/api.md)`），**不复制**内容——复制即制造第二事实源、必然 drift。
 - **删/移文档**：必须同时修掉所有指向它的链接（`INDEX.md` 及他处），不留孤儿链接（§11 校验）。
 
@@ -210,12 +212,13 @@ CLAUDE.md  >  references/  >  concepts/  >  working/  >  archive/
 
 声明任何代码改动**完成**之前，逐条自检——任一项未过 = 改动**未完成**，回去补：
 
-1. ☐ 这次改动碰了 §7 触发表里的东西吗（API / DB / error / SSE / 架构决策 / Phase / 前端类型 / FSD）？→ 对应文档**同一提交**更新了吗？
+1. ☐ 这次改动碰了 §7 触发表里的东西吗（API / DB / error / SSE / 架构决策 / 架构·实体·引擎状态 / 工程规则·N·D·E·S·T / 前端类型 / FSD）？→ 对应文档**同一提交**更新了吗？
 2. ☐ 改的是 `reference` 文档吗？它和代码**逐字**对得上吗（端点/字段/码/事件 一一吻合）？
-3. ☐ 新建文档有合法 frontmatter（§3）吗？`type`/`status`/`id` 对吗？放对目录（§5）了吗？
-4. ☐ 删/移过文档吗？→ 所有指向它的链接（`INDEX.md` 及他处）都修了吗（无孤儿链接）？
-5. ☐ 动过 `decisions/` 里的 ADR 吗？→ **禁止**（只能新建 supersede）。
-6. ☐ working 文档落地了吗（提取进 concepts/references + 填 `landed-into` + 移 `archive/`）？
+3. ☐ 改的是**状态文档**（`architecture.md` / `CLAUDE.md` / 本规范）吗？→ 是**整体重述到当前状态**吗（没在旧内容旁追加、没留旧状态痕迹，§1.7）？
+4. ☐ 新建文档有合法 frontmatter（§3）吗？`type`/`status`/`id` 对吗？放对目录（§5）了吗？
+5. ☐ 删/移过文档吗？→ 所有指向它的链接（`INDEX.md` 及他处）都修了吗（无孤儿链接）？
+6. ☐ 动过 `decisions/` 里的 ADR 吗？→ **禁止**（只能新建 supersede）。
+7. ☐ working 文档落地了吗（提取进 concepts/references + 填 `landed-into` + 移 `archive/`）？
 
 ---
 
