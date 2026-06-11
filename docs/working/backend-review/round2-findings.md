@@ -78,3 +78,11 @@ audience: [human, ai]
   - contextmgr：水位（summary_covers_up_to_seq）幂等键 + SetSummary 先于 archive 标记的崩溃安全次序；触发用真实 InputTokens、闸用 bytes/4 自校正估算；demote 只降不升；archive 按整回合粒度（tool_call 绝不失 tool_result）。
   - llm：唯一 idle 计时器替代总墙钟（健康长流永不杀）；classifyHTTPError 收口 status→sentinel；SanitizeMessages 缝合孤儿 tool_call（防严格 provider 400 锁死）；Generate 的 retry 只许无副作用调用方用（emit 方禁用，注释明示）；11 家 provider 各自自包含（刻意重复防共享分支地狱）、签名/思考块回传、多模态矩阵测试逐家断言官方 wire、PDF 不支持家优雅降级。
 - **🟢 注意**：anthropic「enabled」thinking 的 budget 派生（max/2 clamp [1024,8192]、必要时上调 max_tokens）正确防 400；mock 队列空发 MOCK_QUEUE_EMPTY 错误（fail-loud，T6 正确语义）。
+
+## W6 —— 其余 app 服务 + infra（sandbox 双层 / mcp 双层 / crypto / handler client）
+
+**结论：零缺陷波次。** 亲读 sandbox app+infra（directInstaller 校验和+原子换+zip/tar-slip 守卫+1GiB 顶；进程组三平台 Setpgid/Pdeathsig/Job 对象——组杀使 SpawnOnce 免 WaitDelay）、function/handler/agent/workflow/approval/control 六实体 app（PD-3 B 两步写、版本 Trim、关系同步、CEL 祖先域校验、pin 闭包深度 1 一致）、mcp app+infra（连接生命周期换 client 旧句柄 goroutine 收尾、降级阈值、JSON-RPC progress token）、skill/subagent（fork 隔离、工具过滤去 Subagent 防递归）、document（路径级联 BFS+环防护）、apikey（AES-GCM 机器指纹派生、probe 矩阵）、attachment（sha256 去重 blob+能力降级）、catalog/todo/memory/model/workspace/aispawn/envfix（AI 依赖修复环）+ infra/crypto+infra/handler（crashed 状态机：超时→crashed→重生，弃 goroutine 不污染下任调用）。
+
+| 级别 | 发现 | 处置 |
+|---|---|---|
+| 🟢 | handler DriverScript 把 tuple/set 当生成器迭代消费（`hasattr __iter__` 排除 str/bytes/list/dict 但漏 tuple/set），返回 tuple 的方法只留末元素 | 留档不修——LLM 生成的 handler 方法实际返回 dict/list/标量；修复属 driver 协议升级，发版后随真实反馈定 |
