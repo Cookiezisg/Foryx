@@ -26,8 +26,8 @@ audience: [human, ai]
 
 | 波 | 范围 | 状态 |
 |---|---|---|
-| W0 | 环境+座架（harness/llmmock/promptdump/smoke） | ← 进行中 |
-| W1 | 锻造域 A1-A3（function/handler/control/approval） | ⬜ |
+| W0 | 环境+座架（harness/sse/smoke；llmmock/promptdump 随 W4 进场） | ✅ |
+| W1 | 锻造域 A1-A3（function/handler/control/approval） | ✅ |
 | W2 | 编排域 A5（workflow/trigger/flowrun，含 kill -9 恢复） | ⬜ |
 | W3 | 集成域 A6+A7（MCP 真装真调 + Search 全况含 RAG） | ⬜ |
 | W4 | 对话域 A8（chat 全链/压缩/附件/memory/skill/todo/SSE） | ⬜ |

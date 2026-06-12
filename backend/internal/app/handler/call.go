@@ -115,6 +115,12 @@ func (s *Service) Call(ctx context.Context, in CallInput) (any, error) {
 	startedAt := time.Now().UTC()
 	result, err := inst.Client.StreamCall(ctx, in.Method, in.Args, onProgress)
 	endedAt := time.Now().UTC()
+	// stderr grace before detach: stdout (the return frame) and stderr (the prints) are two
+	// independent pipes read by independent goroutines — a print written BEFORE the return
+	// can still arrive after it. A short quiesce keeps those lines inside this call's window.
+	// detach 前的 stderr 宽限：stdout（return 帧）与 stderr（print）是两条独立管道、各自
+	// goroutine 在读——先于 return 写出的 print 仍可能后到。短静默把这些行留在本调用窗口内。
+	time.Sleep(stderrGrace)
 	detach()
 	if err != nil {
 		runTerm.Close("error", nil)
@@ -126,6 +132,12 @@ func (s *Service) Call(ctx context.Context, in CallInput) (any, error) {
 	s.recordCall(ctx, h, inst, in, startedAt, endedAt, result, logs.String(), callErr, ctx.Err())
 	return result, callErr
 }
+
+// stderrGrace bounds how long a call waits for straggler stderr lines before closing its
+// log window (pipe-ordering race, see Call).
+//
+// stderrGrace 限定调用收尾时等迟到 stderr 行多久（管道乱序竞态，见 Call）。
+const stderrGrace = 30 * time.Millisecond
 
 // yieldBytes renders a streaming method's yield (any) as one line for the entities run terminal:
 // a string goes verbatim, anything else as compact JSON.

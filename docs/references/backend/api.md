@@ -23,7 +23,7 @@ audience: [human, ai]
 | `GET /functions/{id}` | 单读（附 activeVersion：代码+env 状态一趟拿全） |
 | `PATCH /functions/{id}` | 改 meta（name/description/tags，不升版本） |
 | `DELETE /functions/{id}` | 软删 + 销毁 env + 清边，204 |
-| `POST /functions/{id}:run` | 执行（TriggeredBy=manual），body `{input, version?}` |
+| `POST /functions/{id}:run` | 执行（TriggeredBy=manual），body `{args, version?}` |
 | `POST /functions/{id}:revert` | active 指针移到指定版本号 |
 | `POST /functions/{id}:edit` | ops 锻造新版本（空 ops = 仅重建 env） |
 | `POST /functions/{id}:iterate` | 开 AI 编辑对话，返 `conversationId` |
