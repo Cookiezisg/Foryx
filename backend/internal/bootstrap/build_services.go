@@ -51,6 +51,7 @@ import (
 	shelltool "github.com/sunweilin/forgify/backend/internal/app/tool/shell"
 	skilltool "github.com/sunweilin/forgify/backend/internal/app/tool/skill"
 	subagenttool "github.com/sunweilin/forgify/backend/internal/app/tool/subagent"
+	todotool "github.com/sunweilin/forgify/backend/internal/app/tool/todo"
 	triggertool "github.com/sunweilin/forgify/backend/internal/app/tool/trigger"
 	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
 	workflowtool "github.com/sunweilin/forgify/backend/internal/app/tool/workflow"
@@ -186,6 +187,7 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 			searchtool.SearchTools(guard, log),
 			shelltool.NewShellTools().Tools,
 			[]toolapp.Tool{asktool.New()}, // R0064: ask_user — agent asks the human (blocks on the humanloop broker)
+			todotool.TodoTools(todo),      // todo_write — the checklist's only write path (the HTTP board is read-only)
 		),
 		Lazy: concat(
 			functiontool.FunctionTools(fn, searchSvc),

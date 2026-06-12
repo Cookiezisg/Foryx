@@ -57,3 +57,34 @@ audience: [human, ai]
 - ✗「llama-server 关停缺失」——`search.Close()` 对实现 `ProviderCloser` 的 provider 调 Close（app/search/service.go:144-152），builtin 引擎杀子进程。
 - ✗「mcp 改 config 不自动重连」——AddServer upsert 路径 `persistAndConnect` 自动连（install.go:98-110）。
 - ✗「limits 经 settings.json limits.agent.maxSteps 可调」——把包注释当实现；见 PR-3。
+
+## R2 实体闭环配对矩阵
+
+### 实锤·已修
+
+- **PR-10 🔴 todo_write 工具不存在——todo 实体零写入口、功能整体不可用**（fixed）
+  验证：`domains/todo.md` 声称「LLM 工具：todo_write（resident）」；`handlers/todo.go:14` 注释「写入是 LLM 专属（TodoWrite 工具）——前端从不编辑」（HTTP 看板只读 by design）；`todoapp.Write` 完整就绪（整表替换+渲染回显+流推送，todo.go:56）。但 `tool/` 无 todo 包、toolset 零注册、全仓无 `"todo_write"` 字符串——**没有任何主体能写 todos**，chat 每步注入的 TodoReminder 永远渲染空清单。三处（文档/HTTP 注释/service 设计）都以为工具存在，是「波次 2/3」规划中漏装的接线。
+  修复：`tool/todo` 包（todo_write，**resident**——规划不该先经 search_tools 发现）+ `TODO_ITEMS_REQUIRED` sentinel（nil≠[]：[] 清空、缺省是错）+ toolset 注册 + 接线测试。
+- **PR-15 🟢 events.md 三处与代码脱节**（doc-fix）
+  验证：`workflow.lifecycle_changed`/`attention_changed`（crud.go:241/261）、`sandbox.env_status_changed`/`env_deleted`（sandbox.go:441/450）代码发、文档无；文档写「workflow/trigger/... 生命周期族」但 trigger **无任何生命周期 publish**（活动走 activations 行 + fire 信号）。已重述。
+
+### 实锤·待裁决（DECISIONS PD-E/PD-F）
+
+- **PR-11 🟡 对话历史对 LLM 不可检索**（pending → PD-E）
+  验证：综搜（人）覆盖 conversation（12 实体投影）；LLM 面：search_blocks 限六类积木、8 个垂搜工具不含 conversation、无任何对话读取工具。「用户问：我们上次聊的那个方案」LLM 无工具可查——只能靠 memory 萃取物。
+- **PR-12 🟡 relation 关系图对 LLM 不可查**（pending → PD-F）
+  验证：HTTP 有 `GET /relations/neighborhood`（依赖/影响面查询）；LLM 零工具。LLM 删除/改造实体前无法回答「谁在用它」——capability_check 只覆盖 workflow 单向。
+
+### 轻症·已处置
+
+- **PR-13 🟢 handler config 清空无 LLM 工具**（wontfix）：`update_handler_config` 的 merge-patch null 已可删键，HTTP DELETE 兜底；为罕见场景加工具是面积膨胀。
+- **PR-14 🟢 fire_trigger 不返 activationId**（记录待办）：返 `{fired, triggerId}`，查结果需再 search_activations(triggerId)——闭环可走但多一跳；返 id 需改 FireManual 签名，挂后续批。
+- **PR-16 🟢 document/memory/skill List 无分页**（wontfix）：树/名列语义 + 本地规模；前端树渲染本就要全量。
+
+### by-design 记录（矩阵空格、确认有意）
+
+- apikey/workspace/sandbox/notification/attachment 无 LLM 工具组——安全边界（密钥/机器管理不归 LLM）或无意义（通知是人的收件箱）。
+- memory/skill 无 search 工具——发现走 prompt 注入（MemoryProvider 索引 / CatalogProvider 能力概览），按名直读。
+- LLM 无 approval 决策工具——human-in-loop 红线：决策永远是人的。
+- 矩阵六件套（执行→记录→人查→LLM 查→诊断→过程可见）：六类可执行体全格 ✅（exec-observability + 本轮补齐）；:triage 六前缀全覆盖；:iterate 八实体（六版本实体+document+trigger）。
+

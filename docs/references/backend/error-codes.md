@@ -11,7 +11,7 @@ audience: [human, ai]
 
 # 错误码 —— 错误系统 + 全量 wire code 登记
 
-> 后端错误的单一事实源：框架 / 规约 + **全 255 个 wire code 完整登记**（按域）。机械守卫保证「全用 `errorspkg.New`」+「码全库唯一」——`pkg/errors/standard_test.go`，进 `make verify`。
+> 后端错误的单一事实源：框架 / 规约 + **全 256 个 wire code 完整登记**（按域）。机械守卫保证「全用 `errorspkg.New`」+「码全库唯一」——`pkg/errors/standard_test.go`，进 `make verify`。
 
 ## 框架（`pkg/errors`）
 
@@ -42,9 +42,9 @@ audience: [human, ai]
 
 ---
 
-## 全量登记（255 码，按域）
+## 全量登记（256 码，按域）
 
-> `errorspkg.New` 机械抽取（253）+ `pkg/errors` 自身 bare `New` 的跨域 sentinel（2）。每条：code · HTTP（Kind 映射）· message。`(dynamic)` = 消息含运行时格式化。
+> `errorspkg.New` 机械抽取（254）+ `pkg/errors` 自身 bare `New` 的跨域 sentinel（2）。每条：code · HTTP（Kind 映射）· message。`(dynamic)` = 消息含运行时格式化。
 
 ### `pkg/errors`（跨域 sentinel）
 
@@ -479,6 +479,7 @@ audience: [human, ai]
 | code | HTTP | message |
 |---|---|---|
 | `TODO_EMPTY_CONTENT` | 400 | todo item content is required |
+| `TODO_ITEMS_REQUIRED` | 400 | items is required (send the full checklist; [] clears) |
 | `TODO_INVALID_STATUS` | 400 | invalid todo item status |
 | `TODO_TOO_MANY_ITEMS` | 400 | too many todo items |
 

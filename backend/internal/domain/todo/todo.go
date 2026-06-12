@@ -86,6 +86,7 @@ type List struct {
 // "是否冒泡 HTTP"）。今天只经 TodoWrite 工具呈现——渲染成 tool-result 字符串供模型自纠（该路径
 // 读 Message，不用 Kind/Code）——但万一某写入将来到达 HTTP，能正确映射（KindInvalid → 400 + 稳定码）。
 var (
+	ErrItemsRequired = errorspkg.New(errorspkg.KindInvalid, "TODO_ITEMS_REQUIRED", "items is required (send the full checklist; [] clears)")
 	ErrEmptyContent  = errorspkg.New(errorspkg.KindInvalid, "TODO_EMPTY_CONTENT", "todo item content is required")
 	ErrInvalidStatus = errorspkg.New(errorspkg.KindInvalid, "TODO_INVALID_STATUS", "invalid todo item status")
 	ErrTooManyItems  = errorspkg.New(errorspkg.KindInvalid, "TODO_TOO_MANY_ITEMS", "too many todo items")
