@@ -113,9 +113,11 @@ audience: [human, ai]
 
 CRUD（`POST` 严格冲突 / `PUT {name}` 覆盖 / `DELETE {name}`）+ `POST /skills/{name}:activate`（inline 渲染注入 / fork 派 subagent）。
 
-## mcp（`/api/v1/mcp/...`）
+## mcp（`/api/v1/mcp-servers` · `/api/v1/mcp-registry`）
 
-servers CRUD（`PUT` 同名替换）+ `POST {id}:reconnect` + `GET /mcp/registry[/{name}]`（市场浏览）+ `POST /mcp/import`（Claude Desktop mcp.json）+ `GET {id}/calls`（`?tool&status&triggeredBy&conversationId&flowrunId`；返 `{calls, nextCursor, hasMore, aggregates:{okCount,failedCount}}`，与 handler 同形）+ `GET /mcp-calls/{id}`（含 `logs`——progress 通知 + 失败附 server stderr 尾；列表端点不带）。
+servers（name 即键，workspace 唯一）：`GET /mcp-servers`（实时状态列表）· `PUT /mcp-servers/{name}`（手动装/同名替换：stdio `{command, args, env, runtime?, timeoutSec?}`（runtime 缺省按 command 推断：npx→node、uvx→python…）或 remote `{url, transport?, headers}`；**连接失败仍落盘 `status=failed`+`lastError`**，reconnect 可救）· `GET /mcp-servers/{name}`（状态+tools 缓存）· `DELETE /mcp-servers/{name}`（204）· `POST /mcp-servers/{name}:reconnect`（重置按钮）· `GET /mcp-servers/{name}/stderr`（stdio stderr ring 尾，返 `{name, stderr, size}`）· `POST /mcp-servers/{name}/tools/{tool}:invoke`（`{args}` 直接试调、绕过 chat/LLM，返 `{result}`）· `POST /mcp-servers:import?overwrite=`（Claude Desktop mcp.json 片段，返 `{imported, skipped}`）。
+调用台账：`GET /mcp-servers/{name}/calls`（`?tool&status&triggeredBy&conversationId&flowrunId`；返 `{calls, nextCursor, hasMore, aggregates:{okCount,failedCount}}`，与 handler 同形）+ `GET /mcp-calls/{id}`（含 `logs`——progress 通知 + 失败附 server stderr 尾；列表端点不带）。
+市场：`GET /mcp-registry`（curated 全列）· `POST /mcp-registry:install`（`{name, env}`——完整 slug 在 body 因含 `/`，无 per-name 详情端点（列表即全量）；缺必填 env 422 `MCP_ENV_MISSING`、无可跑 package 422 `MCP_NO_RUNNABLE_PACKAGE`）。
 
 ## document（`/api/v1/documents`）
 

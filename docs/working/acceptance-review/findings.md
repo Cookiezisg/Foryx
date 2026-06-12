@@ -62,3 +62,15 @@ audience: [human, ai]
   真机：`@every 2s` → 422 `invalid cron expression`（robfig ParseStandard 只认 5 段、分钟粒度，与分钟桶 dedup 一致——by-design）。但错误消息没说「为什么/该用什么」。修复：错误消息改为「use a 5-field expression (minute granularity); @every and seconds are not supported」。
 - **场景批（全绿）**：webhook HMAC 正签触发+坏签 401+activation/firing 双台账；cron `* * * * *` 真等分钟边界触发（67s）；sensor CEL 真轮询（`payload` 变量、condition 真→fire、ReturnValue 入 activation）。
 
+## W3 集成域（MCP + Search）
+
+- **AC-13 🟠 `GET /mcp-calls/{id}` 文档有、路由无——mcp 调用 logs 经 HTTP 完全不可达**（fixed）
+  真机：黑盒按 api.md 打 `GET /mcp-calls/{id}` 404。整条链 store（GetCall 带 logs/列表置空，有单测）→ app（GetCall，:triage 在用）→ LLM 工具（get_mcp_call）全在，**只缺 transport 一条路由**——而 handler 同形面 `GET /handler-calls/{callId}` 存在。前端拿不到 mcp 调用的 progress 通知与失败 stderr 尾（第八个「设计完整、接线缺失」）。修复：补路由对标 handler；同时 api.md mcp 节整体重述（registry/import/stderr/invoke 的路径全与实际漂移）+ 删除零消费方的 `GetRegistryEntry`（slug 含 `/` 本就做不成 path 参数，列表即全量）。
+- **AC-14 🟠 引擎安装期间 `GET /search/settings` 阻塞 52.7 秒——Status() 与下载抢同一把锁**（fixed）
+  真机：log 实锤 `GET /search/settings ... elapsed_ms=52755`。`Builtin.ensureRunning` 全程持 `b.mu`（下载 llama-server+GGUF 可达分钟级），`Status()` 也拿 `b.mu` → 设置页轮询挂到下载完——「downloading」状态本身就是为这个窗口设计的，却被锁顺序弄到看不见。修复：status/lastErr 改独立叶子锁 `stmu`，安装中 Status() 秒回 `downloading`。
+- **AC-15 🟢 memory PUT 必填 source/description**（by-design）：`MEMORY_INVALID_SOURCE` 枚举校验（user/ai 写侧语义有别，LLM 工具恒 ai），报错可操作，非校验剧场。
+- **testend harness：runtime 缓存 all-or-nothing 回存 bug**（fixed）：`saveRuntimeCache` 见缓存已存在即整体跳过——python 先占位后，node/llamasrv/embedmodel 永远进不了缓存（每跑重下）。改按 kind 子目录合并；现五 runtime 全缓存（python/node/uv/llamasrv/embedmodel ~640MB），RAG/MCP 场景后跑秒装。
+- **场景批（全绿，9 个新场景）**：
+  - MCP：脚本 stdio server 全生命周期（PUT ready+tools schema 原样透传、`:invoke` 真调、**progress 通知真落调用 logs**、连续 3 失败翻 degraded→一次成功回 ready、失败调用附 stderr 尾、stderr ring、reconnect、删净 404）；错误路径（未知工具 502 `MCP_RPC_ERROR`、坏 command 落盘 failed+lastError 可 reconnect、死 remote 同语义、down 调用 503 `MCP_SERVER_DOWN`、未知 action 400）；import skip/overwrite 语义 + registry 全列 + 装未知 404 + 缺 env 422（下载前拦截）；**官方 filesystem server npx 真装**（node runtime 真下载、真读真文件、台账记账，22s）。
+  - Search：8 类实体投影同索引综搜收敛、中文短词 LIKE 回退（2 rune「天气」/1 rune「猫」）、exact-name 置顶、垂搜 types/tags/归档过滤、FTS5 注入安全（6 种元字符/SQL 片段不 500）、`<mark>` 高亮；物化窗口分页 25 行 3 页不重不漏 total 稳定、异查询 cursor 400 `SEARCH_CURSOR_INVALID`；reindex 202 后命中恢复、settings 回显/非法 embedder 400/off 词法照常/ollama 指死端口软降级/空串重置默认；**RAG 真下载真嵌入**——builtin 引擎真装真 spawn，英文查询 `rain umbrella tomorrow forecast` 经向量命中纯中文文档《出行备忘》（零词法重叠 = RRF 融合的物理证明，缓存后 20s）。
+

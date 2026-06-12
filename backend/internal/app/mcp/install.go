@@ -206,13 +206,6 @@ func (s *Service) ListRegistry(ctx context.Context) ([]mcpdomain.RegistryEntry, 
 	return s.registry.List(ctx)
 }
 
-// GetRegistryEntry returns one marketplace entry by full registry name.
-//
-// GetRegistryEntry 按完整 registry 名返回一条市场条目。
-func (s *Service) GetRegistryEntry(ctx context.Context, name string) (*mcpdomain.RegistryEntry, error) {
-	return s.registry.Get(ctx, name)
-}
-
 // --- helpers ---------------------------------------------------------------
 
 // shortName takes the last path segment of a registry slug ("com.microsoft/azure" → "azure").

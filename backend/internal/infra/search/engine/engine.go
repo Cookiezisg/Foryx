@@ -69,9 +69,17 @@ type Builtin struct {
 	ensure Ensurer
 	log    *zap.Logger
 
-	mu      sync.Mutex
+	mu      sync.Mutex // serializes install+spawn — held across the whole first-demand download. 串行化安装+spawn——首用下载全程持有。
 	cmd     *exec.Cmd
 	baseURL string // set in tests to bypass install+spawn. 测试注入以绕过安装+spawn。
+
+	// stmu is a leaf lock for the status snapshot: GET /search/settings polls Status()
+	// while an install is in flight — it must report "downloading" instantly, never
+	// queue behind mu for the duration of a model download.
+	//
+	// stmu 是状态快照的叶子锁：安装进行中 GET /search/settings 轮询 Status()——必须立刻
+	// 报 "downloading"，绝不能在 mu 后面排队等完一次模型下载。
+	stmu    sync.Mutex
 	status  string
 	lastErr string
 
@@ -102,13 +110,24 @@ func NewBuiltinForTest(baseURL string) *Builtin {
 // Model 标识存量向量（换 embedder 即失效，绝不混用）。
 func (b *Builtin) Model() string { return modelVersion }
 
-// Status reports the engine lifecycle for the settings surface.
+// Status reports the engine lifecycle for the settings surface. Reads the leaf lock only,
+// so it stays instant while ensureRunning holds mu through a download.
 //
-// Status 报告引擎生命周期给 settings 面。
+// Status 报告引擎生命周期给 settings 面。只读叶子锁——ensureRunning 持 mu 下载期间它仍秒回。
 func (b *Builtin) Status() (status, lastErr string) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.stmu.Lock()
+	defer b.stmu.Unlock()
 	return b.status, b.lastErr
+}
+
+// setStatus updates the status snapshot under the leaf lock.
+//
+// setStatus 在叶子锁下更新状态快照。
+func (b *Builtin) setStatus(status, lastErr string) {
+	b.stmu.Lock()
+	b.status = status
+	b.lastErr = lastErr
+	b.stmu.Unlock()
 }
 
 // Embed ensures the engine is installed + running, then embeds texts (batch
@@ -139,7 +158,7 @@ func (b *Builtin) ensureRunning(ctx context.Context) (string, error) {
 		return b.baseURL, nil // test mode: injected URL, no process. 测试态：注入 URL、无进程。
 	}
 
-	b.status = StatusDownloading
+	b.setStatus(StatusDownloading, "")
 	bin, err := b.ensure.EnsureTool(ctx, "llamasrv", llamasrvVersion)
 	if err != nil {
 		b.fail("install llama-server: %v", err)
@@ -176,8 +195,7 @@ func (b *Builtin) ensureRunning(ctx context.Context) (string, error) {
 	}
 	b.cmd = cmd
 	b.baseURL = base
-	b.status = StatusReady
-	b.lastErr = ""
+	b.setStatus(StatusReady, "")
 	b.log.Info("search engine ready", zap.String("addr", base), zap.String("model", modelVersion))
 	return base, nil
 }
@@ -187,9 +205,9 @@ func (b *Builtin) processAlive() bool {
 }
 
 func (b *Builtin) fail(format string, args ...any) {
-	b.status = StatusError
-	b.lastErr = fmt.Sprintf(format, args...)
-	b.log.Warn("search engine: " + b.lastErr)
+	msg := fmt.Sprintf(format, args...)
+	b.setStatus(StatusError, msg)
+	b.log.Warn("search engine: " + msg)
 }
 
 // Close stops the resident process (app shutdown). Off ≠ uninstall: files stay,
@@ -203,9 +221,11 @@ func (b *Builtin) Close() {
 		_ = b.cmd.Process.Kill()
 	}
 	b.cmd = nil
+	b.stmu.Lock()
 	if b.status == StatusReady {
 		b.status = StatusAbsent
 	}
+	b.stmu.Unlock()
 }
 
 // Ollama adapts a local Ollama daemon (/api/embed) for users reusing its

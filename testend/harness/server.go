@@ -133,24 +133,33 @@ func Start(t *testing.T) *Server {
 	return s
 }
 
-// saveRuntimeCache copies downloaded runtimes back into the shared cache (first run pays,
-// the rest ride).
+// saveRuntimeCache merges downloaded runtimes back into the shared cache per kind (first
+// run pays, the rest ride). Per-kind, not all-or-nothing: python landing first must not
+// block node/llamasrv/embedmodel downloaded by later waves from ever being cached.
 //
-// saveRuntimeCache 把已下载的运行时拷回共享缓存（首跑买单、后跑搭车）。
+// saveRuntimeCache 把已下载的运行时按 kind 合并回共享缓存（首跑买单、后跑搭车）。按 kind
+// 而非 all-or-nothing：python 先落缓存不能挡住后续波次下的 node/llamasrv/embedmodel 入缓存。
 func (s *Server) saveRuntimeCache() {
 	cache := runtimeCache()
 	if cache == "" {
 		return
 	}
 	src := filepath.Join(s.DataDir, "sandbox", "runtimes")
-	if _, err := os.Stat(src); err != nil {
+	entries, err := os.ReadDir(src)
+	if err != nil {
 		return
 	}
-	if _, err := os.Stat(filepath.Join(cache, "sandbox", "runtimes")); err == nil {
-		return // cache already populated. 缓存已就绪。
+	dst := filepath.Join(cache, "sandbox", "runtimes")
+	_ = os.MkdirAll(dst, 0o755)
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(dst, e.Name())); err == nil {
+			continue // this kind already cached. 该 kind 已有缓存。
+		}
+		_ = exec.Command("cp", "-R", filepath.Join(src, e.Name()), filepath.Join(dst, e.Name())).Run()
 	}
-	_ = os.MkdirAll(filepath.Join(cache, "sandbox"), 0o755)
-	_ = exec.Command("cp", "-R", src, filepath.Join(cache, "sandbox", "runtimes")).Run()
 }
 
 func (s *Server) waitHealthy(t *testing.T, timeout time.Duration) {
