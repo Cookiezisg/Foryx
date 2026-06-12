@@ -192,15 +192,22 @@ func (s *Service) TouchLastUsed(ctx context.Context, id string) error {
 	return s.repo.TouchLastUsed(ctx, id)
 }
 
-// Validate implements the auth middleware's WorkspaceResolver port: it reports
-// whether id names an existing workspace (nil = valid, error = unknown). The
-// middleware holds the interface; this matches it by signature, injected at wiring.
+// Resolve implements the auth middleware's WorkspaceResolver port: it confirms id names an
+// existing workspace and returns its UI locale (derived from the persisted language) so the
+// middleware can make the workspace language authoritative over Accept-Language (AC-PD-2).
+// Unknown id → error. workspace.Language values ("zh-CN"/"en") are exactly the Locale values, so
+// the cast is direct; an empty/invalid one is dropped by the middleware's IsSupported() guard.
 //
-// Validate 实现 auth 中间件的 WorkspaceResolver 端口：报告 id 是否为已存在 workspace
-// （nil=有效，error=未知）。中间件持接口，此处按签名对上，装配时注入。
-func (s *Service) Validate(ctx context.Context, id string) error {
-	_, err := s.repo.Get(ctx, id)
-	return err
+// Resolve 实现 auth 中间件的 WorkspaceResolver 端口：确认 id 为已存在 workspace 并返回其 UI locale
+// （由持久化 language 派生），使中间件让 workspace 语言压过 Accept-Language（AC-PD-2）。未知 id→错。
+// workspace.Language 取值（"zh-CN"/"en"）正是 Locale 取值，故直接 cast；空/非法值由中间件
+// IsSupported() 守卫丢弃。
+func (s *Service) Resolve(ctx context.Context, id string) (reqctxpkg.Locale, error) {
+	w, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return reqctxpkg.Locale(w.Language), nil
 }
 
 // Pick implements modeldomain.ModelPicker: it returns the current workspace's default ModelRef for

@@ -34,6 +34,6 @@ audience: [human, ai]
 | W3 | 集成域 A6+A7（MCP 真装真调 + Search 全况含 RAG） | ✅ |
 | W4 | 对话域 A8（chat 全链/压缩/附件/memory/skill/todo/SSE）——llmmock+promptdump 进场 | ✅ |
 | W5 | 平台域 A9 + 涟漪矩阵 A10 | ✅ |
-| W6 | 体验静态（柱 B：六视角 dump 审读/可见性矩阵/prompt lint） | ⬜ |
+| W6 | 体验静态（柱 B：六视角 dump 审读/可见性矩阵/prompt lint） | ✅ |
 | W7 | 金标旅程（柱 C：真模型 12 条） | ⬜ |
 | W8 | 修复收口 + 终报 | ⬜ |

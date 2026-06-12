@@ -28,7 +28,7 @@ audience: [human, ai]
 
 **产出物**（永久资产，不是一次性脚本）：`testend/` 可重跑验收套件（`make testend`）+ 金标套件（`make evals`）+ promptdump 体验审计 + 终报。
 
-**当前进度**：W0–W5 ✅（环境座架 / 锻造域 / 编排域 / 集成域 / 对话域 / 平台域+涟漪矩阵），全套 `make testend` 零失败、`make verify` 绿。**下一波 = W6 体验静态（柱 B：六视角×六状态 promptdump 审读 / 可见性矩阵 / prompt lint）**，见 §8。
+**当前进度**：W0–W6 ✅（环境座架 / 锻造域 / 编排域 / 集成域 / 对话域 / 平台域+涟漪 / 体验静态柱B），全套 `make testend` 零失败、`make verify` 绿。**下一波 = W7 金标真模型旅程（柱 C：`make evals`，12 条，deepseek-v4-flash，key 在仓库根 `.env`）**，见 §8。W6 抓到 AC-24（workspace.language 不驱动回复语言）→ 用户裁决 workspace.language 权威、已修（`WorkspaceResolver.Resolve` 返 locale + `IdentifyWorkspace` 覆盖头默认）；prompt 设计审读整体干净（无安全剧场 / preview 无漂移 / S18 字段齐 / 视角隔离）。
 
 ---
 

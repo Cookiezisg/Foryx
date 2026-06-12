@@ -23,7 +23,7 @@ audience: [human, ai]
 | conversation id | `Set`/`Get`/`RequireConversationID` | chat / subagent | loop + 多 app |
 | subagent / message / toolCall id | `Set`/`Get*` | loop / chat / subagent | 流式嵌套（E3）/ 归属 |
 | flowrun / flowrunNode id | `Set`/`Get*`（只 Get、无 Require——缺席=非 workflow 派发，非错误） | **workflow 调度器**（runNode 派发前） | function/handler/agent 执行记账填 flowrun 审计列 |
-| locale | `Set`/`GetLocale`（总返可用值，默认 zh-CN） | locale 中间件 + chat | AI 生成内容语言 |
+| locale | `Set`/`GetLocale`（总返可用值，默认 zh-CN） | `InjectLocale`（Accept-Language，pre-workspace 兜底）→ `IdentifyWorkspace`（**workspace.language 权威**，识别到 workspace 即覆盖）+ chat detached 重埋 | AI 生成内容语言 |
 | agentState | `With`/`GetAgentState` | chat / subagent runner | loop / tool / skill |
 
 ## 3. 横切链路（单看包看不见，必须全项目看）

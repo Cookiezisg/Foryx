@@ -297,8 +297,12 @@ func TestMCP_ImportAndRegistry(t *testing.T) {
 		t.Fatalf("overwrite re-import must import, got %+v", imp)
 	}
 
-	// marketplace list is global + curated; every entry renders name/description.
-	// 市场列表全局 curated；每条有 name/description。
+	// marketplace list is the LIVE GitHub MCP Registry (real fetch). name is the install handle —
+	// a hard per-entry invariant. description is upstream-controlled and some entries legitimately
+	// ship none (e.g. io.github.sourcegraph/mcp), so assert the field renders for the bulk rather
+	// than requiring every single entry — the live registry drifts under us.
+	// 市场列表是**实时** GitHub MCP Registry（真拉）。name 是安装句柄——逐条硬不变量；description 由
+	// 上游控制、部分条目本就没有，故断言「字段对大多数渲染」而非要求每条都有——实时注册表会漂移。
 	var entries []struct {
 		Name        string `json:"name"`
 		Description string `json:"description"`
@@ -307,10 +311,17 @@ func TestMCP_ImportAndRegistry(t *testing.T) {
 	if len(entries) < 10 {
 		t.Fatalf("curated registry suspiciously small: %d", len(entries))
 	}
+	withDesc := 0
 	for _, e := range entries {
-		if e.Name == "" || e.Description == "" {
-			t.Fatalf("registry entry missing name/description: %+v", e)
+		if e.Name == "" {
+			t.Fatalf("registry entry missing name (the install handle): %+v", e)
 		}
+		if e.Description != "" {
+			withDesc++
+		}
+	}
+	if withDesc*2 < len(entries) {
+		t.Fatalf("registry descriptions mostly empty (%d/%d) — projection may be broken", withDesc, len(entries))
 	}
 
 	// install error surface: unknown entry; required env enforced BEFORE any download.

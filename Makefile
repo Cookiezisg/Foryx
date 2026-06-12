@@ -87,10 +87,11 @@ testend:
 	$(AUTO_DEVBOX)
 	@cd testend && go test -count=1 -timeout 30m ./scenarios/...
 
-# evals — 金标 LLM 旅程：真模型端到端（需 EVALS_BASE_URL/EVALS_MODEL/EVALS_KEY 环境变量）。烧钱，手动跑。
+# evals — 金标 LLM 旅程：真模型端到端（柱C）。烧钱，手动跑。自动 source 仓库根 .env（若存在）注入
+# key——默认认 DEEPSEEK_API_KEY + deepseek-v4-flash；EVALS_BASE_URL/EVALS_MODEL/EVALS_KEY 可覆盖。
 evals:
 	$(AUTO_DEVBOX)
-	@cd testend && EVALS=1 go test -count=1 -timeout 60m ./golden/...
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; cd testend && EVALS=1 go test -count=1 -timeout 60m ./golden/...
 
 # docs — 文档规范门禁：frontmatter / 类型 / 生命周期 / INDEX≤50 / 孤儿链接（GOVERNANCE §11）。
 docs:

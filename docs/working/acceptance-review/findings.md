@@ -111,3 +111,18 @@ llmmock 进场（`testend/harness/llmmock.go`）：OpenAI 兼容假模型 httpte
   - sandbox：bootstrap-status + runtimes 列 + disk-usage 物化后 >0 + envs ownerKind 守卫（缺失/非法各 400）+ 单 env 销毁 204。
   - relation（A10 涟漪）：agent equip function → neighborhood 现 equip 边（toName hydrate）；改 function 名 → 边 toName 自动跟随（图存 id、名读时取）；relgraph 全景含 agent；删 function → PurgeEntity 清边（neighborhood 不再含 fnId）。
 
+## W6 体验静态审查（柱 B：promptdump 审读——「模型在线缆上真看到什么」）
+
+llmmock 的 PromptDump 把每个视角的 system prompt / 工具 schema / 请求体抓成可断言事实。`promptdump_test.go` 7 场景审读三视角（Chat 主 LLM / Utility / Agent 实体）+ 用户透明面 + 横切刀。
+
+- **AC-24 🟡 assistant 回复语言由 `Accept-Language` 请求头决定，`workspace.language` 持久化设置不参与**（fixed——用户裁决 AC-PD-2：workspace.language 权威）
+  真机：把 workspace 语言设为 `en` 后发消息，模型收到的 environment 段仍是「Reply in Chinese」。根因：locale 仅由 `InjectLocale` 中间件从 `Accept-Language` 头解析（无头默认 zh-CN），全栈无任何处把 `workspace.language` 灌进 locale ctx；chat runner 的 `t.locale` 也是头派生值。后果：用户在设置页显式选了语言，assistant 却按浏览器头（或默认 zh-CN）回复——显式设置被静默忽略。与「设计完整、接线缺失」同族（字段存在、校验齐全、却不驱动它最该驱动的东西）。**用户裁决：workspace.language 为权威**。修复：`WorkspaceResolver` 端口 `Validate→Resolve`（返 workspace 的 UI locale），`IdentifyWorkspace` 中间件在 workspace 识别后用它 `SetLocale` 压过 `InjectLocale` 设的头默认（中间件链 InjectLocale→IdentifyWorkspace，后者在内层故覆盖生效）；头仅作 pre-workspace（onboarding）兜底。chat 任务 ctx 的 `t.locale` 本就读 `GetLocale(ctx)`，故修复自动贯通到 environment 段，无需改 chat。i18n 场景收紧为 zh-CN→Chinese / en→English 实证。
+- **W6 正面确认（审读通过、无回退——这些是「审了、干净」的事实，进终报）**：
+  - **system prompt 结构**：identity→how_to_work→tools→capabilities→memory→documents→user_system_prompt→environment→architecture_rules→critical_rules，每段 `<section name>` 包裹；身份只现一次、无空 section 残壳、无安全剧场套话（"As an AI language model" 等四类均缺席——符合「本地单用户无 safety theater」）。
+  - **lazy 工具目录浮出**：tools 段列全 lazy 工具 name+一句话（LLM 知全集不盲搜）；forged function 真进 capabilities 菜单。
+  - **S18 框架字段注入齐全**：每个线缆工具 schema 的 `properties` 都含 `summary`/`danger`/`execution_group`，且工具 description 非空（LLM 选型靠它）。
+  - **R0057 透明度无漂移**：`GET /system-prompt-preview` 与模型真收到的 system prompt **逐字一致**（同对话同日，二者都走 buildSystemPrompt）——用户看到的就是模型看到的。
+  - **视角隔离**：Utility（首回合起标题）收到的是紧凑专用 prompt，不泄漏 chat 全 section（无 identity 段/无 Searchable tools），且确实引用了对话内容；Agent 实体 :invoke 收到「You are <name>, a workflow automation worker. Your role: …」自有身份，不漏 chat 主视角。
+  - **空态自举连贯**：零 forged 实体的 workspace，核心身份/规则段仍在、无残壳。
+  - **i18n 接缝在场**：environment 段带「Reply in <lang>」指令、prompt 本体保持英文（不整体翻译）——唯回复语言的来源是 AC-24 的待裁决项。
+
