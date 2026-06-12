@@ -149,7 +149,7 @@ llmmock 的 PromptDump 把每个视角的 system prompt / 工具 schema / 请求
 - **AC-27** 🟡（mcp 可接线 ref 物理死亡：投影键与挂载键不一致）：mcp searchsource 按 **msv_ 行 id** 键控投影，refHint 渲染成 `mcp:msv_…/<tool>`；而 agent 挂载解析（`mount.mcpTool`）只按 **server name** 匹配（`mcp:<name>/<tool>`，与 HTTP `/mcp-servers/{name}`、api.md「name 即键」一致）。后果：search_blocks/综搜给 LLM 的每条 mcp ref 都挂载不上（`MCP_SERVER_NOT_FOUND`）——「ref 直填」契约对 mcp 类从未成立。skill 早已按 name 投影（代码库自身标准），mcp 是漏网。修复：mcp 投影身份换 server name（Stamps/Docs/3 处 notifySearch）；旧 id 行由 boot 对账孤儿清理自愈、零迁移。黑盒钉死：R1 GranularityAnchors 断言 `refHint == "mcp:granmcp/<tool>"`。
 - **AC-28** 🟢（垂搜渲染不一致，记录不改）：8 个垂搜中 7 个经 ContentSearch 返回 slim `{count, list}` JSON，`search_documents` 引擎同源但自有散文渲染（`- name (id=…)` 列表 + 空态指路 list_documents）。LLM 面两种形状并存——按 doc 工具自身定位（path 浏览心智）保留现状，文档已改述精确计数（7+1）。
 - **AC-25** 🟢（定性：休眠口 + 文档误导）：`Service.Retrieve`（RAG 内部口、search 域文档自称"四个出口"之一）**零生产消费方**——`grep -rn "\.Retrieve(" backend/internal` 仅定义处。archive 设计文档言明它为"agent 上下文注入/未来知识挂载"预留，非接线缺失 bug；但 reference 把它列为活出口有误导、PLAN 把 `Retrieve(MaxChars)` 列为必验格而黑盒不可达。处置：`domains/search.md` 已补"当前零生产消费方（休眠口）"一句；验收面记 **N/A（黑盒不可达，单测覆盖管线）**。
-- **N/A 台账（黑盒不可达格，亲验定界）**：① Retrieve（上）；② 垂搜"引擎出错回退原子串路径"——黑盒无法注入引擎错误（引擎 nil 仅当 search 服务整体缺席），回退逻辑由 `contentsearch.go` 单测覆盖；③ `fts_schema_version` 不匹配→boot 清空重建——需直改 DB 文件，白盒不变量；④ ollama 真连真嵌——本机无 ollama，W3 已验"设置生效+死端口软降级"边界。
+- **N/A 台账（黑盒不可达格，亲验定界）**：① Retrieve（上）；② 垂搜"引擎出错回退原子串路径"——黑盒无法注入引擎错误（引擎 nil 仅当 search 服务整体缺席），回退逻辑由 `contentsearch.go` 单测覆盖；③ `fts_schema_version` 不匹配→boot 清空重建——需直改 DB 文件，白盒不变量；④ ollama 真连真嵌——本机无 ollama，W3 已验"设置生效+死端口软降级"边界；⑤ 换 embedder 模型→向量失效→后台重嵌——黑盒证明需第二个真嵌入引擎（同④），`search_embeddings.model` 逐行记账的失效/重嵌逻辑由 search 单测覆盖、builtin 全链由 W3 RAG 真嵌实证。
 
 ## R2 A4 Agent 整域（agent_test.go 新建，首轮零覆盖的补课）
 
@@ -164,7 +164,12 @@ llmmock 的 PromptDump 把每个视角的 system prompt / 工具 schema / 请求
 - **版本面**：:edit 全量替换 → v2 即时生效；:revert 回 v1 下次 invoke 生效。
 - 线缆事实（接手须知）：InvokeResult/执行行 status 词汇 = `ok|failed`（与 function 域一致）；`GET /agents/{id}/versions` 与 `GET /api-keys` 返回**裸数组**；执行列表返回 `{executions, aggregates}`。
 
-## R6 柱B 体验审查补全（promptdump_r6_test.go 新建，6/6 全绿）
+## R7 柱C 金标补全（golden_r7_test.go：J4/J6/J8/J10/J12b 五旅程，真模型 deepseek-v4-flash）
+
+- **AC-30** 🟡（体验陷阱，AC-20 同族——记录待前端提示，无后端改动）：把 deepseek 以 **openai-compatible 路线**（provider=openai + 自定义 baseURL）接入时，窗口/能力静态表按 (provider, modelID) 查不到 → 预算未知 → **压缩按设计静默禁用**（`contextmgr`: "unknown budget — don't compact blind"）。J12b 首跑据此全哑。正解 = 用户选 deepseek provider（静态表 1M/384k 命中）；产品侧应在 key 探测/设置页提示「该模型窗口未知，长对话压缩不可用」。golden 套件已改为 provider=deepseek（真实用户选法）。
+- **J6 溯源语义（非 bug）**：真模型可能把任务**委托 Subagent**完成——子运行内的 mcp 调用台账记 `triggeredBy=agent`（`recordCall`: ctx 带 SubagentID → agent）。断言放宽为 chat|agent，两者都证明「对话驱动的 mcp 真调」。
+- J4 真模型搓三节点图 + trigger_workflow：flash 首轮常建图不触发——旅程按真实用户范式给自愈迭代回合（J5 同款）。线缆事实（接手须知）：**`parked` 是节点状态、run 行保持 `running`**——必须查 `GET /flowruns/{id}` 详情的 nodes，列表行匹配不到；flowrun 列表 data 是裸数组。
+- **终绿：5/5**（J4 建图→触发→真挂 parked 44s 一轮过 / J6 mcp 真调（Subagent 委托路线）/ J8 跨对话回忆 GOLDHARBOR 命中 / J10 skill 激活且遵循 SKILLSTAMP / J12b 压缩真发生且跨边界召回 GOLDCOMPACT）。与首批 7 条合计 **12/12 旅程全绿**（provider=deepseek 切换后 J1 金丝雀复验通过）。
 
 六视角/六状态/横切刀的首轮缺格全补，**无新后端 bug**：
 

@@ -76,29 +76,46 @@ func TestGolden_J4_WorkflowToParked(t *testing.T) {
 	}).OK(t, &apf)
 
 	conv := newConv(t, wc, "build workflow")
-	say(t, wc, conv,
+	a1 := say(t, wc, conv,
 		"Create a workflow named publish_pipeline with three nodes: a manual trigger, then the existing "+
 			"approval "+apf.Approval.ID+" (a human gate), then the existing function "+fnID+". "+
-			"Wire trigger→approval, and approval's yes port→function. Then start one run of it "+
-			"(trigger it manually) and tell me the run id.", 300000)
+			"Wire trigger→approval, and approval's yes port→function. After creating it, use the "+
+			"trigger_workflow tool to start one run, then tell me the run id.", 300000)
+	t.Logf("J4 turn1: %.400s", a1)
 
-	// 结果状态：存在一个 parked 的 flowrun（approval 节点真把 run 挂住）。
-	var wfs []struct {
-		ID   string `json:"id"`
-		Name string `json:"name"`
-	}
-	wc.GET("/api/v1/workflows").OK(t, &wfs)
-	if len(wfs) == 0 {
-		t.Fatal("the model must have created a workflow")
-	}
-	harness.Eventually(t, 120000, "a flowrun parks on the approval gate", func() bool {
+	// parked 是**节点**状态（run 行保持 running）——必须查 run 详情的 nodes。
+	parked := func() bool {
+		var wfs []struct {
+			ID string `json:"id"`
+		}
+		wc.GET("/api/v1/workflows").OK(t, &wfs)
 		for _, wf := range wfs {
 			r := wc.GET("/api/v1/flowruns?workflowId=" + wf.ID)
-			if r.Status == 200 && strings.Contains(string(r.Data), `"parked"`) {
-				return true
+			if r.Status != 200 {
+				continue
+			}
+			var runs []struct {
+				ID string `json:"id"`
+			}
+			_ = json.Unmarshal(r.Data, &runs)
+			for _, run := range runs {
+				d := wc.GET("/api/v1/flowruns/" + run.ID)
+				if d.Status == 200 && strings.Contains(string(d.Data), `"parked"`) {
+					return true
+				}
 			}
 		}
 		return false
+	}
+	// 真实用户范式：第一轮没跑起来就让模型自查自修（J5 同款自愈环）。
+	if !parked() {
+		a2 := say(t, wc, conv,
+			"I don't see a run yet. Inspect your workflow (get_workflow / capability-check), fix any "+
+				"wiring problem, then call trigger_workflow and report the flowrun id.", 300000)
+		t.Logf("J4 turn2: %.400s", a2)
+	}
+	harness.Eventually(t, 90000, "a flowrun parks on the approval gate", func() bool {
+		return parked()
 	})
 }
 
@@ -126,6 +143,8 @@ func TestGolden_J6_MCPDiscoverAndCall(t *testing.T) {
 		"I installed an MCP server named goldecho with one tool. Use its echo tool to echo back "+
 			"the exact text GOLDENPING and tell me what it returned.", 240000)
 
+	// 真模型可走直调（chat）或 Subagent 委托（子运行内记 agent）——两者都证明
+	// 「对话驱动的 mcp 真调」。
 	var calls struct {
 		Calls []struct {
 			Tool        string `json:"tool"`
@@ -136,7 +155,7 @@ func TestGolden_J6_MCPDiscoverAndCall(t *testing.T) {
 	wc.GET("/api/v1/mcp-servers/goldecho/calls").OK(t, &calls)
 	ok := false
 	for _, c := range calls.Calls {
-		if c.Tool == "echo" && c.Status == "ok" && c.TriggeredBy == "chat" {
+		if c.Tool == "echo" && c.Status == "ok" && (c.TriggeredBy == "chat" || c.TriggeredBy == "agent") {
 			ok = true
 		}
 	}
@@ -193,10 +212,13 @@ func TestGolden_J12b_CrossCompactionTask(t *testing.T) {
 	wc := evalWS(t)
 	wc.PATCH("/api/v1/limits", map[string]any{"context": map[string]any{"triggerRatio": 0.01}}).OK(t, nil)
 
+	// deepseek-v4-flash 窗口 1M → 0.01 触发线 = 1 万 input token；短回合不越线，
+	// 用户侧粘长资料把真实 input 推过线（跨压缩长任务的本来面目）。
+	pad := strings.Repeat("Background notes line for the long task, keep for reference. ", 200)
 	conv := newConv(t, wc, "long task")
-	say(t, wc, conv, "Remember: the project codename is GOLDCOMPACT-11. Acknowledge briefly.", 120000)
-	say(t, wc, conv, "Now list three colors, briefly.", 120000)
-	say(t, wc, conv, "And three animals, briefly.", 120000)
+	say(t, wc, conv, "Remember: the project codename is GOLDCOMPACT-11. Acknowledge briefly. Context dump:\n"+pad, 120000)
+	say(t, wc, conv, "More notes to keep:\n"+pad+"\nNow list three colors, briefly.", 120000)
+	say(t, wc, conv, "Final notes:\n"+pad+"\nAnd three animals, briefly.", 120000)
 
 	// 压缩真发生：滚动摘要落到 conversation 行。
 	harness.Eventually(t, 60000, "rolling summary persists", func() bool {

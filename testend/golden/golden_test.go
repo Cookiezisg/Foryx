@@ -64,8 +64,11 @@ func evalWS(t *testing.T, scenarios ...string) *harness.Client {
 	c := srv.Client(t)
 	wsID := c.POST("/api/v1/workspaces", map[string]any{"name": "eval-ws", "language": "en"}).Field(t, "id")
 	wc := c.WS(wsID)
+	// provider 用 "deepseek"（真实用户的选法）：窗口/能力静态表按 (provider, modelID)
+	// 命中（1M/384k）——压缩等预算敏感链路才有已知 budget；openai+裸 baseURL 会查不到
+	// 窗口、压缩按设计盲禁。
 	keyID := wc.POST("/api/v1/api-keys", map[string]any{
-		"provider": "openai", "displayName": "deepseek", "key": key, "baseUrl": baseURL,
+		"provider": "deepseek", "displayName": "deepseek", "key": key, "baseUrl": baseURL,
 	}).Field(t, "id")
 	wc.POST("/api/v1/api-keys/"+keyID+":test", nil).OK(t, nil)
 	if len(scenarios) == 0 {
