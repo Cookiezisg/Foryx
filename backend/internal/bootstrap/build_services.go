@@ -40,6 +40,7 @@ import (
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	blockstool "github.com/sunweilin/forgify/backend/internal/app/tool/blocks"
 	controltool "github.com/sunweilin/forgify/backend/internal/app/tool/control"
+	conversationtool "github.com/sunweilin/forgify/backend/internal/app/tool/conversation"
 	documenttool "github.com/sunweilin/forgify/backend/internal/app/tool/document"
 	filesystemtool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
 	functiontool "github.com/sunweilin/forgify/backend/internal/app/tool/function"
@@ -47,6 +48,7 @@ import (
 	mcptool "github.com/sunweilin/forgify/backend/internal/app/tool/mcp"
 	memorytool "github.com/sunweilin/forgify/backend/internal/app/tool/memory"
 	mounttool "github.com/sunweilin/forgify/backend/internal/app/tool/mount"
+	relationtool "github.com/sunweilin/forgify/backend/internal/app/tool/relation"
 	searchtool "github.com/sunweilin/forgify/backend/internal/app/tool/search"
 	shelltool "github.com/sunweilin/forgify/backend/internal/app/tool/shell"
 	skilltool "github.com/sunweilin/forgify/backend/internal/app/tool/skill"
@@ -179,6 +181,26 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	}, log)
 	skill := skillapp.NewService(st.skill, subagentSvc, notif, log)
 
+	// relation: built with every entity's name resolver (read-time hydration), then injected back
+	// into each entity as its RelationSyncer (edge sync on create/edit/delete).
+	rel := relationapp.NewService(relationapp.Config{
+		Repo: st.relation,
+		Namers: map[string]relationapp.Namer{
+			relationdomain.EntityKindFunction:     fn,
+			relationdomain.EntityKindHandler:      hd,
+			relationdomain.EntityKindAgent:        ag, // workflow→agent equip / conversation→agent forged 边的目标端 hydrate
+			relationdomain.EntityKindControl:      ctl,
+			relationdomain.EntityKindApproval:     apf,
+			relationdomain.EntityKindWorkflow:     wf,
+			relationdomain.EntityKindTrigger:      trg,
+			relationdomain.EntityKindMCP:          mcp,
+			relationdomain.EntityKindSkill:        skill,
+			relationdomain.EntityKindDocument:     doc,
+			relationdomain.EntityKindConversation: conv,
+		},
+		Log: log,
+	})
+
 	// --- toolset: Resident (filesystem/search/shell) + Lazy (entity tools + web) ---
 	guard := pathguardpkg.NewDefault()
 	toolset := toolapp.Toolset{
@@ -202,6 +224,8 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 			mcptool.MCPTools(mcp),
 			skilltool.SkillTools(skill),
 			blockstool.BlocksTools(searchSvc),
+			conversationtool.ConversationTools(searchSvc),
+			relationtool.RelationTools(rel),
 			webtool.WebTools(ws, keys, inf.factory, ws, ws, log),
 		),
 	}
@@ -300,25 +324,6 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	// workflow ref resolution (CapabilityCheck + pin closure determinism).
 	wf.SetResolver(NewRefResolver(fn, hd, ag, ctl, apf, trg, mcp))
 
-	// relation: built with every entity's name resolver (read-time hydration), then injected back
-	// into each entity as its RelationSyncer (edge sync on create/edit/delete).
-	rel := relationapp.NewService(relationapp.Config{
-		Repo: st.relation,
-		Namers: map[string]relationapp.Namer{
-			relationdomain.EntityKindFunction:     fn,
-			relationdomain.EntityKindHandler:      hd,
-			relationdomain.EntityKindAgent:        ag, // workflow→agent equip / conversation→agent forged 边的目标端 hydrate
-			relationdomain.EntityKindControl:      ctl,
-			relationdomain.EntityKindApproval:     apf,
-			relationdomain.EntityKindWorkflow:     wf,
-			relationdomain.EntityKindTrigger:      trg,
-			relationdomain.EntityKindMCP:          mcp,
-			relationdomain.EntityKindSkill:        skill,
-			relationdomain.EntityKindDocument:     doc,
-			relationdomain.EntityKindConversation: conv,
-		},
-		Log: log,
-	})
 	fn.SetRelationSyncer(rel)
 	hd.SetRelationSyncer(rel)
 	ag.SetRelationSyncer(rel)

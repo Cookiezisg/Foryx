@@ -70,9 +70,9 @@ audience: [human, ai]
 
 ### 实锤·待裁决（DECISIONS PD-E/PD-F）
 
-- **PR-11 🟡 对话历史对 LLM 不可检索**（pending → PD-E）
+- **PR-11 🟡 对话历史对 LLM 不可检索**（fixed——裁决 PD-E：`search_conversations` 工具，混合检索 conversation 投影，只返 conversationId/title/snippet/messageId、IncludeArchived、limit≤20；防上下文污染=指针不倾倒）
   验证：综搜（人）覆盖 conversation（12 实体投影）；LLM 面：search_blocks 限六类积木、8 个垂搜工具不含 conversation、无任何对话读取工具。「用户问：我们上次聊的那个方案」LLM 无工具可查——只能靠 memory 萃取物。
-- **PR-12 🟡 relation 关系图对 LLM 不可查**（pending → PD-F）
+- **PR-12 🟡 relation 关系图对 LLM 不可查**（fixed——裁决 PD-F：`get_relations` 工具包 Neighborhood（kind+id+depth 1-3），relation 构造上移至 toolset 前供注入）
   验证：HTTP 有 `GET /relations/neighborhood`（依赖/影响面查询）；LLM 零工具。LLM 删除/改造实体前无法回答「谁在用它」——capability_check 只覆盖 workflow 单向。
 
 ### 轻症·已处置

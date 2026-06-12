@@ -21,6 +21,6 @@ audience: [human, ai]
 | PD-B | Ollama embedder baseURL/model 硬编码 | **A：settings 扩展** | ✅ 已落地（PR-4 fixed） |
 | PD-C | 桌面 app 无日志文件 | **A 最小版：文件 + 轮转** | ✅ 已落地（PR-5 fixed） |
 | PD-D | 跨机迁移密文不可解、无文档 | **B 先行：文档声明，export/import 进 roadmap** | ✅ 已落地（PR-6 doc-fix） |
-| PD-E | 对话历史对 LLM 不可检索（PR-11）——人有综搜、LLM 只能靠 memory 萃取 | 建议：加 `search_conversations` 垂搜工具（搜索引擎已索引 conversation，纯开口子半小时活）；风险是上下文污染——可只返回 snippet+conversationId 不返全文 | ⬜ 待裁决 |
-| PD-F | relation 图对 LLM 不可查（PR-12）——删除/改造前无法答「谁在用它」 | 建议：加 `get_relations` 工具包 neighborhood 查询（service 就绪，纯开口子）；LLM 搭工作流时依赖面自查价值高 | ⬜ 待裁决 |
+| PD-E | 对话历史对 LLM 不可检索（PR-11）——人有综搜、LLM 只能靠 memory 萃取 | **批：加 `search_conversations`**（只返指针不返全文） | ✅ 已落地（PR-11 fixed） |
+| PD-F | relation 图对 LLM 不可查（PR-12）——删除/改造前无法答「谁在用它」 | **批：加 `get_relations`** | ✅ 已落地（PR-12 fixed） |
 
