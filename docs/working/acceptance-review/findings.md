@@ -164,6 +164,19 @@ llmmock 的 PromptDump 把每个视角的 system prompt / 工具 schema / 请求
 - **版本面**：:edit 全量替换 → v2 即时生效；:revert 回 v1 下次 invoke 生效。
 - 线缆事实（接手须知）：InvokeResult/执行行 status 词汇 = `ok|failed`（与 function 域一致）；`GET /agents/{id}/versions` 与 `GET /api-keys` 返回**裸数组**；执行列表返回 `{executions, aggregates}`。
 
+## R6 柱B 体验审查补全（promptdump_r6_test.go 新建，6/6 全绿）
+
+六视角/六状态/横切刀的首轮缺格全补，**无新后端 bug**：
+
+- **Subagent 视角**：子请求自足（父用户原文零泄漏、只见 Subagent prompt）；Explore 工具集真是只读侦察（无 Subagent/锻造/run）；自有紧凑 system、非 chat 主 prompt。
+- **前端开发者视角（三流帧线缆形状审读）**：envelope 恒 `{seq, scope:{kind,id}, id, frame}`、frame 带 `kind` 判别（open/delta/close/signal 全集）、**delta 恒 seq=0**（E2）、三流各有 durable 帧、messages scope=conversation。接手须知：帧 kind 是判别字段而非 type-key 对象。
+- **规模态**：5 实体基线 vs 200 实体——system prompt 体积 <3×（懒目录不线性爆炸的物理证明）。
+- **降级态**：零配置 workspace 的 system-prompt-preview 仍连贯渲染（自举调试面活着）。
+- **崩溃恢复态**：kill -9 重启续聊——模型视角的灾前回合**恰一次**（重水合无重复无残缺）。
+- **长程压缩后态**：滚动摘要在模型视角**恰一次**、被压回合尽出、当前回合在场（压缩保留近窗：需足量可折叠旧回合——4 回合形）。
+- **tool_result 配对刀**：线缆历史里每个 assistant tool_call id 恰有一个 role=tool 回包、零孤儿（sanitizer 红线黑盒钉死）。
+- **token 账单刀**：三回合（含工具回合双请求）usage 与 mock 上报逐数相等（666/49）。
+
 ## R5 A10 跨域涟漪矩阵（ripple_test.go 新建，3/3 全绿）
 
 **矩阵台账**：{创建/改名/删除} × 12 实体 × 6 面，逐格归口（✅=黑盒已测于；N/A=物理不存在该格，亲验定界）：
