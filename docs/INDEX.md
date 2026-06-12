@@ -14,6 +14,7 @@
 | 地基与引擎（orm / reqctx / **scheduler-flowrun** / loop / stream-llm / sandbox / bootstrap / 小件） | `references/backend/foundation/` |
 | 架构决策（直装运行时 / 统一错误类型） | `decisions/000{1,2}-*.md` |
 | 数据目录 / 备份 / 跨机迁移 | `how-to/data-migration.md` |
+| 全功能黑盒验收套件（make testend / evals） | `references/testend/overview.md` |
 
 ## 后端文档体系（V-next 重写完成，2026-06-11）
 
