@@ -12,7 +12,7 @@
 | **HTTP 端点 / DB 表 / 错误码 / SSE 事件**（四索引，与代码逐字同步） | `references/backend/{api,database,error-codes,events}.md` |
 | 某个域怎么设计的（心智模型 / 生命周期 / 坑） | `references/backend/domains/<域>.md` |
 | 地基与引擎（orm / reqctx / **scheduler-flowrun** / loop / stream-llm / sandbox / bootstrap / 小件） | `references/backend/foundation/` |
-| 架构决策（直装运行时 / 统一错误类型 / API 契约标准化） | `decisions/000{1,2,3}-*.md` |
+| 架构决策（直装运行时 / 统一错误类型 / API 契约标准化 / 前端 Flutter 架构） | `decisions/000{1,2,3,4}-*.md` |
 | 数据目录 / 备份 / 跨机迁移 | `how-to/data-migration.md` |
 | 全功能黑盒验收套件（make testend / evals） | `references/testend/overview.md` |
 

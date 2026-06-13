@@ -105,8 +105,8 @@ docs/
 │   ├── backend/          ← api.md · database.md · events.md · error-codes.md · changelog.md
 │   │   ├── domains/      ← 每个后端域一篇 <domain>.md
 │   │   └── foundation/   ← 地基/引擎/infra 一篇（orm · cel · reqctx · loop · tool · …）
-│   └── frontend/         ← fsd-layers.md · entity-types.md · cross-cutting.md
-│       └── slices/       ← 每个 FSD slice 一篇 <slice>.md
+│   └── frontend/         ← architecture.md · contract.md · sse-gateway.md（Flutter，ADR 0004）
+│       └── features/     ← 每个 feature 一篇 <feature>.md
 ├── decisions/            ← ADR，仅追加、不可变（decision）
 ├── how-to/               ← 操作手册（how-to）
 ├── working/              ← 在研，≤90 天（working）
@@ -150,8 +150,8 @@ draft → active → superseded → archived
 | 架构决策（选型/取舍） | `decisions/` 新建一篇 ADR |
 | 架构 / 分层 / 实体 / 引擎 / 路线状态变更 | **整体重述** `concepts/architecture.md` 相关节（§1.7，非追加） |
 | 工程规则 / 设计原则 / 契约宪法（N·D·E·S·T）变更 | **整体重述** `CLAUDE.md` 相关节（§1.7，非追加） |
-| 前端实体类型变更 | `references/frontend/entity-types.md` |
-| FSD 层级规则变更 | `references/frontend/fsd-layers.md` + `CLAUDE.md` 前端节 |
+| 前端契约层（DTO / envelope / 错误码映射）变更 | `references/frontend/contract.md` + 对应 `domains/<域>.md` |
+| 前端架构 / 分层 / SSE gateway 规则变更 | `references/frontend/{architecture,sse-gateway}.md` + `CLAUDE.md` 前端节 + [`ADR 0004`](decisions/0004-frontend-flutter-architecture.md) |
 
 **两种更新 mode 不混（§1.1 vs §1.7）**：`reference` 文档行 = **精确同步**（增量改到逐字吻合代码）；`architecture.md` / `CLAUDE.md` 行 = **整体重述**（把相关节重写到当前状态、删尽旧状态，绝不在旁追加）。表为高频清单、非穷举——「代码改了而某文档因此失真」一律适用。
 
@@ -213,7 +213,7 @@ CLAUDE.md  >  references/  >  concepts/  >  working/  >  archive/
 
 声明任何代码改动**完成**之前，逐条自检——任一项未过 = 改动**未完成**，回去补：
 
-1. ☐ 这次改动碰了 §7 触发表里的东西吗（API / DB / error / SSE / 架构决策 / 架构·实体·引擎状态 / 工程规则·N·D·E·S·T / 前端类型 / FSD）？→ 对应文档**同一提交**更新了吗？
+1. ☐ 这次改动碰了 §7 触发表里的东西吗（API / DB / error / SSE / 架构决策 / 架构·实体·引擎状态 / 工程规则·N·D·E·S·T / 前端契约 / 前端架构）？→ 对应文档**同一提交**更新了吗？
 2. ☐ 改的是 `reference` 文档吗？它和代码**逐字**对得上吗（端点/字段/码/事件 一一吻合）？
 3. ☐ 改的是**状态文档**（`architecture.md` / `CLAUDE.md` / 本规范）吗？→ 是**整体重述到当前状态**吗（没在旧内容旁追加、没留旧状态痕迹，§1.7）？
 4. ☐ 新建文档有合法 frontmatter（§3）吗？`type`/`status`/`id` 对吗？放对目录（§5）了吗？

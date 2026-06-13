@@ -1,6 +1,54 @@
 {
   "lockfile_version": "1",
   "packages": {
+    "flutter@latest": {
+      "last_modified": "2026-05-21T08:15:18Z",
+      "resolved": "github:NixOS/nixpkgs/4a29d733e8a7d5b824c3d8c958a946a9867b3eb2#flutter",
+      "source": "devbox-search",
+      "version": "3.41.9-sdk-links",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/mp9x3mn0x5hs11m8z4m20w8gndkkccb7-flutter-wrapped-3.41.9-sdk-links",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/mp9x3mn0x5hs11m8z4m20w8gndkkccb7-flutter-wrapped-3.41.9-sdk-links"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/aidhap5ilmmf4fzyr0gwxxls0d7b9h7z-flutter-wrapped-3.41.9-sdk-links",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/aidhap5ilmmf4fzyr0gwxxls0d7b9h7z-flutter-wrapped-3.41.9-sdk-links"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/27gbcgwqbaaf81i792zssg862xcwzwzg-flutter-wrapped-3.41.9-sdk-links",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/27gbcgwqbaaf81i792zssg862xcwzwzg-flutter-wrapped-3.41.9-sdk-links"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/fqcjikcpdcn123csd805bmg05jv75szj-flutter-wrapped-3.41.9-sdk-links",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/fqcjikcpdcn123csd805bmg05jv75szj-flutter-wrapped-3.41.9-sdk-links"
+        }
+      }
+    },
     "github:NixOS/nixpkgs/nixpkgs-unstable": {
       "last_modified": "2026-05-01T13:14:57Z",
       "resolved": "github:NixOS/nixpkgs/c6d65881c5624c9cae5ea6cedef24699b0c0a4c0?lastModified=1777641297&narHash=sha256-WNGcmeOZ8Tr9dq6ztCspYbzWFswr2mPebM9LpsfGxPk%3D"

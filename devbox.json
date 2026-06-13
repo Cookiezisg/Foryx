@@ -2,7 +2,8 @@
   "$schema": "https://raw.githubusercontent.com/jetify-com/devbox/main/.schema/devbox.schema.json",
   "packages": [
     "go@1.25",
-    "gnumake@latest"
+    "gnumake@latest",
+    "flutter@latest"
   ],
   "env": {
     "PATH": "$HOME/go/bin:$PATH"

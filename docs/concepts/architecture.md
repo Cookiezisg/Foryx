@@ -17,7 +17,7 @@ audience: [human, ai]
 
 ## 1. 产品愿景
 
-Forgify 是一个 **本地优先（local-first）的 Agentic Workflow Platform**，交付形态为 **Wails 桌面 app**、**单进程单用户**、SQLite 落盘——**不做 SaaS、不做多租户**。
+Forgify 是一个 **本地优先（local-first）的 Agentic Workflow Platform**，交付形态为 **Flutter 桌面 app**（macOS/Linux/Windows，Go 后端作 sidecar）、**单进程单用户**、SQLite 落盘——**不做 SaaS、不做多租户**。
 
 用户用自然语言**锻造**可复用的执行体、并把它们**编排**成工作流；工作流由一个**持久化执行引擎**驱动，崩溃可恢复、确定可重放。本地大模型窗口被充分利用（文档/记忆**直接注入、无 RAG**）。
 
@@ -165,7 +165,8 @@ trigger 是**独立信号源实体**：
 | 里程碑 | 形态 | 状态 |
 |---|---|---|
 | 后端（`backend/`，4 层架构 + Quadrinity + durable 引擎 + 全实体） | 编译/装配/启动/服务全通；单一后端 | ✅ 当前 |
-| 前端重建（FSD 架构、对接 `backend` 契约） | 桌面 app 联调 | ⬜ 下一步 |
+| 前端地基（`frontend/`，Flutter 桌面端：sidecar + 契约层 + SSE gateway + 装配根 + i18n） | analyze + test 绿；见 [`decisions/0004`](../decisions/0004-frontend-flutter-architecture.md) | ✅ 当前 |
+| 前端 features（按 app 形态铺各域屏、对接 `backend` 契约） | 桌面 app 联调 | ⬜ 下一步 |
 
 > 旧版快照归档在 `version-0.2` git 分支。历史只在 git，不在本文档（**零历史包袱**）。
 

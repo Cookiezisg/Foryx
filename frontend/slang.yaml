@@ -1,0 +1,9 @@
+# slang i18n config. Strings live in lib/i18n/<locale>.i18n.json and are accessed
+# type-safely via `t.<key>` (no BuildContext, no hardcoded strings — CLAUDE.md i18n).
+# 文案在 lib/i18n/<locale>.i18n.json,经 `t.<key>` 类型安全访问(无 BuildContext、禁硬编码)。
+base_locale: en
+input_directory: lib/i18n
+output_directory: lib/i18n
+input_file_pattern: .i18n.json
+output_file_name: translations.g.dart
+fallback_strategy: base_locale

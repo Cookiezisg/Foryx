@@ -15,7 +15,7 @@ audience: [human, ai]
 
 ## 1. 一句话与一张图
 
-**本地优先 Agentic Workflow 平台**：单进程、单用户、SQLite 落盘，Wails 桌面 app。核心心智 = **Quadrinity 四项全能**（Function / Handler / Agent / Workflow 四种能力实体）+ **Durable Execution**（节点结果记忆化 + 解释器幂等重走）。
+**本地优先 Agentic Workflow 平台**：单进程、单用户、SQLite 落盘，Flutter 桌面 app（Go 后端作 sidecar）。核心心智 = **Quadrinity 四项全能**（Function / Handler / Agent / Workflow 四种能力实体）+ **Durable Execution**（节点结果记忆化 + 解释器幂等重走）。
 
 ```
 ┌─ transport ───────────────────────────────────────────────────────────┐

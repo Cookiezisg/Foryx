@@ -8,10 +8,10 @@
 
 ## 项目一句话
 
-- **本地优先 Agentic Workflow Platform**，目标 **Wails 桌面 app**、**单进程单用户**、SQLite 落盘（**不做 SaaS**）。
+- **本地优先 Agentic Workflow Platform**，目标 **Flutter 桌面 app**（macOS/Linux/Windows，Go 后端作 sidecar）、**单进程单用户**、SQLite 落盘（**不做 SaaS**）。
 - **核心心智**：**Quadrinity（四项全能）** 实体（Function/Handler/Agent/Workflow）+ **Durable Execution**（节点结果记忆化 + 解释器幂等重走）。
 - **架构**：4 层 Clean Architecture，依赖单向 `transport → app → (domain ∪ infra/store) → infra/db`。地基自研：`pkg/orm`（去 GORM）+ `glebarez/go-sqlite`（纯 Go、无 CGO）。
-- **当前状态**：后端 `backend/` 全实体 + durable 引擎，编译/装配/启动/服务全通（单一后端）；**下一步**：前端按 FSD 重建、对接 `backend` 契约。
+- **当前状态**：后端 `backend/` 全实体 + durable 引擎，编译/装配/启动/服务全通（单一后端）；前端 `frontend/` Flutter 桌面端**地基已落**（sidecar/契约/SSE gateway/装配根/i18n，analyze+test 绿，见 ADR 0004）；**下一步**：按 app 形态铺 features、对接 `backend` 契约。
 
 ## 文档地图
 
@@ -30,7 +30,7 @@
 1. **Quadrinity 实体化**：任何能力必须归属于 Function / Handler / Agent / Workflow 之一。
 2. **Durable 为魂**：工作流执行基于**节点结果记忆化**（`flowrun_nodes` 行表 + record-once）+ **解释器幂等重走**实现崩溃恢复与确定性重放——**非**事件日志（Temporal 式 journal 已否决）。
 3. **依赖自下而上**：`domain` 层**严禁 import 任何外部包**（含 ORM / cel-go）；`app` 层协调 domain 与 infra；跨实体协作走 DIP 端口、不硬依赖具体实现。
-4. **后端契约是事实源**：`reference` 文档 = 代码的精确投影；前端按 FSD 架构对接已定型的后端契约（前端重建中）。
+4. **后端契约是事实源**：`reference` 文档 = 代码的精确投影；前端按 [`ADR 0004`](docs/decisions/0004-frontend-flutter-architecture.md)（Flutter 3-tier feature-first）对接已定型的后端契约（地基已落）。
 5. **端到端推演先行**：开工前必走完整数据流 + 列出跨域依赖（relation 边）。
 6. **反校验剧场**：只保留有物理价值的校验（JSON、必填、CHECK/UNIQUE）；不加多余 null-check。
 7. **零历史包袱 + 状态即重述**：项目未上线，禁止维护兼容性、禁止历史演化描述，只留当前物理事实（历史从 git 取）。**状态文档**（本文件 / `architecture.md` / `GOVERNANCE.md`）改任何状态/事实 = **整体重述当前状态、非追加**——绝不在旧内容旁堆新句、不留旧状态痕迹（见末「文档纪律」节 + GOVERNANCE §1.7）。
@@ -85,17 +85,21 @@
 - **`make verify`（pre-push 门禁，host 平台）**：`gofmt` 净 + `go vet` + `go build` + 单测 + 文档门禁全绿。并发/取消测试带 `-race`。
 - **`make docs`（文档门禁）**：`cmd/docs` 跑 GOVERNANCE §11 全套（frontmatter / 类型 / 生命周期 / INDEX≤50 / 孤儿链接）。
 - **跨平台 release**：任意平台 `cd backend && GOOS=x GOARCH=y go build ./cmd/server` 直接出二进制——**无内嵌、无预拉**（运行时由自研 `directInstaller` 在目标机首用按需下，见 [`decisions/0001`](docs/decisions/0001-sandbox-runtime-direct-install.md)）。
-- 前端门禁（TS / ESLint / FSD 架构检查）随前端重建接入。
+- **`make fe-verify`（前端门禁，devbox flutter）**：codegen（freezed/json/slang）+ `flutter analyze` 净 + `flutter test` 绿。与 `make verify`（后端）分列、各自 pre-push。
 
 ---
 
-# 前端开发守则（重建中，按本节）
+# 前端开发守则（Flutter 桌面端，按本节 + [`decisions/0004`](docs/decisions/0004-frontend-flutter-architecture.md)）
 
-- **FSD 架构**：严格遵守 `app → pages → widgets → features → entities → shared` 依赖链。
-- **DIP 注入**：`shared` 层不准依赖上层；**workspace 注入** + 401 拦截由 `app` 层经 Provider 注入。
-- **视觉灵魂**：明亮、通透、轻盈。`--row-h: 32px` 紧凑布局；`tool_call` 与 `reasoning` 默认折叠。
-- **i18n**：严禁在 TSX 硬编码中英文；文案走 `t("key")`、登记在 `locales/` 下。
-- 对接 `backend` 契约（三条 SSE 流常驻订阅；camelCase 线缆；统一 Envelope）。
+- **技术栈**：Flutter 桌面端（Dart）。状态 **Riverpod**（经典 provider 写法，非 codegen——此 Dart SDK + freezed 3 太新，riverpod_generator/lint 生态未跟上，见 ADR 0004 取舍）；**freezed + json_serializable + slang** 经 build_runner codegen；**dio**（HTTP）/ **go_router**（导航）/ **window_manager**（窗口）。工具链经 devbox（`flutter`）。
+- **进程模型**：Go 后端作 **sidecar**，客户端经 localhost HTTP+SSE 对接——Dart 抢临时端口 → `FORGIFY_ADDR` 拉起 → `/api/v1/health` 门控（零后端改）。dev 用 `FORGIFY_BACKEND_URL` 挂已跑后端（`make server`）。
+- **分层（3-tier feature-first，对齐 Clean 不照搬）**：`shared/core`（contract/net、SSE gateway、design、i18n、router、process）→ `features/<域>`（各自管 data+state+ui）→ `app`（装配根 + shell）。**无 use-case 层**（客户端零业务规则，Go 二进制即用例）。features **互不依赖**（跨 feature 走 shared provider / nav intent）。唯一框架无关纯模型层：`BlockTreeReducer` / `GraphModel`（承载性正确、须脱 widget/socket 单测）。
+- **状态 + 实时**：Riverpod 托管 server-state（`AsyncNotifier` 分页 `loadMore`）+ 三条 `keepAlive` SSE 流。SSE 经 `SseGateway` 的 plain-Dart **`Map<Scope,Stream>` demux 自滤**（**不**在 Riverpod 里逐帧 `.where`）。铁律 **DB 行是真相、流只为实时**：`seq>0` 才 durable / 推进续传游标；ephemeral（delta/tick）只改瞬时视图态、不进耐久缓存。
+- **DIP 注入**：`shared` 不依赖上层；**workspace**（=唯一鉴权轴，header `X-Forgify-Workspace-ID`）+ **baseUrl** 由 `app` 经 `ProviderScope` override 注入；401（`UNAUTH_NO_WORKSPACE`→清选区重选）/ 410（`SEQ_TOO_OLD`→重取 REST 再续）在此拦截。
+- **契约层 = 后端投影**：freezed DTO 逐字镜像 `references/`；**仅 seal 真封闭集**（4 frame 动词 / 6 block 型 / 5 图节点 kind / 4 trigger 源），协议级 SSE `node.type` 与 ~256 错误码**保持开放 + `unknown` 兜底**。改后端字段 → **同提交**改 Dart DTO（文档纪律延伸到前端契约）。
+- **视觉灵魂**：明亮、通透、轻盈。`Tokens.rowHeight = 32` 紧凑；`tool_call` 与 `reasoning` 默认折叠。颜色/度量走 design token，禁内联硬编码。
+- **i18n**：严禁在 Dart 硬编码中英文；文案走 slang `context.t.<key>`、登记在 `lib/i18n/<locale>.i18n.json`。
+- **门禁**：`make fe-verify`（codegen + `flutter analyze` 净 + `flutter test` 绿）。codegen 产物入库（源等价、deterministic，fresh checkout 直接 analyze）。层依赖暂用目录约定 + review 守（custom_lint 待生态跟上 SDK 再接）。桌面真跑 `flutter run -d <平台>` 需完整 Xcode/CocoaPods 等机器层面工具，不入门禁。
 
 ---
 
@@ -120,7 +124,8 @@
 | 架构决策（选型/取舍） | `decisions/` 新建一篇 ADR |
 | 架构 / 实体 / 引擎 / 路线状态变更 | **整体重述** `concepts/architecture.md` 相关节（非追加） |
 | 工程规则 / 设计原则 / N·D·E·S·T 变更 | **整体重述** 本文件相关节（非追加） |
-| 前端实体类型 / FSD 规则变更 | `references/frontend/{entity-types,fsd-layers}.md` |
+| 前端契约层（DTO / envelope / 错误码）变更 | `references/frontend/contract.md` + 对应 `domains/<域>.md` |
+| 前端架构 / 分层 / SSE gateway 规则变更 | `references/frontend/{architecture,sse-gateway}.md` + 本文件前端节 + [`ADR 0004`](docs/decisions/0004-frontend-flutter-architecture.md) |
 
 非穷举。**两种 mode 不混**：`reference` 文档 = 精确同步（逐字吻合代码）；`architecture.md` / 本文件 = **整体重述**（相关节重写到当前状态、删尽旧状态，绝不追加堆叠）——见 GOVERNANCE §1.7。
 

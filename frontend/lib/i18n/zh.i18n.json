@@ -1,0 +1,23 @@
+{
+  "app": {
+    "name": "Forgify"
+  },
+  "backend": {
+    "starting": "正在启动 Forgify…",
+    "crashedTitle": "后端启动失败",
+    "retry": "重试"
+  },
+  "workspace": {
+    "selectTitle": "选择一个工作区",
+    "none": "未选择工作区"
+  },
+  "nav": {
+    "chat": "对话",
+    "functions": "函数",
+    "handlers": "处理器",
+    "agents": "智能体",
+    "workflows": "工作流",
+    "search": "搜索",
+    "settings": "设置"
+  }
+}

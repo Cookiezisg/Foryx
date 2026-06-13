@@ -1,0 +1,23 @@
+{
+  "app": {
+    "name": "Forgify"
+  },
+  "backend": {
+    "starting": "Starting Forgify…",
+    "crashedTitle": "Backend failed to start",
+    "retry": "Retry"
+  },
+  "workspace": {
+    "selectTitle": "Select a workspace",
+    "none": "No workspace selected"
+  },
+  "nav": {
+    "chat": "Chat",
+    "functions": "Functions",
+    "handlers": "Handlers",
+    "agents": "Agents",
+    "workflows": "Workflows",
+    "search": "Search",
+    "settings": "Settings"
+  }
+}
