@@ -1,7 +1,7 @@
 ---
 id: WRK-014
 type: working
-status: active
+status: archived
 owner: @weilin
 created: 2026-06-12
 reviewed: 2026-06-12

@@ -1,7 +1,7 @@
 ---
 id: WRK-018
 type: working
-status: active
+status: archived
 owner: @weilin
 created: 2026-06-13
 reviewed: 2026-06-13
