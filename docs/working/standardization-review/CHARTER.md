@@ -70,7 +70,9 @@ audience: [human, ai]
 - tool Execute 返回 `(string,error)`:结构数据→`ToJSON`、内容正文→prose(document list/search 落 prose 侧待议 MD7)。S18 五方法 + 框架字段已 100% 一致。
 - 生命周期 `publish(ctx,action,id,extra)` + `notifySearch`;后置注入统一 `Set<Cap>` nil-tolerant(注入机制统一、注入内容随域分化=byDesign)。
 
-## 决策台账（24 项）
+## 决策台账（24 项）—— ✅ 已批准定稿（2026-06-13）
+
+> **批准结果**:A 组 **MD1 裸实体+内嵌 currentVersion / MD3 单产物统一 `{id}` / MD4 统一返实体后置快照 / MD5 逐个判+写进 N5** 经用户确认取推荐;**MD2/MD6/MD7/MD8 + B 组 7 项**默认按推荐生效。下表"推荐"列即**已批准的 canonical**,第 2/3 轮据此对标与归一。
 
 ### A. 宏观契约决策（定义前端契约/有产品取舍,需拍板）
 
