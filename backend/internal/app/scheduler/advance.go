@@ -107,7 +107,8 @@ func (s *Service) emitNodeProgress(ctx context.Context, run *flowrundomain.FlowR
 		"iteration": rn.iter,
 		"status":    status,
 	})
-	entitystreamapp.Signal(ctx, s.entities, streamdomain.Scope{Kind: streamdomain.KindWorkflow, ID: run.WorkflowID}, entitystreamapp.NodeRun, content)
+	// ephemeral=true：flowrun_nodes 行是重连真相，tick 仅实时呈现、丢弃无妨、不占 replay 环(E2/MD-sse1)。
+	entitystreamapp.Signal(ctx, s.entities, streamdomain.Scope{Kind: streamdomain.KindWorkflow, ID: run.WorkflowID}, entitystreamapp.NodeRun, content, true)
 }
 
 // finalize settles a run that has no ready nodes left: still-running if any node is parked (awaiting

@@ -14,6 +14,27 @@ audience: [human, ai]
 > 流式产出的单一事实源。随评审逐域填入；当前已落：P0-P6 全部 32 域。
 > 通则（E 系列）：全系统**仅三条 SSE 流**（messages / entities / notifications，E1 永不再加）；workspace 级、后端不过滤；delta/tick 标 `seq=0` ephemeral（E2）；messages 流 `parentBlockId` 嵌套（E3）。任何实体**不开新流**——只把内容挂上三条流。
 
+## Frame 协议与 node.type 词表（MD-sse2 登记，非穷举）
+
+三流共用统一帧 envelope `{seq, scope:{kind,id}, id, frame}`，`frame` 是四动词封闭联合。`durable` 报告该帧是否进 replay 环（重连可重建）；`seq=0` = ephemeral、不入 buffer、不产生背压。
+
+| 动词 | durable | 说明 |
+|---|---|---|
+| `Open` | 恒 durable | 建节点（`parentId` 空=顶层，非空=嵌套挂载点，E3） |
+| `Delta` | 恒 ephemeral | 给开着的节点追加流式 chunk（token 文本 / 终端输出） |
+| `Close` | 恒 durable | 结束节点；`result` 携最终快照——流式节点的重连真相（delta 可丢） |
+| `Signal` | **由 `Ephemeral` 字段定** | 不建树的点状广播；`Ephemeral` 不上线缆，仅定投递语义 |
+
+**Signal 的 durable/ephemeral 硬规则**："DB 行才是真相、流只为实时呈现"的点状广播 MUST 置 `Ephemeral:true`：**flowrun 节点 tick**（`run`，flowrun_nodes 行是真相）、**trigger fire**（`fire`，Activation/Firing 行是真相）、**chat interaction**（broker pending 表是真相、重连走 REST 重同步）。必达的 **notification 信号**置 `Ephemeral:false`（durable——流是推送、行是真相但不可丢）。
+
+`Node.Type` 词表由 **producer 定**（domain 不枚举类型），下表登记**当前全集**、非穷举：
+
+| 流 | node.type 当前全集 |
+|---|---|
+| entities | `forge`（create/edit 内容镜像）· `run`（执行中间产出 / flowrun tick）· `fire`（trigger 扇出） |
+| messages | `message`（start/stop，durable 带快照）· `text` · `reasoning` · `tool_call` · `tool_result` · `progress`（块级 open/delta/close）· `interaction`（ephemeral 信号）· `todo`（信号） |
+| notifications | node.type = 事件类型字符串 `<domain>.<action>`（见下方各域登记） |
+
 ## notifications 流（生命周期通知，`<domain>.<action>`）
 
 | 域 | 事件 |
@@ -47,8 +68,8 @@ audience: [human, ai]
 **entities 流**：
 | 域 | 挂载 |
 |---|---|
-| workflow | **flowrun 节点进度**：advance 每节点终态发一条 Signal（`{flowrunId, nodeId, iteration, status}`）→ workflow scope——面板实时看 run 逐节点推进；forge 镜像（create/edit_workflow 的图 ops） |
-| trigger | **fire 信号**：每次扇出（全 4 源 + manual）发 `{activationId, kind, fired, firingCount, error}` → trigger scope；durable 记录 = Activation/Firing 行 |
+| workflow | **flowrun 节点进度**：advance 每节点终态发一条 **ephemeral** Signal（`{flowrunId, nodeId, iteration, status}`）→ workflow scope——面板实时看 run 逐节点推进；flowrun_nodes 行是真相、tick 不占 replay 环（E2）；forge 镜像（create/edit_workflow 的图 ops） |
+| trigger | **fire 信号**：每次扇出（全 4 源 + manual）发 **ephemeral** Signal `{activationId, kind, fired, firingCount, error}` → trigger scope；durable 记录 = Activation/Firing 行（信号丢弃无妨） |
 | control / approval | forge 镜像（create/edit 的 branches/template） |
 
 ## P4 三域挂载

@@ -160,16 +160,20 @@ func (w *Writer) publish(frame streamdomain.Frame) {
 }
 
 // Signal emits one point-in-time node to bridge scoped to an entity — for events with no streaming
-// body (a trigger firing). nil-safe.
+// body (a trigger firing, a flowrun node tick). ephemeral picks the delivery class: true = lossy,
+// no-backpressure, seq 0, never buffered (the DB row is the reconnect truth — fire/tick panels
+// re-fetch their durable log); false = durable, enters the replay ring. nil-safe.
 //
-// Signal 往 bridge 发一个点状节点、锚某实体——给无流式体的事件（trigger fire）。nil 安全。
-func Signal(ctx context.Context, bridge streamdomain.Bridge, scope streamdomain.Scope, nodeType string, content json.RawMessage) {
+// Signal 往 bridge 发一个点状节点、锚某实体——给无流式体的事件（trigger fire、flowrun 节点 tick）。
+// ephemeral 选投递类：true = 可丢、无背压、seq 0、不入 buffer（DB 行才是重连真相——fire/tick 面板重连时
+// 重拉其 durable 日志）；false = durable、进 replay 环。nil 安全。
+func Signal(ctx context.Context, bridge streamdomain.Bridge, scope streamdomain.Scope, nodeType string, content json.RawMessage, ephemeral bool) {
 	if bridge == nil || scope.ID == "" {
 		return
 	}
 	_, _ = bridge.Publish(ctx, streamdomain.Event{
 		Scope: scope,
 		ID:    idgenpkg.New("sig"),
-		Frame: streamdomain.Signal{Node: streamdomain.Node{Type: nodeType, Content: content}},
+		Frame: streamdomain.Signal{Node: streamdomain.Node{Type: nodeType, Content: content}, Ephemeral: ephemeral},
 	})
 }

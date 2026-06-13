@@ -72,7 +72,7 @@ func TestWriter_NoOpWhenDisabled(t *testing.T) {
 func TestSignal_PointNode(t *testing.T) {
 	b := &capBridge{}
 	scope := streamdomain.Scope{Kind: streamdomain.KindTrigger, ID: "trg_1"}
-	Signal(context.Background(), b, scope, "fire", json.RawMessage(`{"flowrunId":"frn_9"}`))
+	Signal(context.Background(), b, scope, "fire", json.RawMessage(`{"flowrunId":"frn_9"}`), true)
 	if len(b.events) != 1 {
 		t.Fatalf("want 1 signal frame, got %d", len(b.events))
 	}
@@ -80,10 +80,14 @@ func TestSignal_PointNode(t *testing.T) {
 	if !ok || sig.Node.Type != "fire" || b.events[0].Scope.ID != "trg_1" {
 		t.Fatalf("not a fire Signal scoped to the trigger: %+v", b.events[0])
 	}
+	// ephemeral=true → lossy, never buffered (E2/MD-sse1: the DB row is the reconnect truth).
+	if !sig.Ephemeral || sig.Durable() {
+		t.Fatalf("ephemeral signal must not be durable: %+v", sig)
+	}
 	// disabled.
 	b2 := &capBridge{}
-	Signal(context.Background(), nil, scope, "fire", nil)
-	Signal(context.Background(), b2, streamdomain.Scope{Kind: "trigger", ID: ""}, "fire", nil)
+	Signal(context.Background(), nil, scope, "fire", nil, true)
+	Signal(context.Background(), b2, streamdomain.Scope{Kind: "trigger", ID: ""}, "fire", nil, true)
 	if len(b2.events) != 0 {
 		t.Fatal("disabled Signal must emit nothing")
 	}

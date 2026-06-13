@@ -93,6 +93,7 @@ func (s *Service) fanOut(ctx context.Context, triggerID, kind string, workflows 
 	//
 	// SSE-C：每次扇出（所有来源——cron/webhook/fsnotify/sensor/manual——都经此处）发一条 trigger scope 的
 	// fire 信号，使 trigger 面板实时显示活动。耐久记录 = Activation/Firing 行；这是 live 视图。
+	// ephemeral=true：Activation/Firing 行是重连真相，fire 信号仅 live 视图、不占 replay 环(E2/MD-sse1)。
 	entitystreamapp.Signal(ctx, s.entities, streamdomain.Scope{Kind: streamdomain.KindTrigger, ID: triggerID},
 		entitystreamapp.NodeFire, streamdomain.JSONContent(map[string]any{
 			"activationId": actID,
@@ -100,7 +101,7 @@ func (s *Service) fanOut(ctx context.Context, triggerID, kind string, workflows 
 			"fired":        act.Fired,
 			"firingCount":  fired,
 			"error":        act.Error,
-		}))
+		}), true)
 	return actID
 }
 
