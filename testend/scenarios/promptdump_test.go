@@ -229,18 +229,13 @@ func TestPromptDump_AgentViewpoint(t *testing.T) {
 	wc.PUT("/api/v1/workspaces/"+wsID+"/default-models/agent",
 		map[string]any{"apiKeyId": keyID, "modelId": "mock-agent"}).OK(t, nil)
 
-	var ag struct {
-		Agent struct {
-			ID string `json:"id"`
-		} `json:"agent"`
-	}
-	wc.POST("/api/v1/agents", map[string]any{
+	agID := wc.POST("/api/v1/agents", map[string]any{
 		"name": "DataBot", "description": "crunch numbers and report",
 		"prompt": "you analyze data",
-	}).OK(t, &ag)
+	}).Field(t, "id") // create 现返裸实体(MD1)
 
 	mock.Enqueue("mock-agent", harness.LLMTurn{Text: "analysis complete."})
-	wc.POST("/api/v1/agents/"+ag.Agent.ID+":invoke", map[string]any{"input": map[string]any{}}).OK(t, nil)
+	wc.POST("/api/v1/agents/"+agID+":invoke", map[string]any{"input": map[string]any{}}).OK(t, nil)
 
 	d := mock.WaitDumps(t, "mock-agent", 1, 10000)[0]
 	sys := d.System

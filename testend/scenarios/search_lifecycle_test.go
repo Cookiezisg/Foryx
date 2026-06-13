@@ -34,14 +34,9 @@ type lcKind struct {
 // nestedID 解 {<entity>:{id}} 创建形（版本实体的 AC-1 约定）。
 func nestedID(t *testing.T, r *harness.Resp, entity string) string {
 	t.Helper()
-	var m map[string]struct {
-		ID string `json:"id"`
-	}
-	r.OK(t, &m)
-	if m[entity].ID == "" {
-		t.Fatalf("create %s returned no nested id: %s", entity, r.Raw)
-	}
-	return m[entity].ID
+	// Create 现返裸实体(MD1):data 顶层即 id。entity 参数留作调用点自文档。
+	_ = entity
+	return r.Field(t, "id")
 }
 
 // TestSearchR1_ProjectionLifecycle12Kinds: 12 类实体逐个走 建→改→删 全周期，
@@ -135,20 +130,14 @@ func TestSearchR1_ProjectionLifecycle12Kinds(t *testing.T) {
 		{
 			kind: "workflow",
 			create: func(t *testing.T, wc *harness.Client, tok string) string {
-				var created struct {
-					Workflow struct {
-						ID string `json:"id"`
-					} `json:"workflow"`
-				}
-				wc.POST("/api/v1/workflows", map[string]any{
+				return wc.POST("/api/v1/workflows", map[string]any{
 					"name": "lc_wf", "description": tok + " pipeline",
 					"ops": []map[string]any{
 						{"op": "add_node", "node": map[string]any{"id": "t", "kind": "trigger", "ref": "trg_x"}},
 						{"op": "add_node", "node": map[string]any{"id": "a", "kind": "action", "ref": "fn_x"}},
 						{"op": "add_edge", "edge": map[string]any{"id": "e1", "from": "t", "to": "a"}},
 					},
-				}).OK(t, &created)
-				return created.Workflow.ID
+				}).Field(t, "id")
 			},
 			update: func(t *testing.T, wc *harness.Client, id, tok string) {
 				wc.PATCH("/api/v1/workflows/"+id, map[string]any{"description": tok + " pipeline"}).OK(t, nil)
@@ -160,19 +149,10 @@ func TestSearchR1_ProjectionLifecycle12Kinds(t *testing.T) {
 		{
 			kind: "trigger",
 			create: func(t *testing.T, wc *harness.Client, tok string) string {
-				var created struct {
-					Trigger struct {
-						ID string `json:"id"`
-					} `json:"trigger"`
-				}
-				wc.POST("/api/v1/triggers", map[string]any{
+				return wc.POST("/api/v1/triggers", map[string]any{
 					"name": "lc_trg", "description": tok + " listener", "kind": "webhook",
 					"config": map[string]any{"path": "lc-in", "secret": "s1", "signatureAlgo": "hmac-sha256-hex"},
-				}).OK(t, &created)
-				if created.Trigger.ID == "" {
-					t.Fatal("trigger create returned no id")
-				}
-				return created.Trigger.ID
+				}).Field(t, "id")
 			},
 			update: func(t *testing.T, wc *harness.Client, id, tok string) {
 				wc.PATCH("/api/v1/triggers/"+id, map[string]any{"description": tok + " listener"}).OK(t, nil)

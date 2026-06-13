@@ -427,18 +427,12 @@ func TestPlatform_RelationRipple(t *testing.T) {
 
 	fnID := fnCreate(t, wc, "rel_target_old", "def f() -> dict:\n    return {}\n")
 
-	// agent 挂载该 function（equip 出边）。create 返版本实体嵌套形 {agent, version}（AC-1 约定）。
-	var ag struct {
-		Agent struct {
-			ID string `json:"id"`
-		} `json:"agent"`
-	}
-	wc.POST("/api/v1/agents", map[string]any{
+	// agent 挂载该 function（equip 出边）。create 现返裸实体(MD1):data 顶层即 id。
+	agID := wc.POST("/api/v1/agents", map[string]any{
 		"name": "rel_agent", "description": "验收用",
 		"prompt": "you mount a function",
 		"tools":  []map[string]any{{"ref": fnID, "name": "rel_target_old"}},
-	}).OK(t, &ag)
-	agID := ag.Agent.ID
+	}).Field(t, "id")
 
 	neigh := func() string {
 		r := wc.GET(fmt.Sprintf("/api/v1/relations/neighborhood?kind=agent&id=%s&depth=1", agID))

@@ -14,18 +14,10 @@ import (
 // fnCreate 经 HTTP 锻造一个 function 并返回 id（W1 共享 helper）。
 func fnCreate(t *testing.T, wc *harness.Client, name, code string) string {
 	t.Helper()
-	var created struct {
-		Function struct {
-			ID string `json:"id"`
-		} `json:"function"`
-	}
-	wc.POST("/api/v1/functions", map[string]any{
+	// Create 现返裸实体(MD1):data 顶层即 id + 内嵌 activeVersion。
+	return wc.POST("/api/v1/functions", map[string]any{
 		"name": name, "description": "验收用", "code": code,
-	}).OK(t, &created)
-	if created.Function.ID == "" {
-		t.Fatal("create returned no function.id")
-	}
-	return created.Function.ID
+	}).Field(t, "id")
 }
 
 // TestFunction_CreateRejections: A1 创建情况矩阵的出错列——无 def 的坏代码、重名。

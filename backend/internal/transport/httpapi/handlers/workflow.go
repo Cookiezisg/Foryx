@@ -78,7 +78,8 @@ func (h *WorkflowHandler) Create(w http.ResponseWriter, r *http.Request) {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	responsehttpapi.Created(w, map[string]any{"workflow": wf, "version": v})
+	wf.ActiveVersion = v // 裸实体 + 内嵌 activeVersion,与 GET 同形(MD1)
+	responsehttpapi.Created(w, wf)
 }
 
 func (h *WorkflowHandler) List(w http.ResponseWriter, r *http.Request) {

@@ -4,7 +4,6 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"net/http"
 	"strings"
 	"testing"
@@ -17,25 +16,8 @@ import (
 // trgCreate 建一个 trigger 并返回 id。
 func trgCreate(t *testing.T, wc *harness.Client, name, kind string, config map[string]any) string {
 	t.Helper()
-	var created struct {
-		Trigger struct {
-			ID string `json:"id"`
-		} `json:"trigger"`
-	}
-	r := wc.POST("/api/v1/triggers", map[string]any{"name": name, "kind": kind, "config": config})
-	r.OK(t, &created)
-	if created.Trigger.ID == "" {
-		// some create shapes are flat — probe. 有的 create 形状是扁平的——探。
-		var flat struct {
-			ID string `json:"id"`
-		}
-		_ = json.Unmarshal(r.Data, &flat)
-		created.Trigger.ID = flat.ID
-	}
-	if created.Trigger.ID == "" {
-		t.Fatalf("trigger create returned no id: %s", r.Data)
-	}
-	return created.Trigger.ID
+	// Create 现返裸实体(MD1):data 顶层即 id。
+	return wc.POST("/api/v1/triggers", map[string]any{"name": name, "kind": kind, "config": config}).Field(t, "id")
 }
 
 // wfWithTrigger builds fn + workflow wired to the given trigger and activates it.

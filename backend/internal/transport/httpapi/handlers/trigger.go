@@ -66,7 +66,7 @@ func (h *TriggerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	responsehttpapi.Created(w, map[string]any{"trigger": t})
+	responsehttpapi.Created(w, t) // 裸实体(trigger 无版本)(MD1)
 }
 
 func (h *TriggerHandler) List(w http.ResponseWriter, r *http.Request) {

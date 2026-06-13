@@ -92,7 +92,8 @@ func (h *ControlHandler) Create(w http.ResponseWriter, r *http.Request) {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	responsehttpapi.Created(w, map[string]any{"control": c, "version": v})
+	c.ActiveVersion = v // 裸实体 + 内嵌 activeVersion,与 GET 同形(MD1)
+	responsehttpapi.Created(w, c)
 }
 
 func (h *ControlHandler) List(w http.ResponseWriter, r *http.Request) {

@@ -44,24 +44,24 @@ func IsValidKind(k string) bool {
 //
 // Trigger 是实体行。Config 持有 source 专属配置（见 config.go），用自由 map 存——加 source 种类无需改列。
 type Trigger struct {
-	ID          string            `db:"id,pk"`
-	WorkspaceID string            `db:"workspace_id,ws"`
-	Name        string            `db:"name"`
-	Description string            `db:"description"`
-	Kind        string            `db:"kind"`
-	Config      map[string]any    `db:"config,json"`
-	Outputs     []schemapkg.Field `db:"outputs,json"` // declared payload fields delivered to listening workflows (downstream reads these)
-	CreatedAt   time.Time         `db:"created_at,created"`
-	UpdatedAt   time.Time         `db:"updated_at,updated"`
-	DeletedAt   *time.Time        `db:"deleted_at,deleted"`
+	ID          string            `db:"id,pk"              json:"id"`
+	WorkspaceID string            `db:"workspace_id,ws"    json:"-"` // D2 物理隔离列,不上线缆
+	Name        string            `db:"name"               json:"name"`
+	Description string            `db:"description"        json:"description"`
+	Kind        string            `db:"kind"               json:"kind"`
+	Config      map[string]any    `db:"config,json"        json:"config"`
+	Outputs     []schemapkg.Field `db:"outputs,json"       json:"outputs"` // declared payload fields delivered to listening workflows (downstream reads these)
+	CreatedAt   time.Time         `db:"created_at,created" json:"createdAt"`
+	UpdatedAt   time.Time         `db:"updated_at,updated" json:"updatedAt"`
+	DeletedAt   *time.Time        `db:"deleted_at,deleted" json:"-"`
 
 	// RefCount / Listening are computed at read time from the app's in-memory listen
 	// registry (how many active workflows reference it / whether its listener is hot).
 	// Not persisted — the persistent truth is the workflow side (who is active).
 	//
 	// RefCount / Listening 读时由 app 内存监听表算出（多少 active workflow 引用它 / listener 热否），不落库。
-	RefCount  int  `db:"-"`
-	Listening bool `db:"-"`
+	RefCount  int  `db:"-" json:"refCount"`
+	Listening bool `db:"-" json:"listening"`
 }
 
 // ListFilter paginates the trigger list.

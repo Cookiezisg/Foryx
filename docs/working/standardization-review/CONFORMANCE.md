@@ -44,6 +44,7 @@ audience: [human, ai]
 | ST-23 | S8 | action | med | 线缆 | `list_documents`/`search_documents` tool prose → `ToJSON`(MD7) |
 | ST-24 | S8 | internal | med | 内部 | `agent.List` 签名 raw int/string → `ListFilter` 结构体(与 control 一致) |
 | ST-25 | S9 | envelope | low | 内部 | mcp `:install` 用 `Created` helper / flowrun Inbox key 核准 |
+| ST-26 | S1 | naming | high | 线缆 | **trigger domain 结构体缺 json tag → 序列化 PascalCase(`ID`/`Name`/`Config`)且 `WorkspaceID` 上线缆(D2 漏)**。S1 执行时由「裸实体 + 大小写敏感解包」暴露(此前被 Go 大小写不敏感 unmarshal 掩盖)。审计 naming 轴误判"基本达标"的反例。全量复扫确认 trigger 是唯一缺 tag 实体。已随 S1 补全双 tag |
 
 ## 九波执行计划（每波独立提交;exit = make verify 绿 + 涉线缆补 testend + api/error-codes/events/domains 1:1 同步）
 
@@ -68,4 +69,5 @@ audience: [human, ai]
 ## 状态
 
 - 第 1 轮(宪章)✅ / 第 2 轮(本矩阵)✅。
-- **第 3 轮 = 执行 S1-S9**,待用户批准从 S1 开干(首波动代码前确认)。
+- **第 3 轮 = 执行 S1-S9**(用户批准自主跑完)。
+  - **S1 ✅**(ST-1 + 新抓 ST-26):7 Create handler 裸实体化 + trigger json tag 补全;testend 11 文件解析点全转 `Field(t,"id")`;api.md 响应形状铁律;verify+testend 绿。

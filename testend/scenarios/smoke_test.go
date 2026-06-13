@@ -33,17 +33,12 @@ func TestSmoke_BootToSearchableEntity(t *testing.T) {
 
 	// forge a function via the flat HTTP payload (buildOpsFromDirect path).
 	// 经扁平 HTTP payload 锻造 function（buildOpsFromDirect 路径）。
-	var created struct {
-		Function struct {
-			ID string `json:"id"`
-		} `json:"function"`
-	}
-	wc.POST("/api/v1/functions", map[string]any{
+	// create 现返裸实体(MD1):data 顶层即 id。
+	fnID := wc.POST("/api/v1/functions", map[string]any{
 		"name":        "greet_user",
 		"description": "向用户问好的冒烟函数",
 		"code":        "def greet(name: str) -> dict:\n    print(\"smoke print line\")\n    return {\"msg\": f\"hello {name}\"}\n",
-	}).OK(t, &created)
-	fnID := created.Function.ID
+	}).Field(t, "id")
 	if fnID == "" {
 		t.Fatal("create returned no function.id")
 	}

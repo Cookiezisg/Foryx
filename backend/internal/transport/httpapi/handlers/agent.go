@@ -92,7 +92,8 @@ func (h *AgentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	responsehttpapi.Created(w, map[string]any{"agent": ag, "version": v})
+	ag.ActiveVersion = v // 裸实体 + 内嵌 activeVersion,与 GET 同形(MD1)
+	responsehttpapi.Created(w, ag)
 }
 
 func (h *AgentHandler) List(w http.ResponseWriter, r *http.Request) {

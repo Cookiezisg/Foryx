@@ -80,7 +80,8 @@ func (h *HandlerHandler) Create(w http.ResponseWriter, r *http.Request) {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	responsehttpapi.Created(w, map[string]any{"handler": hd, "version": v})
+	hd.ActiveVersion = v // 裸实体 + 内嵌 activeVersion,与 GET 同形(MD1)
+	responsehttpapi.Created(w, hd)
 }
 
 func (h *HandlerHandler) List(w http.ResponseWriter, r *http.Request) {

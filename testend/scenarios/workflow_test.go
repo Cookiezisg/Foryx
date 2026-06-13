@@ -14,16 +14,8 @@ import (
 // wfCreate 从 ops 锻造 workflow 并返回 id。
 func wfCreate(t *testing.T, wc *harness.Client, name string, ops []map[string]any) string {
 	t.Helper()
-	var created struct {
-		Workflow struct {
-			ID string `json:"id"`
-		} `json:"workflow"`
-	}
-	wc.POST("/api/v1/workflows", map[string]any{"name": name, "ops": ops}).OK(t, &created)
-	if created.Workflow.ID == "" {
-		t.Fatal("create returned no workflow.id")
-	}
-	return created.Workflow.ID
+	// Create 现返裸实体(MD1):data 顶层即 id + 内嵌 activeVersion。
+	return wc.POST("/api/v1/workflows", map[string]any{"name": name, "ops": ops}).Field(t, "id")
 }
 
 // runAndWait starts a manual run and returns (flowrunId, terminal status, nodes raw).
@@ -179,23 +171,18 @@ func TestWorkflow_ControlRoutingAndEmit(t *testing.T) {
 
 	bigFn := fnCreate(t, wc, "big_path", "def f(tier: str) -> dict:\n    return {\"ran\": \"big\", \"tier\": tier}\n")
 	smallFn := fnCreate(t, wc, "small_path", "def f() -> dict:\n    return {\"ran\": \"small\"}\n")
-	var ctl struct {
-		Control struct {
-			ID string `json:"id"`
-		} `json:"control"`
-	}
-	wc.POST("/api/v1/controls", map[string]any{
+	ctlID := wc.POST("/api/v1/controls", map[string]any{
 		"name":   "amount_router",
 		"inputs": []map[string]any{{"name": "amount", "type": "number"}},
 		"branches": []map[string]any{
 			{"port": "big", "when": "input.amount > 100.0", "emit": map[string]string{"tier": "'vip'"}},
 			{"port": "small", "when": "true"},
 		},
-	}).OK(t, &ctl)
+	}).Field(t, "id")
 
 	wfID := wfCreate(t, wc, "routed_pipe", []map[string]any{
 		{"op": "add_node", "node": map[string]any{"id": "start", "kind": "trigger", "ref": "trg_manual"}},
-		{"op": "add_node", "node": map[string]any{"id": "gate", "kind": "control", "ref": ctl.Control.ID, "input": map[string]any{"amount": "start.amount"}}},
+		{"op": "add_node", "node": map[string]any{"id": "gate", "kind": "control", "ref": ctlID, "input": map[string]any{"amount": "start.amount"}}},
 		{"op": "add_node", "node": map[string]any{"id": "big", "kind": "action", "ref": bigFn, "input": map[string]any{"tier": "gate.tier"}}},
 		{"op": "add_node", "node": map[string]any{"id": "small", "kind": "action", "ref": smallFn}},
 		{"op": "add_edge", "edge": map[string]any{"id": "e1", "from": "start", "to": "gate"}},
@@ -225,18 +212,13 @@ func TestWorkflow_ApprovalParkDecideResume(t *testing.T) {
 	ns := wc.Subscribe(t, "notifications")
 
 	pubFn := fnCreate(t, wc, "publish_step", "def f(decision: str) -> dict:\n    return {\"published\": decision}\n")
-	var apf struct {
-		Approval struct {
-			ID string `json:"id"`
-		} `json:"approval"`
-	}
-	wc.POST("/api/v1/approvals", map[string]any{
+	apfID := wc.POST("/api/v1/approvals", map[string]any{
 		"name": "spend_gate", "template": "approve {{ input.amt }}?", "allowReason": true,
-	}).OK(t, &apf)
+	}).Field(t, "id")
 
 	wfID := wfCreate(t, wc, "approval_pipe", []map[string]any{
 		{"op": "add_node", "node": map[string]any{"id": "start", "kind": "trigger", "ref": "trg_manual"}},
-		{"op": "add_node", "node": map[string]any{"id": "human", "kind": "approval", "ref": apf.Approval.ID, "input": map[string]any{"amt": "start.amt"}}},
+		{"op": "add_node", "node": map[string]any{"id": "human", "kind": "approval", "ref": apfID, "input": map[string]any{"amt": "start.amt"}}},
 		{"op": "add_node", "node": map[string]any{"id": "pub", "kind": "action", "ref": pubFn, "input": map[string]any{"decision": "human.decision"}}},
 		{"op": "add_edge", "edge": map[string]any{"id": "e1", "from": "start", "to": "human"}},
 		{"op": "add_edge", "edge": map[string]any{"id": "e2", "from": "human", "to": "pub", "fromPort": "yes"}},

@@ -15,12 +15,8 @@ func TestControl_CRUDAndCELValidation(t *testing.T) {
 	ws := c.POST("/api/v1/workspaces", map[string]any{"name": "ctl"}).OK(t, nil)
 	wc := c.WS(ws.Field(t, "id"))
 
-	var created struct {
-		Control struct {
-			ID string `json:"id"`
-		} `json:"control"`
-	}
-	wc.POST("/api/v1/controls", map[string]any{
+	// Create 现返裸实体(MD1):data 顶层即 id。
+	ctlID := wc.POST("/api/v1/controls", map[string]any{
 		"name":        "amount_gate",
 		"description": "按金额分流",
 		"inputs":      []map[string]any{{"name": "amount", "type": "number"}},
@@ -28,8 +24,7 @@ func TestControl_CRUDAndCELValidation(t *testing.T) {
 			{"port": "big", "when": "input.amount > 100", "emit": map[string]string{"tier": "'vip'"}},
 			{"port": "small", "when": "true"},
 		},
-	}).OK(t, &created)
-	ctlID := created.Control.ID
+	}).Field(t, "id")
 	if !strings.HasPrefix(ctlID, "ctl_") {
 		t.Fatalf("control id shape: %s", ctlID)
 	}
@@ -72,20 +67,15 @@ func TestApproval_CRUDAndTemplate(t *testing.T) {
 	ws := c.POST("/api/v1/workspaces", map[string]any{"name": "apf"}).OK(t, nil)
 	wc := c.WS(ws.Field(t, "id"))
 
-	var created struct {
-		Approval struct {
-			ID string `json:"id"`
-		} `json:"approval"`
-	}
-	wc.POST("/api/v1/approvals", map[string]any{
+	// Create 现返裸实体(MD1):data 顶层即 id。
+	apfID := wc.POST("/api/v1/approvals", map[string]any{
 		"name":            "spend_check",
 		"description":     "花钱要批",
 		"template":        "approve spending {{ input.amount }}?",
 		"allowReason":     true,
 		"timeout":         "2d",
 		"timeoutBehavior": "reject",
-	}).OK(t, &created)
-	apfID := created.Approval.ID
+	}).Field(t, "id")
 	if !strings.HasPrefix(apfID, "apf_") {
 		t.Fatalf("approval id shape: %s", apfID)
 	}

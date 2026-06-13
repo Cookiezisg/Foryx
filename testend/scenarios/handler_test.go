@@ -16,20 +16,12 @@ func hdCreate(t *testing.T, wc *harness.Client, name string, body map[string]any
 	for k, v := range body {
 		payload[k] = v
 	}
-	var created struct {
-		Handler struct {
-			ID string `json:"id"`
-		} `json:"handler"`
-	}
 	r := wc.POST("/api/v1/handlers", payload)
 	if r.Status >= 300 {
 		t.Fatalf("handler create: %d %s", r.Status, r.Raw)
 	}
-	r.OK(t, &created)
-	if created.Handler.ID == "" {
-		t.Fatalf("create returned no handler.id: %s", r.Data)
-	}
-	return created.Handler.ID
+	// Create 现返裸实体(MD1):data 顶层即 id + 内嵌 activeVersion。
+	return r.Field(t, "id")
 }
 
 // TestHandler_ResidentLifecycleAndCalls: A2 核心——首调 spawn、状态保持（常驻的灵魂）、

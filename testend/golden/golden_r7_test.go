@@ -52,33 +52,20 @@ for line in sys.stdin:
 func TestGolden_J4_WorkflowToParked(t *testing.T) {
 	wc := evalWS(t)
 
-	fnID := ""
-	{
-		var created struct {
-			Function struct {
-				ID string `json:"id"`
-			} `json:"function"`
-		}
-		wc.POST("/api/v1/functions", map[string]any{
-			"name": "publish_report", "description": "publishes the report",
-			"code": "def publish_report() -> dict:\n    return {\"published\": True}\n",
-		}).OK(t, &created)
-		fnID = created.Function.ID
-	}
-	var apf struct {
-		Approval struct {
-			ID string `json:"id"`
-		} `json:"approval"`
-	}
-	wc.POST("/api/v1/approvals", map[string]any{
+	// create 现返裸实体(MD1):data 顶层即 id。
+	fnID := wc.POST("/api/v1/functions", map[string]any{
+		"name": "publish_report", "description": "publishes the report",
+		"code": "def publish_report() -> dict:\n    return {\"published\": True}\n",
+	}).Field(t, "id")
+	apfID := wc.POST("/api/v1/approvals", map[string]any{
 		"name": "publish_gate", "description": "human gate before publishing",
 		"template": "Publish the report?",
-	}).OK(t, &apf)
+	}).Field(t, "id")
 
 	conv := newConv(t, wc, "build workflow")
 	a1 := say(t, wc, conv,
 		"Create a workflow named publish_pipeline with three nodes: a manual trigger, then the existing "+
-			"approval "+apf.Approval.ID+" (a human gate), then the existing function "+fnID+". "+
+			"approval "+apfID+" (a human gate), then the existing function "+fnID+". "+
 			"Wire trigger→approval, and approval's yes port→function. After creating it, use the "+
 			"trigger_workflow tool to start one run, then tell me the run id.", 300000)
 	t.Logf("J4 turn1: %.400s", a1)

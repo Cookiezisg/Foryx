@@ -79,30 +79,18 @@ func TestSearchLLM_VerticalToolsContentEngine(t *testing.T) {
 	apfID := nestedID(t, wc.POST("/api/v1/approvals", map[string]any{
 		"name": "vt_apf", "description": "budgetsignoff spend gate", "template": "ok?",
 	}), "approval")
-	var wfc struct {
-		Workflow struct {
-			ID string `json:"id"`
-		} `json:"workflow"`
-	}
-	wc.POST("/api/v1/workflows", map[string]any{
+	wfID := wc.POST("/api/v1/workflows", map[string]any{
 		"name": "vt_wf", "description": "nightlydigest sync pipeline",
 		"ops": []map[string]any{
 			{"op": "add_node", "node": map[string]any{"id": "t", "kind": "trigger", "ref": "trg_x"}},
 			{"op": "add_node", "node": map[string]any{"id": "a", "kind": "action", "ref": "fn_x"}},
 			{"op": "add_edge", "edge": map[string]any{"id": "e1", "from": "t", "to": "a"}},
 		},
-	}).OK(t, &wfc)
-	wfID := wfc.Workflow.ID
-	var trgc struct {
-		Trigger struct {
-			ID string `json:"id"`
-		} `json:"trigger"`
-	}
-	wc.POST("/api/v1/triggers", map[string]any{
+	}).Field(t, "id")
+	trgID := wc.POST("/api/v1/triggers", map[string]any{
 		"name": "vt_trg", "description": "webhookpulse inbound listener", "kind": "webhook",
 		"config": map[string]any{"path": "vt-in", "secret": "s1", "signatureAlgo": "hmac-sha256-hex"},
-	}).OK(t, &trgc)
-	trgID := trgc.Trigger.ID
+	}).Field(t, "id")
 	docID := wc.POST("/api/v1/documents", map[string]any{
 		"name": "vt_doc", "content": "an essay about the harborlight at dusk.",
 	}).Field(t, "id")
