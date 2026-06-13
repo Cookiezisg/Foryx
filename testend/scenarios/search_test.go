@@ -39,7 +39,9 @@ type searchPage struct {
 func searchQ(t *testing.T, wc *harness.Client, params string) searchPage {
 	t.Helper()
 	var page searchPage
-	wc.GET("/api/v1/search?"+params).OK(t, &page)
+	r := wc.GET("/api/v1/search?" + params)
+	r.OK(t, &page)
+	page.NextCursor = r.NextCursor // 分页坐标在 envelope 顶层(Paged/MD2),不在 data
 	return page
 }
 

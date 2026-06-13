@@ -111,7 +111,8 @@ func (h *MCPHandler) ListCalls(w http.ResponseWriter, r *http.Request) {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	responsehttpapi.Success(w, http.StatusOK, res)
+	// 分页坐标恒顶层(Paged);aggregates 作 list 元数据进 data 子对象(MD2)。
+	responsehttpapi.Paged(w, map[string]any{"calls": res.Calls, "aggregates": res.Aggregates}, res.NextCursor, res.HasMore)
 }
 
 func (h *MCPHandler) GetStderr(w http.ResponseWriter, r *http.Request) {

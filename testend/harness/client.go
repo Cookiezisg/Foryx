@@ -54,11 +54,13 @@ func (c *Client) BaseURL() string { return c.base }
 //
 // Resp 是一个解包后的 N1 envelope。
 type Resp struct {
-	Status int
-	Data   json.RawMessage
-	Code   string // error.code when failed. 失败时的 error.code。
-	Msg    string
-	Raw    []byte
+	Status     int
+	Data       json.RawMessage
+	Code       string // error.code when failed. 失败时的 error.code。
+	Msg        string
+	Raw        []byte
+	NextCursor string // Paged envelope 顶层游标(N4);非分页响应为空。
+	HasMore    bool   // Paged envelope 顶层 hasMore。
 }
 
 // Try performs one request without failing the test — crash scenarios need to fire
@@ -94,8 +96,10 @@ func (c *Client) Try(method, path string, body any) (*Resp, error) {
 	raw, _ := io.ReadAll(resp.Body)
 	out := &Resp{Status: resp.StatusCode, Raw: raw}
 	var env struct {
-		Data  json.RawMessage `json:"data"`
-		Error *struct {
+		Data       json.RawMessage `json:"data"`
+		NextCursor string          `json:"nextCursor"`
+		HasMore    bool            `json:"hasMore"`
+		Error      *struct {
 			Code    string `json:"code"`
 			Message string `json:"message"`
 		} `json:"error"`
@@ -106,6 +110,7 @@ func (c *Client) Try(method, path string, body any) (*Resp, error) {
 		}
 	}
 	out.Data = env.Data
+	out.NextCursor, out.HasMore = env.NextCursor, env.HasMore // Paged 顶层分页坐标(N4)
 	if env.Error != nil {
 		out.Code, out.Msg = env.Error.Code, env.Error.Message
 	}

@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strconv"
 	"strings"
 	"time"
 
@@ -93,9 +92,17 @@ func (h *SearchHandler) PatchSettings(w http.ResponseWriter, r *http.Request) {
 // Search 处理 GET /api/v1/search 全参数面。
 func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 	qp := r.URL.Query()
+	// search 专属界（默认 20 / 上限 50），走统一 ParsePageBounded 取错误语义 + 钳制（N4/MD2），
+	// 不再手搓 limit 解析。
+	pg, err := responsehttpapi.ParsePageBounded(r, 20, 50)
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
 	q := &searchdomain.Query{
 		Q:               qp.Get("q"),
-		Cursor:          qp.Get("cursor"),
+		Cursor:          pg.Cursor,
+		Limit:           pg.Limit,
 		IncludeArchived: qp.Get("includeArchived") != "false", // default true: archived+searchable is the point of archiving. 默认 true：归档+可搜正是归档的意义。
 	}
 	for _, t := range splitCSV(qp.Get("types")) {
@@ -112,17 +119,13 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 			q.UpdatedBefore = &ts
 		}
 	}
-	if v := qp.Get("limit"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil {
-			q.Limit = n
-		}
-	}
 	page, err := h.svc.Search(r.Context(), q)
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	responsehttpapi.Success(w, http.StatusOK, page)
+	// 分页坐标恒在 envelope 顶层(Paged);total 作 list 元数据进 data 子对象(MD2)。
+	responsehttpapi.Paged(w, map[string]any{"hits": page.Hits, "total": page.Total}, page.NextCursor, page.NextCursor != "")
 }
 
 // Reindex handles POST /api/v1/search:reindex — purge + rebuild the ctx

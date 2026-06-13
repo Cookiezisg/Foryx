@@ -31,7 +31,17 @@ type PageParams struct {
 // ParsePage 读 ?cursor= 与 ?limit=。limit 默认 DefaultLimit、钳制到 [1, MaxLimit]；非数字或
 // <1 → ErrInvalidRequest。cursor 在此保持不透明，拿到 keyset 形状后用 DecodeCursor 解。
 func ParsePage(r *http.Request) (PageParams, error) {
-	p := PageParams{Limit: DefaultLimit}
+	return ParsePageBounded(r, DefaultLimit, MaxLimit)
+}
+
+// ParsePageBounded is ParsePage with caller-supplied default + max — for surfaces with
+// tighter bounds than the global 50/200 (search uses 20/50). Same clamp + error semantics,
+// so no List endpoint hand-rolls limit parsing (N4).
+//
+// ParsePageBounded 是 ParsePage 的带界版,供比全局 50/200 更紧的面（search 用 20/50）。同一钳制
+// + 错误语义,使无 List 端点手搓 limit 解析（N4）。
+func ParsePageBounded(r *http.Request, defaultLimit, maxLimit int) (PageParams, error) {
+	p := PageParams{Limit: defaultLimit}
 	q := r.URL.Query()
 	p.Cursor = q.Get("cursor")
 	if v := q.Get("limit"); v != "" {
@@ -41,8 +51,8 @@ func ParsePage(r *http.Request) (PageParams, error) {
 		}
 		p.Limit = n
 	}
-	if p.Limit > MaxLimit {
-		p.Limit = MaxLimit
+	if p.Limit > maxLimit {
+		p.Limit = maxLimit
 	}
 	return p, nil
 }
