@@ -184,14 +184,37 @@ func (c *client) CallTool(ctx context.Context, name string, args json.RawMessage
 	//
 	// 若调用方 opt-in 进度（chat 工具层在 ctx 放了 sink），登记 per-call token，使本 server 的进度通知在
 	// 调用期间流到该 sink。
+	var progressSeen chan struct{}
 	if sink := ProgressFrom(ctx); sink != nil {
 		token := strconv.FormatInt(c.progSeq.Add(1), 10)
-		c.progress.Store(token, sink)
+		// Wrap the sink to also signal delivery, so we can drain in-flight progress before the
+		// token is unregistered (below). Buffered+non-blocking: never stalls the handler.
+		// 包裹 sink 使其同时发投递信号，以便在 token 注销前排空在途进度。缓冲+非阻塞：绝不卡处理器。
+		progressSeen = make(chan struct{}, 1)
+		c.progress.Store(token, func(line string) {
+			sink(line)
+			select {
+			case progressSeen <- struct{}{}:
+			default:
+			}
+		})
 		defer c.progress.Delete(token)
 		params.SetProgressToken(token)
 	}
 
 	res, err := c.session.CallTool(ctx, params)
+	// The server emits progress notifications before the result on the ordered stream, but the SDK
+	// dispatches them on a separate handler goroutine — so when CallTool returns they may be enqueued
+	// yet unrun, and the deferred Delete above would then drop them (the sink never fires, the durable
+	// call log races empty). Yield so the handler flushes them to the sink while the token is still
+	// registered. Repro of the loss: GOMAXPROCS=1.
+	//
+	// server 在有序流上把进度通知发在 result 之前，但 SDK 在独立 handler goroutine 上分发——故 CallTool
+	// 返回时它们可能已入队却未跑，上面 deferred Delete 随即丢弃它们（sink 不触发、durable 调用日志竞争为空）。
+	// 让出调度使 handler 在 token 仍登记时把它们刷进 sink。丢失复现：GOMAXPROCS=1。
+	if progressSeen != nil {
+		drainProgress(progressSeen)
+	}
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 			return "", fmt.Errorf("mcp.Client.CallTool %s/%s: %w: %v",

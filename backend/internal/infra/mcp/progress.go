@@ -3,9 +3,40 @@ package mcp
 import (
 	"context"
 	"fmt"
+	"runtime"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// drainProgress yields the scheduler so the SDK's async notification handler flushes a call's
+// already-queued progress lines to the sink before the caller unregisters the per-call token. Cheap
+// by design: a no-progress call returns after a couple of yields; a call with progress drains its
+// batch then returns once a yield produces nothing new (each signal means the sink already ran —
+// same goroutine, sequential). maxYields is a hard backstop against a stuck handler goroutine.
+//
+// drainProgress 让出调度，使 SDK 异步通知处理器在调用方注销 per-call token 前把已入队的进度行刷进 sink。
+// 设计上廉价：无进度调用几次让出即返回；有进度调用排空其批次、某次让出无新增即返回（收到信号即意味 sink
+// 已跑——同 goroutine、顺序）。maxYields 作硬兜底，防 handler goroutine 卡死。
+func drainProgress(seen <-chan struct{}) {
+	const (
+		maxYields  = 64
+		quietLimit = 2 // consecutive yields with no new progress → drained
+	)
+	quiet := 0
+	for range maxYields {
+		select {
+		case <-seen:
+			quiet = 0
+			continue
+		default:
+		}
+		if quiet >= quietLimit {
+			return
+		}
+		quiet++
+		runtime.Gosched()
+	}
+}
 
 type progressKey struct{}
 
