@@ -19,7 +19,7 @@ audience: [human, ai]
 
 ## apikey —— 加密凭据管理
 
-凭据自身生命周期：存（AES-GCM 整密文）、probe 连通性测试、按 id 发放（`KeyProvider`/`ProbeReader` 端口）。**刻意零 provider 语义**——选哪个 key、key 隐含什么模型，是 model/websearch 的事。**删除守卫**：`RefScanner` 端口（boot 注册），Delete 询问每个 scanner、任一命中即拒（`API_KEY_IN_USE` 422）；真实引用来源二——workspace 的三 scenario 默认模型 / 默认搜索 key（`workspace.ReferencesAPIKey`）+ agent active 版本的 modelOverride（`agent.ReferencesAPIKey`），均结构满足端口、build_services 注入。probe 归档供 model 聚合解析。码 `API_KEY_*` 7；ID `key_`。
+凭据自身生命周期：存（AES-GCM 整密文）、probe 连通性测试、按 id 发放（`KeyProvider`/`ProbeReader` 端口）。**刻意零 provider 语义**——选哪个 key、key 隐含什么模型，是 model/websearch 的事。**删除守卫**：`RefScanner` 端口（boot 注册），Delete 询问每个 scanner、任一命中即拒（`API_KEY_IN_USE` 422）；真实引用来源二——workspace 的三 scenario 默认模型 / 默认搜索 key（`workspace.ReferencesAPIKey`）+ agent active 版本的 modelOverride（`agent.ReferencesAPIKey`），均结构满足端口、build_services 注入。probe 归档供 model 聚合解析。码 `API_KEY_*` 7；ID `aki_`。
 
 ## model —— 模型选择与能力
 
@@ -39,7 +39,7 @@ audience: [human, ai]
 
 ## notification —— 通知中心
 
-任何模块经 `Emitter` 端口发 `<domain>.<action>`；app 落 DB 行 **并**推 notifications 流 durable 信号（SSE 推送 best-effort，DB 行是真相）。前端列表 + 未读徽标（`WhereNull(read_at).Count`）。码 `NOTIFICATION_*` 2；ID `ntf_`。
+任何模块经 `Emitter` 端口发 `<domain>.<action>`；app 落 DB 行 **并**推 notifications 流 durable 信号（SSE 推送 best-effort，DB 行是真相）。前端列表 + 未读徽标（`WhereNull(read_at).Count`）。码 `NOTIFICATION_*` 2；ID `noti_`。
 
 ## aispawn —— AI 工作对话引擎（:iterate / :triage）
 

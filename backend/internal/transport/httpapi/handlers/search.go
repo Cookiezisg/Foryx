@@ -14,10 +14,12 @@ import (
 
 // SearchHandler serves the unified search surface: omni/vertical search (one
 // endpoint — empty types = omni) and the reindex action. The window-cursor
-// pagination follows N4; reindex follows N2/N5 (202 + :action).
+// pagination follows N4; reindex follows N5 (:action) and returns 204 — it is
+// fire-and-forget with no pollable product (MD4), so no 202+id.
 //
 // SearchHandler 提供统一搜索面：综搜/垂搜（同一端点——types 空 = 综搜）与重建动作。
-// 窗口 cursor 分页遵循 N4；reindex 遵循 N2/N5（202 + :action）。
+// 窗口 cursor 分页遵循 N4；reindex 遵循 N5（:action）、返 204——fire-and-forget、
+// 无可轮询产物（MD4），故非 202+id。
 type SearchHandler struct {
 	svc *searchapp.Service
 	log *zap.Logger
@@ -129,9 +131,10 @@ func (h *SearchHandler) Search(w http.ResponseWriter, r *http.Request) {
 }
 
 // Reindex handles POST /api/v1/search:reindex — purge + rebuild the ctx
-// workspace asynchronously (202).
+// workspace asynchronously, returning 204 (fire-and-forget, nothing to poll).
 //
-// Reindex 处理 POST /api/v1/search:reindex——异步清空重建 ctx workspace（202）。
+// Reindex 处理 POST /api/v1/search:reindex——异步清空重建 ctx workspace，返 204
+// （fire-and-forget、无可轮询产物）。
 func (h *SearchHandler) Reindex(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.Reindex(r.Context()); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)

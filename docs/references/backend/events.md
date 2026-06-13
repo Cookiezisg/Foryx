@@ -84,7 +84,7 @@ audience: [human, ai]
 
 **messages 流（主战场）**：message_start/stop（durable，close 带快照）· 块级 open/delta/close（text/reasoning/tool_call/tool_result/progress 实时流，E2 delta=ephemeral）· **interaction 信号**（ephemeral——broker pending 表是真相、重连走 REST 重同步）· todo 信号 · subagent 子树经 `Open.ParentID` 嵌套（E3）。
 
-**notifications**：`conversation.{created, deleted, archived, pinned, auto_titled, model_override, compacted}`（`compacted` payload {coversUpToSeq, summaryBytes}——压缩器写）· `memory.{created, updated, deleted}` · `sandbox.env_status_changed`（payload 含 env/状态）· `sandbox.env_deleted` · 上传/删除类生命周期。
+**notifications**：`conversation.{created, deleted, archived, unarchived, pinned, unpinned, auto_titled, model_override, compacted}`（archived/unarchived·pinned/unpinned 为 toggle 动作；`compacted` payload {coversUpToSeq, summaryBytes}——压缩器写）· `memory.{created, updated, deleted}` · `sandbox.env_status_changed`（payload 含 env/状态）· `sandbox.env_deleted` · 上传/删除类生命周期。
 
 ## P6 支撑域挂载
 

@@ -32,7 +32,7 @@ audience: [human, ai]
 | `POST /functions/{id}:iterate` | 开 AI 编辑对话，返 `conversationId` |
 | `GET /functions/{id}/versions` | 版本分页 |
 | `GET /functions/{id}/versions/{version}` | 单版本（接受版本号或 fnv_ id） |
-| `GET /functions/{id}/executions` | 执行日志分页（`?status&triggeredBy&conversationId&flowrunId`） |
+| `GET /functions/{id}/executions` | 执行日志分页（`?status&triggeredBy&conversationId&flowrunId`）；返 `{data:{executions, aggregates}, nextCursor, hasMore}`——分页坐标顶层、聚合在 data 子对象(MD2，与 handler/agent/mcp 执行·调用日志同形) |
 | `GET /function-executions/{id}` | 单执行详情（含 `logs`——print/调试输出；列表端点不带） |
 
 ## handler（`/api/v1/handlers`）
@@ -53,7 +53,7 @@ audience: [human, ai]
 | `GET /handlers/{id}/config` | 读 config（sensitive 字段掩码 `********`） |
 | `PUT /handlers/{id}/config` | JSON Merge Patch 更新（null 删 key）→ 整 blob 重加密 → **重启实例重跑 `__init__`** |
 | `DELETE /handlers/{id}/config` | 清空 config + 停实例 |
-| `GET /handlers/{id}/calls` | 调用日志分页（`?method&status&triggeredBy&conversationId&flowrunId`） |
+| `GET /handlers/{id}/calls` | 调用日志分页（`?method&status&triggeredBy&conversationId&flowrunId`）；返 `{data:{calls, aggregates}, nextCursor, hasMore}`(MD2，同 function/agent/mcp 同形) |
 | `GET /handler-calls/{id}` | 单调用详情（含 `logs`——yield + 调用窗口 stderr；列表端点不带） |
 
 ## agent（`/api/v1/agents`）
@@ -70,7 +70,7 @@ audience: [human, ai]
 | `POST /agents/{id}:edit` | 全量 Config 替换 → 新版本（**非** ops、非合并） |
 | `POST /agents/{id}:iterate` | 开 AI 编辑对话 |
 | `GET /agents/{id}/versions` · `/versions/{version}` | 版本分页 · 单版本（接受版本号或 agv_ id） |
-| `GET /agents/{id}/executions` | 执行日志分页（同款过滤） |
+| `GET /agents/{id}/executions` | 执行日志分页（同款过滤）；返 `{data:{executions, aggregates}, nextCursor, hasMore}`(MD2，同 function/handler/mcp 同形) |
 | `GET /agent-executions/{id}` | 单执行详情（含完整 transcript） |
 
 ## workflow（`/api/v1/workflows`）
@@ -103,7 +103,7 @@ audience: [human, ai]
 | Method · Path | 语义 |
 |---|---|
 | `POST /triggers` · `GET /triggers` · `GET /triggers/{id}` · `PATCH /triggers/{id}` · `DELETE /triggers/{id}` | CRUD（PATCH=Edit，热更监听中的 listener） |
-| `POST /triggers/{id}:fire` | 手动催一次（扇给当前监听者），202 返 `{fired, triggerId, activationId}`——拿 id 直查 activation 闭环 |
+| `POST /triggers/{id}:fire` | 手动催一次（扇给当前监听者），202 返 `{data:{id}}`——新产物 activation 的单 id（triggerId 在 URL、fired 被 202 蕴含，MD3）；拿 id 直查 activation 闭环 |
 | `POST /triggers/{id}:iterate` | 开 AI 编辑对话 |
 | `GET /triggers/{id}/activations` · `GET /trigger-activations/{id}` | 活动审计（触没触发都有记录） |
 | `GET /triggers/{id}/firings` | firing 收件箱分页（`?status=pending\|started\|skipped\|superseded\|shed`）——「触发了为什么没跑」的处置面 |
@@ -136,7 +136,7 @@ CRUD + `POST {id}:move`（防环；nil parent=根）+ `GET /documents?parentId=`
 | `POST /{id}:cancel` | **Cancel** 在途生成（动作语法,非删子资源;MD5） |
 | `GET /{id}/interactions` · `POST /{id}/interactions/{toolCallId}` | 待决人机交互重同步 / 决议（approve/deny/approve_always/answer） |
 | `GET /{id}/system-prompt-preview` · `GET /{id}/usage` | 调试预览 / token 用量 |
-| `GET /{conversationID}/todos` | 对话工作清单 |
+| `GET /{conversationId}/todos` | 对话工作清单 |
 
 ## attachment / memory（`/api/v1/...`）
 
@@ -148,7 +148,7 @@ memory：`GET /memories` · `GET/PUT/DELETE /memories/{name}` · `POST /{name}/p
 | Method · Path | 语义 |
 |---|---|
 | `GET /search` | 综搜/垂搜同端点：`?q`(必填) `&types`(csv，空=综搜) `&tags`(csv) `&updatedAfter/Before`(RFC3339) `&includeArchived`(默认 true) `&cursor&limit`(默认 20 上限 50,走 ParsePageBounded;非数字/<1 → 400)。返 `{data:{hits, total}, nextCursor, hasMore}`——分页坐标顶层、total 在 data 子对象(MD2);hit 含 entityType/entityId/name/snippet(`<mark>`)/anchor/tags/archived/score/matchedChunks/refHint（仅积木六类） |
-| `POST /search:reindex` | 清空重建 ctx workspace 索引，202；运行中 409 `SEARCH_REINDEX_RUNNING` |
+| `POST /search:reindex` | 清空重建 ctx workspace 索引，204（fire-and-forget、无可轮询产物 MD4；运行中再调 409 `SEARCH_REINDEX_RUNNING`） |
 | `GET /search/settings` | 机器级搜索设置 + 引擎实时状态 `{embedder, ollamaBaseUrl, ollamaModel, engine:{status: ready\|downloading\|absent\|error\|off, model, lastError}}`（Ollama 字段恒回显生效值） |
 | `PATCH /search/settings` | 修补设置：`{embedder?: builtin\|ollama\|off, ollamaBaseUrl?, ollamaModel?}`（缺省字段不动；Ollama 参数空串重置默认）；非法 embedder 400 `SEARCH_EMBEDDER_INVALID`；改 model 即旧模型向量按 model 列失效、后台重嵌 |
 

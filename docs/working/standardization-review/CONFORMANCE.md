@@ -21,7 +21,7 @@ audience: [human, ai]
 |---|---|---|---|---|---|
 | ST-1 | S1 | envelope | high | 线缆 | Create `{entity,version}`/`{trigger}` wrapper → 裸实体 + 内嵌 `currentVersion`(7 端点) |
 | ST-2 | S2 | action | high | 线缆 | 执行/异步动作新 id 键统一 `{id}`(messageId/flowrunId/conversationId/triggerId→id) |
-| ST-3 | S2 | action | med | 线缆 | trigger `:fire` 去冗余 `fired` 裸键,保 `{id,triggerId,activationId}` |
+| ST-3 | S2 | action | med | 线缆 | trigger `:fire` 异步动作收单产物 id：去 `fired`(被 202 蕴含)+ `triggerId`(在 URL 路径)，留 `{id:activationId}`(MD3，执行落定见 S2 ✅) |
 | ST-4 | S3 | action | high | 线缆 | `:stage`/`:kill` 返实体后置快照,禁 `{staged:true}`/`{killed:N}`(MD4) |
 | ST-5 | S3 | action | med | 线缆 | handler `:restart`/`Call`、skill `:activate`、mcp `:call` 去 data 内层多余包裹 |
 | ST-6 | S3 | action | med | 线缆 | chat `:resolve-interaction` → 204 NoContent |
