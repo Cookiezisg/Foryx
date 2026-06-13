@@ -45,7 +45,7 @@ func (h *MCPHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/mcp-servers/{nameAction}", h.serverNameAction)
 	mux.HandleFunc("POST /api/v1/mcp-servers/{name}/tools/{toolNameAction}", h.toolNameAction)
 	mux.HandleFunc("POST /api/v1/mcp-servers:import", h.Import)
-	mux.HandleFunc("GET /api/v1/mcp-calls/{callId}", h.GetCall)
+	mux.HandleFunc("GET /api/v1/mcp-calls/{id}", h.GetCall) // Log 单读路径变量统一 {id}(MD-id4)
 	mux.HandleFunc("GET /api/v1/mcp-registry", h.ListRegistry)
 	mux.HandleFunc("POST /api/v1/mcp-registry:install", h.Install)
 }
@@ -57,7 +57,7 @@ func (h *MCPHandler) Register(mux Registrar) {
 // GetCall 返回单条调用日志——唯一携带 logs（进度通知 + 失败附 stderr 尾）的 HTTP 面；列表行
 // 不带。对标 GET /handler-calls/{callId}。
 func (h *MCPHandler) GetCall(w http.ResponseWriter, r *http.Request) {
-	c, err := h.svc.GetCall(r.Context(), r.PathValue("callId"))
+	c, err := h.svc.GetCall(r.Context(), r.PathValue("id"))
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

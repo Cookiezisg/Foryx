@@ -36,8 +36,21 @@ func NewNotificationHandler(svc *notificationapp.Service, log *zap.Logger) *Noti
 func (h *NotificationHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/notifications", h.List)
 	mux.HandleFunc("GET /api/v1/notifications/unread-count", h.UnreadCount)
-	mux.HandleFunc("PUT /api/v1/notifications/{id}/read", h.MarkRead)
-	mux.HandleFunc("POST /api/v1/notifications/read-all", h.MarkAllRead)
+	// 非 CRUD 状态变更用 :action(N5/MD5):实体级 {id}:mark-read、集合级 :mark-all-read。
+	mux.HandleFunc("POST /api/v1/notifications/{idAction}", h.postOnNotification)
+	mux.HandleFunc("POST /api/v1/notifications:mark-all-read", h.MarkAllRead)
+}
+
+// postOnNotification dispatches the single entity-level action POST /notifications/{id}:mark-read.
+//
+// postOnNotification 派发唯一的实体级动作 POST /notifications/{id}:mark-read。
+func (h *NotificationHandler) postOnNotification(w http.ResponseWriter, r *http.Request) {
+	id, action, ok := idAndAction(r, "idAction")
+	if !ok || action != "mark-read" {
+		http.NotFound(w, r)
+		return
+	}
+	h.markRead(w, r, id)
 }
 
 // List handles GET /api/v1/notifications — newest-first, keyset-paginated.
@@ -69,20 +82,20 @@ func (h *NotificationHandler) UnreadCount(w http.ResponseWriter, r *http.Request
 	responsehttpapi.Success(w, http.StatusOK, map[string]int{"unread": n})
 }
 
-// MarkRead handles PUT /api/v1/notifications/{id}/read.
+// markRead marks one notification read (POST /notifications/{id}:mark-read).
 //
-// MarkRead 处理 PUT /api/v1/notifications/{id}/read。
-func (h *NotificationHandler) MarkRead(w http.ResponseWriter, r *http.Request) {
-	if err := h.svc.MarkRead(r.Context(), r.PathValue("id")); err != nil {
+// markRead 把一条通知标已读（POST /notifications/{id}:mark-read）。
+func (h *NotificationHandler) markRead(w http.ResponseWriter, r *http.Request, id string) {
+	if err := h.svc.MarkRead(r.Context(), id); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
 	responsehttpapi.NoContent(w)
 }
 
-// MarkAllRead handles POST /api/v1/notifications/read-all.
+// MarkAllRead handles POST /api/v1/notifications:mark-all-read.
 //
-// MarkAllRead 处理 POST /api/v1/notifications/read-all。
+// MarkAllRead 处理 POST /api/v1/notifications:mark-all-read。
 func (h *NotificationHandler) MarkAllRead(w http.ResponseWriter, r *http.Request) {
 	if err := h.svc.MarkAllRead(r.Context()); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)

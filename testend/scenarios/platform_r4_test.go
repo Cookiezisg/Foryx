@@ -272,12 +272,12 @@ func TestPlatformR4_NotificationAllDomains(t *testing.T) {
 		t.Fatal("unread count must be positive after the burst")
 	}
 	before := unread.Unread
-	wc.PUT("/api/v1/notifications/"+page[0].ID+"/read", nil).OK(t, nil)
+	wc.POST("/api/v1/notifications/"+page[0].ID+":mark-read", nil).OK(t, nil) // :action(MD5)
 	wc.GET("/api/v1/notifications/unread-count").OK(t, &unread)
 	if unread.Unread != before-1 {
 		t.Fatalf("single mark-read must decrement (want %d, got %d)", before-1, unread.Unread)
 	}
-	wc.POST("/api/v1/notifications/read-all", nil).OK(t, nil)
+	wc.POST("/api/v1/notifications:mark-all-read", nil).OK(t, nil) // 集合级 :action(MD5)
 	wc.GET("/api/v1/notifications/unread-count").OK(t, &unread)
 	if unread.Unread != 0 {
 		t.Fatalf("read-all must zero the unread count, got %d", unread.Unread)

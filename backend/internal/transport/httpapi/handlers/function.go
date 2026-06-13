@@ -50,7 +50,7 @@ func (h *FunctionHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/functions/{id}/versions", h.ListVersions)
 	mux.HandleFunc("GET /api/v1/functions/{id}/versions/{version}", h.GetVersion)
 	mux.HandleFunc("GET /api/v1/functions/{id}/executions", h.ListExecutions)
-	mux.HandleFunc("GET /api/v1/function-executions/{execId}", h.GetExecution)
+	mux.HandleFunc("GET /api/v1/function-executions/{id}", h.GetExecution) // Log 单读路径变量统一 {id}(MD-id4)
 }
 
 type createFunctionRequest struct {
@@ -298,7 +298,7 @@ func (h *FunctionHandler) ListExecutions(w http.ResponseWriter, r *http.Request)
 }
 
 func (h *FunctionHandler) GetExecution(w http.ResponseWriter, r *http.Request) {
-	e, err := h.svc.GetExecution(r.Context(), r.PathValue("execId"))
+	e, err := h.svc.GetExecution(r.Context(), r.PathValue("id"))
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

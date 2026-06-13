@@ -36,7 +36,7 @@ func NewTodoHandler(svc *todoapp.Service, log *zap.Logger) *TodoHandler {
 //
 // Register 挂只读端点。
 func (h *TodoHandler) Register(mux Registrar) {
-	mux.HandleFunc("GET /api/v1/conversations/{conversationID}/todos", h.List)
+	mux.HandleFunc("GET /api/v1/conversations/{conversationId}/todos", h.List) // 路径占位 camelCase(N3)
 }
 
 // List returns the checklist for a conversation, or for a subagent run within it when
@@ -44,7 +44,7 @@ func (h *TodoHandler) Register(mux Registrar) {
 //
 // List 返某对话的清单，给了 ?subagentId= 则返其中某 subagent run 的。作用域尚无 todo 时返空数组（非 null）。
 func (h *TodoHandler) List(w http.ResponseWriter, r *http.Request) {
-	conv := r.PathValue("conversationID")
+	conv := r.PathValue("conversationId")
 	var sub *string
 	if sid := r.URL.Query().Get("subagentId"); sid != "" {
 		sub = &sid

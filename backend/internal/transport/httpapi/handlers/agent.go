@@ -50,7 +50,7 @@ func (h *AgentHandler) Register(mux Registrar) {
 	mux.HandleFunc("GET /api/v1/agents/{id}/versions", h.ListVersions)
 	mux.HandleFunc("GET /api/v1/agents/{id}/versions/{version}", h.GetVersion)
 	mux.HandleFunc("GET /api/v1/agents/{id}/executions", h.ListExecutions)
-	mux.HandleFunc("GET /api/v1/agent-executions/{execId}", h.GetExecution)
+	mux.HandleFunc("GET /api/v1/agent-executions/{id}", h.GetExecution) // Log 单读路径变量统一 {id}(MD-id4)
 }
 
 // agentConfigRequest is the mounted config carried by create/edit HTTP bodies.
@@ -294,7 +294,7 @@ func (h *AgentHandler) ListExecutions(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *AgentHandler) GetExecution(w http.ResponseWriter, r *http.Request) {
-	e, err := h.svc.GetExecutionDetail(r.Context(), r.PathValue("execId"))
+	e, err := h.svc.GetExecutionDetail(r.Context(), r.PathValue("id"))
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

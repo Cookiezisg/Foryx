@@ -44,7 +44,7 @@ func (h *TriggerHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/triggers/{idAction}", h.postOnTrigger)
 	mux.HandleFunc("GET /api/v1/triggers/{id}/activations", h.ListActivations)
 	mux.HandleFunc("GET /api/v1/triggers/{id}/firings", h.ListFirings)
-	mux.HandleFunc("GET /api/v1/trigger-activations/{actId}", h.GetActivation)
+	mux.HandleFunc("GET /api/v1/trigger-activations/{id}", h.GetActivation) // Log 单读路径变量统一 {id}(MD-id4)
 }
 
 func (h *TriggerHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -189,7 +189,7 @@ func (h *TriggerHandler) ListFirings(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *TriggerHandler) GetActivation(w http.ResponseWriter, r *http.Request) {
-	act, err := h.svc.GetActivation(r.Context(), r.PathValue("actId"))
+	act, err := h.svc.GetActivation(r.Context(), r.PathValue("id"))
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

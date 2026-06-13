@@ -47,7 +47,7 @@ func (h *HandlerHandler) Register(mux Registrar) {
 	mux.HandleFunc("PUT /api/v1/handlers/{id}/config", h.UpdateConfig)
 	mux.HandleFunc("DELETE /api/v1/handlers/{id}/config", h.ClearConfig)
 	mux.HandleFunc("GET /api/v1/handlers/{id}/calls", h.ListCalls)
-	mux.HandleFunc("GET /api/v1/handler-calls/{callId}", h.GetCall)
+	mux.HandleFunc("GET /api/v1/handler-calls/{id}", h.GetCall) // Log 单读路径变量统一 {id}(MD-id4)
 }
 
 type createHandlerRequest struct {
@@ -338,7 +338,7 @@ func (h *HandlerHandler) ListCalls(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *HandlerHandler) GetCall(w http.ResponseWriter, r *http.Request) {
-	c, err := h.svc.GetCall(r.Context(), r.PathValue("callId"))
+	c, err := h.svc.GetCall(r.Context(), r.PathValue("id"))
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

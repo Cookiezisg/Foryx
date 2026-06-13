@@ -351,7 +351,7 @@ func TestPlatform_NotificationFlow(t *testing.T) {
 	}
 
 	// 标该条已读 → 未读减少。
-	wc.PUT("/api/v1/notifications/"+firstID+"/read", nil).OK(t, nil)
+	wc.POST("/api/v1/notifications/"+firstID+":mark-read", nil).OK(t, nil) // :action(MD5)
 	var afterOne struct {
 		Unread int `json:"unread"`
 	}
@@ -361,7 +361,7 @@ func TestPlatform_NotificationFlow(t *testing.T) {
 	}
 
 	// 全标已读 → 0。
-	wc.POST("/api/v1/notifications/read-all", nil).OK(t, nil)
+	wc.POST("/api/v1/notifications:mark-all-read", nil).OK(t, nil) // 集合级 :action(MD5)
 	var afterAll struct {
 		Unread int `json:"unread"`
 	}
