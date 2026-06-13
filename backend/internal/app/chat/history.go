@@ -51,6 +51,14 @@ func (h *chatHost) LoadHistory(ctx context.Context) ([]llminfra.LLMMessage, erro
 		}
 		switch m.Role {
 		case messagesdomain.RoleUser:
+			// The watermark governs user turns too: a fully-folded user turn (its text already
+			// lives in the summary) must not ride along verbatim — user pastes are the bulk of
+			// context growth, and summary + verbatim double-presence would defeat compaction.
+			// 水位线同样统辖 user 回合：已整体并入摘要的 user 回合不得原文随行——用户粘贴本就是
+			// 上下文膨胀的大头，摘要+原文双份在场会让压缩形同虚设。
+			if len(m.Blocks) > 0 && len(h.unfolded(m.Blocks)) == 0 {
+				continue
+			}
 			out = append(out, h.userMessage(ctx, m))
 		case messagesdomain.RoleAssistant:
 			if m.ID == h.assistantMsgID {

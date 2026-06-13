@@ -201,4 +201,14 @@ func TestBuild_SearchSettingsSurface(t *testing.T) {
 	if code, body := do(http.MethodPatch, "/api/v1/search/settings", `{"embedder":"cloud"}`); code != 400 || !strings.Contains(body, "SEARCH_EMBEDDER_INVALID") {
 		t.Fatalf("invalid embedder: %d %s", code, body)
 	}
+	// Ollama connection params patch + echo; "" resets to the domain default.
+	// Ollama 连接参数修补 + 回显；"" 重置回域默认。
+	if code, body := do(http.MethodPatch, "/api/v1/search/settings", `{"ollamaBaseUrl":"http://10.0.0.9:11434","ollamaModel":"nomic-embed-text"}`); code != 200 ||
+		!strings.Contains(body, `"ollamaBaseUrl":"http://10.0.0.9:11434"`) || !strings.Contains(body, `"ollamaModel":"nomic-embed-text"`) {
+		t.Fatalf("ollama params patch: %d %s", code, body)
+	}
+	if code, body := do(http.MethodPatch, "/api/v1/search/settings", `{"ollamaModel":""}`); code != 200 ||
+		!strings.Contains(body, `"ollamaModel":"embeddinggemma"`) || !strings.Contains(body, `"ollamaBaseUrl":"http://10.0.0.9:11434"`) {
+		t.Fatalf("ollama model reset: %d %s", code, body)
+	}
 }

@@ -23,6 +23,7 @@ import (
 	attachmentdomain "github.com/sunweilin/forgify/backend/internal/domain/attachment"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 )
 
 // BlobStore is the content-addressed byte store (port; infra/fs/blob implements it). Put is a
@@ -71,7 +72,7 @@ func (s *Service) Upload(ctx context.Context, filename, mime string, data []byte
 	if len(data) == 0 {
 		return nil, attachmentdomain.ErrEmpty
 	}
-	if int64(len(data)) > attachmentdomain.MaxBytes {
+	if int64(len(data)) > int64(limitspkg.Current().Guards.AttachmentMaxMB)<<20 {
 		return nil, attachmentdomain.ErrTooLarge
 	}
 	sum := sha256.Sum256(data)

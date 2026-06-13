@@ -17,7 +17,7 @@ audience: [human, ai]
 
 ## 2. 心智模型：每对话一条串行队列
 
-`Send` 是**两段式**（头部先验对话存在——404 早退不落孤儿行；归档对话**自动解档**后照常接收，软失败不挡消息）：① 同步落 user 回合（text block + 附件 id/[@提及快照](#5-freeze-on-send)进 Attrs）+ 开 assistant 回合（streaming、无 block——先 mint id 作流锚点）+ 发 message_start；② 任务入该对话的 `convQueue`。**每对话一个抽取 goroutine 串行生成**（同时一个 assistant 回合 → block seq 分配天然无竞争）；正在流式时新 Send 直接 409 `STREAM_IN_PROGRESS`（不无界排队）。队列 **5 分钟无任务自毁**（休眠对话零成本），新 Send 按需重建；拆卸与投递在 q.mu 下原子互斥（task 不可能滞留死 channel）。**Shutdown 即时**：cancel 全部在跑回合 + stop 信号短路每个队列（不等 idle timer）。
+`Send` 是**两段式**（头部先验对话存在——404 早退不落孤儿行；归档对话**自动解档**后照常接收，软失败不挡消息）：① 同步落 user 回合（text block + 附件 id/[@提及快照](#5-freeze-on-send)进 Attrs）+ 开 assistant 回合（streaming、无 block——先 mint id 作流锚点）+ 发 message_start；② 任务入该对话的 `convQueue`。**每对话一个抽取 goroutine 串行生成**（同时一个 assistant 回合 → block seq 分配天然无竞争）；生成中（`q.running`，至 finalize 放行）再 Send 直接 409 `STREAM_IN_PROGRESS`（不排队）；回合收尾活（同步压缩检查，可达秒级真 LLM 调用）期间的 Send 落进**单槽缓冲**、紧随其后被服务，槽满仍 409。队列 **5 分钟无任务自毁**（休眠对话零成本），新 Send 按需重建；拆卸与投递在 q.mu 下原子互斥（task 不可能滞留死 channel）。**Shutdown 即时**：cancel 全部在跑回合 + stop 信号短路每个队列（不等 idle timer）。
 
 **processTask 的 ctx 装配**（Send ctx 早已消失，全部重建）：`Detached(ws)` + locale + conversationID + messageID + AgentState + messages 流桥 + entities 流桥（forge 镜像）+ humanloop broker + cancel（Cancel 端点可触发）。
 
@@ -28,7 +28,7 @@ audience: [human, ai]
 - **Tools 每步重算**：resident + `search_tools` + 本对话已 discovered 的 lazy 工具（记在 AgentState）；**AutoActivator**——LLM 直接点名 lazy 工具时自动标记 discovered（免先跑 search_tools）。
 - **ReminderProvider**：每步前注入 live todo 清单为临时 `<system-reminder>`（不污染持久历史）。
 - **WriteFinalize 在 Detached ctx**：用户中途关页也绝不留永久 streaming 孤儿；**硬崩溃**（kill -9）的孤儿由 boot 对账兜底（`SweepOrphans`——每 workspace 把 pending/streaming 行扫成 cancelled，messages 版 scheduler.Recover）。
-- 回合后（仍在队列槽内防竞态）：首回合自动起标题（utility 模型、best-effort）+ 同步触发上下文压缩检查（contextmgr）。
+- 回合后（仍在队列槽内防竞态）：首回合自动起标题（utility 模型、best-effort）+ 同步触发上下文压缩检查（contextmgr）。**utility 未配时的全降级面**：起标题静默缺席、压缩跳过、WebFetch 摘要回退原文、search_blocks 精选落纯索引——对话主链路（dialogue 模型）不受影响，但这些静默缺席的归因口前端应在设置页提示「未配 utility 模型」。
 - maxSteps=25（高于 agent 的 10——交互对话合理串更多步）；触顶诚实报 `max_steps` + "继续"提示。
 
 ## 4. 人在环（R0064）

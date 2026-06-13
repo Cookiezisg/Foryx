@@ -174,6 +174,9 @@ func (s *Store) ListRuns(ctx context.Context, filter flowrundomain.ListFilter) (
 	if filter.WorkflowID != "" {
 		q = q.WhereEq("workflow_id", filter.WorkflowID)
 	}
+	if filter.Status != "" {
+		q = q.WhereEq("status", filter.Status)
+	}
 	rows, next, err := q.Page(ctx, filter.Cursor, filter.Limit)
 	if err != nil {
 		return nil, "", fmt.Errorf("flowrunstore.ListRuns: %w", err)

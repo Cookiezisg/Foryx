@@ -12,17 +12,30 @@ import "time"
 // 一次 fire 按监听的 workflow 扇出成多条 Firing。scheduler（波次 4）排空 pending、单事务 claim
 // 每条（pending→claimed→started），无 claimed-但-无-flowrun 残留态。终态 status 即 outcome。
 type Firing struct {
-	ID           string         `db:"id,pk"`
-	WorkspaceID  string         `db:"workspace_id,ws"`
-	TriggerID    string         `db:"trigger_id"`
-	WorkflowID   string         `db:"workflow_id"`
-	ActivationID string         `db:"activation_id"`
-	Payload      map[string]any `db:"payload,json"`
-	DedupKey     string         `db:"dedup_key"`
-	Status       string         `db:"status"`
-	FlowrunID    string         `db:"flowrun_id"`
-	CreatedAt    time.Time      `db:"created_at,created"` // enqueue time — drained oldest-first
-	UpdatedAt    time.Time      `db:"updated_at,updated"`
+	ID           string         `db:"id,pk"               json:"id"`
+	WorkspaceID  string         `db:"workspace_id,ws"     json:"-"`
+	TriggerID    string         `db:"trigger_id"          json:"triggerId"`
+	WorkflowID   string         `db:"workflow_id"         json:"workflowId"`
+	ActivationID string         `db:"activation_id"       json:"activationId"`
+	Payload      map[string]any `db:"payload,json"        json:"payload,omitempty"`
+	DedupKey     string         `db:"dedup_key"           json:"dedupKey"`
+	Status       string         `db:"status"              json:"status"`
+	FlowrunID    string         `db:"flowrun_id"          json:"flowrunId,omitempty"`
+	CreatedAt    time.Time      `db:"created_at,created"  json:"createdAt"` // enqueue time — drained oldest-first
+	UpdatedAt    time.Time      `db:"updated_at,updated"  json:"updatedAt"`
+}
+
+// FiringFilter queries one trigger's firing inbox (newest first), optionally one status —
+// the "why didn't it run" surface: skipped/superseded/shed dispositions are invisible on
+// the activation log (it only counts the fan-out).
+//
+// FiringFilter 查某 trigger 的 firing 收件箱（最新优先），可限定单一 status——「为什么没跑」
+// 的可见面：skipped/superseded/shed 处置在 activation 日志上不可见（它只记扇出数）。
+type FiringFilter struct {
+	TriggerID string
+	Status    string
+	Cursor    string
+	Limit     int
 }
 
 // Firing lifecycle+disposition — a single status enum, no separate outcome column.

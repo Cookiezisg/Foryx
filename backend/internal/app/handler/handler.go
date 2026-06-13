@@ -20,6 +20,7 @@ import (
 
 	"go.uber.org/zap"
 
+	entitystreamapp "github.com/sunweilin/forgify/backend/internal/app/entitystream"
 	envfixapp "github.com/sunweilin/forgify/backend/internal/app/envfix"
 	cryptodomain "github.com/sunweilin/forgify/backend/internal/domain/crypto"
 	handlerdomain "github.com/sunweilin/forgify/backend/internal/domain/handler"
@@ -170,6 +171,12 @@ func envOwner(handlerID, envID string) sandboxdomain.Owner {
 // ensureEnv 经 envfix 循环物化 v 的 env，写回终态 + deps。返回 env 是否就绪。
 func (s *Service) ensureEnv(ctx context.Context, v *handlerdomain.Version, sink envfixapp.Sink) (ready bool, errMsg string) {
 	_ = s.repo.UpdateVersionEnv(ctx, v.ID, handlerdomain.EnvStatusSyncing, "", v.Dependencies, nil)
+
+	// Tee attempts to the panel's forge terminal regardless of caller (parity with function).
+	// 把尝试行 tee 到面板锻造终端、不分调用方（与 function 对齐）。
+	term := entitystreamapp.New(ctx, s.entities, streamdomain.Scope{Kind: streamdomain.KindHandler, ID: v.HandlerID}, entitystreamapp.NodeForge, nil)
+	defer term.Close("completed", nil)
+	sink = envfixapp.MultiSink(sink, envfixapp.NewWriterSink(term))
 
 	res := s.provisioner.Provision(ctx, envfixapp.Request{
 		Owner:   envOwner(v.HandlerID, v.EnvID),

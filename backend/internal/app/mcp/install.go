@@ -69,7 +69,11 @@ func (s *Service) InstallFromRegistry(ctx context.Context, fullName string, user
 		}
 	}
 
-	return s.persistAndConnect(ctx, srv)
+	st, err := s.persistAndConnect(ctx, srv)
+	if err == nil {
+		s.emitNotif(ctx, "installed", srv.Name)
+	}
+	return st, err
 }
 
 // AddServer upserts a manually-configured server (PUT) and connects; same name replaces.
@@ -95,9 +99,11 @@ func (s *Service) AddServer(ctx context.Context, srv *mcpdomain.Server) (*mcpdom
 
 	// Replace an existing same-name server: keep its id, drop its old connection.
 	// 替换同名 server：保留 id、断旧连接。
+	replaced := false
 	if existing, _ := s.repo.GetByName(ctx, srv.Name); existing != nil {
 		srv.ID = existing.ID
 		s.closeOne(srv.ID)
+		replaced = true
 	} else if srv.ID == "" {
 		srv.ID = idgenpkg.New("mcp")
 	}
@@ -107,7 +113,15 @@ func (s *Service) AddServer(ctx context.Context, srv *mcpdomain.Server) (*mcpdom
 			return nil, fmt.Errorf("mcpapp.AddServer %s: %w: %w", srv.Name, mcpdomain.ErrInstallFailed, err)
 		}
 	}
-	return s.persistAndConnect(ctx, srv)
+	st, err := s.persistAndConnect(ctx, srv)
+	if err == nil {
+		if replaced {
+			s.emitNotif(ctx, "updated", srv.Name)
+		} else {
+			s.emitNotif(ctx, "installed", srv.Name)
+		}
+	}
+	return st, err
 }
 
 // Import folds a Claude Desktop mcp.json fragment into the store; overwrite=false skips
@@ -151,8 +165,9 @@ func (s *Service) RemoveServer(ctx context.Context, name string) error {
 	s.mu.Lock()
 	delete(s.states, srv.ID)
 	s.mu.Unlock()
-	s.notifySearch(ctx, srv.ID)
+	s.notifySearch(ctx, srv.Name)
 	s.purgeRelations(ctx, srv.ID)
+	s.emitNotif(ctx, "removed", srv.Name)
 	return nil
 }
 
@@ -163,7 +178,7 @@ func (s *Service) persistAndConnect(ctx context.Context, srv *mcpdomain.Server) 
 	if err := s.repo.Save(ctx, srv); err != nil {
 		return nil, fmt.Errorf("mcpapp.persistAndConnect: save: %w", err)
 	}
-	s.notifySearch(ctx, srv.ID)
+	s.notifySearch(ctx, srv.Name)
 	s.initStatus(srv)
 	cctx, cancel := context.WithTimeout(ctx, addServerTimeout)
 	defer cancel()
@@ -204,13 +219,6 @@ func (s *Service) ensureEnv(ctx context.Context, srv *mcpdomain.Server) error {
 // ListRegistry 返回所有市场条目（全局公共；HTTP + list_mcp_marketplace）。
 func (s *Service) ListRegistry(ctx context.Context) ([]mcpdomain.RegistryEntry, error) {
 	return s.registry.List(ctx)
-}
-
-// GetRegistryEntry returns one marketplace entry by full registry name.
-//
-// GetRegistryEntry 按完整 registry 名返回一条市场条目。
-func (s *Service) GetRegistryEntry(ctx context.Context, name string) (*mcpdomain.RegistryEntry, error) {
-	return s.registry.Get(ctx, name)
 }
 
 // --- helpers ---------------------------------------------------------------

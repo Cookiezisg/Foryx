@@ -106,6 +106,38 @@ func (s *Service) ListAll(ctx context.Context) ([]*agentdomain.Agent, error) {
 	return s.repo.ListAll(ctx)
 }
 
+// ReferencesAPIKey implements apikeyapp.RefScanner: an agent references an api-key when its
+// active version pins a modelOverride on that key. Deleting the key would break the agent's
+// next invoke with an opaque resolve error, so apikey.Delete consults this scanner and
+// refuses with API_KEY_IN_USE while any agent overrides the key. An unreadable active
+// version is treated as a non-reference (the delete-guard never blocks on a lookup miss).
+//
+// ReferencesAPIKey 实现 apikeyapp.RefScanner：当某 agent 的 active 版本以 modelOverride 钉在该
+// api-key 上即算引用。删它会让 agent 下次 invoke 以晦涩的解析错误崩，故 apikey.Delete 询问本
+// scanner、有 agent 引用时拒删 API_KEY_IN_USE。active 版本读不到按未引用处理（守卫不因查询失败挡删）。
+func (s *Service) ReferencesAPIKey(ctx context.Context, apiKeyID string) (bool, error) {
+	if apiKeyID == "" {
+		return false, nil
+	}
+	agents, err := s.repo.ListAll(ctx)
+	if err != nil {
+		return false, fmt.Errorf("agentapp.ReferencesAPIKey: list agents: %w", err)
+	}
+	for _, a := range agents {
+		if a.ActiveVersionID == "" {
+			continue
+		}
+		v, err := s.GetVersion(ctx, a.ActiveVersionID)
+		if err != nil {
+			continue
+		}
+		if v.ModelOverride != nil && v.ModelOverride.APIKeyID == apiKeyID {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // Search filters live agents by case-insensitive substring over name / description / tags
 // (no LLM rerank — the calling LLM judges relevance from the slim results).
 //

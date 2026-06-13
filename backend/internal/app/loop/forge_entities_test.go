@@ -44,8 +44,17 @@ func TestStreamLLM_ForgeDoubleWritesToEntities(t *testing.T) {
 	if !ok || open.Node.Type != entitystreamapp.NodeForge {
 		t.Fatalf("frame[0] not a forge Open: %+v", ent.events[0])
 	}
-	if ent.events[0].Scope.Kind != streamdomain.KindFunction || ent.events[0].Scope.ID != "tc1" {
-		t.Fatalf("forge not scoped to the function forge session function:tc1: %+v", ent.events[0].Scope)
+	// The forge session is keyed by the SERVER-minted tool_call block id (blk_), never the
+	// provider's wire id — providers recycle wire ids, which cannot key anything durable.
+	// forge 会话以服务端铸造的 tool_call 块 id（blk_）为键、绝非 provider 线缆 id——provider 会
+	// 复用线缆 id，不能作任何持久键。
+	if ent.events[0].Scope.Kind != streamdomain.KindFunction || !strings.HasPrefix(ent.events[0].Scope.ID, "blk_") {
+		t.Fatalf("forge not scoped to a blk_-keyed function forge session: %+v", ent.events[0].Scope)
+	}
+	for i := 1; i < 4; i++ {
+		if ent.events[i].Scope.ID != ent.events[0].Scope.ID {
+			t.Fatalf("frame[%d] scope drifted from the forge session: %+v", i, ent.events[i].Scope)
+		}
 	}
 	if !strings.Contains(string(open.Node.Content), `"create"`) {
 		t.Fatalf("open content missing op=create: %s", open.Node.Content)

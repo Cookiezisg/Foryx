@@ -14,17 +14,17 @@ import "time"
 // 原因（条件 false 还是调用出错）。Firing 只是触发路径；Activation 是全程。没触发的 Activation
 // 产 0 条 Firing，触发的产 FiringCount 条（扇出宽度）。
 type Activation struct {
-	ID          string         `db:"id,pk"`
-	WorkspaceID string         `db:"workspace_id,ws"`
-	TriggerID   string         `db:"trigger_id"`
-	Kind        string         `db:"kind"`
-	Fired       bool           `db:"fired"`
-	ReturnValue map[string]any `db:"return_value,json"`  // sensor: what the probe returned (kept even when not fired)
-	Payload     map[string]any `db:"payload,json"`       // the payload fired out (empty when not fired)
-	Error       string         `db:"error"`              // invoke/probe error (empty on success)
-	Detail      string         `db:"detail"`             // human-readable note, e.g. "condition evaluated false"
-	FiringCount int            `db:"firing_count"`       // how many workflows it fanned out to
-	CreatedAt   time.Time      `db:"created_at,created"` // when the action occurred
+	ID          string         `db:"id,pk"               json:"id"`
+	WorkspaceID string         `db:"workspace_id,ws"     json:"-"`
+	TriggerID   string         `db:"trigger_id"          json:"triggerId"`
+	Kind        string         `db:"kind"                json:"kind"`
+	Fired       bool           `db:"fired"               json:"fired"`
+	ReturnValue map[string]any `db:"return_value,json"   json:"returnValue,omitempty"` // sensor: what the probe returned (kept even when not fired)
+	Payload     map[string]any `db:"payload,json"        json:"payload,omitempty"`     // the payload fired out (empty when not fired)
+	Error       string         `db:"error"               json:"error,omitempty"`       // invoke/probe error (empty on success)
+	Detail      string         `db:"detail"              json:"detail,omitempty"`      // human-readable note, e.g. "condition evaluated false"
+	FiringCount int            `db:"firing_count"        json:"firingCount"`           // how many workflows it fanned out to
+	CreatedAt   time.Time      `db:"created_at,created"  json:"createdAt"`             // when the action occurred
 }
 
 // ActivationFilter queries the activation log for one trigger (newest first), optionally

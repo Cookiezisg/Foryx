@@ -32,7 +32,7 @@ audience: [human, ai]
 
 ## 4. 生命周期 / 行为
 
-- **编辑 = 图 ops**（`set_meta/add_node/update_node/delete_node/add_edge/update_edge/delete_edge`，JSON 判别式；update 走 merge patch、id 不可变；delete_node 级联删边）。与 function 的差异：**不修 JSON**（ops 来自结构化编辑器/工具，畸形是该上呈的真错误）。`set_meta` 折成头部 patch（`ExtractMeta`），不动图。
+- **编辑 = 图 ops**（`set_meta/add_node/update_node/delete_node/add_edge/update_edge/delete_edge`，JSON 判别式；update 走 merge patch、id 不可变；delete_node 级联删边）。**活监听重绑**：active workflow 的 Edit/Revert 若改了入口 trigger ref，按旧/新图 diff 重指绑定（detach 删除者 + attach 新增者，`rebindIfListening`）——否则旧 trigger 永远触发本 workflow、新 trigger 无人听；staged 的一次性武装在 binder 内部、编辑保留旧武装。与 function 的差异：**不修 JSON**（ops 来自结构化编辑器/工具，畸形是该上呈的真错误）。`set_meta` 折成头部 patch（`ExtractMeta`），不动图。
 - **执行生命周期五动作**（`execution.go`，协调 trigger Binder + scheduler Runner 两端口）：`:trigger`（立即跑一次，不碰监听）· `:stage`（待命恰一次真实触发后自动撤防；已 active 报 `WORKFLOW_ALREADY_ACTIVE`）· `:activate`（逐入口 trigger Attach + 翻 active；无 trigger 节点报 `WORKFLOW_NO_TRIGGER_ENTRY`——纯手动图只能 :trigger）· `:deactivate`（Detach + 翻 inactive/draining，在途 run 不杀）· `:kill`（Detach + 取消全部在途 run + inactive）。
 - **pin**（`BuildPinClosure`）：跑前把图引用的每个实体解析成 active 版本快照；agent 额外递归一层进其挂载（深度封顶 2——agent 不能挂 agent）。解析不到的 ref 不算 pin 失败（那是 CapabilityCheck 的事）。
 - boot 时 `ReattachActive` 重挂所有 active workflow 的监听（监听注册表在内存）——**在 per-workspace 播种 ctx 下跑**（见引擎文档 §5）。

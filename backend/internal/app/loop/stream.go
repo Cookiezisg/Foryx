@@ -148,22 +148,31 @@ func streamLLM(
 		case llminfra.EventToolStart:
 			closeText(messagesdomain.StatusCompleted)
 			closeReason(messagesdomain.StatusCompleted)
-			a := &toolAccum{id: event.ToolID, name: event.ToolName}
+			// The tool-call/block id is SERVER-minted, never the provider's call id: providers
+			// recycle ids across steps and turns ("call_0"/"call_1" every response — index-style
+			// providers do this), and message_blocks.id is a table-wide PK — reusing the wire id
+			// loses ENTIRE turns to UNIQUE conflicts at finalize. The provider id is only an
+			// in-response correlation handle (accums key by ToolIndex already); history round-trips
+			// pair assistant tool_calls with tool results by THIS id, which providers accept.
+			//
+			// tool_call/块 id 一律服务端铸造、绝不用 provider 的 call id：provider 会跨步跨回合复用 id
+			// （index 风格的家常发 "call_0"/"call_1"），而 message_blocks.id 是全表 PK——沿用线缆 id 会在
+			// finalize 撞 UNIQUE、整回合丢失。provider id 只是响应内关联句柄（accums 本就按 ToolIndex
+			// 键控）；历史回喂用本 id 配对 assistant tool_calls 与 tool 结果，provider 照单全收。
+			a := &toolAccum{id: idgenpkg.New("blk"), name: event.ToolName}
 			accums[event.ToolIndex] = a
-			if event.ToolID != "" {
-				em.open(ctx, event.ToolID, msgID, messagesdomain.BlockTypeToolCall,
-					streamdomain.JSONContent(toolCallContent{Name: event.ToolName}))
-				// SSE-C: a forge tool_call's args ARE an entity's content being written — mirror the
-				// delta onto the entities stream (scope = a forge session keyed by the tool_call id;
-				// the front end correlates to the entity via the streamed args + the tool_result).
-				//
-				// SSE-C：forge tool_call 的 args 本身就是某实体正被写出的内容——把 delta 镜像到 entities 流
-				// （scope = 以 tool_call id 为键的 forge 会话；前端经流式 args + tool_result 关联到实体）。
-				if spec, ok := forgeOf(event.ToolName); ok {
-					a.forge = entitystreamapp.New(ctx, entBridge,
-						streamdomain.Scope{Kind: spec.Kind, ID: event.ToolID},
-						entitystreamapp.NodeForge, streamdomain.JSONContent(forgeOpenContent{Op: spec.Op}))
-				}
+			em.open(ctx, a.id, msgID, messagesdomain.BlockTypeToolCall,
+				streamdomain.JSONContent(toolCallContent{Name: event.ToolName}))
+			// SSE-C: a forge tool_call's args ARE an entity's content being written — mirror the
+			// delta onto the entities stream (scope = a forge session keyed by the tool_call id;
+			// the front end correlates to the entity via the streamed args + the tool_result).
+			//
+			// SSE-C：forge tool_call 的 args 本身就是某实体正被写出的内容——把 delta 镜像到 entities 流
+			// （scope = 以 tool_call id 为键的 forge 会话；前端经流式 args + tool_result 关联到实体）。
+			if spec, ok := forgeOf(event.ToolName); ok {
+				a.forge = entitystreamapp.New(ctx, entBridge,
+					streamdomain.Scope{Kind: spec.Kind, ID: a.id},
+					entitystreamapp.NodeForge, streamdomain.JSONContent(forgeOpenContent{Op: spec.Op}))
 			}
 
 		case llminfra.EventToolDelta:

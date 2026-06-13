@@ -40,6 +40,7 @@ type MetaPatch struct {
 	Name        *string
 	Description *string
 	Tags        *[]string
+	Concurrency *string // overlap policy; validated by the consumer. overlap 政策；消费方校验。
 }
 
 // ParseOps decodes the wire format (JSON array with `op` discriminator) into []Op. Unlike
@@ -103,9 +104,13 @@ func ExtractMeta(ops []Op) (MetaPatch, error) {
 			Name        *string   `json:"name,omitempty"`
 			Description *string   `json:"description,omitempty"`
 			Tags        *[]string `json:"tags,omitempty"`
+			Concurrency *string   `json:"concurrency,omitempty"`
 		}
 		if err := json.Unmarshal(op.Raw, &p); err != nil {
 			return MetaPatch{}, ErrInvalidOps.WithDetails(map[string]any{"reason": fmt.Sprintf("ops[%d] (set_meta): %v", i, err)})
+		}
+		if p.Concurrency != nil {
+			patch.Concurrency = p.Concurrency
 		}
 		if p.Name != nil {
 			patch.Name = p.Name

@@ -14,6 +14,7 @@ import (
 	messagesdomain "github.com/sunweilin/forgify/backend/internal/domain/messages"
 	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
 
@@ -183,28 +184,32 @@ func skillPreApproves(ctx context.Context, toolName string) bool {
 	return ok && st.IsToolPreApprovedBySkill(toolName)
 }
 
-// maxToolResultBytes hard-caps any single tool_result. The result is persisted whole, rides a
+// maxToolResultBytes() hard-caps any single tool_result. The result is persisted whole, rides a
 // durable SSE open frame whole, and feeds the SAME turn's next LLM step whole (warm/cold
 // projection only trims LATER turns) — so one unbounded result (a head_limit-less Grep over a
 // big tree, a chatty MCP tool) would blow the provider request, the DB row, and the frontend
 // frame all at once. 256 KiB matches the Bash tool's own cap.
 //
-// maxToolResultBytes 硬限单个 tool_result。结果会整段落库、整段上 durable SSE open 帧、并整段进入
+// maxToolResultBytes() 硬限单个 tool_result。结果会整段落库、整段上 durable SSE open 帧、并整段进入
 // **同一回合**下一步的 LLM 请求（warm/cold 投影只裁后续回合）——一个无界结果（不带 head_limit 的
 // 大树 Grep、话痨 MCP 工具）会同时打爆 provider 请求、DB 行与前端帧。256 KiB 对齐 Bash 自身的 cap。
-const maxToolResultBytes = 256 * 1024
+
+// maxToolResultBytes reads the live tool_result cap (limits.Tools.ToolResultCapKB).
+//
+// maxToolResultBytes 读活动 tool_result 上限（limits.Tools.ToolResultCapKB）。
+func maxToolResultBytes() int { return limitspkg.Current().Tools.ToolResultCapKB << 10 }
 
 // capToolResult truncates an oversized result (keeping the head — for search-style output the
 // first matches are the useful ones) and tells the LLM how to narrow.
 //
 // capToolResult 截断超限结果（保头部——搜索类输出前面的命中才有用）并告诉 LLM 如何收窄。
 func capToolResult(s string) string {
-	if len(s) <= maxToolResultBytes {
+	if len(s) <= maxToolResultBytes() {
 		return s
 	}
-	return s[:maxToolResultBytes] + fmt.Sprintf(
+	return s[:maxToolResultBytes()] + fmt.Sprintf(
 		"\n...[tool result truncated: %d of %d bytes shown — narrow the query (filters / head_limit / pagination) to see the rest]",
-		maxToolResultBytes, len(s))
+		maxToolResultBytes(), len(s))
 }
 
 // executeTool runs ValidateInput then Execute and shapes the (output, errMsg, ok) tuple.

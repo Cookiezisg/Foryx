@@ -24,6 +24,9 @@ type Repository interface {
 	// firings 收件箱（先持久化再动作）。AppendFiring 按 dedup key 幂等。
 	AppendFiring(ctx context.Context, f *Firing) (*Firing, error)
 	ListPendingFirings(ctx context.Context, limit int) ([]*Firing, error)
+	// SearchFirings pages a trigger's firing inbox (the disposition surface: started /
+	// skipped / superseded / shed). SearchFirings 分页 trigger 的 firing 收件箱（处置面）。
+	SearchFirings(ctx context.Context, filter FiringFilter) ([]*Firing, string, error)
 	MarkFiringOutcome(ctx context.Context, firingID, status string) error
 
 	// activation log (append-only; D1 no delete).

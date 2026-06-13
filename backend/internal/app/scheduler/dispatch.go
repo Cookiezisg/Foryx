@@ -70,7 +70,18 @@ func (s *Service) runNode(ctx context.Context, run *flowrundomain.FlowRun, senv 
 		if err != nil {
 			return s.failNode(ctx, run, node, iter, err.Error())
 		}
-		return s.writeNode(ctx, run, node, iter, flowrundomain.NodeParked, result, "")
+		status, werr := s.writeNode(ctx, run, node, iter, flowrundomain.NodeParked, result, "")
+		if werr == nil {
+			// Summon the human: a parked approval blocks the run until someone decides — the
+			// inbox alone only helps whoever already checks it. At-least-once (a crash between
+			// write and advance may re-emit); a duplicate summons beats a silent stall.
+			// 唤人：parked 审批把 run 堵到有人决策——光有收件箱只帮到主动去看的人。at-least-once
+			// （写行与 advance 之间崩溃可能重发）；重复唤起好过静默卡死。
+			s.notify(ctx, "workflow.approval_pending", map[string]any{
+				"workflowId": run.WorkflowID, "flowrunId": run.ID, "nodeId": node.ID,
+			})
+		}
+		return status, werr
 
 	default:
 		return s.failNode(ctx, run, node, iter, fmt.Sprintf("unschedulable node kind %q", node.Kind))

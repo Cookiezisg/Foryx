@@ -80,7 +80,7 @@
 
 # 测试与门禁（T 系列）
 
-- **T5 Pipeline 优先**：大功能必须提供 `test/<axis>/` 下的集成测试（smoke / api / cross / sse / lifecycle / errcodes）。
+- **T5 验收双层**：单元/集成测试随包；**全功能黑盒验收在 `testend/`**（独立 module、零 backend import、拉真二进制打纯 HTTP/SSE）——`make testend`（llmmock 零 token，分钟级）+ `make evals`（真模型金标，EVALS=1 门控烧钱）。两者不进 `make verify`。见 [`references/testend/overview.md`](docs/references/testend/overview.md)。
 - **T6 Fake LLM**：默认测试用 `fake_llm`，0 Token 消耗。
 - **`make verify`（pre-push 门禁，host 平台）**：`gofmt` 净 + `go vet` + `go build` + 单测 + 文档门禁全绿。并发/取消测试带 `-race`。
 - **`make docs`（文档门禁）**：`cmd/docs` 跑 GOVERNANCE §11 全套（frontmatter / 类型 / 生命周期 / INDEX≤50 / 孤儿链接）。

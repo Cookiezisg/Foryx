@@ -17,4 +17,6 @@ audience: [human, ai]
 
 ## 2. 契约（引用）
 
+LLM 工具：`get_relations`（neighborhood 的工具孪生——kind+id+depth(1-3)，编辑/删除前自查影响面）。
+
 表 `relations` → [database.md](../database.md) · 码 `REL_*` 5 → [error-codes.md](../error-codes.md)。端点：list / neighborhood / relgraph（全景快照）。写方：每个实体的 relations.go 适配器（nil 容忍——relation 不在场实体照常工作）。

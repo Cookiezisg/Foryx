@@ -14,8 +14,8 @@ import (
 // SetSearchNotifier 接上可选的写侧搜索钩子（bootstrap）。
 func (s *Service) SetSearchNotifier(n searchdomain.Notifier) { s.search = n }
 
-func (s *Service) notifySearch(ctx context.Context, id string) {
-	searchdomain.Notify(ctx, s.search, searchdomain.TypeMCP, id, "")
+func (s *Service) notifySearch(ctx context.Context, name string) {
+	searchdomain.Notify(ctx, s.search, searchdomain.TypeMCP, name, "")
 }
 
 // SearchSource projects an mcp server: server card + ONE ROW PER CACHED TOOL
@@ -23,9 +23,18 @@ func (s *Service) notifySearch(ctx context.Context, id string) {
 // encrypted config (env/headers) NEVER enters the projection: a plaintext
 // index row would undo the at-rest encryption.
 //
+// Projection identity is the server NAME (the entity's public, workspace-unique
+// key: HTTP addresses /mcp-servers/{name}, mounts resolve mcp:<name>/<tool>).
+// Keying by row id once made every emitted refHint ("mcp:msv_…/tool")
+// unresolvable by agent mounts — a dead wireable ref (AC-27).
+//
 // SearchSource 投影 mcp server：server 卡 + **每个缓存工具一行**（anchor=工具名）——
 // 面板命中单元是可调用工具。加密 config（env/headers）**永不入投影**：索引明文
 // 落盘等于废掉落盘加密。
+//
+// 投影身份用 server **NAME**（实体的公开 workspace 唯一键：HTTP 以 /mcp-servers/{name}
+// 寻址、挂载解析 mcp:<name>/<tool>）。曾按行 id 键控，导致发出的 refHint
+// （"mcp:msv_…/tool"）对 agent 挂载永不可解析——可接线 ref 物理死亡（AC-27）。
 func (s *Service) SearchSource() *SearchSource { return &SearchSource{svc: s} }
 
 type SearchSource struct{ svc *Service }
@@ -39,13 +48,13 @@ func (ss *SearchSource) Stamps(ctx context.Context) (map[string]time.Time, error
 	}
 	out := make(map[string]time.Time, len(srvs))
 	for _, srv := range srvs {
-		out[srv.ID] = srv.UpdatedAt
+		out[srv.Name] = srv.UpdatedAt
 	}
 	return out, nil
 }
 
-func (ss *SearchSource) Docs(ctx context.Context, id string) ([]searchdomain.SourceDoc, error) {
-	srv, err := ss.svc.repo.GetByID(ctx, id)
+func (ss *SearchSource) Docs(ctx context.Context, name string) ([]searchdomain.SourceDoc, error) {
+	srv, err := ss.svc.repo.GetByName(ctx, name)
 	if errors.Is(err, mcpdomain.ErrServerNotFound) {
 		return nil, nil
 	}

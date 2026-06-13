@@ -21,6 +21,7 @@ import (
 	"go.uber.org/zap"
 
 	triggerinfra "github.com/sunweilin/forgify/backend/internal/infra/trigger"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 )
 
 // Signature algorithms. Only hmac-sha256-hex is implemented (GitHub's X-Hub-Signature-256).
@@ -31,8 +32,6 @@ const (
 	DefaultHMACSignatureHeader = "X-Hub-Signature-256"
 	HMACSignaturePrefix        = "sha256="
 )
-
-const MaxBodyBytes = 10 * 1024 * 1024
 
 // Listener manages webhook registrations against one shared http.ServeMux.
 //
@@ -150,12 +149,12 @@ func (l *Listener) handleWebhook(fullPath string) http.HandlerFunc {
 			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		body, err := io.ReadAll(io.LimitReader(r.Body, MaxBodyBytes+1))
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxBodyBytes()+1))
 		if err != nil {
 			http.Error(w, "read body", http.StatusBadRequest)
 			return
 		}
-		if len(body) > MaxBodyBytes {
+		if int64(len(body)) > maxBodyBytes() {
 			http.Error(w, "body too large", http.StatusRequestEntityTooLarge)
 			return
 		}
@@ -254,3 +253,8 @@ func verifyHMACSHA256Hex(body, secret []byte, headerVal string) bool {
 }
 
 var _ triggerinfra.Listener = (*Listener)(nil)
+
+// maxBodyBytes reads the live webhook body cap (limits.Guards.WebhookBodyMaxMB).
+//
+// maxBodyBytes 读活动 webhook body 上限（limits.Guards.WebhookBodyMaxMB）。
+func maxBodyBytes() int64 { return int64(limitspkg.Current().Guards.WebhookBodyMaxMB) << 20 }

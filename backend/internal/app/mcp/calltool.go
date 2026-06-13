@@ -14,6 +14,7 @@ import (
 	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 	mcpinfra "github.com/sunweilin/forgify/backend/internal/infra/mcp"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 	logtailpkg "github.com/sunweilin/forgify/backend/internal/pkg/logtail"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -43,7 +44,7 @@ func (s *Service) CallTool(ctx context.Context, serverID, tool string, args json
 		return "", fmt.Errorf("mcpapp.CallTool %s: %w (status=%s)", st.Name, mcpdomain.ErrServerNotConnected, st.Status)
 	}
 
-	cctx, cancel := context.WithTimeout(ctx, defaultCallTimeout)
+	cctx, cancel := context.WithTimeout(ctx, time.Duration(limitspkg.Current().Timeout.MCPCallSec)*time.Second)
 	defer cancel()
 
 	// Tee progress notifications to the entities run terminal (entity panel, all callers) and the
@@ -156,6 +157,33 @@ func (s *Service) recordCall(ctx context.Context, serverID, tool string, args js
 		s.log.Warn("mcpapp.recordCall: save failed (best-effort)",
 			zap.String("serverId", serverID), zap.String("tool", tool), zap.Error(err))
 	}
+}
+
+// SearchCallsResult is the paged call-log + ok/failed rollup (mirrors handlerapp).
+//
+// SearchCallsResult 是分页调用日志 + ok/失败汇总（对标 handlerapp）。
+type SearchCallsResult struct {
+	Calls      []*mcpdomain.Call        `json:"calls"`
+	NextCursor string                   `json:"nextCursor,omitempty"`
+	HasMore    bool                     `json:"hasMore"`
+	Aggregates mcpdomain.CallAggregates `json:"aggregates"`
+}
+
+// SearchCalls runs a paginated call-log query with the ok/failed rollup (the entity
+// panel's run history + status badge — same surface every executable kind has).
+//
+// SearchCalls 跑分页调用日志查询 + ok/失败汇总（实体面板运行历史 + 状态徽标——与其它
+// 可执行体同面）。
+func (s *Service) SearchCalls(ctx context.Context, filter mcpdomain.CallFilter) (*SearchCallsResult, error) {
+	rows, next, err := s.repo.ListCalls(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("mcpapp.SearchCalls: %w", err)
+	}
+	agg, err := s.repo.ComputeCallAggregates(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("mcpapp.SearchCalls: aggregates: %w", err)
+	}
+	return &SearchCallsResult{Calls: rows, NextCursor: next, HasMore: next != "", Aggregates: agg}, nil
 }
 
 // ListCalls pages a server's call log (the entity panel's run history).

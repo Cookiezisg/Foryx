@@ -18,7 +18,7 @@ type RunFunction struct{ svc *functionapp.Service }
 func (t *RunFunction) Name() string { return "run_function" }
 
 func (t *RunFunction) Description() string {
-	return "Run a function with keyword arguments; returns {ok, output, errorMsg, elapsedMs, logs} — logs carries the function's print()/debug output. Omit version to run the active version."
+	return "Run a function with keyword arguments; returns {ok, output, errorMsg, elapsedMs, logs} — logs carries the function's print()/debug output. Omit version to run the active version. Each run is recorded — inspect history with search_function_executions / get_function_execution."
 }
 
 func (t *RunFunction) Parameters() json.RawMessage {

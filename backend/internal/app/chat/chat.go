@@ -21,6 +21,7 @@ package chat
 
 import (
 	"context"
+	"strings"
 	"sync"
 
 	"go.uber.org/zap"
@@ -50,21 +51,15 @@ import (
 // 多模态内容部件。
 const attrAttachments = "attachments"
 
-// defaultMaxSteps caps the ReAct loop's turns for a chat conversation. Higher than the agent
-// default (10) because an interactive chat legitimately chains more tool steps; surfaced as
-// MAX_STEPS_REACHED with a "continue" affordance rather than a silent stop.
+// queueCapacity is 1: the single slot only decouples Send from the drain goroutine's pickup.
+// "One assistant turn in flight per conversation" is a hard contract — a Send while a turn is
+// running (q.running) or already buffered (slot taken) rejects with STREAM_IN_PROGRESS instead
+// of queueing behind the user's back.
 //
-// defaultMaxSteps 限定 chat 对话 ReAct 循环的回合上限。高于 agent 默认（10），因交互对话合理地
-// 串更多工具步；触顶以 MAX_STEPS_REACHED + 「继续」提示暴露、非静默停。
-const defaultMaxSteps = 25
-
-// queueCapacity is the per-conversation task buffer. A conversation already streaming rejects a
-// new Send with STREAM_IN_PROGRESS rather than queueing unboundedly; the small buffer absorbs a
-// rapid double-submit without growing memory.
-//
-// queueCapacity 是 per-conversation 任务缓冲。正在流式的对话用 STREAM_IN_PROGRESS 拒新 Send 而非
-// 无界排队；小缓冲吸收快速双提交而不涨内存。
-const queueCapacity = 5
+// queueCapacity 为 1：单槽只为解耦 Send 与抽取 goroutine 的取走。「每对话同时只飞一个 assistant
+// 回合」是硬契约——回合在跑（q.running）或已有一个在槽里时再 Send 直接 STREAM_IN_PROGRESS 拒绝，
+// 不背着用户排队。
+const queueCapacity = 1
 
 // Errors that bubble to HTTP (R0056 handler maps them). Defined here (chat has no domain package
 // — messages is the neutral content model) via errorspkg so they carry a Kind→status + a
@@ -215,7 +210,6 @@ type Service struct {
 	deps             Deps
 	searchTool       toolapp.Tool                                         // search_tools, built once from Deps.Toolset.Lazy; resident in every turn
 	mentionResolvers map[mentiondomain.MentionType]mentiondomain.Resolver // @-mention resolvers, registered per type at M7
-	maxSteps         int
 	log              *zap.Logger
 
 	// broker is the human-in-the-loop broker (R0064): seeded into every turn's ctx so the loop's
@@ -245,7 +239,6 @@ func New(messages messagesdomain.Repository, deps Deps, log *zap.Logger) *Servic
 		deps:             deps,
 		searchTool:       toolsetpkg.NewSearchTools(deps.Toolset.Lazy),
 		mentionResolvers: map[mentiondomain.MentionType]mentiondomain.Resolver{},
-		maxSteps:         defaultMaxSteps,
 		log:              log,
 		stop:             make(chan struct{}),
 	}
@@ -272,7 +265,10 @@ type SendInput struct {
 // Send 落用户回合、开 assistant 回合（streaming）、发 message_start、入队生成——立即返回 assistant
 // message id（202 语义；回合经 messages SSE 流式）。对话已在跑则 STREAM_IN_PROGRESS。
 func (s *Service) Send(ctx context.Context, conversationID string, in SendInput) (string, error) {
-	if in.Content == "" && len(in.AttachmentIDs) == 0 {
+	// Trimmed gate: a whitespace-only message is as empty as "" — it would persist a blank
+	// user turn and bill a model call for nothing.
+	// trim 后再判：纯空白消息等同空串——否则落一条空白 user 回合、为空内容白付一次模型调用。
+	if strings.TrimSpace(in.Content) == "" && len(in.AttachmentIDs) == 0 {
 		return "", ErrEmptyContent
 	}
 	// Existence gate: without it a Send to a deleted / unknown conversation persists an orphan
@@ -387,6 +383,18 @@ type convQueue struct {
 	mu         sync.Mutex
 	cancel     context.CancelFunc
 	dead       bool // set under mu by runQueue at teardown; enqueue re-creates on sight
+	running    bool // set under mu by runQueue around processTask; enqueue rejects while true. 运行中标志，enqueue 见之即拒。
+}
+
+// setRunning flips the in-flight flag under q.mu (enqueue reads it to enforce the
+// one-turn-in-flight contract — the dequeued task is no longer visible in the channel).
+//
+// setRunning 在 q.mu 下翻转在飞标志（enqueue 读它执行「同时一回合」契约——被取走的 task
+// 在 channel 里已不可见）。
+func (q *convQueue) setRunning(v bool) {
+	q.mu.Lock()
+	q.running = v
+	q.mu.Unlock()
 }
 
 // enqueue gets-or-creates the conversation's queue and offers the task; a full buffer means a
@@ -405,6 +413,10 @@ func (s *Service) enqueue(conversationID string, t task) error {
 		if q.dead {
 			q.mu.Unlock()
 			continue // teardown won the race — the map entry is gone; build a fresh queue
+		}
+		if q.running {
+			q.mu.Unlock()
+			return ErrStreamInProgress
 		}
 		select {
 		case q.ch <- t:

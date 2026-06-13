@@ -207,6 +207,20 @@ func (s *Service) entryTriggerRefsOf(ctx context.Context, w *workflowdomain.Work
 	if err != nil {
 		return nil, err
 	}
+	refs := triggerRefs(g)
+	if len(refs) == 0 {
+		return nil, workflowdomain.ErrNoTriggerEntry
+	}
+	return refs, nil
+}
+
+// triggerRefs collects a graph's deduped trigger-node entity refs (nil graph → none).
+//
+// triggerRefs 收集图中 trigger 节点的去重实体 ref（nil 图 → 空）。
+func triggerRefs(g *workflowdomain.Graph) []string {
+	if g == nil {
+		return nil
+	}
 	var refs []string
 	seen := map[string]bool{}
 	for i := range g.Nodes {
@@ -216,8 +230,48 @@ func (s *Service) entryTriggerRefsOf(ctx context.Context, w *workflowdomain.Work
 			refs = append(refs, n.Ref)
 		}
 	}
-	if len(refs) == 0 {
-		return nil, workflowdomain.ErrNoTriggerEntry
+	return refs
+}
+
+// rebindIfListening re-points the live trigger binding after an edit changed the entry refs.
+// Activate attached the OLD graph's refs and Deactivate detaches whatever the CURRENT graph
+// resolves to — so without this, an edit that swaps the entry trigger leaks the old binding
+// (the old trigger keeps firing this workflow forever) while the new trigger is never heard.
+// Staged (AttachOnce) arming is binder-internal and not visible on the workflow row; an edit
+// while staged keeps the old one-shot — acceptable for a trial-run state.
+//
+// rebindIfListening 在编辑改动入口 ref 后重指活监听。Activate 挂的是**旧图**的 ref，Deactivate
+// 卸的是**当前图**解析出的 ref——没有这步，换入口 trigger 的编辑会泄漏旧绑定（旧 trigger 永远
+// 触发本 workflow），新 trigger 却无人听。staged（AttachOnce）的武装在 binder 内部、workflow 行
+// 上不可见；staged 期间编辑保留旧的一次性武装——试运行态可接受。
+func (s *Service) rebindIfListening(ctx context.Context, w *workflowdomain.Workflow, oldGraph, newGraph *workflowdomain.Graph) {
+	// Both graphs required: with the old one unknown we cannot diff, and attaching blindly
+	// would double-count the binder's refcount. Skip — the next deactivate/activate resyncs.
+	// 两张图都要：旧图未知就没法 diff，盲 attach 会让 binder 引用计数重复。跳过——下次
+	// deactivate/activate 自然重同步。
+	if !w.Active || s.binder == nil || oldGraph == nil || newGraph == nil {
+		return
 	}
-	return refs, nil
+	oldRefs, newRefs := triggerRefs(oldGraph), triggerRefs(newGraph)
+	old := map[string]bool{}
+	for _, r := range oldRefs {
+		old[r] = true
+	}
+	cur := map[string]bool{}
+	for _, r := range newRefs {
+		cur[r] = true
+	}
+	for _, r := range oldRefs {
+		if !cur[r] {
+			s.binder.Detach(r, w.ID)
+		}
+	}
+	for _, r := range newRefs {
+		if !old[r] {
+			if err := s.binder.Attach(ctx, r, w.ID); err != nil {
+				s.log.Warn("workflowapp: rebind after edit failed; trigger not listening",
+					zap.String("workflowId", w.ID), zap.String("triggerRef", r), zap.Error(err))
+			}
+		}
+	}
 }

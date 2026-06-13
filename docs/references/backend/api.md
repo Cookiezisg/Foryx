@@ -23,7 +23,7 @@ audience: [human, ai]
 | `GET /functions/{id}` | 单读（附 activeVersion：代码+env 状态一趟拿全） |
 | `PATCH /functions/{id}` | 改 meta（name/description/tags，不升版本） |
 | `DELETE /functions/{id}` | 软删 + 销毁 env + 清边，204 |
-| `POST /functions/{id}:run` | 执行（TriggeredBy=manual），body `{input, version?}` |
+| `POST /functions/{id}:run` | 执行（TriggeredBy=manual），body `{args, version?}` |
 | `POST /functions/{id}:revert` | active 指针移到指定版本号 |
 | `POST /functions/{id}:edit` | ops 锻造新版本（空 ops = 仅重建 env） |
 | `POST /functions/{id}:iterate` | 开 AI 编辑对话，返 `conversationId` |
@@ -74,7 +74,7 @@ audience: [human, ai]
 
 | Method · Path | 语义 |
 |---|---|
-| `POST /workflows` · `GET /workflows` · `GET /workflows/{id}` · `PATCH /workflows/{id}` · `DELETE /workflows/{id}` | CRUD（PATCH=meta 不升版本） |
+| `POST /workflows` · `GET /workflows` · `GET /workflows/{id}` · `PATCH /workflows/{id}` · `DELETE /workflows/{id}` | CRUD（PATCH=meta 不升版本）（含 `concurrency`: serial\|skip\|buffer_one\|buffer_all\|allow_all——overlap 政策，下一次 drain 生效） |
 | `POST /workflows/{id}:trigger` | 立即跑一次（任何 lifecycle 下可跑），body `{payload, entryNode?}`，返 flowrun id |
 | `POST /workflows/{id}:stage` | 待命恰一次真实触发后自动撤防（已 active → 409） |
 | `POST /workflows/{id}:activate` / `:deactivate` | 上线（挂监听+active）/ 优雅下线（摘监听+inactive 或 draining） |
@@ -88,7 +88,7 @@ audience: [human, ai]
 
 | Method · Path | 语义 |
 |---|---|
-| `GET /flowruns` | 运行历史分页（`?workflowId`） |
+| `GET /flowruns` | 运行历史分页（`?workflowId&status=running\|completed\|failed\|cancelled`） |
 | `POST /flowruns` | 手动起 run（= workflow `:trigger` 的等价入口） |
 | `GET /flowruns/{id}` | run 头 + 全部节点行（完整记忆化） |
 | `POST /flowruns/{id}:replay` | 修复失败 run：清 failed 行 + 重走（completed 复用） |
@@ -100,9 +100,10 @@ audience: [human, ai]
 | Method · Path | 语义 |
 |---|---|
 | `POST /triggers` · `GET /triggers` · `GET /triggers/{id}` · `PATCH /triggers/{id}` · `DELETE /triggers/{id}` | CRUD（PATCH=Edit，热更监听中的 listener） |
-| `POST /triggers/{id}:fire` | 手动催一次（扇给当前监听者） |
+| `POST /triggers/{id}:fire` | 手动催一次（扇给当前监听者），202 返 `{fired, triggerId, activationId}`——拿 id 直查 activation 闭环 |
 | `POST /triggers/{id}:iterate` | 开 AI 编辑对话 |
 | `GET /triggers/{id}/activations` · `GET /trigger-activations/{actId}` | 活动审计（触没触发都有记录） |
+| `GET /triggers/{id}/firings` | firing 收件箱分页（`?status=pending\|started\|skipped\|superseded\|shed`）——「触发了为什么没跑」的处置面 |
 
 ## control / approval（`/api/v1/controls` · `/api/v1/approvals`）
 
@@ -112,9 +113,11 @@ audience: [human, ai]
 
 CRUD（`POST` 严格冲突 / `PUT {name}` 覆盖 / `DELETE {name}`）+ `POST /skills/{name}:activate`（inline 渲染注入 / fork 派 subagent）。
 
-## mcp（`/api/v1/mcp/...`）
+## mcp（`/api/v1/mcp-servers` · `/api/v1/mcp-registry`）
 
-servers CRUD（`PUT` 同名替换）+ `POST {id}:reconnect` + `GET /mcp/registry[/{name}]`（市场浏览）+ `POST /mcp/import`（Claude Desktop mcp.json）+ `GET {id}/calls`（`?tool&status&triggeredBy&conversationId&flowrunId`）+ `GET /mcp-calls/{id}`（含 `logs`——progress 通知 + 失败附 server stderr 尾；列表端点不带）。
+servers（name 即键，workspace 唯一）：`GET /mcp-servers`（实时状态列表）· `PUT /mcp-servers/{name}`（手动装/同名替换：stdio `{command, args, env, runtime?, timeoutSec?}`（runtime 缺省按 command 推断：npx→node、uvx→python…）或 remote `{url, transport?, headers}`；**连接失败仍落盘 `status=failed`+`lastError`**，reconnect 可救）· `GET /mcp-servers/{name}`（状态+tools 缓存）· `DELETE /mcp-servers/{name}`（204）· `POST /mcp-servers/{name}:reconnect`（重置按钮）· `GET /mcp-servers/{name}/stderr`（stdio stderr ring 尾，返 `{name, stderr, size}`）· `POST /mcp-servers/{name}/tools/{tool}:invoke`（`{args}` 直接试调、绕过 chat/LLM，返 `{result}`）· `POST /mcp-servers:import?overwrite=`（Claude Desktop mcp.json 片段，返 `{imported, skipped}`）。
+调用台账：`GET /mcp-servers/{name}/calls`（`?tool&status&triggeredBy&conversationId&flowrunId`；返 `{calls, nextCursor, hasMore, aggregates:{okCount,failedCount}}`，与 handler 同形）+ `GET /mcp-calls/{id}`（含 `logs`——progress 通知 + 失败附 server stderr 尾；列表端点不带）。
+市场：`GET /mcp-registry`（curated 全列）· `POST /mcp-registry:install`（`{name, env}`——完整 slug 在 body 因含 `/`，无 per-name 详情端点（列表即全量）；缺必填 env 422 `MCP_ENV_MISSING`、无可跑 package 422 `MCP_NO_RUNNABLE_PACKAGE`）。
 
 ## document（`/api/v1/documents`）
 
@@ -143,11 +146,11 @@ memory：`GET /memories` · `GET/PUT/DELETE /memories/{name}` · `POST /{name}/p
 |---|---|
 | `GET /search` | 综搜/垂搜同端点：`?q`(必填) `&types`(csv，空=综搜) `&tags`(csv) `&updatedAfter/Before`(RFC3339) `&includeArchived`(默认 true) `&cursor&limit`(默认 20 上限 50)。返 `{hits, nextCursor, total}`，hit 含 entityType/entityId/name/snippet(`<mark>`)/anchor/tags/archived/score/matchedChunks/refHint（仅积木六类） |
 | `POST /search:reindex` | 清空重建 ctx workspace 索引，202；运行中 409 `SEARCH_REINDEX_RUNNING` |
-| `GET /search/settings` | 机器级 embedder 设置 + 引擎实时状态 `{embedder, engine:{status: ready\|downloading\|absent\|error\|off, model, lastError}}` |
-| `PATCH /search/settings` | 切 embedder：`{embedder: builtin\|ollama\|off}`；非法值 400 `SEARCH_EMBEDDER_INVALID`；旧模型向量按 model 列失效、后台重嵌 |
+| `GET /search/settings` | 机器级搜索设置 + 引擎实时状态 `{embedder, ollamaBaseUrl, ollamaModel, engine:{status: ready\|downloading\|absent\|error\|off, model, lastError}}`（Ollama 字段恒回显生效值） |
+| `PATCH /search/settings` | 修补设置：`{embedder?: builtin\|ollama\|off, ollamaBaseUrl?, ollamaModel?}`（缺省字段不动；Ollama 参数空串重置默认）；非法 embedder 400 `SEARCH_EMBEDDER_INVALID`；改 model 即旧模型向量按 model 列失效、后台重嵌 |
 
 LLM 工具面（非 HTTP）：`search_blocks`（积木面板：六类可接线单元，返 ref 直填 workflow 节点）；8 个 `search_<entity>` 垂搜工具保 schema 换引擎（非空 query 走内容引擎、引擎错误回退原子串路径）。
 
 ## P6 支撑域
 
-workspace：CRUD（守最后一个；PATCH 含 `webFetchMode`: local|jina）。apikey：CRUD + `:test`（probe）。model：`GET /model-capabilities` · scenarios。sandbox：`GET /sandbox/status` · `POST /sandbox:retry-bootstrap` · envs 列表/销毁。relation：list / `GET /relations/neighborhood` / `GET /relgraph`。catalog：`GET /catalog`。notification：list / 已读标记 / 未读计数。aispawn：`POST /<entity>/{id}:iterate` 分布于各实体 + `POST /triage`。
+workspace：CRUD（守最后一个；PATCH 含 `webFetchMode`: local|jina）+ `PUT {id}/default-models/{scenario}`（dialogue|utility|agent 三场景模型）+ `PUT/DELETE {id}/default-search`（搜索 key）+ `POST {id}:activate`（刷 lastUsedAt）。apikey：CRUD + `:test`（probe）。model：`GET /model-capabilities` · `GET /scenarios`。sandbox：`GET/POST /sandbox/runtimes` + `DELETE /sandbox/runtimes/{id}` · `GET /sandbox/envs[/{id}]` + `DELETE /sandbox/envs/{id}` · `GET /sandbox/disk-usage` · `GET /sandbox/bootstrap-status` · `POST /sandbox:gc` · `POST /sandbox:retry-bootstrap`。relation：list / `GET /relations/neighborhood` / `GET /relgraph`。catalog：`GET /catalog`。limits：`GET /limits`（活动运行上限）+ `PATCH /limits`（部分 JSON 合并、校验后持久化 `<dataDir>/settings.json` 并热换——消费方下次读取即生效；越界 400 `SETTINGS_LIMITS_INVALID`）。notification：list / 已读标记 / 未读计数。aispawn：`POST /<entity>/{id}:iterate` 分布于各实体 + `POST /triage`。

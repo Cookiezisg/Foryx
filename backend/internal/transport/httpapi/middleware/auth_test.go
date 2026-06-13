@@ -13,11 +13,11 @@ import (
 
 type fakeResolver struct{ ok bool }
 
-func (f fakeResolver) Validate(_ context.Context, _ string) error {
+func (f fakeResolver) Resolve(_ context.Context, _ string) (reqctxpkg.Locale, error) {
 	if f.ok {
-		return nil
+		return reqctxpkg.LocaleEn, nil
 	}
-	return errors.New("unknown workspace")
+	return "", errors.New("unknown workspace")
 }
 
 func TestIdentifyWorkspaceFromHeader(t *testing.T) {

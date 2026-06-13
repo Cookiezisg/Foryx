@@ -21,4 +21,6 @@ audience: [human, ai]
 
 ## 2. 契约（引用）
 
+LLM 工具：`search_conversations`（内容混合检索历史对话——只返 conversationId/title/snippet/messageId，绝不返全文；回忆是指针、不是上下文倾倒）。
+
 端点（CRUD + usage）→ [api.md](../api.md) · 表 `conversations` → [database.md](../database.md) · 码 `CONVERSATION_*` 2 个 → [error-codes.md](../error-codes.md) · ID：`cv_`。被消费：chat（每回合读配置）、relation（conversation↔实体的 create/edit 边的另一端）、aispawn（`:iterate`/`:triage` 创建）。

@@ -55,11 +55,6 @@ const (
 	KindOther    = "other"
 )
 
-// MaxBytes caps a single uploaded file (aligns with OpenAI's per-file 50 MB; Claude.ai is 30 MB).
-//
-// MaxBytes 单文件上限（对齐 OpenAI 单文件 50 MB；Claude.ai 为 30 MB）。
-const MaxBytes = 50 << 20
-
 var (
 	ErrNotFound = errorspkg.New(errorspkg.KindNotFound, "ATTACHMENT_NOT_FOUND", "attachment not found")
 	ErrTooLarge = errorspkg.New(errorspkg.KindTooLarge, "ATTACHMENT_TOO_LARGE", "file exceeds the 50 MB limit")

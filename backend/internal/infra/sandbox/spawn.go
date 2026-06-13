@@ -141,7 +141,15 @@ func SpawnLongLived(ctx context.Context, opts SpawnOptions) (sandboxdomain.LongL
 	if err := checkBinaryExists(opts.Cmd); err != nil {
 		return nil, fmt.Errorf("sandbox.SpawnLongLived: %w", err)
 	}
-	cmd := exec.CommandContext(ctx, opts.Cmd, opts.Args...)
+	// A resident process must outlive the request that lazily spawned it: CommandContext
+	// would kill it the moment that request's ctx cancels (first :call ends → instance dies
+	// → every later call hits a corpse). ctx gates only the pre-spawn checks; lifetime is
+	// owned explicitly by handle.Kill / Shutdown.
+	// 常驻进程必须活得比懒 spawn 它的那个请求长：CommandContext 会在请求 ctx 取消瞬间杀掉它
+	//（首个 :call 结束 → 实例死 → 后续调用全撞尸体）。ctx 只管 spawn 前检查；生命周期由
+	// handle.Kill / Shutdown 显式拥有。
+	_ = ctx
+	cmd := exec.Command(opts.Cmd, opts.Args...)
 	cmd.Dir = opts.Cwd
 	if len(opts.Env) > 0 {
 		cmd.Env = opts.Env
@@ -164,7 +172,6 @@ func SpawnLongLived(ctx context.Context, opts SpawnOptions) (sandboxdomain.LongL
 	}
 
 	setupProcessGroup(cmd)
-	cmd.Cancel = func() error { return killProcessGroup(cmd) }
 
 	if err := cmd.Start(); err != nil {
 		_ = stdin.Close()

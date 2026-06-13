@@ -84,6 +84,15 @@ type CallFilter struct {
 	Limit          int
 }
 
+// CallAggregates is the ok / not-ok rollup beside a page of calls (status-badge data,
+// same shape as handler/function).
+//
+// CallAggregates 是分页旁的 ok / 非 ok 汇总（状态徽标数据，与 handler/function 同形）。
+type CallAggregates struct {
+	OKCount     int `json:"okCount"`
+	FailedCount int `json:"failedCount"`
+}
+
 // CallRepository is the call-log slice of Repository (Save on every invocation; Get fetches one
 // for triage; List feeds the server panel's run history).
 //
@@ -92,4 +101,5 @@ type CallRepository interface {
 	SaveCall(ctx context.Context, c *Call) error
 	GetCall(ctx context.Context, id string) (*Call, error)
 	ListCalls(ctx context.Context, filter CallFilter) ([]*Call, string, error)
+	ComputeCallAggregates(ctx context.Context, filter CallFilter) (CallAggregates, error)
 }

@@ -101,7 +101,7 @@ type InvokeAgent struct{ svc *agentapp.Service }
 func (t *InvokeAgent) Name() string { return "invoke_agent" }
 
 func (t *InvokeAgent) Description() string {
-	return "Run an agent: it executes its ReAct loop over the given input and returns the final output (shaped by its outputSchema). Find one with search_agent first. The run is recorded in the agent's execution history."
+	return "Run an agent: it executes its ReAct loop over the given input and returns the final output (shaped by its outputSchema). Find one with search_agent first. The run is recorded — inspect it later with search_agent_executions / get_agent_execution (the latter carries the full transcript)."
 }
 
 func (t *InvokeAgent) Parameters() json.RawMessage {

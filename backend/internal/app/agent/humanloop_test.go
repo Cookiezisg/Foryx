@@ -117,8 +117,11 @@ func TestInvoke_DangerGateFromBrokerInCtx(t *testing.T) {
 	default:
 	}
 
-	// Resolve via the same broker, keyed by the sub-run's tool_call id.
-	if !broker.Resolve("tc1", humanloopapp.Response{Action: humanloopapp.DecisionApprove}) {
+	// Resolve via the same broker, keyed by the sub-run's tool_call id — the SERVER-minted
+	// block id read off the pending entry (never the provider's recyclable wire id).
+	// 经同一 broker 决议，键为子运行的 tool_call id——从 pending 条目读到的服务端铸造块 id
+	// （绝非 provider 可复用的线缆 id）。
+	if !broker.Resolve(broker.Pending("c1")[0].ToolCallID, humanloopapp.Response{Action: humanloopapp.DecisionApprove}) {
 		t.Fatal("Resolve should find the nested pending interaction")
 	}
 	res := <-done

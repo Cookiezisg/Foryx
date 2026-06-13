@@ -552,11 +552,20 @@ func TestEmbedWorker_BackfillsAndInvalidates(t *testing.T) {
 func TestSettings_SwitchAndValidate(t *testing.T) {
 	repo := newFakeRepo()
 	svc := New(repo, nil)
-	svc.SetEmbeddingProviders(&fakeProvider{model: "m1"}, &fakeProvider{model: "ollama:x"})
+	var gotBase, gotModel string
+	svc.SetEmbeddingProviders(&fakeProvider{model: "m1"}, func(baseURL, model string) searchdomain.EmbeddingProvider {
+		gotBase, gotModel = baseURL, model
+		return &fakeProvider{model: "ollama:" + model}
+	})
 
 	view, err := svc.Settings(ctxWS("ws_a"))
 	if err != nil || view.Embedder != searchdomain.EmbedderBuiltin {
 		t.Fatalf("default must be builtin: %v %+v", err, view)
+	}
+	// Defaults surface on the view even before switching.
+	// 切换前默认值就应出现在 view 上。
+	if view.OllamaBaseURL != searchdomain.DefaultOllamaBaseURL || view.OllamaModel != searchdomain.DefaultOllamaModel {
+		t.Fatalf("ollama defaults missing on view: %+v", view)
 	}
 	if _, err := svc.SetEmbedder(ctxWS("ws_a"), "nope"); !errors.Is(err, searchdomain.ErrEmbedderInvalid) {
 		t.Fatalf("invalid embedder: %v", err)
@@ -566,8 +575,48 @@ func TestSettings_SwitchAndValidate(t *testing.T) {
 		t.Fatalf("off switch: %v %+v", err, view)
 	}
 	view, err = svc.SetEmbedder(ctxWS("ws_a"), searchdomain.EmbedderOllama)
-	if err != nil || view.Engine.Model != "ollama:x" {
+	if err != nil || view.Engine.Model != "ollama:"+searchdomain.DefaultOllamaModel {
 		t.Fatalf("ollama switch: %v %+v", err, view)
+	}
+	if gotBase != searchdomain.DefaultOllamaBaseURL || gotModel != searchdomain.DefaultOllamaModel {
+		t.Fatalf("factory got wrong defaults: %q %q", gotBase, gotModel)
+	}
+}
+
+// TestSettings_OllamaParamsPatch: patching the connection params rebuilds the adapter
+// with the new values and echoes them on the view; "" resets to defaults.
+//
+// TestSettings_OllamaParamsPatch：修补连接参数即用新值重建适配器并回显；"" 重置默认。
+func TestSettings_OllamaParamsPatch(t *testing.T) {
+	repo := newFakeRepo()
+	svc := New(repo, nil)
+	var gotBase, gotModel string
+	svc.SetEmbeddingProviders(nil, func(baseURL, model string) searchdomain.EmbeddingProvider {
+		gotBase, gotModel = baseURL, model
+		return &fakeProvider{model: "ollama:" + model}
+	})
+
+	emb, base, model := searchdomain.EmbedderOllama, "http://10.0.0.5:11434", "nomic-embed-text"
+	view, err := svc.UpdateSettings(ctxWS("ws_a"), UpdateSettingsInput{Embedder: &emb, OllamaBaseURL: &base, OllamaModel: &model})
+	if err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	if view.OllamaBaseURL != base || view.OllamaModel != model {
+		t.Fatalf("view did not echo params: %+v", view)
+	}
+	if gotBase != base || gotModel != model {
+		t.Fatalf("factory got %q %q, want %q %q", gotBase, gotModel, base, model)
+	}
+	if view.Engine.Model != "ollama:"+model {
+		t.Fatalf("engine model wrong: %+v", view.Engine)
+	}
+
+	// "" resets to default; only-URL patch keeps the model.
+	// "" 重置默认；只补 URL 不动 model。
+	empty := ""
+	view, err = svc.UpdateSettings(ctxWS("ws_a"), UpdateSettingsInput{OllamaBaseURL: &empty})
+	if err != nil || view.OllamaBaseURL != searchdomain.DefaultOllamaBaseURL || view.OllamaModel != model {
+		t.Fatalf("URL reset wrong: %v %+v", err, view)
 	}
 }
 

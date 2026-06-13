@@ -79,6 +79,7 @@ func (t *SearchFlowruns) Parameters() json.RawMessage {
 		"type": "object",
 		"properties": {
 			"workflowId": {"type": "string", "description": "Optional: only this workflow's runs."},
+			"status": {"type": "string", "description": "Optional: running | completed | failed | cancelled."},
 			"limit": {"type": "integer", "description": "Page size (default 50)."},
 			"cursor": {"type": "string", "description": "Opaque pagination cursor."}
 		}
@@ -96,6 +97,7 @@ func (t *SearchFlowruns) ValidateInput(args json.RawMessage) error {
 func (t *SearchFlowruns) Execute(ctx context.Context, argsJSON string) (string, error) {
 	var args struct {
 		WorkflowID string `json:"workflowId"`
+		Status     string `json:"status"`
 		Limit      int    `json:"limit"`
 		Cursor     string `json:"cursor"`
 	}
@@ -104,6 +106,7 @@ func (t *SearchFlowruns) Execute(ctx context.Context, argsJSON string) (string, 
 	}
 	runs, next, err := t.sched.ListRuns(ctx, flowrundomain.ListFilter{
 		WorkflowID: args.WorkflowID,
+		Status:     args.Status,
 		Cursor:     args.Cursor,
 		Limit:      args.Limit,
 	})

@@ -40,9 +40,11 @@ audience: [human, ai]
 
 **env 物化（`ensureEnv`）**：写 syncing → 委托 `envfix.Provisioner`（带 LLM 改依赖的修复循环，≤3 次——装不上时让 LLM 改依赖列表重试）→ 终态（ready/failed + **修正后的依赖**）写回 Version 行。create/edit **容忍**失败（env failed 也创建成功，状态可见）；run 时未 ready 才报 `FUNCTION_ENV_NOT_READY`。`Edit` 空 ops = "重建 active env"路径（重试失败的安装），发 `function.env_rebuilt`。
 
-**执行（`RunFunction`，所有路径唯一漏斗）**：取版本（空→active）→ env 未 ready 则懒物化 → `runner.Run` → **`ErrEnvNotFound`（env 被 GC 回收）= 重建 env + 重试一次** → `recordExecution`。四个调用方：`run_function` 工具（chat/agent，按 ctx 推）、HTTP `:run`（manual）、workflow 调度器 `dispatch.RunAction`（workflow，fail-fast：`OK=false` 转 error 使节点行写 failed）、sensor 触发器。
+**执行（`RunFunction`，所有路径唯一漏斗）**：nil input 在 runner 前归一成 `{}`（driver 做 `f(**input)`，nil→JSON `null`→`f(**None)` TypeError；无参调用方如 sensor/无接线 workflow 节点不该崩）；取版本（空→active）→ env 未 ready 则懒物化 → `runner.Run` → **`ErrEnvNotFound`（env 被 GC 回收）= 重建 env + 重试一次** → `recordExecution`。四个调用方：`run_function` 工具（chat/agent，按 ctx 推）、HTTP `:run`（manual）、workflow 调度器 `dispatch.RunAction`（workflow，fail-fast：`OK=false` 转 error 使节点行写 failed）、sensor 触发器。
 
 **沙箱驱动（精妙处）**：`SandboxAdapter.Run` 写 `main.py` = 用户代码 + driver 模板。driver 在调用期间**把 stdout 重定向到 stderr**、结束后才把 JSON 结果打回真 stdout——既保证 stdout 是可解析的单一 JSON，又让函数自己的 `print()` 变成实时进度（stderr 被**三写**：messages 流 tool_call progress + entities 流 run 终端 + `pkg/logtail` 限长收集器——后者随执行记录落 `logs` 列，run_function 的返回也携带）。
+
+**env 物化可见性**：ensureEnv 把每次尝试/模型修复行经 `envfix.WriterSink` tee 到 entities 流 forge 终端（不分入口——HTTP 编辑器路径与 chat 锻造同等可见）；状态级信号另走 `sandbox.env_status_changed` 通知（installing/ready/failed 带 errorMsg）。
 
 **记账（`recordExecution`）**：best-effort、走 `reqctx.Detached(wsID)`（被取消的运行仍落审计行）；status 按 `ctx.Err()` 区分 timeout/cancelled/failed；`logs` 随行落盘（List 置空、单条 Get 携带）。
 

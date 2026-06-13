@@ -59,6 +59,24 @@ func (s *Store) ListPendingFirings(ctx context.Context, limit int) ([]*triggerdo
 // firing reaches a terminal status, never silently dropped. Best-effort on a missing row.
 //
 // MarkFiringOutcome 置非 started 终态（skipped/superseded/shed）——每条 firing 都有终态，绝不静默丢。
+// SearchFirings pages one trigger's firing inbox newest-first (the disposition surface).
+//
+// SearchFirings 分页某 trigger 的 firing 收件箱（最新优先，处置面）。
+func (s *Store) SearchFirings(ctx context.Context, filter triggerdomain.FiringFilter) ([]*triggerdomain.Firing, string, error) {
+	q := s.frs.Query()
+	if filter.TriggerID != "" {
+		q = q.WhereEq("trigger_id", filter.TriggerID)
+	}
+	if filter.Status != "" {
+		q = q.WhereEq("status", filter.Status)
+	}
+	rows, next, err := q.Page(ctx, filter.Cursor, filter.Limit)
+	if err != nil {
+		return nil, "", fmt.Errorf("triggerstore.SearchFirings: %w", err)
+	}
+	return rows, next, nil
+}
+
 func (s *Store) MarkFiringOutcome(ctx context.Context, firingID, status string) error {
 	if _, err := s.frs.WhereEq("id", firingID).Update(ctx, "status", status); err != nil {
 		return fmt.Errorf("triggerstore.MarkFiringOutcome: %w", err)

@@ -45,7 +45,7 @@ durable 收件箱 trigger_firings（pending）……scheduler 每 5s 逐 workspa
 
 ## 4. 生命周期 / 行为
 
-- **4 源 config**（`ValidateConfig` 按 kind 分检）：cron=robfig 表达式（`TRIGGER_INVALID_CRON`）；webhook=挂载路径 + 可选 secret（明文比对或 HMAC-SHA256 验签，`TRIGGER_WEBHOOK_SECRET_MISMATCH` 401）；fsnotify=路径 + 事件类型 + 可选 pattern；sensor=周期 invoke fn/hd + CEL 条件（`TRIGGER_INVALID_CEL`/`TRIGGER_INVALID_INTERVAL`/`TRIGGER_SENSOR_TARGET_REQUIRED`）。
+- **4 源 config**（`ValidateConfig` 按 kind 分检）：cron=robfig **5 段**表达式（分钟粒度，与分钟桶 dedup 一致；`@every`/秒级不支持，错误消息指路）（`TRIGGER_INVALID_CRON`）；webhook=挂载路径 + 可选 secret（明文比对或 HMAC-SHA256 验签，`TRIGGER_WEBHOOK_SECRET_MISMATCH` 401）；fsnotify=路径 + 事件类型 + 可选 pattern；sensor=周期 invoke fn/hd + CEL 条件（`TRIGGER_INVALID_CEL`/`TRIGGER_INVALID_INTERVAL`/`TRIGGER_SENSOR_TARGET_REQUIRED`）。
 - **Edit 热更**：正在监听的 trigger 用新 config 重 Register。
 - **`:fire`**（FireManual）：手动催一次——扇给当前监听者（可能 0 个，那就只是一条 0 firing 的 Activation）。
 - webhook 异步 fire + recover（handler 不被慢/panic 拖累）、202 立即返回。
@@ -56,7 +56,7 @@ listener 永不知道 workflow（扇出是 app 的事）；Activation 与 Firing
 
 ## 6. 契约（引用）
 
-端点（CRUD + `:fire`/`:iterate` + activations 两查询）→ [api.md](../api.md) · 表（`triggers`/`trigger_activations`/`trigger_firings`——后两张 Log）→ [database.md](../database.md) · 码 `TRIGGER_*` 12+3 → [error-codes.md](../error-codes.md) · ID：`trg_`/`tra_`/`trf_`。
+端点（CRUD + `:fire`/`:iterate` + activations 两查询）→ [api.md](../api.md) · 表（`triggers`/`trigger_activations`/`trigger_firings`——后两张 Log）→ [database.md](../database.md) · 码 `TRIGGER_*` 12+3 → [error-codes.md](../error-codes.md) · ID：`trg_`/`tra_`/`trf_`。（另有 `GET {id}/firings`——收件箱处置面：started/skipped/superseded/shed）
 
 ## 7. 跨域集成
 

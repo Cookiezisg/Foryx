@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	errorspkg "github.com/sunweilin/forgify/backend/internal/pkg/errors"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	fspathpkg "github.com/sunweilin/forgify/backend/internal/pkg/fspath"
@@ -19,7 +20,6 @@ import (
 )
 
 const (
-	defaultLimit  = 2000
 	defaultOffset = 1
 
 	// maxScannerLineBytes caps a single line; bufio.Scanner errors past this
@@ -124,7 +124,7 @@ func (t *Read) Execute(ctx context.Context, argsJSON string) (string, error) {
 		args.Offset = defaultOffset
 	}
 	if args.Limit == 0 {
-		args.Limit = defaultLimit
+		args.Limit = limitspkg.Current().Tools.ReadDefaultLines
 	}
 
 	cleaned, err := fspathpkg.Expand(args.FilePath)

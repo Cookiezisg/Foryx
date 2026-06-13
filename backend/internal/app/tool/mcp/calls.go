@@ -24,7 +24,7 @@ type SearchMCPCalls struct{ svc *mcpapp.Service }
 func (t *SearchMCPCalls) Name() string { return "search_mcp_calls" }
 
 func (t *SearchMCPCalls) Description() string {
-	return "List an MCP server's tool-call history (most recent first). Filter by tool name or status (ok|failed|cancelled|timeout). Use get_mcp_call on an id for the full record including logs."
+	return "List an MCP server's tool-call history (most recent first) with an ok/failed rollup. Filter by tool name or status (ok|failed|cancelled|timeout). Use get_mcp_call on an id for the full record including logs."
 }
 
 func (t *SearchMCPCalls) Parameters() json.RawMessage {
@@ -65,7 +65,7 @@ func (t *SearchMCPCalls) Execute(ctx context.Context, argsJSON string) (string, 
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("search_mcp_calls: bad args: %w", err)
 	}
-	calls, next, err := t.svc.ListCalls(ctx, mcpdomain.CallFilter{
+	res, err := t.svc.SearchCalls(ctx, mcpdomain.CallFilter{
 		ServerID: args.ServerID,
 		Tool:     args.Tool,
 		Status:   args.Status,
@@ -75,7 +75,7 @@ func (t *SearchMCPCalls) Execute(ctx context.Context, argsJSON string) (string, 
 	if err != nil {
 		return "", fmt.Errorf("search_mcp_calls: %w", err)
 	}
-	return toolapp.ToJSON(map[string]any{"calls": calls, "nextCursor": next, "hasMore": next != ""}), nil
+	return toolapp.ToJSON(res), nil
 }
 
 // --- get_mcp_call ------------------------------------------------------------

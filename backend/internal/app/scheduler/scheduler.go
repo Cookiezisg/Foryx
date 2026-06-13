@@ -26,6 +26,7 @@ import (
 	approvaldomain "github.com/sunweilin/forgify/backend/internal/domain/approval"
 	controldomain "github.com/sunweilin/forgify/backend/internal/domain/control"
 	flowrundomain "github.com/sunweilin/forgify/backend/internal/domain/flowrun"
+	notificationdomain "github.com/sunweilin/forgify/backend/internal/domain/notification"
 	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 	triggerdomain "github.com/sunweilin/forgify/backend/internal/domain/trigger"
 	workflowdomain "github.com/sunweilin/forgify/backend/internal/domain/workflow"
@@ -122,6 +123,11 @@ type RunStore interface {
 // （手动/测试）。DIP：由 *workflowapp.Service 实现。
 type LifecycleReconciler interface {
 	MarkInactiveIfDrained(ctx context.Context, workflowID string) error
+	// MarkRunAttention lights (failed run) or clears (completed run) the workflow's
+	// needs-attention banner. Idempotent on the workflow side.
+	// MarkRunAttention 点亮（失败 run）或熄灭（completed run）workflow 的 needs-attention
+	// 横幅。workflow 侧幂等。
+	MarkRunAttention(ctx context.Context, workflowID string, needs bool, reason string) error
 }
 
 // Service is the durable interpreter. inbox may be nil (manual-only). log defaults to nop. inflight
@@ -137,8 +143,9 @@ type Service struct {
 	approval  ApprovalResolver
 	dispatch  Dispatcher
 	inbox     FiringInbox
-	entities  streamdomain.Bridge // entities stream (SSE-C); nil → no workflow-panel run terminal
-	recon     LifecycleReconciler // nil → no drain reconcile
+	entities  streamdomain.Bridge        // entities stream (SSE-C); nil → no workflow-panel run terminal
+	recon     LifecycleReconciler        // nil → no drain reconcile
+	notif     notificationdomain.Emitter // nil → no run notifications. nil → 无运行通知。
 	log       *zap.Logger
 
 	inflightMu sync.Mutex
@@ -157,6 +164,26 @@ func (s *Service) SetEntitiesBridge(b streamdomain.Bridge) { s.entities = b }
 // SetLifecycleReconciler 构造后装入排空 reconciler（避开 DI 环：workflow ← scheduler）。nil-tolerant
 // ——手动/测试装配不设。
 func (s *Service) SetLifecycleReconciler(r LifecycleReconciler) { s.recon = r }
+
+// SetNotifier installs the notifications emitter post-construction: a failed run and a
+// parked approval are the two asynchronous events a user must be summoned back for —
+// the panel signal alone only reaches whoever is already watching.
+//
+// SetNotifier 构造后装入通知发射器：失败 run 与 parked 审批是两类必须把用户**唤回**的
+// 异步事件——面板信号只够到正在看的人。
+func (s *Service) SetNotifier(e notificationdomain.Emitter) { s.notif = e }
+
+// notify emits one run notification best-effort (a notification must never fail a run).
+//
+// notify best-effort 发一条运行通知（通知绝不连累 run）。
+func (s *Service) notify(ctx context.Context, eventType string, payload map[string]any) {
+	if s.notif == nil {
+		return
+	}
+	if err := s.notif.Emit(ctx, eventType, payload); err != nil {
+		s.log.Warn("schedulerapp: notify failed (best-effort)", zap.String("event", eventType), zap.Error(err))
+	}
+}
 
 // NewService wires the interpreter. runs/workflows/control/approval/dispatch are required; inbox is
 // optional (nil = manual-only); log nil → nop.

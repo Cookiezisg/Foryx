@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"sync/atomic"
 
 	"go.uber.org/zap"
@@ -30,9 +31,11 @@ const (
 	// schemaVersion guards the index layout: a mismatch at boot drops and
 	// rebuilds — the index is derived data, never migrated in place.
 	// schemaVersion 守护索引布局：boot 不匹配即清空重建——索引是派生数据，从不原地迁移。
-	schemaVersion   = "1"
-	metaSchemaKey   = "fts_schema_version"
-	metaEmbedderKey = "embedder"
+	schemaVersion      = "1"
+	metaSchemaKey      = "fts_schema_version"
+	metaEmbedderKey    = "embedder"
+	metaOllamaURLKey   = "ollama_base_url"
+	metaOllamaModelKey = "ollama_model"
 )
 
 // §6.3 ranking constants — initial values, tests assert relative order only.
@@ -64,16 +67,21 @@ type Service struct {
 
 	reindexing atomic.Bool
 
-	// Semantic layer (§8): two adapters, the active one resolved per call from
-	// search_meta; vectors cached per workspace; backfill runs on its own worker.
-	// 语义层（§8）：两个适配器、按 search_meta 逐次解析生效者；向量按 workspace 缓存；
-	// 补算走独立 worker。
-	builtinProv searchdomain.EmbeddingProvider
-	ollamaProv  searchdomain.EmbeddingProvider
-	sifter      Sifter // nil → precision chain tier 3 only. nil → 精度链只剩第三档。
-	vectors     *vecCache
-	embedKick   chan string
-	embedQuit   chan struct{}
+	// Semantic layer (§8): the builtin adapter + an Ollama factory; the active one is
+	// resolved per call from search_meta, and the Ollama adapter is rebuilt (cached under
+	// ollamaMu) whenever the stored connection params change. Vectors cached per
+	// workspace; backfill runs on its own worker.
+	// 语义层（§8）：builtin 适配器 + Ollama 工厂；生效者按 search_meta 逐次解析，Ollama
+	// 适配器在存储连接参数变化时重建（ollamaMu 下缓存）。向量按 workspace 缓存；补算走独立 worker。
+	builtinProv   searchdomain.EmbeddingProvider
+	ollamaFactory OllamaFactory
+	ollamaMu      sync.Mutex
+	ollamaProv    searchdomain.EmbeddingProvider // cache for the current params key. 当前参数键的缓存。
+	ollamaKey     string
+	sifter        Sifter // nil → precision chain tier 3 only. nil → 精度链只剩第三档。
+	vectors       *vecCache
+	embedKick     chan string
+	embedQuit     chan struct{}
 }
 
 // New builds the Service; register sources before Start.

@@ -6,19 +6,21 @@ import (
 	"fmt"
 	"strings"
 
+	modelclientapp "github.com/sunweilin/forgify/backend/internal/app/modelclient"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 )
 
 // llmSifter backs the search_blocks precision chain (§7.4) with the utility
-// model — the same resolve → credentials → build → generate chain WebFetch's
-// summariser uses. One short completion, strict numbers-only output; any
-// failure makes the chain fall back to index ranking.
+// model — resolution goes through modelclient (the one shared chain; a hand-rolled
+// copy here once miswired base URL into the wire model id, AC-26). One short
+// completion, strict numbers-only output; any failure makes the chain fall back
+// to index ranking.
 //
-// llmSifter 用 utility 模型支撑 search_blocks 精度链（§7.4）——与 WebFetch 摘要器
-// 同一条 resolve → credentials → build → generate 链。一次短补全、严格只回编号；
-// 任何失败让链回退索引排序。
+// llmSifter 用 utility 模型支撑 search_blocks 精度链（§7.4）——解析走 modelclient
+// （唯一共享链；这里曾手抄一份并把 base URL 误接进线缆 model id，AC-26）。一次短
+// 补全、严格只回编号；任何失败让链回退索引排序。
 type llmSifter struct {
 	picker  modeldomain.ModelPicker
 	keys    apikeydomain.KeyProvider
@@ -26,21 +28,7 @@ type llmSifter struct {
 }
 
 func (f *llmSifter) Sift(ctx context.Context, query string, items []string, topN int) ([]int, error) {
-	ref, err := modeldomain.Resolve(ctx, modeldomain.ScenarioUtility, nil, f.picker)
-	if err != nil {
-		return nil, err
-	}
-	creds, err := f.keys.ResolveCredentialsByID(ctx, ref.APIKeyID)
-	if err != nil {
-		return nil, err
-	}
-	client, modelID, err := f.factory.Build(llminfra.Config{
-		Provider:  creds.Provider,
-		APIFormat: creds.APIFormat,
-		ModelID:   ref.ModelID,
-		Key:       creds.Key,
-		BaseURL:   creds.BaseURL,
-	})
+	client, req, _, err := modelclientapp.Resolve(ctx, modeldomain.ScenarioUtility, nil, f.picker, f.keys, f.factory)
 	if err != nil {
 		return nil, err
 	}
@@ -51,13 +39,8 @@ func (f *llmSifter) Sift(ctx context.Context, query string, items []string, topN
 	}
 	fmt.Fprintf(&sb, "\nReturn ONLY a JSON array of the numbers of the best-matching blocks, best first, at most %d, e.g. [3,1]. No other text. Return [] if nothing fits.", topN)
 
-	out, err := llminfra.Generate(ctx, client, llminfra.Request{
-		ModelID:  modelID,
-		Key:      creds.Key,
-		BaseURL:  creds.BaseURL,
-		Options:  ref.Options,
-		Messages: []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: sb.String()}},
-	})
+	req.Messages = []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: sb.String()}}
+	out, err := llminfra.Generate(ctx, client, req)
 	if err != nil {
 		return nil, err
 	}

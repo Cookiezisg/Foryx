@@ -6,6 +6,8 @@
 #   运行   server   起后端服务（FORGIFY_DEV，端口 $(BACKEND_PORT)）
 #          stop     优雅关停后端（SIGTERM → App.Serve 有序关停）
 #   测试   unit     Go 单测（in-memory SQLite）
+#          testend  全功能黑盒验收（testend/ 真起后端二进制 + llmmock；分钟级，不进 verify）
+#          evals    金标 LLM 旅程（testend/golden，真模型烧钱；手动触发）
 #   文档   docs     文档规范门禁（cmd/docs，GOVERNANCE §11 全套）
 #   出包   build    后端二进制 → bin/forgify-server
 #   门禁   verify   pre-push：gofmt + vet + build + unit + docs（host 平台）
@@ -34,6 +36,8 @@ help:
 	@echo "  运行:   make server   起后端服务（:$(BACKEND_PORT)）"
 	@echo "          make stop     优雅关停后端"
 	@echo "  测试:   make unit     Go 单测"
+	@echo "          make testend  全功能黑盒验收（真二进制 + llmmock，分钟级）"
+	@echo "          make evals    金标 LLM 旅程（真模型，烧钱，手动跑）"
 	@echo "  文档:   make docs     文档规范门禁（GOVERNANCE §11）"
 	@echo "  出包:   make build    后端二进制 → bin/forgify-server"
 	@echo "  门禁:   make verify   pre-push（gofmt+vet+build+unit+docs）"
@@ -76,6 +80,18 @@ stop:
 unit:
 	$(AUTO_DEVBOX)
 	@cd backend && go test -count=1 ./...
+
+# testend — 全功能黑盒验收：编译并拉起真 backend 二进制，纯 HTTP/SSE 打全功能场景（零 backend import）。
+# 首跑会下载 sandbox 运行时（之后走 ~/.forgify-testend-cache 缓存）。
+testend:
+	$(AUTO_DEVBOX)
+	@cd testend && go test -count=1 -timeout 30m ./scenarios/...
+
+# evals — 金标 LLM 旅程：真模型端到端（柱C）。烧钱，手动跑。自动 source 仓库根 .env（若存在）注入
+# key——默认认 DEEPSEEK_API_KEY + deepseek-v4-flash；EVALS_BASE_URL/EVALS_MODEL/EVALS_KEY 可覆盖。
+evals:
+	$(AUTO_DEVBOX)
+	@if [ -f .env ]; then set -a; . ./.env; set +a; fi; cd testend && EVALS=1 go test -count=1 -timeout 60m ./golden/...
 
 # docs — 文档规范门禁：frontmatter / 类型 / 生命周期 / INDEX≤50 / 孤儿链接（GOVERNANCE §11）。
 docs:

@@ -15,6 +15,10 @@ import (
 // fakeReconciler records which workflows the scheduler asked to settle their drain.
 type fakeReconciler struct{ drained []string }
 
+func (f *fakeReconciler) MarkRunAttention(_ context.Context, _ string, _ bool, _ string) error {
+	return nil
+}
+
 func (f *fakeReconciler) MarkInactiveIfDrained(_ context.Context, workflowID string) error {
 	f.drained = append(f.drained, workflowID)
 	return nil

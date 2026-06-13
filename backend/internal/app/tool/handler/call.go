@@ -18,7 +18,7 @@ type CallHandler struct{ svc *handlerapp.Service }
 func (t *CallHandler) Name() string { return "call_handler" }
 
 func (t *CallHandler) Description() string {
-	return "Call a method on a handler's resident instance (it stays alive between calls, so its state persists). Returns the method's result. The instance is started on first use if needed."
+	return "Call a method on a handler's resident instance (it stays alive between calls, so its state persists). Returns the method's result. The instance is started on first use if needed. Each call is recorded — inspect later with search_handler_calls / get_handler_call (logs included)."
 }
 
 func (t *CallHandler) Parameters() json.RawMessage {

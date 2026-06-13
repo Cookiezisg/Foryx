@@ -17,6 +17,7 @@ import (
 	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	idgenpkg "github.com/sunweilin/forgify/backend/internal/pkg/idgen"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 	schemapkg "github.com/sunweilin/forgify/backend/internal/pkg/schema"
 )
@@ -67,8 +68,6 @@ type InvokeResult struct {
 	ErrorMsg    string `json:"errorMsg,omitempty"`
 	ElapsedMs   int64  `json:"elapsedMs"`
 }
-
-const defaultInvokeMaxTurns = 10
 
 // InvokeAgent runs an agent's ReAct loop once and records one Execution (mirrors function
 // RunFunction: the single execution method every path — invoke_agent tool / HTTP :invoke /
@@ -201,7 +200,7 @@ func (s *Service) runLoop(ctx context.Context, a *agentdomain.Agent, v *agentdom
 
 	maxTurns := in.MaxTurns
 	if maxTurns <= 0 {
-		maxTurns = defaultInvokeMaxTurns
+		maxTurns = limitspkg.Current().Agent.InvokeMaxTurns
 	}
 	remaining := maxTurns - len(in.ReplaySteps)
 	if remaining < 1 {

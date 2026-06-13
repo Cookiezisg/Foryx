@@ -30,6 +30,7 @@ import (
 	sandboxapp "github.com/sunweilin/forgify/backend/internal/app/sandbox"
 	schedulerapp "github.com/sunweilin/forgify/backend/internal/app/scheduler"
 	searchapp "github.com/sunweilin/forgify/backend/internal/app/search"
+	settingsapp "github.com/sunweilin/forgify/backend/internal/app/settings"
 	skillapp "github.com/sunweilin/forgify/backend/internal/app/skill"
 	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	todoapp "github.com/sunweilin/forgify/backend/internal/app/todo"
@@ -39,6 +40,7 @@ import (
 	asktool "github.com/sunweilin/forgify/backend/internal/app/tool/ask"
 	blockstool "github.com/sunweilin/forgify/backend/internal/app/tool/blocks"
 	controltool "github.com/sunweilin/forgify/backend/internal/app/tool/control"
+	conversationtool "github.com/sunweilin/forgify/backend/internal/app/tool/conversation"
 	documenttool "github.com/sunweilin/forgify/backend/internal/app/tool/document"
 	filesystemtool "github.com/sunweilin/forgify/backend/internal/app/tool/filesystem"
 	functiontool "github.com/sunweilin/forgify/backend/internal/app/tool/function"
@@ -46,10 +48,12 @@ import (
 	mcptool "github.com/sunweilin/forgify/backend/internal/app/tool/mcp"
 	memorytool "github.com/sunweilin/forgify/backend/internal/app/tool/memory"
 	mounttool "github.com/sunweilin/forgify/backend/internal/app/tool/mount"
+	relationtool "github.com/sunweilin/forgify/backend/internal/app/tool/relation"
 	searchtool "github.com/sunweilin/forgify/backend/internal/app/tool/search"
 	shelltool "github.com/sunweilin/forgify/backend/internal/app/tool/shell"
 	skilltool "github.com/sunweilin/forgify/backend/internal/app/tool/skill"
 	subagenttool "github.com/sunweilin/forgify/backend/internal/app/tool/subagent"
+	todotool "github.com/sunweilin/forgify/backend/internal/app/tool/todo"
 	triggertool "github.com/sunweilin/forgify/backend/internal/app/tool/trigger"
 	webtool "github.com/sunweilin/forgify/backend/internal/app/tool/web"
 	workflowtool "github.com/sunweilin/forgify/backend/internal/app/tool/workflow"
@@ -57,6 +61,7 @@ import (
 	workflowapp "github.com/sunweilin/forgify/backend/internal/app/workflow"
 	workspaceapp "github.com/sunweilin/forgify/backend/internal/app/workspace"
 	relationdomain "github.com/sunweilin/forgify/backend/internal/domain/relation"
+	searchdomain "github.com/sunweilin/forgify/backend/internal/domain/search"
 	mcpinfra "github.com/sunweilin/forgify/backend/internal/infra/mcp"
 	sandboxinfra "github.com/sunweilin/forgify/backend/internal/infra/sandbox"
 	searchengine "github.com/sunweilin/forgify/backend/internal/infra/search/engine"
@@ -92,6 +97,7 @@ type services struct {
 	approval     *approvalapp.Service
 	workflow     *workflowapp.Service
 	scheduler    *schedulerapp.Service
+	settings     *settingsapp.Service
 	conversation *conversationapp.Service
 	chat         *chatapp.Service
 	subagent     *subagentapp.Service
@@ -131,7 +137,9 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	// search：所有出口背后的同一个引擎（综搜/垂搜/积木/RAG）；source 与 notifier 在装配后
 	// 接线，worker 于 App.Boot 启动。
 	searchSvc := searchapp.New(st.search, log)
-	searchSvc.SetEmbeddingProviders(searchengine.NewBuiltin(sbx, log), searchengine.NewOllama("", ""))
+	searchSvc.SetEmbeddingProviders(searchengine.NewBuiltin(sbx, log), func(baseURL, model string) searchdomain.EmbeddingProvider {
+		return searchengine.NewOllama(baseURL, model)
+	})
 	searchSvc.SetSifter(&llmSifter{picker: ws, keys: keys, factory: inf.factory})
 
 	// R0060 model-resolution chain (one core, four scenario wrappers) + caps/window lookup.
@@ -146,6 +154,7 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	todo := todoapp.New(st.todo, bus.messages, log)
 	att := attachmentapp.New(st.attachment, st.blob, attachmentapp.NewSandboxExtractor(sbx), log)
 	fn := functionapp.NewService(st.function, prov, functionapp.NewSandboxAdapter(sbx, dataDir, bus.entities), notif, log)
+	fn.SetEntitiesBridge(bus.entities) // SSE-C: env 物化尝试行 tee 到 function 锻造终端（不分入口）
 	hd := handlerapp.NewService(st.handler, prov, handlerapp.NewSandboxAdapter(sbx, dataDir), inf.encryptor, handlerapp.DefaultClientFactory, notif, log)
 	hd.SetEntitiesBridge(bus.entities) // SSE-C: Call tees method yields to the handler's run terminal
 	ag := agentapp.NewService(st.agent, notif, log)
@@ -173,6 +182,26 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	}, log)
 	skill := skillapp.NewService(st.skill, subagentSvc, notif, log)
 
+	// relation: built with every entity's name resolver (read-time hydration), then injected back
+	// into each entity as its RelationSyncer (edge sync on create/edit/delete).
+	rel := relationapp.NewService(relationapp.Config{
+		Repo: st.relation,
+		Namers: map[string]relationapp.Namer{
+			relationdomain.EntityKindFunction:     fn,
+			relationdomain.EntityKindHandler:      hd,
+			relationdomain.EntityKindAgent:        ag, // workflow→agent equip / conversation→agent forged 边的目标端 hydrate
+			relationdomain.EntityKindControl:      ctl,
+			relationdomain.EntityKindApproval:     apf,
+			relationdomain.EntityKindWorkflow:     wf,
+			relationdomain.EntityKindTrigger:      trg,
+			relationdomain.EntityKindMCP:          mcp,
+			relationdomain.EntityKindSkill:        skill,
+			relationdomain.EntityKindDocument:     doc,
+			relationdomain.EntityKindConversation: conv,
+		},
+		Log: log,
+	})
+
 	// --- toolset: Resident (filesystem/search/shell) + Lazy (entity tools + web) ---
 	guard := pathguardpkg.NewDefault()
 	toolset := toolapp.Toolset{
@@ -181,6 +210,7 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 			searchtool.SearchTools(guard, log),
 			shelltool.NewShellTools().Tools,
 			[]toolapp.Tool{asktool.New()}, // R0064: ask_user — agent asks the human (blocks on the humanloop broker)
+			todotool.TodoTools(todo),      // todo_write — the checklist's only write path (the HTTP board is read-only)
 		),
 		Lazy: concat(
 			functiontool.FunctionTools(fn, searchSvc),
@@ -195,6 +225,8 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 			mcptool.MCPTools(mcp),
 			skilltool.SkillTools(skill),
 			blockstool.BlocksTools(searchSvc),
+			conversationtool.ConversationTools(searchSvc),
+			relationtool.RelationTools(rel),
 			webtool.WebTools(ws, keys, inf.factory, ws, ws, log),
 		),
 	}
@@ -238,10 +270,22 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	// active workflow 是 App.Boot 的事。
 	wf.SetExecutionPorts(trg, runnerAdapter{sched: sched})
 	sched.SetLifecycleReconciler(wf)
+	sched.SetNotifier(notif) // run_failed / approval_pending 唤回用户；completed 熄 attention
 	// Deleting a conversation cancels its in-flight generation (chat satisfies the port;
 	// post-build injection breaks the chat→conversation→chat cycle).
 	// 删对话连带取消在途生成（chat 满足该端口；后注入破 chat→conversation→chat 环）。
 	conv.SetGenerationCanceler(chat)
+
+	// apikey delete-guard (RefScanner): refuse to delete a key still referenced, so the
+	// reference never dangles. Two real sources — a workspace's scenario default models /
+	// search key, and an agent's pinned modelOverride; both implement RefScanner structurally.
+	// Without these the guard consults an empty scanner list and API_KEY_IN_USE can never fire.
+	//
+	// apikey 删除守卫（RefScanner）：仍被引用的 key 拒删，引用绝不悬空。两个真实来源——workspace
+	// 的 scenario 默认模型 / 搜索 key，与 agent 钉死的 modelOverride；二者结构上满足 RefScanner。
+	// 缺这两行则守卫询问空 scanner 列、API_KEY_IN_USE 永不触发。
+	keys.AddRefScanner(ws)
+	keys.AddRefScanner(ag)
 
 	// Workspace delete cascades (PD-1 plan A): kill every workflow's automation (detach
 	// listeners + cancel in-flight runs + inactive — idempotent on already-inactive ones, and
@@ -293,25 +337,6 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	// workflow ref resolution (CapabilityCheck + pin closure determinism).
 	wf.SetResolver(NewRefResolver(fn, hd, ag, ctl, apf, trg, mcp))
 
-	// relation: built with every entity's name resolver (read-time hydration), then injected back
-	// into each entity as its RelationSyncer (edge sync on create/edit/delete).
-	rel := relationapp.NewService(relationapp.Config{
-		Repo: st.relation,
-		Namers: map[string]relationapp.Namer{
-			relationdomain.EntityKindFunction:     fn,
-			relationdomain.EntityKindHandler:      hd,
-			relationdomain.EntityKindAgent:        ag, // workflow→agent equip / conversation→agent forged 边的目标端 hydrate
-			relationdomain.EntityKindControl:      ctl,
-			relationdomain.EntityKindApproval:     apf,
-			relationdomain.EntityKindWorkflow:     wf,
-			relationdomain.EntityKindTrigger:      trg,
-			relationdomain.EntityKindMCP:          mcp,
-			relationdomain.EntityKindSkill:        skill,
-			relationdomain.EntityKindDocument:     doc,
-			relationdomain.EntityKindConversation: conv,
-		},
-		Log: log,
-	})
 	fn.SetRelationSyncer(rel)
 	hd.SetRelationSyncer(rel)
 	ag.SetRelationSyncer(rel)
@@ -377,6 +402,8 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	mcp.SetSearchNotifier(sn)
 	chat.SetSearchNotifier(sn)
 	subagentSvc.SetSearchNotifier(sn)
+	// events.md 的 mcp.{installed,updated,removed,reconnected} 族——缺此线整族哑火（AC-29）。
+	mcp.SetNotifier(notif)
 
 	s := &services{
 		workspace: ws, apikey: keys, modelCaps: modelCaps, relation: rel, catalog: cat,

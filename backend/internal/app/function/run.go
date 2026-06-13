@@ -54,9 +54,19 @@ func (s *Service) RunFunction(ctx context.Context, in RunInput) (*functiondomain
 		}
 	}
 
+	// Normalize nil input to {} BEFORE the runner: the driver does f(**input), and a nil
+	// map marshals to JSON `null` → f(**None) → TypeError. A no-arg caller (sensor poll,
+	// a workflow node with no input wiring) must not crash a zero-arg function.
+	// 在 runner 前把 nil input 归一成 {}：driver 做 f(**input)，nil map 序列化成 JSON `null`
+	// → f(**None) → TypeError。无参调用方（sensor 轮询、无 input 接线的 workflow 节点）不该
+	// 把零参函数搞崩。
+	input := in.Input
+	if input == nil {
+		input = map[string]any{}
+	}
 	owner := envOwner(v.FunctionID, v.EnvID)
 	startedAt := time.Now().UTC()
-	res, sandboxErr := s.runner.Run(ctx, owner, v.FunctionID, v.ID, v.Code, in.Input)
+	res, sandboxErr := s.runner.Run(ctx, owner, v.FunctionID, v.ID, v.Code, input)
 
 	// Env reclaimed externally (GC / manual cleanup): rebuild from the version snapshot
 	// and retry once.
@@ -65,7 +75,7 @@ func (s *Service) RunFunction(ctx context.Context, in RunInput) (*functiondomain
 		s.log.Info("function env reclaimed; rebuilding then retrying",
 			zap.String("functionId", v.FunctionID), zap.String("versionId", v.ID))
 		if ready, _ := s.ensureEnv(ctx, v, nil); ready {
-			res, sandboxErr = s.runner.Run(ctx, owner, v.FunctionID, v.ID, v.Code, in.Input)
+			res, sandboxErr = s.runner.Run(ctx, owner, v.FunctionID, v.ID, v.Code, input)
 		}
 	}
 	endedAt := time.Now().UTC()

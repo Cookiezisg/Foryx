@@ -33,4 +33,4 @@ MCP server 是**容器实体**：持 N 个可调工具、以常驻进程（stdio
 
 ## 4. 契约（引用）
 
-端点（servers CRUD + `:reconnect` + registry 浏览 + import + calls 查询）→ [api.md](../api.md) · 表 `mcp_servers`（config_enc）+ `mcp_calls`（Log）→ [database.md](../database.md) · 码 `MCP_*` 11+3 → [error-codes.md](../error-codes.md) · ID：`mcp_`/`mcl_`。LLM 工具：动态 `mcp__*__*` 全家 + `install_mcp_server` 等系统工具 + 调用日志两查询（`search_mcp_calls`/`get_mcp_call`，与 fn/hd/ag 的执行日志查询面对齐）。消费方：chat loop（动态工具）、agent 挂载（`mcp:server/tool`）、workflow action 节点（dispatcher 直调 CallTool）。
+端点（servers CRUD + `:reconnect` + `stderr` + `tools/{tool}:invoke` 直调 + registry 浏览/安装 + import + calls 列表/详情——列表带 ok/failed 聚合、详情带 logs，与 handler 同形）→ [api.md](../api.md) · 表 `mcp_servers`（config_enc）+ `mcp_calls`（Log）→ [database.md](../database.md) · 码 `MCP_*` 11+3 → [error-codes.md](../error-codes.md) · ID：`mcp_`/`mcl_`。LLM 工具：动态 `mcp__*__*` 全家 + `install_mcp_server` 等系统工具 + 调用日志两查询（`search_mcp_calls`/`get_mcp_call`，与 fn/hd/ag 的执行日志查询面对齐）。通知：`mcp.{installed,updated,removed,reconnected}` 族（`SetNotifier` 注入 Emitter；曾缺线整族哑火，AC-29）→ [events.md](../events.md)。消费方：chat loop（动态工具）、agent 挂载（`mcp:server/tool`）、workflow action 节点（dispatcher 直调 CallTool）。

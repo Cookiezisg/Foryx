@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"iter"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -125,14 +126,18 @@ func TestDanger_ApproveRunsTool(t *testing.T) {
 		t.Fatalf("Send: %v", err)
 	}
 	pending := waitPending(t, svc, "cv_1", 1)
-	if pending[0].Kind != humanloopapp.KindDanger || pending[0].Tool != "deploy" || pending[0].ToolCallID != "tc1" {
+	// The interaction id is the SERVER-minted block id (blk_), never the provider's wire id
+	// — providers recycle ids, so the wire id cannot key anything durable.
+	// 交互 id 是服务端铸造的块 id（blk_）、绝非 provider 线缆 id——provider 会复用 id，线缆 id
+	// 不能作任何持久键。
+	if pending[0].Kind != humanloopapp.KindDanger || pending[0].Tool != "deploy" || !strings.HasPrefix(pending[0].ToolCallID, "blk_") {
 		t.Fatalf("unexpected pending interaction: %+v", pending[0])
 	}
 	if ran {
 		t.Fatal("tool must NOT run before approval (interrupt-before-side-effect)")
 	}
 
-	if err := svc.ResolveInteraction(ctx, "tc1", humanloopapp.DecisionApprove, ""); err != nil {
+	if err := svc.ResolveInteraction(ctx, pending[0].ToolCallID, humanloopapp.DecisionApprove, ""); err != nil {
 		t.Fatalf("ResolveInteraction: %v", err)
 	}
 	waitClose(t, bridge, asstID)
@@ -156,8 +161,8 @@ func TestDanger_DenySkipsTool(t *testing.T) {
 	ctx := ctxWS("ws_1")
 
 	asstID, _ := svc.Send(ctx, "cv_1", SendInput{Content: "deploy"})
-	waitPending(t, svc, "cv_1", 1)
-	if err := svc.ResolveInteraction(ctx, "tc1", humanloopapp.DecisionDeny, ""); err != nil {
+	pending := waitPending(t, svc, "cv_1", 1)
+	if err := svc.ResolveInteraction(ctx, pending[0].ToolCallID, humanloopapp.DecisionDeny, ""); err != nil {
 		t.Fatalf("ResolveInteraction: %v", err)
 	}
 	waitClose(t, bridge, asstID)
@@ -186,8 +191,8 @@ func TestDanger_ApproveAlwaysWhitelists(t *testing.T) {
 	ctx := ctxWS("ws_1")
 
 	asst1, _ := svc.Send(ctx, "cv_1", SendInput{Content: "deploy"})
-	waitPending(t, svc, "cv_1", 1)
-	if err := svc.ResolveInteraction(ctx, "tc1", humanloopapp.DecisionApproveAlways, ""); err != nil {
+	pending := waitPending(t, svc, "cv_1", 1)
+	if err := svc.ResolveInteraction(ctx, pending[0].ToolCallID, humanloopapp.DecisionApproveAlways, ""); err != nil {
 		t.Fatalf("approve_always: %v", err)
 	}
 	waitClose(t, bridge, asst1)

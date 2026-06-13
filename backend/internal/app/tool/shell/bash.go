@@ -14,14 +14,13 @@ import (
 	"time"
 
 	errorspkg "github.com/sunweilin/forgify/backend/internal/pkg/errors"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 
 	loopapp "github.com/sunweilin/forgify/backend/internal/app/loop"
 )
 
 const (
-	defaultTimeoutMS = 120_000
-	maxTimeoutMS     = 600_000
-	outputCapBytes   = 256 * 1024
+	maxTimeoutMS = 600_000
 
 	// waitDelay bounds how long Run/Wait keeps the I/O pipes open after the process exits or
 	// the context is cancelled. Without it, any surviving grandchild that inherited the stdout
@@ -120,7 +119,7 @@ func (t *Bash) Execute(ctx context.Context, argsJSON string) (string, error) {
 
 	timeoutMS := args.Timeout
 	if timeoutMS == 0 {
-		timeoutMS = defaultTimeoutMS
+		timeoutMS = limitspkg.Current().Timeout.BashDefaultTimeoutSec * 1000
 	}
 	return t.runForeground(ctx, cmdText, time.Duration(timeoutMS)*time.Millisecond)
 }
@@ -195,15 +194,15 @@ func formatForegroundResult(output string, exitCode int, note string) string {
 	return sb.String()
 }
 
-// capOutput trims to outputCapBytes (keeping the tail) and annotates the dropped count.
+// capOutput trims to outputCapBytes() (keeping the tail) and annotates the dropped count.
 //
-// capOutput 截到 outputCapBytes（保留尾部）并标注丢弃字节数。
+// capOutput 截到 outputCapBytes()（保留尾部）并标注丢弃字节数。
 func capOutput(b []byte) string {
-	if len(b) <= outputCapBytes {
+	if len(b) <= outputCapBytes() {
 		return string(b)
 	}
-	dropped := len(b) - outputCapBytes
-	return fmt.Sprintf("...[truncated %d bytes from start]\n", dropped) + string(b[len(b)-outputCapBytes:])
+	dropped := len(b) - outputCapBytes()
+	return fmt.Sprintf("...[truncated %d bytes from start]\n", dropped) + string(b[len(b)-outputCapBytes():])
 }
 
 // runBackground starts the command detached so it outlives the chat turn; reaped via
@@ -298,3 +297,8 @@ func buildShellCmd(ctx context.Context, command string) *exec.Cmd {
 	setProcessGroup(cmd)
 	return cmd
 }
+
+// outputCapBytes reads the live bash output cap (limits.Tools.BashOutputCapKB).
+//
+// outputCapBytes 读活动 bash 输出上限（limits.Tools.BashOutputCapKB）。
+func outputCapBytes() int { return limitspkg.Current().Tools.BashOutputCapKB << 10 }

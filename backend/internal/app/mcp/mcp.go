@@ -18,6 +18,7 @@ import (
 	"go.uber.org/zap"
 
 	mcpdomain "github.com/sunweilin/forgify/backend/internal/domain/mcp"
+	notificationdomain "github.com/sunweilin/forgify/backend/internal/domain/notification"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 	searchdomain "github.com/sunweilin/forgify/backend/internal/domain/search"
 	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
@@ -25,8 +26,7 @@ import (
 )
 
 const (
-	connectTimeout     = 30 * time.Second
-	defaultCallTimeout = 180 * time.Second // MCP tools may call LLMs / scrape; a long ceiling returns control to the agent
+	connectTimeout = 30 * time.Second
 )
 
 // SandboxPort is the subset of sandboxapp.Service mcp needs: provision a runtime env
@@ -51,7 +51,8 @@ type RelationSyncer interface {
 // Service 串联 repo、registry、sandbox 与 per-server client。
 type Service struct {
 	repo      mcpdomain.Repository
-	search    searchdomain.Notifier // nil → search indexing disabled. nil → 不接搜索索引。
+	search    searchdomain.Notifier      // nil → search indexing disabled. nil → 不接搜索索引。
+	notif     notificationdomain.Emitter // nil → mcp.* 通知族静默（events.md P4 契约）
 	registry  mcpdomain.RegistrySource
 	sandbox   SandboxPort
 	relations RelationSyncer      // optional; nil disables relation hooks
@@ -88,6 +89,26 @@ func New(repo mcpdomain.Repository, registry mcpdomain.RegistrySource, sandbox S
 
 // SetRelationSyncer installs the relation Service post-construction.
 func (s *Service) SetRelationSyncer(r RelationSyncer) { s.relations = r }
+
+// SetNotifier installs the notification emitter post-construction — the
+// mcp.{installed,updated,removed,reconnected} family events.md promises; the
+// service shipped without this wire and the family never fired (AC-29).
+//
+// SetNotifier 装配后装入通知发射器——events.md 承诺的 mcp.{installed,updated,removed,
+// reconnected} 族；此前缺这条线、整族从未发出（AC-29）。
+func (s *Service) SetNotifier(n notificationdomain.Emitter) { s.notif = n }
+
+// emitNotif fires one mcp.<action> notification (best-effort, nil-safe).
+//
+// emitNotif 发一条 mcp.<action> 通知（best-effort、nil 安全）。
+func (s *Service) emitNotif(ctx context.Context, action, name string) {
+	if s.notif == nil {
+		return
+	}
+	if err := s.notif.Emit(ctx, "mcp."+action, map[string]any{"name": name}); err != nil {
+		s.log.Warn("mcpapp.notify failed", zap.String("name", name), zap.String("action", action), zap.Error(err))
+	}
+}
 
 // SetEntitiesBridge installs the entities stream post-construction (SSE-C): CallTool tees a tool
 // call's progress notifications onto the server's run terminal for the entity panel.
@@ -157,6 +178,7 @@ func (s *Service) Reconnect(ctx context.Context, name string) (*mcpdomain.Server
 	cctx, cancel := context.WithTimeout(ctx, connectTimeout)
 	defer cancel()
 	_ = s.connectOne(cctx, srv) // failure → status=failed; caller sees lastError
+	s.emitNotif(ctx, "reconnected", srv.Name)
 	return s.GetServer(ctx, name)
 }
 
@@ -230,7 +252,7 @@ func (s *Service) connectOne(ctx context.Context, srv *mcpdomain.Server) error {
 		st.Tools = tools
 	}
 	s.mu.Unlock()
-	s.notifySearch(ctx, srv.ID)
+	s.notifySearch(ctx, srv.Name)
 	return nil
 }
 

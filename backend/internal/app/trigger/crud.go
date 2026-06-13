@@ -183,6 +183,16 @@ func (s *Service) GetActivation(ctx context.Context, id string) (*triggerdomain.
 	return s.repo.GetActivation(ctx, id)
 }
 
+// SearchFirings pages a trigger's firing inbox — where a fired activation's run-or-not
+// disposition (started / skipped / superseded / shed) becomes visible ("it fired, why
+// didn't it run?").
+//
+// SearchFirings 分页 trigger 的 firing 收件箱——触发后「跑没跑、为什么没跑」的处置
+// （started/skipped/superseded/shed）在这里可见。
+func (s *Service) SearchFirings(ctx context.Context, filter triggerdomain.FiringFilter) ([]*triggerdomain.Firing, string, error) {
+	return s.repo.SearchFirings(ctx, filter)
+}
+
 // validate checks kind + structural config (domain) then source-specific syntax: cron
 // expression parse and sensor CEL compile (condition/output). CEL/cron syntax can't live in
 // the domain (no cel-go/robfig import), so it's verified here and mapped to a domain error.

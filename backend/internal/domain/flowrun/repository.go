@@ -8,6 +8,7 @@ import "context"
 // ListFilter 分页一个 workspace 的 flowrun（最新优先）。可选 WorkflowID 收窄到单个 workflow 历史。
 type ListFilter struct {
 	WorkflowID string
+	Status     string // running | completed | failed | cancelled; "" = all. 空 = 全部。
 	Cursor     string
 	Limit      int
 }

@@ -2,41 +2,36 @@ package limits
 
 import "testing"
 
-func TestDefault_HighCeilings(t *testing.T) {
+// TestDefault_MatchesPreWiringConstants pins the defaults to the values the code enforced
+// before limits was wired — wiring must not change behavior.
+//
+// TestDefault_MatchesPreWiringConstants 把默认值钉到接线前代码实际执行的常量——接线不得改行为。
+func TestDefault_MatchesPreWiringConstants(t *testing.T) {
 	d := Default()
-	if d.Agent.MaxSteps != 150 {
-		t.Errorf("MaxSteps = %d, want 150", d.Agent.MaxSteps)
+	if d.Agent.MaxSteps != 25 || d.Agent.InvokeMaxTurns != 10 {
+		t.Fatalf("agent defaults drifted: %+v", d.Agent)
 	}
-	if d.Output.UnknownModelMaxTokens != 64000 {
-		t.Errorf("UnknownModelMaxTokens = %d, want 64000", d.Output.UnknownModelMaxTokens)
+	if d.Context.TriggerRatio != 0.80 {
+		t.Fatalf("context default drifted: %+v", d.Context)
 	}
-	if d.Timeout.LLMIdleSec != 150 {
-		t.Errorf("LLMIdleSec = %d, want 150", d.Timeout.LLMIdleSec)
+	if d.Timeout.LLMIdleSec != 150 || d.Timeout.MCPCallSec != 180 || d.Timeout.BashDefaultTimeoutSec != 120 {
+		t.Fatalf("timeout defaults drifted: %+v", d.Timeout)
 	}
-	if d.Tools.SearchTopN != 10 {
-		t.Errorf("SearchTopN = %d, want 10", d.Tools.SearchTopN)
+	if d.Tools.ReadDefaultLines != 2000 || d.Tools.BashOutputCapKB != 256 || d.Tools.ToolResultCapKB != 256 {
+		t.Fatalf("tools defaults drifted: %+v", d.Tools)
 	}
-	if d.Context.SoftRatio != 0.70 || d.Context.HardRatio != 0.85 {
-		t.Errorf("ratios = %v/%v, want 0.70/0.85", d.Context.SoftRatio, d.Context.HardRatio)
-	}
-	if d.Workflow.AgentNodeMaxTurnsHard != 50 {
-		t.Errorf("AgentNodeMaxTurnsHard = %d, want 50", d.Workflow.AgentNodeMaxTurnsHard)
+	if d.Guards.AttachmentMaxMB != 50 || d.Guards.WebhookBodyMaxMB != 10 {
+		t.Fatalf("guards defaults drifted: %+v", d.Guards)
 	}
 }
 
-// Default must satisfy func() Limits so it injects directly as the getter.
-func TestDefault_IsGetterShape(t *testing.T) {
-	var getter func() Limits = Default
-	if getter().Tools.SearchTopN != 10 {
-		t.Fatal("getter shape broken")
+func TestWithDefaults_FillsZeros(t *testing.T) {
+	l := WithDefaults(Limits{Agent: AgentLimits{MaxSteps: 7}})
+	if l.Agent.MaxSteps != 7 {
+		t.Fatalf("explicit value overwritten: %+v", l.Agent)
 	}
-}
-
-func TestCurrent_DefaultsToDefault(t *testing.T) {
-	// With no provider set, Current mirrors Default.
-	// 未设 provider 时 Current 等同 Default。
-	if Current().Agent.MaxSteps != Default().Agent.MaxSteps {
-		t.Errorf("Current should default to Default()")
+	if l.Agent.InvokeMaxTurns != 10 || l.Timeout.MCPCallSec != 180 || l.Context.TriggerRatio != 0.80 {
+		t.Fatalf("zeros not filled: %+v", l)
 	}
 }
 
@@ -55,11 +50,5 @@ func TestSetProvider_NilIgnored(t *testing.T) {
 	SetProvider(nil) // must be ignored — keep the previous provider
 	if got := Current().Agent.MaxSteps; got != 7 {
 		t.Errorf("nil SetProvider should be ignored, got MaxSteps=%d", got)
-	}
-}
-
-func TestMaxSearchTopN(t *testing.T) {
-	if MaxSearchTopN != 50 {
-		t.Errorf("MaxSearchTopN = %d, want 50", MaxSearchTopN)
 	}
 }

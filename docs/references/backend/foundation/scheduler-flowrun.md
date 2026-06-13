@@ -55,7 +55,7 @@ audience: [human, ai]
 - 表：`flowruns` / `flowrun_nodes` → [database.md](../database.md)；ID：`fr_` / `frn_`。两张都是 Log 表（D1 不删；唯一例外 = replay 清 failed 行）。
 - 端点：`GET/POST /flowruns` · `GET /flowruns/{id}`（头+全节点行）· `POST /flowruns/{id}:replay` · `GET /flowrun-inbox` · `POST /flowruns/{id}/approvals/{node}:decide` → [api.md](../api.md)。LLM 读取面：`get_flowrun`（同「头+全节点行」）+ `search_flowruns`（住 app/tool/workflow，闭合 trigger_workflow → flowrunId → 检查的环）。
 - 码：`FLOWRUN_*` domain 5 + 工具校验 1（`FLOWRUN_ID_REQUIRED`，住 app/tool/workflow）→ [error-codes.md](../error-codes.md)。
-- 事件：advance 每节点向 entities 流 workflow scope 发进度 Signal（durable 记录是 frn 行）→ [events.md](../events.md)。
+- 事件：advance 每节点向 entities 流 workflow scope 发进度 Signal（durable 记录是 frn 行）；终态与挂起走 notifications **唤回环**——failed → `workflow.run_failed` + 点亮 needsAttention（经 LifecycleReconciler.MarkRunAttention，completed 熄灭、cancelled 两不做），approval park → `workflow.approval_pending`（at-least-once）→ [events.md](../events.md)。
 
 ## 7. 跨域集成
 

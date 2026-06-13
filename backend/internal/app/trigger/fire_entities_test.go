@@ -31,7 +31,7 @@ func TestFanOut_EmitsFireSignal(t *testing.T) {
 	ctx := ctxWS("ws_1")
 	tr := mkCron(t, s, ctx, "daily")
 
-	if err := s.FireManual(ctx, tr.ID); err != nil {
+	if _, err := s.FireManual(ctx, tr.ID); err != nil {
 		t.Fatalf("FireManual: %v", err)
 	}
 

@@ -16,6 +16,7 @@ import (
 	agentapp "github.com/sunweilin/forgify/backend/internal/app/agent"
 	chatapp "github.com/sunweilin/forgify/backend/internal/app/chat"
 	contextmgrapp "github.com/sunweilin/forgify/backend/internal/app/contextmgr"
+	modelclientapp "github.com/sunweilin/forgify/backend/internal/app/modelclient"
 	subagentapp "github.com/sunweilin/forgify/backend/internal/app/subagent"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
@@ -51,26 +52,7 @@ type modelResolver struct {
 // resolve 为某 scenario（+ 可选 override）跑链，返回即用 client、base Request（System/Messages 由
 // caller 后填）、解析出的 provider（回合溯源）。
 func (r *modelResolver) resolve(ctx context.Context, scenario string, override *modeldomain.ModelRef) (llminfra.Client, llminfra.Request, string, error) {
-	ref, err := modeldomain.Resolve(ctx, scenario, override, r.picker)
-	if err != nil {
-		return nil, llminfra.Request{}, "", err
-	}
-	creds, err := r.keys.ResolveCredentialsByID(ctx, ref.APIKeyID)
-	if err != nil {
-		return nil, llminfra.Request{}, "", err
-	}
-	client, baseURL, err := r.factory.Build(llminfra.Config{
-		Provider:  creds.Provider,
-		APIFormat: creds.APIFormat,
-		ModelID:   ref.ModelID,
-		Key:       creds.Key,
-		BaseURL:   creds.BaseURL,
-	})
-	if err != nil {
-		return nil, llminfra.Request{}, "", err
-	}
-	req := llminfra.Request{ModelID: ref.ModelID, Key: creds.Key, BaseURL: baseURL, Options: ref.Options}
-	return client, req, creds.Provider, nil
+	return modelclientapp.Resolve(ctx, scenario, override, r.picker, r.keys, r.factory)
 }
 
 // ModelResolvers exposes the one resolution core as the four differently-shaped Bundles the LLM

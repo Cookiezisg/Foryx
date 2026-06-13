@@ -192,15 +192,22 @@ func (s *Service) TouchLastUsed(ctx context.Context, id string) error {
 	return s.repo.TouchLastUsed(ctx, id)
 }
 
-// Validate implements the auth middleware's WorkspaceResolver port: it reports
-// whether id names an existing workspace (nil = valid, error = unknown). The
-// middleware holds the interface; this matches it by signature, injected at wiring.
+// Resolve implements the auth middleware's WorkspaceResolver port: it confirms id names an
+// existing workspace and returns its UI locale (derived from the persisted language) so the
+// middleware can make the workspace language authoritative over Accept-Language (AC-PD-2).
+// Unknown id → error. workspace.Language values ("zh-CN"/"en") are exactly the Locale values, so
+// the cast is direct; an empty/invalid one is dropped by the middleware's IsSupported() guard.
 //
-// Validate 实现 auth 中间件的 WorkspaceResolver 端口：报告 id 是否为已存在 workspace
-// （nil=有效，error=未知）。中间件持接口，此处按签名对上，装配时注入。
-func (s *Service) Validate(ctx context.Context, id string) error {
-	_, err := s.repo.Get(ctx, id)
-	return err
+// Resolve 实现 auth 中间件的 WorkspaceResolver 端口：确认 id 为已存在 workspace 并返回其 UI locale
+// （由持久化 language 派生），使中间件让 workspace 语言压过 Accept-Language（AC-PD-2）。未知 id→错。
+// workspace.Language 取值（"zh-CN"/"en"）正是 Locale 取值，故直接 cast；空/非法值由中间件
+// IsSupported() 守卫丢弃。
+func (s *Service) Resolve(ctx context.Context, id string) (reqctxpkg.Locale, error) {
+	w, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	return reqctxpkg.Locale(w.Language), nil
 }
 
 // Pick implements modeldomain.ModelPicker: it returns the current workspace's default ModelRef for
@@ -272,6 +279,37 @@ func (s *Service) DefaultSearchKeyID(ctx context.Context) (string, bool) {
 	}
 	id := strings.TrimSpace(w.DefaultSearchKeyID)
 	return id, id != ""
+}
+
+// ReferencesAPIKey implements apikeyapp.RefScanner: the current workspace (id from ctx)
+// references an api-key when any scenario default model (dialogue/utility/agent) or the
+// default search key points at it. Deleting such a key would silently dangle the
+// workspace's model config, so apikey.Delete consults this scanner and refuses with
+// API_KEY_IN_USE. A missing workspace in ctx or an unreadable row is a scan miss (false),
+// never a hard error — a delete-guard must not block on its own lookup failing.
+//
+// ReferencesAPIKey 实现 apikeyapp.RefScanner：当前 workspace（id 取自 ctx）的任一 scenario
+// 默认模型（dialogue/utility/agent）或默认搜索 key 指向某 api-key 即算引用。删它会静默悬空
+// workspace 的模型配置，故 apikey.Delete 询问本 scanner、命中即拒删 API_KEY_IN_USE。ctx 无
+// workspace 或行读不到都算未命中（false）、绝不硬错——删除守卫不能因自身查询失败而挡删。
+func (s *Service) ReferencesAPIKey(ctx context.Context, apiKeyID string) (bool, error) {
+	if apiKeyID == "" {
+		return false, nil
+	}
+	wsID, err := reqctxpkg.RequireWorkspaceID(ctx)
+	if err != nil {
+		return false, nil
+	}
+	w, err := s.repo.Get(ctx, wsID)
+	if err != nil {
+		return false, nil
+	}
+	for _, scenario := range modeldomain.ListScenarios() {
+		if ref := w.DefaultFor(scenario); ref != nil && ref.APIKeyID == apiKeyID {
+			return true, nil
+		}
+	}
+	return strings.TrimSpace(w.DefaultSearchKeyID) == apiKeyID, nil
 }
 
 // WebFetchMode resolves the current workspace's web-fetch mode for the WebFetch tool:

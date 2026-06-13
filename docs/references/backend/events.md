@@ -28,8 +28,8 @@ audience: [human, ai]
 
 | 域 | 挂载 |
 |---|---|
-| function | **run 终端**：每次执行的实时 stderr（= 函数自己的 `print()`，driver 引流）→ function scope；**forge 镜像**：create/edit_function 的流式 code args → 面板实时填充 |
-| handler | **run 终端**：流式 method 的每个 yield → handler scope（不论谁触发）；**forge 镜像**：create/edit_handler 的类代码 |
+| function | **run 终端**：每次执行的实时 stderr（= 函数自己的 `print()`，driver 引流）→ function scope；**forge 镜像**：create/edit_function 的流式 code args → 面板实时填充；**env 物化终端**：每次 ensureEnv 的尝试/修复行（不分入口——HTTP 编辑器/chat 锻造/run 重建）→ forge 节点 |
+| handler | **run 终端**：流式 method 的每个 yield → handler scope（不论谁触发）；**forge 镜像**：create/edit_handler 的类代码；**env 物化终端**：同 function |
 | agent | **run 轨迹**：invoke 的完整 ReAct block 流（text/reasoning/tool_call/tool_result）→ agent scope（不论 chat/REST/workflow 触发）；**forge 镜像**：create/edit_agent 的 config |
 
 ## messages 流挂载（对话内呈现）
@@ -42,7 +42,7 @@ audience: [human, ai]
 
 ## P3 五域挂载
 
-**notifications**：workflow/trigger/control/approval 的 `<域>.{created, edited, reverted, updated, deleted}` 生命周期族（workflow 另有 lifecycle 流转随 activate/deactivate/kill 的状态变更通知）。
+**notifications**：workflow/control/approval 的 `<域>.{created, edited, reverted, updated, deleted}` 生命周期族；workflow 另有 `workflow.lifecycle_changed`（activate/deactivate/kill 的状态流转，payload {lifecycleState, active}）、`workflow.attention_changed`（payload {needsAttention, attentionReason}——调度器自愈语义：run 失败点亮、completed 熄灭，无 acknowledge 端点）、`workflow.run_failed`（payload {workflowId, flowrunId, error}）与 `workflow.approval_pending`（payload {workflowId, flowrunId, nodeId}，at-least-once——唤人决策）。trigger **无**生命周期通知（其活动经 activations 行 + entities 流 fire 信号呈现）。
 
 **entities 流**：
 | 域 | 挂载 |
@@ -63,7 +63,7 @@ audience: [human, ai]
 
 **messages 流（主战场）**：message_start/stop（durable，close 带快照）· 块级 open/delta/close（text/reasoning/tool_call/tool_result/progress 实时流，E2 delta=ephemeral）· **interaction 信号**（ephemeral——broker pending 表是真相、重连走 REST 重同步）· todo 信号 · subagent 子树经 `Open.ParentID` 嵌套（E3）。
 
-**notifications**：`conversation.auto_titled` · `memory.*` · 上传/删除类生命周期。
+**notifications**：`conversation.auto_titled` · `memory.{created, updated, deleted}` · `sandbox.env_status_changed`（payload 含 env/状态）· `sandbox.env_deleted` · 上传/删除类生命周期。
 
 ## P6 支撑域挂载
 

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"strings"
 
+	"go.uber.org/zap"
+
 	searchdomain "github.com/sunweilin/forgify/backend/internal/domain/search"
 	tokencountpkg "github.com/sunweilin/forgify/backend/internal/pkg/tokencount"
 )
@@ -88,11 +90,15 @@ func (s *Service) SearchBlocks(ctx context.Context, query string, kinds []search
 		if rows, err := s.repo.BlockRows(ctx); err == nil {
 			catalog := filterBlockRows(rows, kinds)
 			if len(catalog) > 0 && catalogTokens(catalog) <= siftBudgetTokens {
-				if out, err := s.sift(ctx, query, catalog, limit); err == nil {
+				out, err := s.sift(ctx, query, catalog, limit)
+				if err == nil {
 					return out, nil
 				}
-				// Sifter failure falls through to index retrieval (tier 3 via tier 2).
-				// 精选失败落到索引检索（经第二档到第三档）。
+				// Sifter failure falls through to index retrieval (tier 3 via tier 2);
+				// the error must be visible or a dead utility wire looks like ranking.
+				// 精选失败落到索引检索（经第二档到第三档）；错误必须可见，否则 utility
+				// 断线会伪装成普通排序。
+				s.log.Info("search_blocks: tier-1 sift failed", zap.Error(err))
 			}
 		}
 	}
@@ -123,10 +129,11 @@ func (s *Service) SearchBlocks(ctx context.Context, query string, kinds []search
 				Title: h.Name, Snippet: h.Snippet,
 			})
 		}
-		if out, err := s.sift(ctx, query, candidates, limit); err == nil {
+		out, err := s.sift(ctx, query, candidates, limit)
+		if err == nil {
 			return out, nil
 		}
-		s.log.Info("search_blocks: sift unavailable, returning index ranking")
+		s.log.Info("search_blocks: sift unavailable, returning index ranking", zap.Error(err))
 	}
 	out := make([]BlockHit, 0, limit)
 	for _, h := range wireable {

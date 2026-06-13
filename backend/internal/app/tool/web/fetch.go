@@ -14,6 +14,7 @@ import (
 	"time"
 
 	loopapp "github.com/sunweilin/forgify/backend/internal/app/loop"
+	modelclientapp "github.com/sunweilin/forgify/backend/internal/app/modelclient"
 	toolapp "github.com/sunweilin/forgify/backend/internal/app/tool"
 	apikeydomain "github.com/sunweilin/forgify/backend/internal/domain/apikey"
 	modeldomain "github.com/sunweilin/forgify/backend/internal/domain/model"
@@ -307,29 +308,15 @@ func classifyIP(ip net.IP) string {
 }
 
 // summarise resolves the utility model, builds a client, and asks it to answer
-// prompt against content. Chain rewritten for backend-new: model.Resolve →
-// keys.ResolveCredentialsByID → factory.Build → llm.Generate (no llmclient pkg,
-// no Thinking — knobs ride in ModelRef.Options).
+// prompt against content. Resolution goes through modelclient — the one shared
+// chain (a hand-rolled copy here once miswired base URL into the wire model id,
+// AC-26); no Thinking — knobs ride in ModelRef.Options.
 //
-// summarise 解析 utility 模型、构造 client、让它按 prompt 回答 content。链对齐 backend-new
-// 重写：model.Resolve → keys.ResolveCredentialsByID → factory.Build → llm.Generate
-// （无 llmclient pkg、无 Thinking——旋钮走 ModelRef.Options）。
+// summarise 解析 utility 模型、构造 client、让它按 prompt 回答 content。解析走
+// modelclient——唯一共享链（这里曾手抄一份并把 base URL 误接进线缆 model id，
+// AC-26）；无 Thinking——旋钮走 ModelRef.Options。
 func (t *WebFetch) summarise(ctx context.Context, source, prompt, content string) (string, error) {
-	ref, err := modeldomain.Resolve(ctx, modeldomain.ScenarioUtility, nil, t.picker)
-	if err != nil {
-		return "", err
-	}
-	creds, err := t.keys.ResolveCredentialsByID(ctx, ref.APIKeyID)
-	if err != nil {
-		return "", err
-	}
-	client, modelID, err := t.factory.Build(llminfra.Config{
-		Provider:  creds.Provider,
-		APIFormat: creds.APIFormat,
-		ModelID:   ref.ModelID,
-		Key:       creds.Key,
-		BaseURL:   creds.BaseURL,
-	})
+	client, req, _, err := modelclientapp.Resolve(ctx, modeldomain.ScenarioUtility, nil, t.picker, t.keys, t.factory)
 	if err != nil {
 		return "", err
 	}
@@ -343,13 +330,7 @@ func (t *WebFetch) summarise(ctx context.Context, source, prompt, content string
 	// turn 下 nil 安全（无帧、返回一致）。
 	prog := loopapp.ToolProgress(ctx)
 	defer prog.Close()
-	req := llminfra.Request{
-		ModelID:  modelID,
-		Key:      creds.Key,
-		BaseURL:  creds.BaseURL,
-		Options:  ref.Options,
-		Messages: []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: buildSummaryPrompt(source, prompt, content)}},
-	}
+	req.Messages = []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: buildSummaryPrompt(source, prompt, content)}}
 	var sb strings.Builder
 	for event := range client.Stream(ctx, req) {
 		switch event.Type {

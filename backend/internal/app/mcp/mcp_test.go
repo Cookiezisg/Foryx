@@ -63,6 +63,10 @@ func (r *fakeRepo) Delete(_ context.Context, id string) error {
 	delete(r.byID, id)
 	return nil
 }
+func (r *fakeRepo) ComputeCallAggregates(_ context.Context, _ mcpdomain.CallFilter) (mcpdomain.CallAggregates, error) {
+	return mcpdomain.CallAggregates{}, nil
+}
+
 func (r *fakeRepo) SaveCall(_ context.Context, c *mcpdomain.Call) error {
 	r.calls = append(r.calls, c)
 	return nil

@@ -80,7 +80,7 @@ var (
 	ErrDuplicateName         = errorspkg.New(errorspkg.KindConflict, "TRIGGER_NAME_DUPLICATE", "trigger name already exists")
 	ErrInvalidKind           = errorspkg.New(errorspkg.KindUnprocessable, "TRIGGER_INVALID_KIND", "unknown trigger kind")
 	ErrInvalidConfig         = errorspkg.New(errorspkg.KindUnprocessable, "TRIGGER_INVALID_CONFIG", "invalid trigger config")
-	ErrInvalidCron           = errorspkg.New(errorspkg.KindUnprocessable, "TRIGGER_INVALID_CRON", "invalid cron expression")
+	ErrInvalidCron           = errorspkg.New(errorspkg.KindUnprocessable, "TRIGGER_INVALID_CRON", "invalid cron expression — use a 5-field expression (minute granularity); @every and seconds are not supported")
 	ErrInvalidCEL            = errorspkg.New(errorspkg.KindUnprocessable, "TRIGGER_INVALID_CEL", "invalid CEL expression")
 	ErrInvalidInterval       = errorspkg.New(errorspkg.KindUnprocessable, "TRIGGER_INVALID_INTERVAL", "sensor interval below minimum")
 	ErrSensorTargetRequired  = errorspkg.New(errorspkg.KindUnprocessable, "TRIGGER_SENSOR_TARGET_REQUIRED", "sensor requires a function or handler target")

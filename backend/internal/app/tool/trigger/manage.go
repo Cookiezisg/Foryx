@@ -47,8 +47,9 @@ func (t *FireTrigger) Execute(ctx context.Context, argsJSON string) (string, err
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("fire_trigger: bad args: %w", err)
 	}
-	if err := t.svc.FireManual(ctx, args.TriggerID); err != nil {
+	actID, err := t.svc.FireManual(ctx, args.TriggerID)
+	if err != nil {
 		return "", fmt.Errorf("fire_trigger: %w", err)
 	}
-	return toolapp.ToJSON(map[string]any{"fired": true, "triggerId": args.TriggerID}), nil
+	return toolapp.ToJSON(map[string]any{"fired": true, "triggerId": args.TriggerID, "activationId": actID}), nil
 }

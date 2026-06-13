@@ -31,16 +31,16 @@ import (
 
 	messagesdomain "github.com/sunweilin/forgify/backend/internal/domain/messages"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 )
 
 const (
-	// triggerRatio compacts when the last turn's real input tokens reach this fraction of the
+	// limitspkg.Current().Context.TriggerRatio compacts when the last turn's real input tokens reach this fraction of the
 	// input budget (window − maxOutput). 0.80 sits in the 75–90% band recommended for quality
 	// (context rot sets in before the hard limit); the 20% slack is the compaction headroom.
 	//
-	// triggerRatio：末回合真实 input token 达 input 预算（window − maxOutput）此比例时压缩。0.80 在
+	// limitspkg.Current().Context.TriggerRatio：末回合真实 input token 达 input 预算（window − maxOutput）此比例时压缩。0.80 在
 	// 业界推荐的 75–90% 区间（硬上限前已现 context rot）；20% 余量即压缩 headroom。
-	triggerRatio = 0.80
 
 	// recentTurns most recent messages are never touched (verbatim floor — the actual current
 	// task must always be present unsummarized).
@@ -169,7 +169,7 @@ func (s *Service) MaybeCompact(ctx context.Context, conversationID string) error
 	if window <= 0 || inputBudget <= 0 {
 		return nil // unknown budget — don't compact blind
 	}
-	if last.InputTokens < int(triggerRatio*float64(inputBudget)) {
+	if last.InputTokens < int(limitspkg.Current().Context.TriggerRatio*float64(inputBudget)) {
 		return nil // under threshold
 	}
 
@@ -185,7 +185,7 @@ func (s *Service) MaybeCompact(ctx context.Context, conversationID string) error
 
 	// Gate: if the projected size is now under the trigger, demotion sufficed — skip the LLM.
 	// 闸：投影大小已低于触发线则 demote 足够——跳过 LLM。
-	if s.estimateTokens(thread, summary) < int(triggerRatio*float64(inputBudget)) {
+	if s.estimateTokens(thread, summary) < int(limitspkg.Current().Context.TriggerRatio*float64(inputBudget)) {
 		return nil
 	}
 

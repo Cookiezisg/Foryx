@@ -109,6 +109,7 @@ func (h *WorkflowHandler) UpdateMeta(w http.ResponseWriter, r *http.Request) {
 		Name        *string   `json:"name"`
 		Description *string   `json:"description"`
 		Tags        *[]string `json:"tags"`
+		Concurrency *string   `json:"concurrency"`
 	}
 	if err := decodeJSON(r, &req); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
@@ -116,6 +117,7 @@ func (h *WorkflowHandler) UpdateMeta(w http.ResponseWriter, r *http.Request) {
 	}
 	wf, err := h.svc.UpdateMeta(r.Context(), workflowapp.UpdateMetaInput{
 		ID: r.PathValue("id"), Name: req.Name, Description: req.Description, Tags: req.Tags,
+		Concurrency: req.Concurrency,
 	})
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)

@@ -19,12 +19,14 @@ import (
 
 	"go.uber.org/zap"
 
+	entitystreamapp "github.com/sunweilin/forgify/backend/internal/app/entitystream"
 	envfixapp "github.com/sunweilin/forgify/backend/internal/app/envfix"
 	functiondomain "github.com/sunweilin/forgify/backend/internal/domain/function"
 	notificationdomain "github.com/sunweilin/forgify/backend/internal/domain/notification"
 	relationdomain "github.com/sunweilin/forgify/backend/internal/domain/relation"
 	sandboxdomain "github.com/sunweilin/forgify/backend/internal/domain/sandbox"
 	searchdomain "github.com/sunweilin/forgify/backend/internal/domain/search"
+	streamdomain "github.com/sunweilin/forgify/backend/internal/domain/stream"
 )
 
 // SandboxRunner is the execution + cleanup surface function needs from the sandbox
@@ -70,8 +72,17 @@ type Service struct {
 	runner      SandboxRunner
 	notif       notificationdomain.Emitter // nil-tolerant
 	relations   RelationSyncer             // nil disables relation hooks
+	entities    streamdomain.Bridge        // nil → no panel env terminal. nil → 无面板 env 终端。
 	log         *zap.Logger
 }
+
+// SetEntitiesBridge installs the entities stream post-construction (SSE-C): every env
+// materialization tees its attempt lines to the function's forge terminal, so the panel
+// shows progress no matter which entry (HTTP editor / chat forge / run rebuild) paid for it.
+//
+// SetEntitiesBridge 装配后装入 entities 流（SSE-C）：每次 env 物化把尝试行 tee 到 function
+// 的锻造终端——不论哪个入口（HTTP 编辑器/chat 锻造/run 重建）买单，面板都看得到进度。
+func (s *Service) SetEntitiesBridge(b streamdomain.Bridge) { s.entities = b }
 
 // NewService wires the service; nil repo / provisioner / runner / log is a wiring bug.
 //
@@ -121,6 +132,13 @@ func envOwner(functionID, envID string) sandboxdomain.Owner {
 // 是否就绪。它从不因构建失败报错——那是调用方上呈的状态（Create/Edit 容忍；Run 视未就绪为错）。
 func (s *Service) ensureEnv(ctx context.Context, v *functiondomain.Version, sink envfixapp.Sink) (ready bool, errMsg string) {
 	_ = s.repo.UpdateVersionEnv(ctx, v.ID, functiondomain.EnvStatusSyncing, "", v.Dependencies, nil)
+
+	// Tee attempts to the panel's forge terminal regardless of caller — the HTTP editor
+	// path used to build in silence while chat forge streamed (AC follow-up).
+	// 把尝试行 tee 到面板锻造终端、不分调用方——此前 HTTP 编辑器路径静默构建而 chat 锻造有流。
+	term := entitystreamapp.New(ctx, s.entities, streamdomain.Scope{Kind: streamdomain.KindFunction, ID: v.FunctionID}, entitystreamapp.NodeForge, nil)
+	defer term.Close("completed", nil)
+	sink = envfixapp.MultiSink(sink, envfixapp.NewWriterSink(term))
 
 	res := s.provisioner.Provision(ctx, envfixapp.Request{
 		Owner:   envOwner(v.FunctionID, v.EnvID),

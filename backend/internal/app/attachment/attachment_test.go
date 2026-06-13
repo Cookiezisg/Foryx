@@ -19,6 +19,7 @@ import (
 	blobfs "github.com/sunweilin/forgify/backend/internal/infra/fs/blob"
 	llminfra "github.com/sunweilin/forgify/backend/internal/infra/llm"
 	attachmentstore "github.com/sunweilin/forgify/backend/internal/infra/store/attachment"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 	ormpkg "github.com/sunweilin/forgify/backend/internal/pkg/orm"
 	reqctxpkg "github.com/sunweilin/forgify/backend/internal/pkg/reqctx"
 )
@@ -112,7 +113,7 @@ func TestUpload_Empty(t *testing.T) {
 func TestUpload_TooLarge(t *testing.T) {
 	svc, _, ctx := newSvc(t)
 	// Size is checked before hashing, so the oversized buffer is never read.
-	big := make([]byte, attachmentdomain.MaxBytes+1)
+	big := make([]byte, int64(limitspkg.Current().Guards.AttachmentMaxMB)<<20+1)
 	if _, err := svc.Upload(ctx, "big.bin", "application/octet-stream", big); !errors.Is(err, attachmentdomain.ErrTooLarge) {
 		t.Errorf("err = %v, want ErrTooLarge", err)
 	}

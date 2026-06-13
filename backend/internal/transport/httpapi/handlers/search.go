@@ -60,22 +60,27 @@ func (h *SearchHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 type patchSearchSettingsRequest struct {
-	Embedder string `json:"embedder"`
+	Embedder      *string `json:"embedder"`
+	OllamaBaseURL *string `json:"ollamaBaseUrl"`
+	OllamaModel   *string `json:"ollamaModel"`
 }
 
 // PatchSettings handles PATCH /api/v1/search/settings — switch embedder
-// (builtin|ollama|off); old-model vectors invalidate by the model column and
+// (builtin|ollama|off) and/or patch the Ollama connection (baseUrl/model; "" resets to
+// default). A model change invalidates old-model vectors by the model column; they
 // re-embed in the background.
 //
-// PatchSettings 处理 PATCH /api/v1/search/settings——切 embedder（builtin|ollama|off）；
-// 旧模型向量按 model 列失效、后台重嵌。
+// PatchSettings 处理 PATCH /api/v1/search/settings——切 embedder（builtin|ollama|off）
+// 与/或修补 Ollama 连接（baseUrl/model；"" 重置默认）。改 model 即按 model 列失效旧向量、后台重嵌。
 func (h *SearchHandler) PatchSettings(w http.ResponseWriter, r *http.Request) {
 	var req patchSearchSettingsRequest
 	if err := decodeJSON(r, &req); err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return
 	}
-	view, err := h.svc.SetEmbedder(r.Context(), req.Embedder)
+	view, err := h.svc.UpdateSettings(r.Context(), searchapp.UpdateSettingsInput{
+		Embedder: req.Embedder, OllamaBaseURL: req.OllamaBaseURL, OllamaModel: req.OllamaModel,
+	})
 	if err != nil {
 		responsehttpapi.FromDomainError(w, h.log, err)
 		return

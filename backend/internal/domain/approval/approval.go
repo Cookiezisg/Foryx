@@ -141,6 +141,12 @@ func ValidateForm(template, timeout, timeoutBehavior string) error {
 		if _, err := ParseTimeout(timeout); err != nil {
 			return err
 		}
+	} else if strings.TrimSpace(timeoutBehavior) != "" && !IsValidTimeoutBehavior(timeoutBehavior) {
+		// A stray behavior without a timeout is inert today but poisons the row the moment
+		// a timeout is added — reject garbage at the door, not at the deadline.
+		// 没 timeout 的孤 behavior 今天无害，但一旦补上 timeout 就毒化该行——垃圾在门口拒，
+		// 别等到截止那一刻。
+		return ErrInvalidTimeout
 	}
 	return nil
 }

@@ -51,7 +51,7 @@ class HandlerImpl:
 
 ### spawn 链（`spawnInstance`）
 
-加载 active 版本 + **解密** config → 校验必填 init-args（缺 → `HANDLER_CONFIG_INCOMPLETE`，不 spawn）→ **按 active schema 过滤 config**（孤儿 key——被后续版本删掉的 arg、revert 留下的——会成为 `__init__` 的意外 kwarg → Python TypeError → 永久 spawn 失败；在 spawn 这个唯一咽喉点过滤，防住所有漂移来源）→ env 未 ready 则物化 → `AssembleClass` 写 `user_handler.py` + `driver.py` → 起长跑 `python driver.py` → **`ErrEnvNotFound`（env 被 GC）= 重建+重试一次** → stderr 进日志（崩溃诊断）**并进实例级 stderr 扇出**（`stderrFan`——调用挂 per-call sink 收窗口内的 print()/日志；协议占 stdout，stderr 是 handler 代码输出唯一可达通道）→ `client.Init(config)` 跑 `__init__`。
+加载 active 版本 + **解密** config → 校验必填 init-args（缺 → `HANDLER_CONFIG_INCOMPLETE`，不 spawn）→ **按 active schema 过滤 config**（孤儿 key——被后续版本删掉的 arg、revert 留下的——会成为 `__init__` 的意外 kwarg → Python TypeError → 永久 spawn 失败；在 spawn 这个唯一咽喉点过滤，防住所有漂移来源）→ env 未 ready 则物化（尝试/修复行 tee 到 entities 流 forge 终端，同 function）→ `AssembleClass` 写 `user_handler.py` + `driver.py` → 起长跑 `python driver.py` → **`ErrEnvNotFound`（env 被 GC）= 重建+重试一次** → stderr 进日志（崩溃诊断）**并进实例级 stderr 扇出**（`stderrFan`——调用挂 per-call sink 收窗口内输出）→ `client.Init(config)` 跑 `__init__`。**driver 协议护盾**：进程启动即把用户态 stdout 整体重定向到 stderr（import/`__init__`/method/shutdown 里的 print() 全部变成调用日志），协议帧只经保存的真 stdout 写——一个 print() 永远炸不了协议（与 function driver 同款护盾）。
 
 ### RPC 协议（`infra/handler` 客户端 ↔ `driver.py`）
 
@@ -68,7 +68,7 @@ stdio 行-JSON：`init`→`ready`/`init_error`；`call{id,method,args}`→`retur
 
 ### 调用与记账（`Call`）
 
-resolve handler → 解析 method spec（校验 + timeout）→ `manager.Get`（懒 spawn）→ **一律 `StreamCall`**（非流式 method 无 yield 自然退化为普通返回）：yield 三写到 entities run 终端 + 调用方 progress sink + 限长 logtail；调用窗口同时在实例 stderr 扇出上挂 sink（print()/日志 → chat progress + run 终端 + logtail，**窗口归属**：同实例并发调用各收各窗口的行、明示可能串扰）→ `recordCall`（Detached ctx，best-effort；溯源 5 列从 ctx 读，同 function；`logs` 随行落盘，List 置空、单条 Get 携带）。TriggeredBy 空时按 ctx 推（subagent→agent，否则 chat）。
+resolve handler → 解析 method spec（校验 + timeout）→ `manager.Get`（懒 spawn）→ **一律 `StreamCall`**（非流式 method 无 yield 自然退化为普通返回）：yield 三写到 entities run 终端 + 调用方 progress sink + 限长 logtail；调用窗口同时在实例 stderr 扇出上挂 sink（print()/日志 → chat progress + run 终端 + logtail，**窗口归属**：同实例并发调用各收各窗口的行、明示可能串扰；收尾留 30ms stderr 宽限——stdout/stderr 两管道乱序，先于 return 写出的 print 可能后到）→ `recordCall`（Detached ctx，best-effort；溯源 5 列从 ctx 读，同 function；`logs` 随行落盘，List 置空、单条 Get 携带）。TriggeredBy 空时按 ctx 推（subagent→agent，否则 chat）。
 
 ## 5. 关键设计决策
 

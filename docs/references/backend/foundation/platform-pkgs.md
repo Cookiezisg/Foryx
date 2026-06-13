@@ -31,4 +31,4 @@ AES-GCM 整密文加解密（apikey 密文 / handler config / mcp config_enc 共
 
 ## pkg 工具箱（一行职责）
 
-`agentstate`（run 内跨工具共享状态：discovered 工具/active skill/读写不变式）· `idgen`（`<prefix>_<16hex>`，S15）· `jsonrepair`（LLM 脏 JSON 尽力修复，strict 解析前置）· `limits`（用户可调操作上限单源）· `logtail`（头+尾限长日志收集器，io.Writer；fn/hd/mcp 执行链落 `logs` 列的共用预算 64KiB）· `pagination`（keyset 游标编解码）· `pathguard`（文件系统工具的 deny-list 安全层）· `schema`（Field 粗类型模型 + JSON Schema 双向转换）· `tokencount`（启发式 token 估算+可校准）· `wikilink`（`[[id]]` 引用抽取）· `fspath`（绝对路径/~ 展开守卫）。
+`agentstate`（run 内跨工具共享状态：discovered 工具/active skill/读写不变式）· `idgen`（`<prefix>_<16hex>`，S15）· `jsonrepair`（LLM 脏 JSON 尽力修复，strict 解析前置）· `limits`（用户可调上限单源——schema 即现实投影：每字段必有消费方；`app/settings` 启动读 `<dataDir>/settings.json` 装源、PATCH /limits 热换；默认值钉死接线前各模块常量）· `logtail`（头+尾限长日志收集器，io.Writer；fn/hd/mcp 执行链落 `logs` 列的共用预算 64KiB）· `pagination`（keyset 游标编解码）· `pathguard`（文件系统工具的 deny-list 安全层）· `schema`（Field 粗类型模型 + JSON Schema 双向转换）· `tokencount`（启发式 token 估算+可校准）· `wikilink`（`[[id]]` 引用抽取）· `fspath`（绝对路径/~ 展开守卫）。

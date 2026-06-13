@@ -203,14 +203,18 @@ func TestDelete_OKWhenMoreThanOne(t *testing.T) {
 	}
 }
 
-func TestValidate_ExistingAndMissing(t *testing.T) {
+func TestResolve_ExistingAndMissing(t *testing.T) {
 	s := newService()
-	w, _ := s.Create(context.Background(), CreateInput{Name: "V"})
-	if err := s.Validate(context.Background(), w.ID); err != nil {
-		t.Errorf("validate existing: %v", err)
+	w, _ := s.Create(context.Background(), CreateInput{Name: "V", Language: "en"})
+	loc, err := s.Resolve(context.Background(), w.ID)
+	if err != nil {
+		t.Errorf("resolve existing: %v", err)
 	}
-	if err := s.Validate(context.Background(), "ws_missing"); !errors.Is(err, workspacedomain.ErrNotFound) {
-		t.Errorf("validate missing: err = %v, want ErrNotFound", err)
+	if string(loc) != "en" {
+		t.Errorf("resolve locale = %q, want en (from workspace.language)", loc)
+	}
+	if _, err := s.Resolve(context.Background(), "ws_missing"); !errors.Is(err, workspacedomain.ErrNotFound) {
+		t.Errorf("resolve missing: err = %v, want ErrNotFound", err)
 	}
 }
 

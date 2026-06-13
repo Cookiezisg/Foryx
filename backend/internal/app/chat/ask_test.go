@@ -56,7 +56,7 @@ func TestAsk_AcceptReturnsAnswer(t *testing.T) {
 		t.Fatalf("unexpected pending interaction: %+v", pending[0])
 	}
 
-	if err := svc.ResolveInteraction(ctx, "tc1", humanloopapp.DecisionAccept, "staging"); err != nil {
+	if err := svc.ResolveInteraction(ctx, pending[0].ToolCallID, humanloopapp.DecisionAccept, "staging"); err != nil {
 		t.Fatalf("ResolveInteraction: %v", err)
 	}
 	waitClose(t, bridge, asstID)
@@ -65,7 +65,7 @@ func TestAsk_AcceptReturnsAnswer(t *testing.T) {
 	if got.Status != messagesdomain.StatusCompleted {
 		t.Fatalf("turn should complete, got %q", got.Status)
 	}
-	tr := toolResultUnder(got, "tc1")
+	tr := toolResultUnder(got, pending[0].ToolCallID)
 	if tr == nil || tr.Content != "staging" {
 		t.Fatalf("ask_user tool_result should hold the answer, got %+v", tr)
 	}
@@ -81,14 +81,14 @@ func TestAsk_Decline(t *testing.T) {
 	ctx := ctxWS("ws_1")
 
 	asstID, _ := svc.Send(ctx, "cv_1", SendInput{Content: "deploy"})
-	waitPending(t, svc, "cv_1", 1)
-	if err := svc.ResolveInteraction(ctx, "tc1", humanloopapp.DecisionDecline, ""); err != nil {
+	pending := waitPending(t, svc, "cv_1", 1)
+	if err := svc.ResolveInteraction(ctx, pending[0].ToolCallID, humanloopapp.DecisionDecline, ""); err != nil {
 		t.Fatalf("ResolveInteraction: %v", err)
 	}
 	waitClose(t, bridge, asstID)
 
 	got, _ := store.GetMessage(ctx, asstID)
-	tr := toolResultUnder(got, "tc1")
+	tr := toolResultUnder(got, pending[0].ToolCallID)
 	if tr == nil || tr.Content != humanloopapp.DeclineFeedback {
 		t.Fatalf("decline should feed the re-route hint, got %+v", tr)
 	}

@@ -152,3 +152,71 @@ func TestExecutionPortsUnwired(t *testing.T) {
 		t.Fatalf("Activate unwired: want errExecUnavailable, got %v", err)
 	}
 }
+
+// TestEditRevert_RebindLiveListener: editing or reverting an ACTIVE workflow whose entry
+// trigger ref changed must re-point the live binding — old ref detached, new ref attached.
+// Without this the old trigger fires the workflow forever and the new one is never heard.
+// An inactive workflow's edit must NOT touch the binder.
+//
+// TestEditRevert_RebindLiveListener：编辑/回退 ACTIVE workflow 且入口 trigger ref 变了，必须
+// 重指活监听——旧 ref 卸、新 ref 挂。否则旧 trigger 永远触发本 workflow、新的无人听。
+// 非 active 的编辑不得碰 binder。
+func TestEditRevert_RebindLiveListener(t *testing.T) {
+	svc, ctx := newSvc(t, nil)
+	binder, runner := &fakeBinder{}, &fakeRunner{}
+	svc.SetExecutionPorts(binder, runner)
+
+	w, _, err := svc.Create(ctx, CreateInput{Name: "pipe", Ops: linearOps(t)})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := svc.Activate(ctx, w.ID); err != nil {
+		t.Fatalf("Activate: %v", err)
+	}
+
+	// edit swaps the entry ref trg_a → trg_b on the live workflow
+	swap := opsJSON(t, `[{"op":"update_node","id":"t","patch":{"ref":"trg_b"}}]`)
+	if _, err := svc.Edit(ctx, EditInput{ID: w.ID, Ops: swap}); err != nil {
+		t.Fatalf("Edit: %v", err)
+	}
+	if !slices.Contains(binder.detach, "trg_a|"+w.ID) {
+		t.Fatalf("edit did not detach old ref: %v", binder.detach)
+	}
+	if !slices.Contains(binder.attach, "trg_b|"+w.ID) {
+		t.Fatalf("edit did not attach new ref: %v", binder.attach)
+	}
+
+	// revert to v1 swaps back trg_b → trg_a
+	if _, err := svc.Revert(ctx, w.ID, 1); err != nil {
+		t.Fatalf("Revert: %v", err)
+	}
+	if !slices.Contains(binder.detach, "trg_b|"+w.ID) {
+		t.Fatalf("revert did not detach trg_b: %v", binder.detach)
+	}
+	if c := countOf(binder.attach, "trg_a|"+w.ID); c != 2 { // activate + revert-rebind
+		t.Fatalf("revert did not re-attach trg_a (attach=%v)", binder.attach)
+	}
+
+	// inactive workflow: edit must not touch the binder
+	if _, err := svc.Deactivate(ctx, w.ID); err != nil {
+		t.Fatalf("Deactivate: %v", err)
+	}
+	nDetach, nAttach := len(binder.detach), len(binder.attach)
+	swap2 := opsJSON(t, `[{"op":"update_node","id":"t","patch":{"ref":"trg_c"}}]`)
+	if _, err := svc.Edit(ctx, EditInput{ID: w.ID, Ops: swap2}); err != nil {
+		t.Fatalf("Edit (inactive): %v", err)
+	}
+	if len(binder.detach) != nDetach || len(binder.attach) != nAttach {
+		t.Fatalf("inactive edit touched binder: detach=%v attach=%v", binder.detach, binder.attach)
+	}
+}
+
+func countOf(xs []string, want string) int {
+	n := 0
+	for _, x := range xs {
+		if x == want {
+			n++
+		}
+	}
+	return n
+}

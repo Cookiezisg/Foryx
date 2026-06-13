@@ -308,6 +308,30 @@ func EffectiveEmbedder(stored string) string {
 	return EmbedderBuiltin
 }
 
+// Ollama connection defaults — the AUTHORITY for "unset" (search_meta
+// "ollama_base_url" / "ollama_model" empty). The engine adapter keeps matching
+// fallbacks as defense, but this is where the values are defined.
+//
+// Ollama 连接默认值——「未设」的**权威**（search_meta "ollama_base_url" /
+// "ollama_model" 为空时）。engine 适配器留有一致的兜底作防御，但定义在此。
+const (
+	DefaultOllamaBaseURL = "http://127.0.0.1:11434"
+	DefaultOllamaModel   = "embeddinggemma"
+)
+
+// EffectiveOllama resolves stored Ollama params to their effective values.
+//
+// EffectiveOllama 把存储的 Ollama 参数解析为生效值。
+func EffectiveOllama(baseURL, model string) (string, string) {
+	if baseURL == "" {
+		baseURL = DefaultOllamaBaseURL
+	}
+	if model == "" {
+		model = DefaultOllamaModel
+	}
+	return baseURL, model
+}
+
 // Domain sentinels (§S20); wire codes registered in error-codes.md.
 //
 // domain sentinel（§S20）；wire code 登记于 error-codes.md。

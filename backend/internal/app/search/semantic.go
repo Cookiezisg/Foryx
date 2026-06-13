@@ -37,13 +37,55 @@ type ProviderCloser interface {
 	Close()
 }
 
-// SetEmbeddingProviders wires the two adapters (bootstrap). The ACTIVE one is
-// chosen per call from search_meta — switching needs no rewiring.
+// SetEmbeddingProviders wires the builtin adapter + the Ollama factory (bootstrap). The
+// ACTIVE provider is chosen per call from search_meta — switching needs no rewiring.
 //
-// SetEmbeddingProviders 接入两个适配器（bootstrap）。**生效**的那个按 search_meta
-// 逐次解析——切换无需重接线。
-func (s *Service) SetEmbeddingProviders(builtin, ollama searchdomain.EmbeddingProvider) {
-	s.builtinProv, s.ollamaProv = builtin, ollama
+// SetEmbeddingProviders 接入 builtin 适配器 + Ollama 工厂（bootstrap）。**生效** provider
+// 按 search_meta 逐次解析——切换无需重接线。
+func (s *Service) SetEmbeddingProviders(builtin searchdomain.EmbeddingProvider, ollama OllamaFactory) {
+	s.builtinProv, s.ollamaFactory = builtin, ollama
+}
+
+// OllamaFactory builds an Ollama adapter for the given connection params — injected by
+// bootstrap so the app layer never imports the engine. The service rebuilds (and caches)
+// the adapter whenever the stored params change, so a PATCH takes effect on the next call.
+//
+// OllamaFactory 按给定连接参数构造 Ollama 适配器——bootstrap 注入，app 层不 import engine。
+// 存储参数变化时 service 重建（并缓存）适配器，PATCH 下一次调用即生效。
+type OllamaFactory func(baseURL, model string) searchdomain.EmbeddingProvider
+
+// ollamaProvider returns the Ollama adapter for the CURRENT stored params, rebuilding on
+// change. Meta read failures fall back to defaults (same posture as provider()).
+//
+// ollamaProvider 返回**当前**存储参数对应的 Ollama 适配器，参数变化即重建。meta 读失败回落
+// 默认值（与 provider() 同姿态）。
+func (s *Service) ollamaProvider(ctx context.Context) searchdomain.EmbeddingProvider {
+	if s.ollamaFactory == nil {
+		return nil
+	}
+	baseURL, model := s.ollamaParams(ctx)
+	key := baseURL + "\x00" + model
+	s.ollamaMu.Lock()
+	defer s.ollamaMu.Unlock()
+	if s.ollamaKey != key || s.ollamaProv == nil {
+		s.ollamaProv, s.ollamaKey = s.ollamaFactory(baseURL, model), key
+	}
+	return s.ollamaProv
+}
+
+// ollamaParams reads the stored connection params and resolves defaults.
+//
+// ollamaParams 读存储连接参数并解析默认值。
+func (s *Service) ollamaParams(ctx context.Context) (string, string) {
+	baseURL, err := s.repo.GetMeta(ctx, metaOllamaURLKey)
+	if err != nil {
+		s.log.Warn("search: ollama url meta read failed", zap.Error(err))
+	}
+	model, err := s.repo.GetMeta(ctx, metaOllamaModelKey)
+	if err != nil {
+		s.log.Warn("search: ollama model meta read failed", zap.Error(err))
+	}
+	return searchdomain.EffectiveOllama(baseURL, model)
 }
 
 // provider resolves the active embedder; nil = semantic layer off (pure
@@ -59,7 +101,7 @@ func (s *Service) provider(ctx context.Context) searchdomain.EmbeddingProvider {
 	}
 	switch searchdomain.EffectiveEmbedder(stored) {
 	case searchdomain.EmbedderOllama:
-		return s.ollamaProv
+		return s.ollamaProvider(ctx)
 	case searchdomain.EmbedderOff:
 		return nil
 	default:
@@ -351,12 +393,17 @@ type EngineStatus struct {
 	LastError string `json:"lastError,omitempty"`
 }
 
-// SettingsView is the GET/PATCH /api/v1/search/settings payload.
+// SettingsView is the GET/PATCH /api/v1/search/settings payload. The Ollama fields show
+// the EFFECTIVE connection params (stored or default) regardless of the active embedder,
+// so a settings page can render them before the user switches.
 //
-// SettingsView 是 GET/PATCH /api/v1/search/settings 载荷。
+// SettingsView 是 GET/PATCH /api/v1/search/settings 载荷。Ollama 字段展示**生效**连接参数
+// （存储值或默认），与当前 embedder 无关——设置页在用户切换前就能渲染。
 type SettingsView struct {
-	Embedder string       `json:"embedder"`
-	Engine   EngineStatus `json:"engine"`
+	Embedder      string       `json:"embedder"`
+	OllamaBaseURL string       `json:"ollamaBaseUrl"`
+	OllamaModel   string       `json:"ollamaModel"`
+	Engine        EngineStatus `json:"engine"`
 }
 
 // Settings reads the machine-level embedder choice + live engine status.
@@ -369,12 +416,13 @@ func (s *Service) Settings(ctx context.Context) (*SettingsView, error) {
 	}
 	eff := searchdomain.EffectiveEmbedder(stored)
 	view := &SettingsView{Embedder: eff}
+	view.OllamaBaseURL, view.OllamaModel = s.ollamaParams(ctx)
 	var prov searchdomain.EmbeddingProvider
 	switch eff {
 	case searchdomain.EmbedderBuiltin:
 		prov = s.builtinProv
 	case searchdomain.EmbedderOllama:
-		prov = s.ollamaProv
+		prov = s.ollamaProvider(ctx)
 	}
 	switch {
 	case eff == searchdomain.EmbedderOff:
@@ -398,15 +446,55 @@ func (s *Service) Settings(ctx context.Context) (*SettingsView, error) {
 // SetEmbedder 落机器级选择并 kick ctx workspace 补算——旧模型行按 model 列自然失效，
 // 绝不混用。
 func (s *Service) SetEmbedder(ctx context.Context, v string) (*SettingsView, error) {
-	if !searchdomain.IsValidEmbedder(v) {
-		return nil, searchdomain.ErrEmbedderInvalid
+	return s.UpdateSettings(ctx, UpdateSettingsInput{Embedder: &v})
+}
+
+// UpdateSettingsInput is the PATCH shape: nil = leave unchanged; empty string on an
+// Ollama param = reset to its default.
+//
+// UpdateSettingsInput 是 PATCH 形状：nil = 不动；Ollama 参数传空串 = 重置回默认。
+type UpdateSettingsInput struct {
+	Embedder      *string
+	OllamaBaseURL *string
+	OllamaModel   *string
+}
+
+// UpdateSettings patches the machine-level search settings. Changing the Ollama model
+// re-keys stored vectors (per-model accounting) so the backfill re-embeds automatically;
+// changing only the base URL keeps the vectors (same model, new address).
+//
+// UpdateSettings 修补机器级搜索设置。改 Ollama model 即换向量记账键（按 model 记账），
+// 补算自动重嵌；只改 base URL 向量保留（同模型、新地址）。
+func (s *Service) UpdateSettings(ctx context.Context, in UpdateSettingsInput) (*SettingsView, error) {
+	if in.Embedder != nil {
+		if !searchdomain.IsValidEmbedder(*in.Embedder) {
+			return nil, searchdomain.ErrEmbedderInvalid
+		}
+		if err := s.repo.SetMeta(ctx, metaEmbedderKey, *in.Embedder); err != nil {
+			return nil, err
+		}
 	}
-	if err := s.repo.SetMeta(ctx, metaEmbedderKey, v); err != nil {
-		return nil, err
+	if in.OllamaBaseURL != nil {
+		if err := s.repo.SetMeta(ctx, metaOllamaURLKey, strings.TrimSpace(*in.OllamaBaseURL)); err != nil {
+			return nil, err
+		}
 	}
-	if wsID, err := reqctxpkg.RequireWorkspaceID(ctx); err == nil {
-		s.vectors.invalidate(wsID)
-		s.kickEmbed(wsID)
+	if in.OllamaModel != nil {
+		if err := s.repo.SetMeta(ctx, metaOllamaModelKey, strings.TrimSpace(*in.OllamaModel)); err != nil {
+			return nil, err
+		}
+	}
+	if in.Embedder != nil || in.OllamaBaseURL != nil || in.OllamaModel != nil {
+		// Drop the cached adapter (params may have changed) and re-kick the ctx workspace:
+		// rows missing the now-active model re-embed in the background.
+		// 丢弃缓存适配器（参数可能变了）并重 kick ctx workspace：缺当前生效模型向量的行后台重嵌。
+		s.ollamaMu.Lock()
+		s.ollamaProv, s.ollamaKey = nil, ""
+		s.ollamaMu.Unlock()
+		if wsID, err := reqctxpkg.RequireWorkspaceID(ctx); err == nil {
+			s.vectors.invalidate(wsID)
+			s.kickEmbed(wsID)
+		}
 	}
 	return s.Settings(ctx)
 }

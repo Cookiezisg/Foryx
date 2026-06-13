@@ -9,7 +9,7 @@ import (
 	"go.uber.org/zap"
 
 	attachmentapp "github.com/sunweilin/forgify/backend/internal/app/attachment"
-	attachmentdomain "github.com/sunweilin/forgify/backend/internal/domain/attachment"
+	limitspkg "github.com/sunweilin/forgify/backend/internal/pkg/limits"
 	responsehttpapi "github.com/sunweilin/forgify/backend/internal/transport/httpapi/response"
 )
 
@@ -55,7 +55,7 @@ const uploadHeadroom = 1 << 20
 //
 // Upload 处理 POST /api/v1/attachments —— 单 "file" 字段的 multipart 表单。
 func (h *AttachmentHandler) Upload(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, attachmentdomain.MaxBytes+uploadHeadroom)
+	r.Body = http.MaxBytesReader(w, r.Body, int64(limitspkg.Current().Guards.AttachmentMaxMB)<<20+uploadHeadroom)
 	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		responsehttpapi.Error(w, http.StatusRequestEntityTooLarge, "ATTACHMENT_BAD_UPLOAD",
 			"could not read multipart upload (too large or malformed)", nil)

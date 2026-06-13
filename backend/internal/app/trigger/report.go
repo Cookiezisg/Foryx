@@ -39,7 +39,7 @@ func (s *Service) onReport(triggerID string, act triggerinfra.Activity) {
 	// Detached context seeded with the trigger's workspace — the listener fired off-request.
 	// Detached ctx 种入 trigger 的 workspace——listener 在请求之外触发。
 	ctx := reqctxpkg.Detached(wsID)
-	s.fanOut(ctx, triggerID, kind, workflows, act)
+	_ = s.fanOut(ctx, triggerID, kind, workflows, act)
 }
 
 // fanOut writes one Activation (always) and, when the activity fired, one Firing per listening
@@ -48,7 +48,7 @@ func (s *Service) onReport(triggerID string, act triggerinfra.Activity) {
 //
 // fanOut 写一条 Activation（总是），动作触发时每监听 workflow 一条 Firing（共享 dedup key，使重复材化
 // 按 workflow 去重）。先 mint Activation 使每条 Firing 都能反指它。
-func (s *Service) fanOut(ctx context.Context, triggerID, kind string, workflows []string, act triggerinfra.Activity) {
+func (s *Service) fanOut(ctx context.Context, triggerID, kind string, workflows []string, act triggerinfra.Activity) string {
 	actID := idgenpkg.New("tra")
 	fired := 0
 	if act.Fired {
@@ -101,6 +101,7 @@ func (s *Service) fanOut(ctx context.Context, triggerID, kind string, workflows 
 			"firingCount":  fired,
 			"error":        act.Error,
 		}))
+	return actID
 }
 
 // FireManual fires a trigger by hand (the fire_trigger tool / a test "ping it now"): it
@@ -109,10 +110,10 @@ func (s *Service) fanOut(ctx context.Context, triggerID, kind string, workflows 
 //
 // FireManual 手动触发一次（fire_trigger 工具 / 测试"立刻催它"）：扇给当前监听的 workflow（可能没有——
 // 那就只是一条 0 firing 的 Activation 记录）。
-func (s *Service) FireManual(ctx context.Context, triggerID string) error {
+func (s *Service) FireManual(ctx context.Context, triggerID string) (string, error) {
 	t, err := s.repo.GetTrigger(ctx, triggerID)
 	if err != nil {
-		return err
+		return "", err
 	}
 	s.mu.RLock()
 	var workflows []string
@@ -122,12 +123,12 @@ func (s *Service) FireManual(ctx context.Context, triggerID string) error {
 		}
 	}
 	s.mu.RUnlock()
-	s.fanOut(ctx, triggerID, t.Kind, workflows, triggerinfra.Activity{
+	actID := s.fanOut(ctx, triggerID, t.Kind, workflows, triggerinfra.Activity{
 		Fired:    true,
 		Payload:  map[string]any{"manual": true},
 		DedupKey: triggerID + "|manual|" + strconv.FormatInt(time.Now().UnixNano(), 10),
 	})
-	return nil
+	return actID, nil
 }
 
 // detachOneShots drops every one-shot (staged) workflow among `workflows` that just received this

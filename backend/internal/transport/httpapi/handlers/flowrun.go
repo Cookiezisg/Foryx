@@ -39,9 +39,9 @@ func (h *FlowrunHandler) Register(mux Registrar) {
 	mux.HandleFunc("POST /api/v1/flowruns/{id}/approvals/{nodeAction}", h.postOnApproval)
 }
 
-// List pages a workspace's runs (newest-first), optionally filtered to one workflow via ?workflowId.
+// List pages a workspace's runs (newest-first), optionally filtered via ?workflowId and/or ?status (running|completed|failed|cancelled).
 //
-// List 分页一个 workspace 的 run（最新优先），可选 ?workflowId 限定单 workflow。
+// List 分页一个 workspace 的 run（最新优先），可选 ?workflowId / ?status 过滤。
 func (h *FlowrunHandler) List(w http.ResponseWriter, r *http.Request) {
 	p, err := responsehttpapi.ParsePage(r)
 	if err != nil {
@@ -50,6 +50,7 @@ func (h *FlowrunHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	runs, next, err := h.svc.ListRuns(r.Context(), flowrundomain.ListFilter{
 		WorkflowID: r.URL.Query().Get("workflowId"),
+		Status:     r.URL.Query().Get("status"),
 		Cursor:     p.Cursor,
 		Limit:      p.Limit,
 	})

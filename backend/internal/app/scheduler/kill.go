@@ -101,6 +101,28 @@ func (s *Service) markRunTerminal(ctx context.Context, run *flowrundomain.FlowRu
 		return err
 	}
 	s.afterRunSettled(ctx, run.WorkflowID)
+	// Self-healing attention + summons: a failed run lights the workflow banner and lands a
+	// notification (the user may have left the panel); a completed run clears the banner.
+	// cancelled does neither — a hand-stopped run is not a fault.
+	// 自愈式 attention + 唤回：失败 run 点亮 workflow 横幅并落通知（用户可能早已离开面板）；
+	// completed 熄灯。cancelled 两者皆不做——手动终止不是故障。
+	switch status {
+	case flowrundomain.StatusFailed:
+		s.notify(ctx, "workflow.run_failed", map[string]any{
+			"workflowId": run.WorkflowID, "flowrunId": run.ID, "error": msg,
+		})
+		if s.recon != nil {
+			if err := s.recon.MarkRunAttention(ctx, run.WorkflowID, true, msg); err != nil {
+				s.log.Warn("schedulerapp: mark attention", zap.String("workflow", run.WorkflowID), zap.Error(err))
+			}
+		}
+	case flowrundomain.StatusCompleted:
+		if s.recon != nil {
+			if err := s.recon.MarkRunAttention(ctx, run.WorkflowID, false, ""); err != nil {
+				s.log.Warn("schedulerapp: clear attention", zap.String("workflow", run.WorkflowID), zap.Error(err))
+			}
+		}
+	}
 	return nil
 }
 
