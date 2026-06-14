@@ -13,6 +13,7 @@ audience: [human, ai]
 
 > 物理 schema 的单一事实源（表 · 关键列 · 索引/约束 · ID 前缀），覆盖全部 32 域。DDL 全文在各 `infra/store/<域>` 的 `Schema`（搜索域在 `infra/search`），幂等 `CREATE IF NOT EXISTS`，启动时 `db.Migrate` 单事务应用。
 > 通则（D 系列）：业务表软删 `deleted_at`；Log 表（executions/calls）**只增不删**（D1）；全表带 `workspace_id`（orm 据 ctx 自动隔离，D2）；name 用 partial-UNIQUE `WHERE deleted_at IS NULL`（软删释放名字）；版本表 `UNIQUE(<entity>_id, version)`。
+> **时间戳约定**：实体表与版本表统一带 `created_at` + `updated_at`（orm `,created`/`,updated` tag 自动戳，写时刷新 updated_at）；**Log 表（executions/calls/activations/notifications 等只增审计行）只带 `created_at`**——行写一次不改，updated_at 无意义（D1）。下方各表列清单省略这套标准时间戳，不逐张列。
 
 ## 三实体共同形状
 

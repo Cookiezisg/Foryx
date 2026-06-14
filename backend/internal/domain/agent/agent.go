@@ -75,6 +75,7 @@ type Version struct {
 	ForgedInConversationID string `db:"forged_in_conversation_id" json:"forgedInConversationId,omitempty"`
 
 	CreatedAt time.Time `db:"created_at,created" json:"createdAt"`
+	UpdatedAt time.Time `db:"updated_at,updated" json:"updatedAt"`
 }
 
 // AcceptedVersionCap bounds retained versions per agent (trimmed on write).

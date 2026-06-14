@@ -20,11 +20,13 @@ import (
 
 // Schema is the agent tables' DDL, exported as ordered idempotent statements for bootstrap to
 // collect via db.Migrate. agents has a partial-UNIQUE name (freed on soft-delete); versions are
-// UNIQUE(agent_id, version) and immutable (no updated_at); executions are an append-only log
-// (no deleted_at — D1) with CHECK-constrained status / triggered_by.
+// UNIQUE(agent_id, version) and carry created_at/updated_at like every other entity's version
+// table (ORM ,updated tag); executions are an append-only log (no deleted_at — D1) with
+// CHECK-constrained status / triggered_by.
 //
 // Schema 是 agent 三表 DDL，按序幂等导出。agents 用 partial-UNIQUE name（软删后释放）；versions
-// UNIQUE(agent_id, version) 且不可变（无 updated_at）；executions 是只增 log（无 deleted_at——D1），
+// UNIQUE(agent_id, version) 且与其他实体的 version 表一样带 created_at/updated_at（ORM ,updated 标签）；
+// executions 是只增 log（无 deleted_at——D1），
 // status / triggered_by 带 CHECK。
 var Schema = []string{
 	`CREATE TABLE IF NOT EXISTS agents (
@@ -55,7 +57,8 @@ var Schema = []string{
 		model_override            TEXT NOT NULL DEFAULT 'null',
 		change_reason             TEXT NOT NULL DEFAULT '',
 		forged_in_conversation_id TEXT NOT NULL DEFAULT '',
-		created_at                DATETIME NOT NULL
+		created_at                DATETIME NOT NULL,
+		updated_at                DATETIME NOT NULL
 	)`,
 	`CREATE UNIQUE INDEX IF NOT EXISTS idx_agv_agent_version ON agent_versions(agent_id, version)`,
 	`CREATE INDEX IF NOT EXISTS idx_agv_agent_created ON agent_versions(agent_id, created_at DESC, id DESC)`,
