@@ -1,14 +1,17 @@
-/* Forgify design-lab — Chat 海洋（单独，一人负责整个文件夹）。
-   含本海洋的全部设计块：对话流 / 工具调用块 / composer / 右岛(实体卡)。
+/* Forgify design-lab — 对话海洋（产品适配 v1，单独，一人负责整个 oceans/chat/ 文件夹）。
+   把 v0 的视觉语言（海与岛 / 工具块折叠 / 右岛实体卡滑入 / spring）原样保留，
+   内容换成 Forgify 真实对话引擎：六型块 / 锻造四实体 → 右岛实时填充 / 人在环危险闸 / progress 块 / durable flowrun / todo。
    依赖：shared/tokens.css + shared/shell.css 的 cc-* / 原语(.ibtn/.chev/spin)（只读）。
-   ⚠ 右岛是「本海洋的」：.aside 的框 + 内容都在这（外壳只给 Shell.body 让我 append）。 */
+   ⚠ 右岛是「本海洋的」：.aside 的框 + 内容都在这（外壳只给 Shell.body 让我 append）。
+   视觉宪法：海与岛同色、靠海岸线(描边)分；无横向 divider；语义色仅 ok/warn/danger；--accent 只点正在发生；动效走 --ease-spring。 */
 
-/* ===== 对话流 ===== */
+/* ===== 对话流（复用 v0） ===== */
 .conv { flex: 1; overflow-y: auto; }
 .col { max-width: 860px; margin: 0 auto; padding: 28px 32px 8px; }
 .turn { margin-bottom: 26px; }
 .umsg { display: flex; justify-content: flex-end; margin-bottom: 26px; }
 .umsg .b { background: var(--cc-bubble); border-radius: 16px; padding: 10px 15px; max-width: 80%; line-height: 1.55; }
+.umsg .b .ref-pill { vertical-align: 1px; }
 .spark { display: flex; align-items: center; color: var(--accent); margin-bottom: 12px; }
 .amsg { font-size: 14px; line-height: 1.65; }
 .amsg p { margin: 0 0 12px; } .amsg p:last-child { margin-bottom: 0; }
@@ -19,8 +22,25 @@
 .ref-pill { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px 1px 7px; border-radius: 999px;
   background: var(--cc-active); color: var(--ink); border: 1px solid var(--line); font-size: 13px; font-weight: 500; cursor: pointer; transition: background .15s; }
 .ref-pill:hover { background: var(--cc-hover); }
+.ref-pill .ico { display: grid; place-items: center; color: var(--ink-2); }
 
-/* ===== 工具调用块（复刻 Claude Code；运行流光 / spring 展开 / 详情就一个块，无灰头） ===== */
+/* 共用流光文字（运行态：工具流光 / progress live / flowrun running node） */
+.shimmer { background: linear-gradient(105deg, var(--ink-3) 36%, var(--ink) 50%, var(--ink-3) 64%);
+  background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 1.5s linear infinite; }
+@keyframes shimmer { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+
+/* ===== reasoning 块（六型之一；默认折叠，复用 tg 折叠机制） ===== */
+.reason { margin: 10px 0; }
+.reason-sum { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 13px; cursor: pointer; padding: 2px 0; }
+.reason-sum:hover { color: var(--ink-2); }
+.reason.open > .reason-sum .chev { transform: rotate(90deg); }
+.reason-body { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .3s var(--ease-spring); }
+.reason.open > .reason-body { grid-template-rows: 1fr; }
+.reason-body > .w { overflow: hidden; min-height: 0; }
+.reason-body > .w > .tbox { margin-top: 8px; }
+.reason .tbox .out { color: var(--ink-2); }
+
+/* ===== 工具调用块（复用 v0；只加 danger 徽章） ===== */
 .tg { margin: 12px 0; }
 .tg-sum { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 13px; cursor: pointer; padding: 2px 0; }
 .tg-sum:hover { color: var(--ink-2); }
@@ -28,7 +48,6 @@
 .tg-sum.run { cursor: default; }
 .tg-sum.run .tk { background: linear-gradient(105deg, var(--ink-3) 36%, var(--ink) 50%, var(--ink-3) 64%);
   background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: shimmer 1.5s linear infinite; }
-@keyframes shimmer { from { background-position: 130% 0; } to { background-position: -30% 0; } }
 .tg-list { display: grid; grid-template-rows: 0fr; transition: grid-template-rows .34s var(--ease-spring); }
 .tg.open > .tg-list { grid-template-rows: 1fr; }
 .tg-list > .w { overflow: hidden; min-height: 0; }
@@ -55,34 +74,159 @@
 .dline.add .s { color: var(--ok); } .dline.add .c { color: var(--ink); }
 .dline.del { background: color-mix(in srgb, var(--danger) 9%, transparent); }
 .dline.del .s { color: var(--danger); } .dline.del .c { color: var(--ink-3); }
+.diff-cap { padding: 6px 12px 2px; font-size: 11px; color: var(--ink-3); }   /* 「实体版本 diff」标注：复用 dline 像素、纠正语义（非 git diff） */
 
-/* ===== composer ===== */
+/* danger 徽章（S18 三级自报；用在工具行 + 审批卡） */
+.badge { font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: 6px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .03em; }
+.badge.safe { color: var(--ink-3); background: var(--cc-active); }
+.badge.cautious { color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); }
+.badge.dangerous { color: var(--danger); background: color-mix(in srgb, var(--danger) 11%, transparent); }
+
+/* ===== progress 块（六型之一；run_function/call_handler 下的实时中间过程，与 result 分两个框） ===== */
+.progress-box { margin: 2px 9px 6px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.progress-box .phead { display: flex; align-items: center; gap: 8px; padding: 6px 11px; font-size: 12px; color: var(--ink-3); }
+.progress-box .phead .lt { display: inline-flex; align-items: center; gap: 5px; margin-left: auto; color: var(--accent); font-weight: 500; }
+.progress-box .phead .lt .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease infinite; }
+.progress-box.done .phead .lt { display: none; }
+.progress-box .plines { padding: 8px 12px; font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--ink-2); white-space: pre-wrap; }
+.res-cap { padding: 2px 9px 4px; font-size: 11px; color: var(--ink-3); }   /* 「返回结果」标注，区别于 progress */
+
+/* ===== 人在环危险闸（R0064）：内联审批卡。两味 = 危险工具 / ask_user。 ===== */
+/* 与 durable flowrun 审批节点是两个不同表面：这是 chat in-loop（批准/始终批准/拒绝），那是 flowrun :decide（通过/驳回）。 */
+.approval-card { margin: 14px 0; border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); border-radius: 14px;
+  background: var(--cc-side); box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04); overflow: hidden; position: relative; }
+.approval-card .ac-pulse { position: absolute; top: 13px; right: 13px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease infinite; }
+.approval-card .ac-head { display: flex; align-items: center; gap: 10px; padding: 12px 13px 8px; }
+.approval-card .ac-shield { width: 28px; height: 28px; border-radius: 8px; flex: none; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--warn); }
+.approval-card .ac-tt { flex: 1; min-width: 0; }
+.approval-card .ac-tt b { display: block; font-size: 14px; font-weight: 600; }
+.approval-card .ac-tt .tool { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.approval-card .ac-body { padding: 0 13px 11px; }
+.approval-card .ac-sum { font-size: 13px; color: var(--ink-2); line-height: 1.55; margin: 2px 0 10px; }
+.approval-card .ac-args { background: var(--cc-input); border: 1px solid var(--line); border-radius: 9px;
+  padding: 8px 11px; font-family: var(--mono); font-size: 12px; line-height: 1.7; color: var(--ink-2); white-space: pre-wrap; margin-bottom: 12px; }
+.approval-card .ac-answer { width: 100%; background: var(--cc-input); border: 1px solid var(--line); border-radius: 9px;
+  padding: 9px 11px; font: inherit; font-size: 13px; color: var(--ink); outline: 0; margin-bottom: 12px; }
+.approval-card .ac-answer:focus { border-color: var(--line-strong); }
+.approval-card .ac-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.acbtn { height: 30px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; transition: background .15s, color .15s; }
+.acbtn.primary { background: var(--accent); color: var(--ink-on-accent); }
+.acbtn.primary:hover { background: var(--accent-hover); }
+.acbtn.ghost { color: var(--ink-2); border: 1px solid var(--line); }
+.acbtn.ghost:hover { background: var(--cc-hover); color: var(--ink); }
+.acbtn.deny { color: var(--ink-2); }
+.acbtn.deny:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); }
+.approval-card .ac-note { font-size: 11px; color: var(--ink-3); margin-left: 2px; }
+.approval-card .ac-settled { display: none; align-items: center; gap: 8px; padding: 11px 13px; font-size: 13px; color: var(--ink-3); }
+.approval-card .ac-settled .ico { display: grid; place-items: center; color: var(--ok); }
+.approval-card.settled { border-color: var(--line); }
+.approval-card.settled .ac-pulse, .approval-card.settled .ac-head, .approval-card.settled .ac-body { display: none; }
+.approval-card.settled .ac-settled { display: flex; }
+
+/* ===== todo 自管清单（六型外的信号；LLM 整表替换、只读；内联在回合顶、不进右岛） ===== */
+.todo-panel { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--cc-side); box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04); padding: 9px 6px 7px; }
+.todo-head { display: flex; align-items: center; gap: 7px; padding: 2px 8px 8px; }
+.todo-head .tt { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; }
+.todo-head .tc { margin-left: auto; font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
+.todo-row { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 0 8px; border-radius: 8px; font-size: 13px; color: var(--ink); }
+.todo-row.enter { animation: dlineIn .32s var(--ease-spring) both; }
+.todo-row .mk { width: 15px; height: 15px; flex: none; display: grid; place-items: center; }
+.todo-row .mk .circle { width: 12px; height: 12px; border-radius: 50%; border: 1.6px solid var(--ink-3); }
+.todo-row .t { flex: 1; }
+.todo-row.in-progress { font-weight: 500; }
+.todo-row.in-progress .mk .circle { border-color: var(--accent); background: linear-gradient(90deg, var(--accent) 50%, transparent 50%); }
+.todo-row.completed { color: var(--ink-3); }
+.todo-row.completed .mk { color: var(--ok); }
+.todo-row.completed .t { text-decoration: line-through; }
+
+/* ===== durable flowrun 条（节点结果记忆化；逐节点 ephemeral tick；行是真相、非事件日志） ===== */
+.flowrun { margin: 13px 0; border: 1px solid var(--line); border-radius: 14px;
+  background: var(--cc-side); box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04); padding: 9px 6px 6px; }
+.fr-head { display: flex; align-items: center; gap: 8px; padding: 2px 8px 8px; }
+.fr-head .fl { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; }
+.fr-head .fid { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.fr-head .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); margin-left: 2px; animation: pulse 1.4s ease infinite; }
+.fr-head .pulse.off { display: none; }
+.fr-node { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 4px 8px; border-radius: 8px; }
+.fr-node.enter { animation: dlineIn .34s var(--ease-spring) both; }
+.fr-node .nico { width: 18px; height: 18px; flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.fr-node .nid { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+.fr-node .nkind { font-size: 11px; color: var(--ink-3); }
+.fr-node .nstatus { margin-left: auto; font-size: 12px; color: var(--ink-3); display: inline-flex; align-items: center; gap: 6px; }
+.fr-node .memo { font-size: 11px; color: var(--ink-3); margin-left: 7px; opacity: .85; }
+.fr-node.running .nico { color: var(--accent); }
+.fr-node.ok .nico { color: var(--ok); }
+.fr-node.ok .nstatus { color: var(--ok); }
+.fr-node.parked .nico { color: var(--warn); }
+.fr-node.parked .nstatus { color: var(--warn); }
+.fr-decide { margin-left: auto; display: inline-flex; align-items: center; gap: 6px; }
+.fr-decide .lbl { font-size: 12px; color: var(--warn); margin-right: 2px; }
+.fr-decide button { font-size: 12px; padding: 3px 11px; border-radius: 7px; border: 1px solid var(--line); color: var(--ink-2); font-weight: 600; transition: background .15s, color .15s; }
+.fr-decide .yes:hover { color: var(--ok); background: var(--ok-soft); border-color: color-mix(in srgb, var(--ok) 30%, var(--line)); }
+.fr-decide .no:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); border-color: color-mix(in srgb, var(--danger) 30%, var(--line)); }
+.fr-foot { padding: 7px 8px 2px; }
+
+/* ===== subagent 子树（E3 ParentID 嵌套；左侧 1px 引导轨，非横向 divider；深度 1） ===== */
+.subtree { margin: 8px 0; padding-left: 14px; border-left: 1px solid var(--line); }
+.subtree .sublabel { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-bottom: 7px; }
+.subtree .sublabel .ico { display: grid; place-items: center; }
+
+/* ===== 回合诚实终态（max_steps；非失败、给「继续」） ===== */
+.turn-end { display: flex; align-items: center; gap: 10px; margin: 14px 0 4px; padding: 10px 13px;
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line)); border-radius: 12px; background: color-mix(in srgb, var(--warn) 5%, transparent); }
+.turn-end .te-ico { color: var(--warn); display: grid; place-items: center; flex: none; }
+.turn-end .te-msg { flex: 1; font-size: 13px; color: var(--ink-2); }
+.turn-end .badge.code { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); text-transform: none; }
+.turn-end .cont { height: 28px; padding: 0 13px; border-radius: 8px; border: 1px solid var(--line); font-weight: 600; font-size: 12px; color: var(--ink); transition: background .15s; }
+.turn-end .cont:hover { background: var(--cc-hover); }
+
+/* ===== compaction 标记（六型之一；安静耳语、无框无线，守「禁分割线」） ===== */
+.compaction { text-align: center; color: var(--ink-3); font-size: 11px; font-family: var(--mono); margin: 22px 0; opacity: .8; }
+
+/* ===== composer（纠正为产品真相：去 git/PR/Auto/Ultracode/mic；加 dialogue 模型 / @提及 / 附件 / 生成中 cancel） ===== */
 .composer { flex: none; padding: 0 32px 18px; }
 .cwrap { max-width: 860px; margin: 0 auto; }
-.ctx { display: flex; align-items: center; gap: 10px; padding: 7px 12px; margin-bottom: 8px;
+.ctx { display: flex; align-items: center; gap: 8px; padding: 7px 11px; margin-bottom: 8px;
   background: var(--cc-input); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); font-size: 12px; color: var(--ink-2); }
-.ctx .repo { display: flex; align-items: center; gap: 6px; font-weight: 500; color: var(--ink); }
-.ctx .branch { display: flex; align-items: center; gap: 5px; color: var(--ink-2); }
-.ctx .diff { font-family: var(--mono); font-size: 12px; margin-left: auto; }
-.ctx .diff .add { color: var(--ok); } .ctx .diff .del { color: var(--danger); }
-.ctx .pr { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border-radius: 7px; border: 1px solid var(--line); background: var(--cc-win); font-weight: 600; color: var(--ink); }
-.ctx .pr:hover { background: var(--cc-hover); }
+.ctx .cchip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 7px; border-radius: 999px; background: var(--cc-active); border: 1px solid var(--line); color: var(--ink-2); }
+.ctx .cchip .ico { display: grid; place-items: center; color: var(--ink-3); }
+.ctx .cchip.mention { color: var(--ink); }
+.ctx .gen { display: none; align-items: center; gap: 6px; color: var(--accent); font-weight: 500; }
+.ctx .gen .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease infinite; }
+.ctx .stop { margin-left: auto; display: none; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border-radius: 7px;
+  border: 1px solid var(--line); color: var(--ink-2); font-weight: 600; transition: background .15s, color .15s; }
+.ctx .stop:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.composer.gen .ctx .gen { display: inline-flex; }
+.composer.gen .ctx .stop { display: inline-flex; }
 .box { border: 1px solid var(--line); border-radius: 16px; background: var(--cc-input); box-shadow: 0 1px 2px rgba(0,0,0,.03); }
 .box:focus-within { border-color: var(--line-strong); }
 .box .field { display: flex; align-items: center; gap: 8px; padding: 13px 14px 6px; }
 .box .field input { flex: 1; border: 0; outline: 0; background: none; font: inherit; font-size: 14px; color: var(--ink); }
 .box .field input::placeholder { color: var(--ink-3); }
-.box .field .enter { color: var(--ink-3); }
+.box .field .enter { color: var(--ink-3); cursor: pointer; }
 .bar { display: flex; align-items: center; gap: 4px; padding: 4px 8px 8px; }
 .cbtn { height: 28px; padding: 0 9px; border-radius: 8px; display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: 12px; font-weight: 500; transition: background .12s; }
 .cbtn:hover { background: var(--cc-hover); color: var(--ink); }
 .cbtn.ic { width: 28px; padding: 0; justify-content: center; }
-.bar .right { margin-left: auto; display: flex; align-items: center; gap: 8px; }
-.bar .right .lbl { font-size: 12px; color: var(--ink-3); }
-.bar .right .spin { color: var(--ink-3); display: grid; place-items: center; }
+.cbtn.model b { font-weight: 600; color: var(--ink); }
+.bar .right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.bar .right .spin { display: none; color: var(--ink-3); place-items: center; }
 .bar .right .spin svg { animation: spin 1s linear infinite; }
+.composer.gen .bar .right .spin { display: grid; }
 
-/* ===== 右岛 = 实体卡（信号交互：AI 触碰实体时从右滑入、流式编辑）===== */
+/* @ 提及选择器（输入框上方弹出；.tag/.aside-tabs 习惯） */
+.mention-pop { display: none; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--cc-input); box-shadow: var(--shadow-pop); overflow: hidden; }
+.mention-pop.show { display: block; }
+.mention-pop .mh { padding: 8px 12px 4px; font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+.mention-row { display: flex; align-items: center; gap: 9px; padding: 7px 12px; cursor: pointer; transition: background .12s; }
+.mention-row:hover { background: var(--cc-hover); }
+.mention-row .ico { width: 18px; display: grid; place-items: center; color: var(--ink-2); }
+.mention-row .nm { font-size: 13px; color: var(--ink); }
+.mention-row .kd { margin-left: auto; font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
+
+/* ===== 右岛 = 实体卡（信号交互：锻造工具流式 → 从右滑入实时填充；扩到 function/handler/agent/workflow）===== */
 /* 同色 + 海岸线；默认收起(宽0)，唤出滑入。append 到 Shell.body 作第三个 flex 子。 */
 .aside { flex: none; width: 0; opacity: 0; overflow: hidden; margin-left: -8px;
   background: var(--cc-side); border: 1px solid var(--line); border-radius: 12px;
@@ -117,3 +261,27 @@
 .tag { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; background: var(--cc-input); border: 1px solid var(--line); font-size: 11px; font-family: var(--mono); color: var(--ink-2); }
 .tag.new { animation: popin .3s var(--ease-spring); }
 @keyframes popin { from { transform: scale(.7); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+/* 实体卡按类扩展：graph 节点行 / 敏感掩码 / lifecycle / env·config 状态 */
+.ec-row { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: 8px; }
+.ec-row.new { animation: popin .3s var(--ease-spring); }
+.ec-row .nico { width: 18px; flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.ec-row .nid { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+.ec-row .nref { margin-left: auto; font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
+.ec-mask { font-family: var(--mono); letter-spacing: 1.5px; color: var(--ink-3); }
+.ec-note { font-size: 11px; color: var(--ink-3); margin-left: 4px; }
+.ec-kv { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 13px; }
+.ec-kv .k { color: var(--ink-3); min-width: 92px; }
+.ec-kv .v { color: var(--ink); font-family: var(--mono); font-size: 12px; }
+.statebadge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; }
+.statebadge .dot { width: 7px; height: 7px; border-radius: 50%; }
+.statebadge.ready { color: var(--ok); } .statebadge.ready .dot { background: var(--ok); }
+.statebadge.syncing { color: var(--ink-2); }
+.statebadge.syncing .dot { background: var(--accent); animation: pulse 1.4s ease infinite; }
+.statebadge.pending { color: var(--ink-3); } .statebadge.pending .dot { background: var(--ink-3); }
+.statebadge.failed { color: var(--danger); } .statebadge.failed .dot { background: var(--danger); }
+.lifecycle { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 2px 9px; border-radius: 6px; }
+.lifecycle.active { color: var(--accent); background: var(--accent-soft); }
+.lifecycle.active .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease infinite; }
+.lifecycle.inactive { color: var(--ink-3); background: var(--cc-active); }
+.lifecycle.draining { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
