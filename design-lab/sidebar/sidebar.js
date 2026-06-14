@@ -36,24 +36,23 @@
       <div class="rec-head"><span>Recents</span><button class="ibtn" data-i="sort"></button></div>
       <div id="reclist"></div>
     </div>
-    <!-- 底部:工作区(可切换,⌄ 开切换菜单) + 通知铃铛(未读角标) + 设置。本地单用户、无账号/套餐——身份轴 = workspace。 -->
+    <!-- 底部:工作区(圆头像+名,点切换、无箭头) + 通知 + 设置。学 Claude Code 用户行清爽;英文名;铃铛/齿轮 15px 同顶部导航。 -->
     <div class="sfoot">
-      <button class="ws" title="切换工作区">
+      <button class="ws" title="Switch workspace">
         <span class="ws-ava" id="ws-ava"></span>
         <span class="ws-name" id="ws-name"></span>
-        <span class="chev" data-i="chevd"></span>
       </button>
-      <button class="ibtn ws-act" title="通知"><span class="ico" data-i="bell"></span><span class="badge"></span></button>
-      <button class="ibtn ws-act" title="设置"><span class="ico" data-i="gear"></span></button>
+      <button class="sf-act" title="Notifications"><span data-i="bell"></span><span class="badge"></span></button>
+      <button class="sf-act" title="Settings"><span data-i="gear"></span></button>
     </div>`;
 
-  const sz = { side: 18, search: 18, chat: 15, entities: 15, scheduler: 15, doc: 15, plus: 18, zap: 18, dispatch: 18, chevd: 14, sort: 15, bell: 18, gear: 18 };
+  const sz = { side: 18, search: 18, chat: 15, entities: 15, scheduler: 15, doc: 15, plus: 18, zap: 18, dispatch: 18, chevd: 14, sort: 15, bell: 15, gear: 15 };
   left.querySelectorAll('[data-i]').forEach(el => { const k = el.dataset.i; el.innerHTML = icon(k, sz[k] || 18); });
 
-  // 工作区身份(示意;接后端时换真 workspace 名)。头像 = 名字首字
-  const WS = '我的工作区';
+  // 工作区身份(示意;接后端换真 workspace)。头像 = 名字首字母(最多两词)
+  const WS = 'Personal';
   left.querySelector('#ws-name').textContent = WS;
-  left.querySelector('#ws-ava').textContent = (WS.trim()[0] || 'W');
+  left.querySelector('#ws-ava').textContent = WS.trim().split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
 
   const SESS = [
     ['前端设计 (fork)', 'run', true], ['前端部署', 'run', false], ['Backend重构 [Done]', 'done', false],

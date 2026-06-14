@@ -57,13 +57,15 @@ html[data-side="off"] .side-reopen { width: 28px; opacity: 1; margin-left: 0; po
 .ritem:hover { background: var(--cc-hover); color: var(--ink); }
 .ritem.on { background: var(--cc-active); color: var(--ink); }
 
-/* 底部:工作区(可切换) + 通知 + 设置——单行,沉底,靠留白与 Recents 分(无横线)。
-   身份轴 = workspace(本地单用户、无账号/套餐);未读角标是唯一允许的强调色(真实状态、非装饰)。 */
+/* 底部:工作区(圆头像+名,点切换;无箭头) + 通知 + 设置。学 Claude Code 用户行的清爽——
+   圆头像、留白、右侧只两个轻图标。身份轴 = workspace(本地单用户、无账号/套餐);
+   铃铛/齿轮 15px = 与顶部四导航同号;未读角标是唯一 accent(真实状态、非装饰)。 */
 .sfoot { display: flex; align-items: center; gap: 2px; margin-top: 6px; }
-.ws { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; height: 38px; padding: 0 6px; border-radius: 9px; color: var(--ink); transition: background .12s; }
+.ws { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px; border-radius: 10px; color: var(--ink); transition: background .12s; }
 .ws:hover { background: var(--cc-hover); }
-.ws-ava { width: 26px; height: 26px; border-radius: 7px; flex: none; display: grid; place-items: center; background: #3b3b40; color: #fff; font-size: 12px; font-weight: 700; }
+.ws-ava { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; background: var(--cc-active); color: var(--ink-2); font-size: 11px; font-weight: 600; }
 .ws-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
-.ws .chev { flex: none; color: var(--ink-3); }
-.ws-act { flex: none; position: relative; }
-.ws-act .badge { position: absolute; top: 4px; right: 4px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); border: 2px solid var(--cc-side); }
+.sf-act { flex: none; position: relative; width: 26px; height: 26px; display: grid; place-items: center; color: var(--ink-3); border-radius: 7px; transition: color .12s, background .12s; }
+.sf-act:hover { color: var(--ink); background: var(--cc-hover); }
+.sf-act svg { display: block; }
+.sf-act .badge { position: absolute; top: 3px; right: 3px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); border: 2px solid var(--cc-side); }
