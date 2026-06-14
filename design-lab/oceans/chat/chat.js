@@ -57,14 +57,14 @@
               <div class="mention-row"><span class="ico">${icon('doc', 16)}</span><span class="nm">竞品列表.md</span><span class="kd">doc</span></div>
             </div>
             <div class="box">
-              <div class="field"><input id="ta" placeholder="发消息，@ 提及实体，或继续上一回合…"><span class="enter" data-i="enter"></span></div>
+              <div class="field"><input id="ta" placeholder=""><span class="enter" data-i="enter"></span></div>
               <div class="bar">
                 <button class="cbtn ic" id="b_at" title="@ 提及实体">${icon('at', 17)}</button>
                 <button class="cbtn ic" id="b_plus" title="附件">${icon('plus', 17)}</button>
                 <span class="right">
                   <button class="cbtn stop" id="b_stop">${icon('stop', 13)} 停止</button>
                   <span class="spin">${icon('spin', 14)}</span>
-                  <button class="cbtn model">本对话模型 · <b>claude-opus-4-8</b> ${icon('chevd', 13)}</button>
+                  <button class="cbtn model"><b>claude-opus-4-8</b> ${icon('chevd', 13)}</button>
                 </span>
               </div>
             </div>
