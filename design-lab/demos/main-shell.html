@@ -62,8 +62,9 @@ code, .mono { font-family: var(--mono); }
 .body { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 0 8px 8px; }
 
 /* ---- 侧栏 ---- */
+/* 侧栏 = 岛：白面板，浮在海上 */
 .side { width: 240px; flex: none; background: var(--cc-panel); border: 1px solid var(--line);
-  border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.03);
+  border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04);
   display: flex; flex-direction: column; padding: 8px; overflow: hidden; }
 
 .modeseg { display: flex; gap: 2px; background: var(--cc-active); border-radius: 9px; padding: 3px; margin-bottom: 10px; }
@@ -102,16 +103,16 @@ code, .mono { font-family: var(--mono); }
 .suser .chev { color: var(--ink-3); }
 
 /* ---- 主区 ---- */
-.main { flex: 1; min-width: 0; background: var(--cc-panel); border: 1px solid var(--line);
-  border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.03); overflow: hidden;
-  display: flex; flex-direction: column; }
+/* 主区 = 海：平铺，透明（露出窗内海色），无圆角/边框/阴影 */
+.main { flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
 .conv { flex: 1; overflow-y: auto; }
 .col { max-width: 860px; margin: 0 auto; padding: 28px 32px 8px; }
 
 /* 消息 */
 .turn { margin-bottom: 26px; }
 .umsg { display: flex; justify-content: flex-end; margin-bottom: 26px; }
-.umsg .b { background: var(--cc-active); border-radius: 16px; padding: 10px 15px; max-width: 80%; line-height: 1.55; }
+.umsg .b { background: var(--cc-panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 10px 15px; max-width: 80%; line-height: 1.55; box-shadow: 0 1px 2px rgba(0,0,0,.04); }
 .spark { display: flex; align-items: center; gap: 0; margin-bottom: 12px; color: var(--accent); }
 .amsg { font-size: 14px; line-height: 1.65; }
 .amsg p { margin: 0 0 12px; }
@@ -141,7 +142,8 @@ code, .mono { font-family: var(--mono); }
 .composer { flex: none; padding: 0 32px 18px; }
 .cwrap { max-width: 860px; margin: 0 auto; }
 .ctx { display: flex; align-items: center; gap: 10px; padding: 7px 12px; margin-bottom: 8px;
-  border: 1px solid var(--line); border-radius: 12px; font-size: 12px; color: var(--ink-2); }
+  background: var(--cc-panel); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 1px 2px rgba(0,0,0,.04); font-size: 12px; color: var(--ink-2); }
 .ctx .repo { display: flex; align-items: center; gap: 6px; font-weight: 500; color: var(--ink); }
 .ctx .branch { display: flex; align-items: center; gap: 5px; color: var(--ink-2); }
 .ctx .diff { font-family: var(--mono); font-size: 12px; margin-left: auto; }
