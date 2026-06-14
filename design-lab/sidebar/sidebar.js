@@ -46,7 +46,7 @@
       <button class="sf-act" title="Settings"><span data-i="gear"></span></button>
     </div>`;
 
-  const sz = { side: 18, search: 18, chat: 15, entities: 15, scheduler: 15, doc: 15, plus: 18, zap: 18, dispatch: 18, chevd: 14, sort: 15, bell: 15, gear: 15 };
+  const sz = { side: 18, search: 18, chat: 18, entities: 18, scheduler: 18, doc: 18, plus: 18, zap: 18, dispatch: 18, chevd: 14, sort: 15, bell: 18, gear: 18 };
   left.querySelectorAll('[data-i]').forEach(el => { const k = el.dataset.i; el.innerHTML = icon(k, sz[k] || 18); });
 
   // 工作区身份(示意;接后端换真 workspace)。头像 = 名字首字母(最多两词)

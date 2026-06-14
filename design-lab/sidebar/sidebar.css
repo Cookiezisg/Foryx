@@ -23,18 +23,19 @@ html[data-side="off"] .side-reopen { width: 28px; opacity: 1; margin-left: 0; po
 .light { width: 12px; height: 12px; border-radius: 50%; }
 .light.r { background: #ff5f57; } .light.y { background: #febc2e; } .light.g { background: #28c840; }
 
-/* 四导航（Notion 原理：选中展开成 图标+文字 药丸；风格用我们的）。
-   收窄护栏:4 个图标 flex:none 永远全显,只让「选中那颗药丸的文字」在挤压时省略号截断——
-   收起/拖窄时图标绝不被挤掉,标签从 Documents→Docu… 优雅降级(标签叫啥都成立)。 */
+/* 四导航（Notion 原理：选中展开成 图标+文字 药丸；未选只图标）。
+   视觉与下方 .sitem 列表统一:图标 18px·恒 --ink-2、字重 500、圆角 8、选中 gap 11——
+   只多一层「选中灰药丸 + 未选收成图标」的开关语义,其余分量与列表一致(不再粗黑)。
+   收窄护栏:4 图标 flex:none 永远全显,只让选中药丸文字省略号截断(Documents→Docu…)。 */
 .modeseg { display: flex; gap: 2px; margin-bottom: 10px; min-width: 0; }
-.modeseg button { flex: none; display: flex; align-items: center; gap: 0; height: 32px; padding: 0 7px; border-radius: 9px;
-  color: var(--ink-2); font-size: 13px; font-weight: 600; background: transparent;
+.modeseg button { flex: none; display: flex; align-items: center; gap: 0; height: 32px; padding: 0 6px; border-radius: 8px;
+  color: var(--ink-2); font-size: 13px; font-weight: 500; background: transparent;
   transition: background .2s, color .2s, gap .34s var(--ease-spring), padding .34s var(--ease-spring); }
 .modeseg button:hover { background: var(--cc-hover); }
-.modeseg button .ico { flex: none; display: grid; place-items: center; }
+.modeseg button .ico { flex: none; display: grid; place-items: center; color: var(--ink-2); }   /* 图标恒浅灰 = 与 .sitem 一致 */
 .modeseg button .lbl { max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
   transition: max-width .34s var(--ease-spring), opacity .22s; }
-.modeseg button.on { flex: 0 1 auto; min-width: 0; gap: 6px; background: var(--cc-active); color: var(--ink); padding: 0 10px; }
+.modeseg button.on { flex: 0 1 auto; min-width: 0; gap: 11px; background: var(--cc-active); color: var(--ink); padding: 0 10px; }
 .modeseg button.on .lbl { max-width: 110px; opacity: 1; }
 
 .sact { display: flex; flex-direction: column; gap: 1px; }
