@@ -24,8 +24,10 @@
 
 - **学 Claude 的执行质感**：柔和扁平侧栏（New chat + 四导航 + Recents 会话列表 + 工作区位）、
   圆润双排 composer（输入 + 底部 + / Auto / 模型 / 圆形发送）、慷慨留白、低对比克制、**圆角统一一套刻度**。
-- **对话区复刻 Claude Code**：**无头像**（不每条都挂头像）、AI 回复**全幅平铺 markdown**、
-  用户消息右侧柔和气泡、**工具调用是紧凑可折叠行**（`✓ Used tool(arg) ›` 展开看 detail，非大框）。
+- **对话区复刻 Claude Code**：**无头像**、AI 回复**全幅平铺 markdown**、用户消息右侧柔和气泡；
+  **工具活动收敛为摘要行**——运行时显示实时状态（`Updating Researcher…` + spinner），完成后收敛为
+  `Used N tools ›`（可展开看每个工具 detail）+ `Updated <实体> v4→v5` 结果行（对应 Claude Code 的
+  「Edited file +n −m」与 Verbose / Normal / Summary 三档）。
   **但只学质感,不学这两样**：① 底色——不抄 Claude 米白暖色,用干净白 / 近黑（苹果官网那种）；
   ② 字体——不抄 Claude 衬线/特调,用标准系统字体。
 - **配色**：跟随苹果官网——纯净白、近黑、系统灰阶。强调色是**单一 token**

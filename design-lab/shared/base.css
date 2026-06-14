@@ -170,33 +170,39 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 }
 .reason .spin { animation: spin 1s linear infinite; }
 
-/* ---- 工具调用：复刻 Claude Code 的紧凑可折叠行（无大框） ---------- */
-.actblock { margin: 10px 0; }
+/* ---- 工具活动：复刻 Claude Code 桌面「摘要行」 ------------------- */
+/* 运行时显示实时状态(spinner + 文案)，收敛为「Used N tools ›」可展开 */
+.actblock { margin: 12px 0; }
 .act {
   display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
-  padding: 5px 9px; border-radius: var(--r-chip);
-  color: var(--ink-2); font-size: var(--t-sm); cursor: pointer;
-  transition: background var(--d-fast);
+  padding: 4px 8px; margin-left: -8px; border-radius: var(--r-chip);
+  color: var(--ink-2); font-size: var(--t-md); transition: background var(--d-fast);
 }
-.act:hover { background: var(--island-2); }
-.act .st { flex: none; display: grid; place-items: center; }
-.act .st.run { color: var(--accent); }
-.act .st.run svg { animation: spin .9s linear infinite; }
-.act .st.done { color: var(--ok); }
-.act .averb { color: var(--ink-3); }
-.act .aname { font-family: var(--mono); color: var(--ink); }
-.act .aarg { color: var(--ink-3); font-size: var(--t-xs);
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
-.act .chev { color: var(--ink-3); transition: transform var(--d-fast); margin-left: 2px; }
+.act.clickable { cursor: pointer; }
+.act.clickable:hover { background: var(--island-2); }
+.act .st { flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.act .st svg { animation: spin .9s linear infinite; }
+.act .atext { color: var(--ink-2); }
+.act .chev { color: var(--ink-3); transition: transform var(--d-fast); }
 .act.open .chev { transform: rotate(90deg); }
 .act-detail {
-  display: none; margin: 4px 0 0 24px; padding: 9px 12px;
-  border-left: 2px solid var(--line); background: var(--island-2);
-  border-radius: 0 var(--r-chip) var(--r-chip) 0;
+  display: none; margin: 6px 0 0 6px; padding: 9px 12px;
+  border-left: 2px solid var(--line);
   font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-2);
-  white-space: pre-wrap; line-height: 1.6;
+  white-space: pre-wrap; line-height: 1.7;
 }
 .act-detail.open { display: block; }
+.act-detail b { color: var(--ink); font-weight: 600; }
+
+/* 「Edited file +n -m」式结果行 → Forgify 实体版（Updated <实体> v4→v5）*/
+.editline {
+  display: inline-flex; align-items: center; gap: 7px; margin: 12px 0;
+  padding: 4px 8px; margin-left: -8px; border-radius: var(--r-chip);
+  font-size: var(--t-md); color: var(--ink-2);
+}
+.editline .ename { font-family: var(--mono); color: var(--ink); }
+.editline .estat { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); }
+.editline .estat .to { color: var(--ok); }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* 工具组「行内引用」的实体小药丸（点了会唤出右侧岛） */

@@ -115,18 +115,30 @@ function aiMsg(){
   return $('.body', m);
 }
 
-// ---------- 工具调用：Claude Code 风格的紧凑可折叠行 ----------
-function act(body, name, arg, detail){
+// ---------- 工具活动：复刻 Claude Code 桌面「摘要行」 ----------
+// 运行时显示实时状态，收敛为「Used N tools ›」可展开
+function toolActivity(body){
   const w = document.createElement('div'); w.className = 'actblock fade-in';
-  w.innerHTML = `<div class="act">
-      <span class="st run">${icon('spin',14)}</span>
-      <span class="averb">Used</span><span class="aname">${name}</span><span class="aarg">(${arg})</span>
-      <span class="chev">${icon('chevron',14)}</span>
-    </div><div class="act-detail">${detail || ''}</div>`;
+  w.innerHTML = `<div class="act"><span class="st">${icon('spin',14)}</span>
+      <span class="atext"></span><span class="chev" style="display:none">${icon('chevron',14)}</span></div>
+    <div class="act-detail"></div>`;
   body.appendChild(w); toBottom();
-  const head = $('.act', w), det = $('.act-detail', w);
-  head.onclick = () => { head.classList.toggle('open'); det.classList.toggle('open'); };
-  return { done(){ const st = $('.st', w); st.className = 'st done'; st.innerHTML = icon('check',14); } };
+  const head = $('.act', w), st = $('.st', w), text = $('.atext', w), chev = $('.chev', w), det = $('.act-detail', w);
+  head.onclick = () => { if(!det.innerHTML) return; head.classList.toggle('open'); det.classList.toggle('open'); };
+  return {
+    status(t){ text.textContent = t; toBottom(); },
+    settle(summary, detailHTML){
+      st.style.display = 'none'; text.textContent = summary; det.innerHTML = detailHTML;
+      chev.style.display = ''; head.classList.add('clickable'); toBottom();
+    },
+  };
+}
+// 「Updated <实体> v4→v5」结果行（对应 Claude Code 的「Edited file +n -m」）
+function editLine(body, name, fromV, toV){
+  const w = document.createElement('div'); w.className = 'editline fade-in';
+  w.innerHTML = `${icon('edit',14)} Updated <span class="ename">${name}</span>
+    <span class="estat">v${fromV} → <span class="to">v${toV}</span></span>`;
+  body.appendChild(w); toBottom();
 }
 
 // ---------- 右侧实体岛：渲染一个 Agent ----------
@@ -204,14 +216,13 @@ async function runDemo(){
   await typeInto(p1, '好的，我来更新 Researcher：切换模型到 claude-opus-4-8，并在系统提示里加上引用要求。', 70);
   if(!alive(id)) return;
 
-  // —— 工具调用（逐行，Claude Code 风格）——
+  // —— 工具活动（复刻 Claude Code：实时状态 → 收敛摘要）——
   await sleep(300);
-  const t1 = act(body, 'read_agent', 'Researcher', '→ model=claude-sonnet-4-6\n→ tools=[web_fetch, read_file, python, summarize]');
-  await sleep(750); if(!alive(id)) return; t1.done();
-
-  const t2 = act(body, 'update_agent', 'Researcher',     // ← 这一刻唤出右侧岛
-    '→ model=claude-opus-4-8\n→ system += 引用要求\n→ tools += web_search');
-  await sleep(450); if(!alive(id)) return;
+  const ta = toolActivity(body);
+  ta.status('Reading Researcher…');
+  await sleep(850); if(!alive(id)) return;
+  ta.status('Updating Researcher…');     // ← 这一刻唤出右侧岛
+  await sleep(400); if(!alive(id)) return;
 
   // —— 实体岛从右滑入，开始流式编辑 ——
   renderAgent({
@@ -245,7 +256,8 @@ async function runDemo(){
   $('[data-ver]', aside).textContent = 'v5';
   setLive(false, '刚刚更新 · v5');
   modelVal.classList.remove('flash'); sysVal.classList.remove('changed');
-  t2.done();
+  ta.settle('Used 2 tools', `<b>read_agent</b>(Researcher)\n  → model = claude-sonnet-4-6\n  → tools = [web_fetch, read_file, python, summarize]\n\n<b>update_agent</b>(Researcher)\n  → model = claude-opus-4-8\n  → system += 引用要求（行内链接）\n  → tools += web_search`);
+  editLine(body, 'Researcher', 4, 5);
   await sleep(400); if(!alive(id)) return;
 
   // —— AI 收尾 ——
