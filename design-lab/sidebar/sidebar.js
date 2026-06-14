@@ -3,6 +3,14 @@
    注：模式段/Recents 现为示意；接后端时换成真数据，外壳契约不变。 */
 (function () {
   const left = Shell.left;
+  const html = document.documentElement;
+
+  // 首帧无闪：注入前先据 localStorage 把终态宽度/收起态写到 <html>（避免 240→实际宽跳变）
+  let w0 = parseInt(localStorage.getItem('fg.side.w'), 10);
+  if (!(w0 >= 200 && w0 <= 420)) w0 = 240;                 // 脏值/NaN 回退
+  html.style.setProperty('--side-w', w0 + 'px');
+  html.dataset.side = localStorage.getItem('fg.side.collapsed') === '1' ? 'off' : 'on';
+
   left.innerHTML = `
     <div class="side-top">
       <div class="lights"><span class="light r"></span><span class="light y"></span><span class="light g"></span></div>
@@ -52,5 +60,47 @@
   const seg = left.querySelector('#modeseg');
   seg.querySelectorAll('button').forEach(b => b.onclick = () => {
     seg.querySelectorAll('button').forEach(x => x.classList.remove('on')); b.classList.add('on');
+  });
+
+  // —— 收起/展开 + 拖拽调宽（状态/交互/持久化全归侧栏；单一真相 = html[data-side]） ——
+  function toggle() {
+    const off = html.dataset.side === 'off';
+    html.dataset.side = off ? 'on' : 'off';
+    localStorage.setItem('fg.side.collapsed', off ? '0' : '1');
+  }
+  left.querySelector('[data-i="side"]').onclick = toggle;   // 岛顶折叠按钮（展开态可见）
+
+  // 再展开按钮 → shell 的中性 #head-lead 槽（收起后岛全隐、按钮需岛外有家；收起语义不进内核）
+  const reopen = document.createElement('button');
+  reopen.className = 'ibtn side-reopen';
+  reopen.title = '展开侧栏';
+  reopen.innerHTML = icon('side', 18);
+  reopen.onclick = toggle;
+  Shell.headLead.appendChild(reopen);
+
+  // 拖拽手柄（贴右内缘）：window 级监听 + flag（稳健处理指针移出窗口）；
+  // move 中只改 CSS var、pointerup 才落盘；拖拽中关 transition 跟手。
+  const grip = document.createElement('div');
+  grip.className = 'side-grip';
+  left.appendChild(grip);
+  let sx = 0, sw = 0, dragging = false;
+  grip.addEventListener('pointerdown', e => {
+    if (html.dataset.side !== 'on') return;                 // 收起态不响应（双保险①）
+    dragging = true; sx = e.clientX; sw = Shell.sideWidth || 240;
+    html.dataset.sideDragging = '';
+    document.body.style.userSelect = 'none'; document.body.style.cursor = 'col-resize';
+    e.preventDefault();
+  });
+  window.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const next = Math.max(200, Math.min(420, sw + (e.clientX - sx)));   // clamp[200,420]
+    html.style.setProperty('--side-w', next + 'px');
+  });
+  window.addEventListener('pointerup', () => {
+    if (!dragging) return;
+    dragging = false;
+    delete html.dataset.sideDragging;
+    document.body.style.userSelect = ''; document.body.style.cursor = '';
+    localStorage.setItem('fg.side.w', Math.round(Shell.sideWidth));     // 仅松手时落盘
   });
 })();

@@ -13,6 +13,7 @@
         <aside class="side" id="left"></aside>            <!-- 侧栏模块填 -->
         <main class="main">
           <div class="main-head">
+            <span id="head-lead" style="display:flex;align-items:center;gap:4px"></span>  <!-- 中性领位槽：侧栏放再展开按钮 -->
             <div class="crumb"><span class="ico" id="i_repo"></span> Forgify <span class="sep">/</span>
               <span class="muted" id="crumb-ocean">前端设计 (fork)</span> <span class="chev" id="i_cd"></span></div>
             <span class="grow"></span>
@@ -37,9 +38,11 @@
   window.Shell = {
     $,
     oceans: {},
-    get left() { return $('#left'); },     // 侧栏槽
-    get sea() { return $('#sea'); },        // 海洋中区槽
-    get body() { return $('#body'); },      // 海洋把右岛 append 到这
+    get left() { return $('#left'); },         // 侧栏槽
+    get sea() { return $('#sea'); },            // 海洋中区槽
+    get body() { return $('#body'); },          // 海洋把右岛 append 到这
+    get headLead() { return $('#head-lead'); }, // 主区头最左中性布局槽（侧栏放再展开按钮；海洋勿碰）
+    get sideWidth() { return parseFloat(getComputedStyle($('#left')).width) || 0; }, // 只读·optional·海洋勿用
     headExtra(html) { const s = $('#head-extra'); s.innerHTML = html; return s; },
     crumb(text) { $('#crumb-ocean').textContent = text; },
     registerOcean(id, def) { this.oceans[id] = def; },

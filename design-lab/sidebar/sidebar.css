@@ -2,9 +2,22 @@
    左岛 = 同色 + 海岸线浮岛；无横向 divider；红绿灯/折叠/搜索在岛顶。
    依赖：shared/tokens.css + shared/shell.css 的 cc-* / 原语（只读）。 */
 
-.side { width: 240px; flex: none; background: var(--cc-side); border: 1px solid var(--line);
+/* 宽度归 shell（--side-w，全仓库唯一处）；这里只管岛的「皮肤」+ 给手柄定位基准 */
+.side { position: relative; flex: none; background: var(--cc-side); border: 1px solid var(--line);
   border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04);
   display: flex; flex-direction: column; padding: 8px; overflow: hidden; }
+
+/* 拖拽调宽手柄（归侧栏，append 进 #left；贴右内缘 col-resize，hover 一抹竖线） */
+.side-grip { position: absolute; top: 0; right: 0; width: 9px; height: 100%; cursor: col-resize; z-index: 3; }
+.side-grip::after { content: ""; position: absolute; top: 0; bottom: 0; right: 1px; width: 2px; border-radius: 2px;
+  background: transparent; transition: background var(--d-fast); }
+.side-grip:hover::after { background: var(--line-strong); }
+html[data-side="off"] .side-grip { display: none; }   /* 收起态不可拖 */
+
+/* 再展开按钮（归侧栏，但 append 进 shell 的 #head-lead；收起态才淡入） */
+.side-reopen { width: 0; opacity: 0; margin-left: -4px; pointer-events: none; overflow: hidden;
+  transition: opacity var(--d-mid), width var(--d-slow) var(--ease-spring), margin-left var(--d-slow) var(--ease-spring); }
+html[data-side="off"] .side-reopen { width: 28px; opacity: 1; margin-left: 0; pointer-events: auto; }
 .side-top { display: flex; align-items: center; gap: 4px; height: 32px; margin-bottom: 6px; }
 .lights { display: flex; gap: 8px; padding-left: 2px; }
 .light { width: 12px; height: 12px; border-radius: 50%; }
