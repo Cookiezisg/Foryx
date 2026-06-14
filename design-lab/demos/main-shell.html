@@ -11,24 +11,24 @@
    仅换：颜色（干净白/近黑，非米白）+ 字体（系统字，非衬线）。
    ============================================================ */
 :root {
-  /* Claude 配色（浅色）：中间对话=白(最亮)，侧栏=略浅灰，整体干净——非米白 */
+  /* 海与岛同色（白），分割只靠海岸线(描边)+圆角+微阴影——非靠颜色 */
   --cc-desk:   #d4d5d9;   /* 桌面底（窗外，衬出浮窗） */
-  --cc-win:    #ffffff;   /* 窗内 = 海 = 中间对话面（白） */
-  --cc-side:   #f5f5f7;   /* 侧栏岛（比海略深的浅灰，克制区分） */
-  --cc-bubble: #f0f0f2;   /* 用户气泡 */
-  --cc-input:  #ffffff;   /* 输入框（白 + 发丝边） */
-  --cc-hover:  #ebebee;
-  --cc-active: #e4e4e8;
+  --cc-win:    #ffffff;   /* 海（中间对话）= 白 */
+  --cc-side:   #ffffff;   /* 岛 = 同样的白 */
+  --cc-bubble: #ffffff;   /* 用户气泡 = 白 + 海岸线 */
+  --cc-input:  #ffffff;
+  --cc-hover:  #f1f1f3;   /* 岛内 item hover/选中（唯一的浅灰填充） */
+  --cc-active: #e9e9ec;
 }
 [data-theme="dark"] {
-  /* 暗色：海最深，岛略亮（浮起） */
-  --cc-desk:   #050506;
-  --cc-win:    #0e0e10;
-  --cc-side:   #1a1a1c;
-  --cc-bubble: #232325;
-  --cc-input:  #1a1a1c;
-  --cc-hover:  #242426;
-  --cc-active: #2c2c30;
+  /* 暗色：海与岛同深，靠海岸线分 */
+  --cc-desk:   #000000;
+  --cc-win:    #1c1c1e;
+  --cc-side:   #1c1c1e;
+  --cc-bubble: #1c1c1e;
+  --cc-input:  #1c1c1e;
+  --cc-hover:  #2a2a2d;
+  --cc-active: #323236;
 }
 * { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; }
@@ -46,13 +46,13 @@ code, .mono { font-family: var(--mono); }
   border-radius: 14px; box-shadow: 0 16px 50px rgba(0,0,0,.20); overflow: hidden; }
 
 /* ---- 标题栏（红绿灯 + 侧栏顶图标 | 面包屑 + 面板切换） ---- */
-.titlebar { height: 42px; flex: none; display: flex; align-items: center; }
-.tb-left { width: 248px; flex: none; height: 100%; display: flex; align-items: center; gap: 12px; padding: 0 16px; }
-.lights { display: flex; gap: 8px; }
+/* 左岛顶：红绿灯 + 收起/搜索（都在岛内） */
+.side-top { display: flex; align-items: center; gap: 4px; height: 32px; margin-bottom: 6px; }
+.lights { display: flex; gap: 8px; padding-left: 2px; }
 .light { width: 12px; height: 12px; border-radius: 50%; }
 .light.r { background: #ff5f57; } .light.y { background: #febc2e; } .light.g { background: #28c840; }
-.tb-left .tbi { margin-left: auto; display: flex; gap: 2px; }
-.tb-right { flex: 1; height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 12px; }
+/* 主区(海)顶：面包屑 + 主题/面板切换 */
+.main-head { display: flex; align-items: center; gap: 8px; height: 44px; flex: none; padding: 0 12px 0 16px; }
 .crumb { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; }
 .crumb .ico { color: var(--ink-3); display: grid; place-items: center; }
 .crumb .sep { color: var(--ink-3); font-weight: 400; }
@@ -63,7 +63,7 @@ code, .mono { font-family: var(--mono); }
   transition: background .15s; }
 .ibtn:hover { background: var(--cc-hover); color: var(--ink); }
 
-.body { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 0 8px 8px; }
+.body { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 8px; }
 
 /* ---- 侧栏 ---- */
 /* 侧栏 = 岛：略浅灰面板，浮在白海上 */
@@ -115,7 +115,7 @@ code, .mono { font-family: var(--mono); }
 /* 消息 */
 .turn { margin-bottom: 26px; }
 .umsg { display: flex; justify-content: flex-end; margin-bottom: 26px; }
-.umsg .b { background: var(--cc-bubble); border-radius: 16px;
+.umsg .b { background: var(--cc-bubble); border: 1px solid var(--line); border-radius: 16px;
   padding: 10px 15px; max-width: 80%; line-height: 1.55; }
 .spark { display: flex; align-items: center; gap: 0; margin-bottom: 12px; color: var(--accent); }
 .amsg { font-size: 14px; line-height: 1.65; }
@@ -176,24 +176,15 @@ code, .mono { font-family: var(--mono); }
 <body>
 <div class="win">
 
-  <!-- ===== 标题栏 ===== -->
-  <div class="titlebar">
-    <div class="tb-left">
-      <div class="lights"><span class="light r"></span><span class="light y"></span><span class="light g"></span></div>
-      <div class="tbi"><button class="ibtn" id="i_side"></button><button class="ibtn" id="i_search"></button></div>
-    </div>
-    <div class="tb-right">
-      <div class="crumb"><span class="ico" id="i_repo"></span> Forgify <span class="sep">/</span>
-        <span class="muted">前端设计 (fork)</span> <span class="chev" id="i_cd"></span></div>
-      <span class="grow"></span>
-      <button class="ibtn" id="i_panel"></button>
-      <button class="ibtn" id="i_theme"></button>
-    </div>
-  </div>
-
   <div class="body">
-    <!-- ===== 侧栏 ===== -->
+    <!-- ===== 左岛（红绿灯/收起/搜索都在岛内 + 模式段 + 会话） ===== -->
     <aside class="side">
+      <div class="side-top">
+        <div class="lights"><span class="light r"></span><span class="light y"></span><span class="light g"></span></div>
+        <span class="grow"></span>
+        <button class="ibtn" id="i_side"></button>
+        <button class="ibtn" id="i_search"></button>
+      </div>
       <div class="modeseg" id="modeseg">
         <button data-m="chat"><span id="i_chat"></span></button>
         <button data-m="tasks"><span id="i_tasks"></span></button>
@@ -222,6 +213,13 @@ code, .mono { font-family: var(--mono); }
 
     <!-- ===== 主区 ===== -->
     <main class="main">
+      <div class="main-head">
+        <div class="crumb"><span class="ico" id="i_repo"></span> Forgify <span class="sep">/</span>
+          <span class="muted">前端设计 (fork)</span> <span class="chev" id="i_cd"></span></div>
+        <span class="grow"></span>
+        <button class="ibtn" id="i_theme"></button>
+        <button class="ibtn" id="i_panel"></button>
+      </div>
       <div class="conv" id="conv">
         <div class="col">
 
