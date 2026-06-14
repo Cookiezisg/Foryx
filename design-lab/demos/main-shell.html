@@ -110,28 +110,23 @@ function userMsg(html){
 }
 function aiMsg(){
   const m = document.createElement('div'); m.className = 'msg ai fade-in';
-  m.innerHTML = `<div class="avatar">${icon('forge',15,2)}</div><div class="body"></div>`;
+  m.innerHTML = `<div class="body"></div>`;   // 复刻 Claude Code：无头像，全幅平铺
   thread.appendChild(m); toBottom();
   return $('.body', m);
 }
 
-// ---------- 工具调用组 ----------
-function toolGroup(){
-  const g = document.createElement('div'); g.className = 'tools open';
-  g.innerHTML = `<button class="tools-head">${icon('sparkle',15)} <span class="ttl">使用工具</span>
-      <span class="chev">${icon('chevron',16)}</span></button>
-    <div class="tools-list"><div></div></div>`;
-  $('.tools-head', g).onclick = () => g.classList.toggle('open');
-  return g;
-}
-function toolRow(g, name, arg){
-  const r = document.createElement('div'); r.className = 'tool-row';
-  r.innerHTML = `<span class="st run">${icon('spin',15)}</span>
-    <span class="tname">${name}</span><span class="targ">(${arg})</span>`;
-  $('.tools-list > div', g).appendChild(r); toBottom();
-  return {
-    done(){ $('.st', r).className = 'st done'; $('.st', r).innerHTML = icon('check',15); }
-  };
+// ---------- 工具调用：Claude Code 风格的紧凑可折叠行 ----------
+function act(body, name, arg, detail){
+  const w = document.createElement('div'); w.className = 'actblock fade-in';
+  w.innerHTML = `<div class="act">
+      <span class="st run">${icon('spin',14)}</span>
+      <span class="averb">Used</span><span class="aname">${name}</span><span class="aarg">(${arg})</span>
+      <span class="chev">${icon('chevron',14)}</span>
+    </div><div class="act-detail">${detail || ''}</div>`;
+  body.appendChild(w); toBottom();
+  const head = $('.act', w), det = $('.act-detail', w);
+  head.onclick = () => { head.classList.toggle('open'); det.classList.toggle('open'); };
+  return { done(){ const st = $('.st', w); st.className = 'st done'; st.innerHTML = icon('check',14); } };
 }
 
 // ---------- 右侧实体岛：渲染一个 Agent ----------
@@ -209,13 +204,13 @@ async function runDemo(){
   await typeInto(p1, '好的，我来更新 Researcher：切换模型到 claude-opus-4-8，并在系统提示里加上引用要求。', 70);
   if(!alive(id)) return;
 
-  // —— 工具组 ——
-  const g = toolGroup(); body.appendChild(g); toBottom();
+  // —— 工具调用（逐行，Claude Code 风格）——
   await sleep(300);
-  const t1 = toolRow(g, 'read_agent', 'Researcher');
+  const t1 = act(body, 'read_agent', 'Researcher', '→ model=claude-sonnet-4-6\n→ tools=[web_fetch, read_file, python, summarize]');
   await sleep(750); if(!alive(id)) return; t1.done();
 
-  const t2 = toolRow(g, 'update_agent', 'Researcher');   // ← 这一刻唤出右侧岛
+  const t2 = act(body, 'update_agent', 'Researcher',     // ← 这一刻唤出右侧岛
+    '→ model=claude-opus-4-8\n→ system += 引用要求\n→ tools += web_search');
   await sleep(450); if(!alive(id)) return;
 
   // —— 实体岛从右滑入，开始流式编辑 ——

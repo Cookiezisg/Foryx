@@ -146,21 +146,16 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 .scroll { flex: 1; overflow-y: auto; padding: var(--s2) 0 140px; }
 .thread { max-width: 720px; margin: 0 auto; padding: 0 var(--s5); }
 
-/* 消息：AI 平铺无气泡，用户是小岛气泡 */
-.msg { display: flex; gap: var(--s3); margin: var(--s6) 0; }
-.msg .avatar {
-  width: 28px; height: 28px; border-radius: 8px; flex: none;
-  display: grid; place-items: center; font-size: 12px; font-weight: 700;
-}
-.msg.ai  .avatar { background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 55%, #9b5de5)); color: #fff; }
+/* 消息：复刻 Claude Code —— 无头像。AI 全幅平铺 markdown；用户右侧柔和气泡 */
+.msg { display: flex; margin: var(--s6) 0; }
 .msg.user { justify-content: flex-end; }
 .msg .body { min-width: 0; }
-.msg.ai .body { flex: 1; padding-top: 3px; }
-.msg.ai .body p { margin: 0 0 var(--s2); }
+.msg.ai .body { width: 100%; }
+.msg.ai .body p { margin: 0 0 var(--s3); line-height: 1.62; }
 .msg.ai .body p:last-child { margin-bottom: 0; }
 .msg.user .bubble {
   background: var(--island-2); border: 1px solid var(--line);
-  border-radius: 18px; padding: 10px 15px; max-width: 82%;
+  border-radius: var(--r-island); padding: 10px 16px; max-width: 82%;
 }
 .caret { display: inline-block; width: 7px; height: 1.05em; vertical-align: -2px; margin-left: 1px;
   background: var(--accent); border-radius: 1px; animation: blink 1s steps(2) infinite; }
@@ -175,36 +170,33 @@ button { font: inherit; color: inherit; border: 0; background: none; cursor: poi
 }
 .reason .spin { animation: spin 1s linear infinite; }
 
-/* ---- 工具调用组（一组工具一个框，可折叠，默认收起） ------------- */
-.tools {
-  border: 1px solid var(--line); border-radius: var(--r-card);
-  background: var(--island-2); margin: var(--s3) 0; overflow: hidden;
+/* ---- 工具调用：复刻 Claude Code 的紧凑可折叠行（无大框） ---------- */
+.actblock { margin: 10px 0; }
+.act {
+  display: inline-flex; align-items: center; gap: 8px; max-width: 100%;
+  padding: 5px 9px; border-radius: var(--r-chip);
+  color: var(--ink-2); font-size: var(--t-sm); cursor: pointer;
+  transition: background var(--d-fast);
 }
-.tools-head {
-  display: flex; align-items: center; gap: var(--s2);
-  padding: 8px 12px; width: 100%;
-  font-size: var(--t-sm); font-weight: 600; color: var(--ink-2);
+.act:hover { background: var(--island-2); }
+.act .st { flex: none; display: grid; place-items: center; }
+.act .st.run { color: var(--accent); }
+.act .st.run svg { animation: spin .9s linear infinite; }
+.act .st.done { color: var(--ok); }
+.act .averb { color: var(--ink-3); }
+.act .aname { font-family: var(--mono); color: var(--ink); }
+.act .aarg { color: var(--ink-3); font-size: var(--t-xs);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+.act .chev { color: var(--ink-3); transition: transform var(--d-fast); margin-left: 2px; }
+.act.open .chev { transform: rotate(90deg); }
+.act-detail {
+  display: none; margin: 4px 0 0 24px; padding: 9px 12px;
+  border-left: 2px solid var(--line); background: var(--island-2);
+  border-radius: 0 var(--r-chip) var(--r-chip) 0;
+  font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-2);
+  white-space: pre-wrap; line-height: 1.6;
 }
-.tools-head .chev { margin-left: auto; transition: transform var(--d-fast); color: var(--ink-3); }
-.tools.open .tools-head .chev { transform: rotate(90deg); }
-.tools-list {
-  display: grid; grid-template-rows: 0fr;
-  transition: grid-template-rows var(--d-mid) var(--ease-out);
-}
-.tools.open .tools-list { grid-template-rows: 1fr; }
-.tools-list > div { overflow: hidden; }
-.tool-row {
-  display: flex; align-items: center; gap: var(--s2);
-  padding: 8px 12px; border-top: 1px solid var(--line);
-  font-size: var(--t-sm);
-}
-.tool-row .tname { font-family: var(--mono); font-size: var(--t-sm); color: var(--ink); }
-.tool-row .targ  { color: var(--ink-3); font-size: var(--t-xs); margin-left: 2px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 280px; }
-.tool-row .st { margin-left: auto; flex: none; display: grid; place-items: center; }
-.tool-row .st.run { color: var(--accent); }
-.tool-row .st.run svg { animation: spin .9s linear infinite; }
-.tool-row .st.done { color: var(--ok); }
+.act-detail.open { display: block; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* 工具组「行内引用」的实体小药丸（点了会唤出右侧岛） */
