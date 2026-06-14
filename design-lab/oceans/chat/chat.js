@@ -81,13 +81,12 @@
       sea.querySelectorAll('.mention-row').forEach(r => r.onclick = () => $('#mpop').classList.remove('show'));
       $('#b_stop').onclick = () => { runId++; setGen(false); };   // 停止 = POST :cancel（中断当前回合）
 
-      // 对话标题：浮在正文顶、对齐居中会话列（非整行；head-lead 还给侧栏）。标题 + 向下箭头快捷操作（重命名/置顶/归档/删除）
-      const titlebar = el('div', 'chat-titlebar');
-      titlebar.innerHTML = `<div class="ct-inner"><span class="ct-wrap">
-        <button class="chat-title"><span class="tt">每日竞品摘要</span><span class="chev">${icon('chevd', 12)}</span></button>
-        <div class="qa-menu"><div class="qa-item" data-a="rename">重命名</div><div class="qa-item" data-a="pin">置顶</div><div class="qa-item" data-a="archive">归档</div><div class="qa-item danger" data-a="delete">删除对话</div></div>
-      </span></div>`;
-      sea.appendChild(titlebar);
+      // 对话标题 → 主区头左上角 head-lead（与右上角控件对称的角落块；不跟会话列对齐）。标题 + 向下箭头快捷操作
+      Shell.headLead.querySelectorAll('[data-ocean-head]').forEach(e => e.remove());   // 自清：重挂不重复
+      const titlebar = el('span', 'chat-titlebar'); titlebar.setAttribute('data-ocean-head', 'chat');
+      titlebar.innerHTML = `<button class="chat-title"><span class="tt">每日竞品摘要</span><span class="chev">${icon('chevd', 12)}</span></button>
+        <div class="qa-menu"><div class="qa-item" data-a="rename">重命名</div><div class="qa-item" data-a="pin">置顶</div><div class="qa-item" data-a="archive">归档</div><div class="qa-item danger" data-a="delete">删除对话</div></div>`;
+      Shell.headLead.appendChild(titlebar);
       const titleBtn = $('.chat-title', titlebar), qa = $('.qa-menu', titlebar);
       titleBtn.onclick = e => { e.stopPropagation(); const open = qa.classList.toggle('show'); titleBtn.classList.toggle('open', open); };
       document.addEventListener('click', () => { qa.classList.remove('show'); titleBtn.classList.remove('open'); });

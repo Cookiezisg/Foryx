@@ -7,7 +7,7 @@
 
 /* ===== 对话流（复用 v0） ===== */
 .conv { flex: 1; overflow-y: auto; }
-.col { max-width: 860px; margin: 0 auto; padding: 48px 32px 8px; }   /* 顶部留白避开浮层头 + 标题 */
+.col { max-width: 860px; margin: 0 auto; padding: 28px 32px 8px; }
 .turn { margin-bottom: 26px; }
 .umsg { display: flex; justify-content: flex-end; margin-bottom: 26px; }
 .umsg .b { background: var(--cc-bubble); border-radius: 16px; padding: 10px 15px; max-width: 80%; line-height: 1.55; }
@@ -194,18 +194,16 @@
 /* ===== compaction 标记（六型之一；安静耳语、无框无线，守「禁分割线」） ===== */
 .compaction { text-align: center; color: var(--ink-3); font-size: 11px; font-family: var(--mono); margin: 22px 0; opacity: .8; }
 
-/* ===== 对话标题：浮在正文顶、对齐居中会话列（非整行）；配右上角浮层控件的克制风格 ===== */
-.chat-titlebar { position: absolute; top: 7px; left: 0; right: 0; z-index: 6; pointer-events: none; }
-.chat-titlebar .ct-inner { max-width: 860px; margin: 0 auto; padding: 0 32px 0 24px; }   /* 左 24 + 块内 8 = 文字落在会话列 32 处 */
-.chat-titlebar .ct-wrap { position: relative; display: inline-flex; pointer-events: auto; }
-.chat-title { display: inline-flex; align-items: center; gap: 5px; height: 30px; max-width: 360px; padding: 0 8px; border-radius: 8px;
-  color: var(--ink); font-weight: 600; font-size: 15px; letter-spacing: -.012em; transition: background .15s; }
+/* ===== 主区头左上角：对话标题（一直在左角，与右上角控件对称；不跟会话列对齐）；不加粗、稍大一号 ===== */
+.chat-titlebar { position: relative; }
+.chat-title { display: inline-flex; align-items: center; gap: 5px; height: 30px; max-width: 300px; padding: 0 8px 0 10px; border-radius: 8px;
+  color: var(--ink); font-weight: 400; font-size: 14px; letter-spacing: -.004em; transition: background .15s; }
 .chat-title:hover { background: var(--cc-hover); }
 .chat-title .tt { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chat-title .chev { color: var(--ink-3); margin-top: 1px; }
 .chat-title.open .chev { transform: rotate(180deg); }
-.chat-title-edit { font: inherit; font-weight: 600; font-size: 15px; letter-spacing: -.012em; color: var(--ink); background: var(--cc-input); border: 1px solid var(--line-strong); border-radius: 7px; height: 30px; padding: 0 8px; outline: none; width: 240px; }
-.qa-menu { position: absolute; top: 38px; left: 0; min-width: 172px; padding: 4px; display: none; z-index: 20;
+.chat-title-edit { font: inherit; font-weight: 400; font-size: 14px; color: var(--ink); background: var(--cc-input); border: 1px solid var(--line-strong); border-radius: 7px; height: 30px; padding: 0 8px; outline: none; width: 220px; }
+.qa-menu { position: absolute; top: 36px; left: 0; min-width: 172px; padding: 4px; display: none; z-index: 20;
   background: var(--cc-input); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow-pop); }
 .qa-menu.show { display: block; animation: popin .16s var(--ease-spring); }
 .qa-item { display: flex; align-items: center; padding: 7px 10px; border-radius: 7px; font-size: 13px; color: var(--ink); cursor: pointer; transition: background .12s; }
