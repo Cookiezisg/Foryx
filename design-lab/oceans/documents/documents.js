@@ -10,40 +10,99 @@
   let runId = 0;
   const alive = id => id === runId;
 
-  // —— 示意正文（渲染产物；接后端时换真 content）——
+  // —— 代码语法高亮（自包含轻量 tokenizer：注释 / 字符串 / 数字 / 关键字 / 函数名）——
+  const KW = new Set('const let var function def class return if else elif for while do in of import from export default new await async try except catch finally raise throw with as lambda yield true false null None True False undefined this self and or not is'.split(' '));
+  const escH = s => s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+  const TOK = /(\/\/[^\n]*|#[^\n]*|\/\*[\s\S]*?\*\/)|(`(?:\\.|[^`\\])*`|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')|(\b\d+(?:\.\d+)?\b)|([A-Za-z_$][\w$]*)/g;
+  function highlight(code) {
+    let out = '', last = 0, m; TOK.lastIndex = 0;
+    while ((m = TOK.exec(code))) {
+      out += escH(code.slice(last, m.index));
+      if (m[1]) out += `<span class="hl-com">${escH(m[1])}</span>`;
+      else if (m[2]) out += `<span class="hl-str">${escH(m[2])}</span>`;
+      else if (m[3]) out += `<span class="hl-num">${escH(m[3])}</span>`;
+      else { const w = m[4]; out += KW.has(w) ? `<span class="hl-kw">${w}</span>` : (/^\s*\(/.test(code.slice(m.index + w.length)) ? `<span class="hl-fn">${escH(w)}</span>` : escH(w)); }
+      last = m.index + m[0].length;
+    }
+    return out + escH(code.slice(last));
+  }
+  function highlightCode(scope) { scope.querySelectorAll('.doc-code pre').forEach(pre => { if (pre.dataset.hl) return; pre.dataset.hl = '1'; pre.innerHTML = highlight(pre.textContent); }); }
+
+  // —— 示意正文（markdown 全类型样张；渲染产物，接后端时换真 content）——
   const BODY_HTML = `
-    <p>这是 Forgify 文档海洋的一篇 <b>markdown 文档</b>。内容区<b>放宽</b>了外壳的禁横线——可有 <a href="#">下划线链接</a>、分隔线、表格细线，大范围参考 Notion；但正文 <b>不用灰色填充块</b>，行内代码 <code>like_this</code> 也 <b>不学</b> Notion 的红。</p>
-    <p><b>不会 markdown 也没关系：</b>空行敲 <code>/</code> 唤出命令窗挑块；选中文字浮出工具条点选格式；块左侧悬停有 <code>+</code> 和拖拽手柄——都不用记符号。</p>
+    <p>这是 Forgify 文档海洋的 <b>markdown 全类型样张</b>。内容区<b>放宽</b>了外壳禁横线——可有 <a href="#">下划线链接</a>、分隔线、表格细线，大范围参考 Notion；但正文 <b>不用灰色填充块</b>、行内代码 <code>like_this</code> <b>不学</b> Notion 的红。</p>
+    <p><b>不会 markdown 也没关系：</b>空行敲 <code>/</code> 唤出命令窗挑块；选中文字浮出工具条点选格式；块左侧悬停有 <code>+</code> 和拖拽手柄。</p>
 
-    <h2>排版即分区</h2>
-    <p>层级靠字号阶梯（26 / 19 / 15），分节靠留白。引用、代码是「白底 + 一圈描边」或左竖线，不靠灰底划块——和 <span class="doc-pill"><span class="ico">${icon('at', 13)}</span>设计原则</span> 一脉相承。</p>
+    <h2>标题层级</h2>
+    <p>层级靠字号阶梯，分节靠留白、不靠编号或下划线。</p>
+    <h3>这是一个三级标题</h3>
+    <p>三级标题下的正文。</p>
+
+    <h2>文字样式</h2>
+    <p>支持 <b>粗体</b>、<em>斜体</em>、<del>删除线</del>、<mark>高亮</mark>、<code>行内代码</code>，以及 <a href="#">带下划线的链接</a>。行内代码是白底 + 细描边的等宽字。</p>
+
+    <h2>列表</h2>
+    <p>无序、有序、任务三种：</p>
     <ul>
-      <li>无序列表用小圆点，嵌套换空心环</li>
-      <li>段落之间用留白呼吸</li>
+      <li>无序列表用小圆点</li>
+      <li>支持嵌套
+        <ul><li>第二层换成空心环</li><li>靠缩进，不画连接线</li></ul>
+      </li>
+      <li>项与项之间留白呼吸</li>
     </ul>
-    <blockquote>海与岛同色、只靠海岸线分；文档区不像 Notion 那样靠底色块，靠留白与圆角。</blockquote>
-
-    <h2>待办与提示</h2>
+    <ol>
+      <li>有序列表用等宽数字</li>
+      <li>序号即层级线索</li>
+      <li>同样的紧凑节奏</li>
+    </ol>
     <ul class="doc-task">
-      <li class="done"><span class="box">${icon('check', 12)}</span><span class="t">完成框是中性近黑实底 + 白勾</span></li>
+      <li class="done"><span class="box">${icon('check', 12)}</span><span class="t">已完成（中性近黑实底 + 白勾）</span></li>
+      <li class="done"><span class="box">${icon('check', 12)}</span><span class="t">不用强调蓝——完成是事实、非「正在发生」</span></li>
       <li><span class="box"></span><span class="t">未完成只是一个细描边空框</span></li>
     </ul>
-    <div class="doc-callout"><span class="ico">${icon('spark', 16, 1.6)}</span><div class="c"><b>提示块（Callout）。</b>白底 + 一圈描边 + 左图标，强调一段话而不靠底色。</div></div>
 
-    <h2>代码与表格</h2>
-    <div class="doc-code"><span class="lang">ts</span><pre>// 文档正文 = 单块 markdown 字符串
-function render(md: string): Html {
-  return parse(md);   // 整篇覆盖、无版本 diff
+    <h2>引用</h2>
+    <blockquote>引用用左侧一道细竖线 + 文字降一档灰，白底无填充。学 Notion 的经典引用，但去掉了灰块。</blockquote>
+
+    <h2>提示块 Callout</h2>
+    <div class="doc-callout"><span class="ico">${icon('spark', 16, 1.6)}</span><div class="c"><b>这是一个 Callout。</b>白底 + 一圈描边 + 左图标，强调一段话而不靠底色。</div></div>
+
+    <h2>代码</h2>
+    <p>行内是 <code>const x = 1</code>；多行代码块带语法高亮、白底、一圈描边、右上角标语言：</p>
+    <div class="doc-code"><span class="lang">ts</span><pre>// 文档正文 = 单块 markdown 字符串，整篇覆盖
+async function render(md) {
+  const html = await parse(md)   // 无版本 diff
+  return wrap(html, { theme: "light", toc: true })
 }</pre></div>
+    <div class="doc-code"><span class="lang">py</span><pre># 抓取竞品动态并归并去重（每日 08:00 触发）
+def weekly_digest(sources, since):
+    items = []
+    for url in sources:
+        items += fetch(url, since)
+    return summarize(dedupe(items))</pre></div>
+
+    <h2>表格</h2>
     <table class="doc-table">
-      <thead><tr><th>构件</th><th>处理</th></tr></thead>
+      <thead><tr><th>构件</th><th>处理</th><th>底色</th></tr></thead>
       <tbody>
-        <tr><td>引用</td><td>左竖线 + 灰字、白底</td></tr>
-        <tr><td>代码</td><td>白底 + 描边 + 等宽</td></tr>
+        <tr><td>引用</td><td>左竖线 + 灰字</td><td>白底</td></tr>
+        <tr><td>代码</td><td>白底 + 描边 + 等宽 + 高亮</td><td>白底</td></tr>
+        <tr><td>表格</td><td>细线分隔</td><td>白底</td></tr>
       </tbody>
     </table>
+
+    <h2>链接与提及</h2>
+    <p>外部 <a href="#">下划线链接</a>；文档间 <span class="doc-pill"><span class="ico">${icon('link', 13)}</span>另一篇文档</span> wikilink；提及实体 <span class="doc-pill"><span class="ico">${icon('at', 13)}</span>某个 Agent</span>。</p>
+
+    <h2>分隔线</h2>
+    <p>分隔线就是一条细线：</p>
     <hr>
-    <p>分隔线就是一条细线，用来分隔大段落。文档间用 <span class="doc-pill"><span class="ico">${icon('link', 13)}</span>另一篇文档</span> 这样的 wikilink 互链。</p>`;
+    <p>用来分隔大段落。</p>
+
+    <h2>图片</h2>
+    <p>图片圆角裁切、可带说明：</p>
+    <div class="doc-imgph">图片占位</div>
+    <div class="doc-cap">图：示意配图（mockup 占位）</div>`;
 
   // —— 斜杠命令窗的块清单（接后端时即「插入」能力表）——
   const BLOCKS = [
@@ -116,6 +175,7 @@ function render(md: string): Html {
     closeSlash(); hideToolbar(); closeBmenu();
     renderHead();
     body.innerHTML = BODY_HTML;
+    highlightCode(body);
     body.classList.remove('doc-morph'); void body.offsetWidth; body.classList.add('doc-morph');
     bindPills(); setStatus(false); DocAside.render();
     $('#docScroll').scrollTop = 0;
@@ -252,7 +312,7 @@ function render(md: string): Html {
     if (block.inline) { host.insertAdjacentHTML('beforeend', ' ' + block.inline); bindPills(); }
     else if (block.ai) { host.insertAdjacentHTML('afterend', '<p></p>'); aiWrite(host.nextElementSibling); }
     else if (mode === 'turn') { host.insertAdjacentHTML('beforebegin', block.html); const f = host.previousElementSibling; host.remove(); f && f.classList.add('doc-morph'); bindPills(); }
-    else { host.insertAdjacentHTML('afterend', block.html); const f = host.nextElementSibling; if (mode === 'type' && host.tagName === 'P' && !host.textContent.trim()) host.remove(); f && (f.classList.add('doc-morph'), f.scrollIntoView({ block: 'nearest' })); bindPills(); }
+    else { host.insertAdjacentHTML('afterend', block.html); const f = host.nextElementSibling; if (mode === 'type' && host.tagName === 'P' && !host.textContent.trim()) host.remove(); f && (f.classList.add('doc-morph'), f.scrollIntoView({ block: 'nearest' })); bindPills(); highlightCode(docBody()); }
     DocAside.render();
   }
   async function aiWrite(p) {

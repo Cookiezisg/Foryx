@@ -1,7 +1,7 @@
 /* Forgify design-lab — 文档海洋（重写 v2；单独，一人负责整个 oceans/documents/ 文件夹）。
    文档页本身 = 面包屑(path) + 标题 + WYSIWYG markdown 正文；编辑零-markdown 心智（斜杠命令窗 / 选中工具条 / 块手柄 / 即输即渲）；右岛 = 元信息抽屉。
    风格对齐侧栏：px 管布局（行高 32 / radius 8·10·12 / 字号 13·14·11）、token 管色与动效；菜单/岛/行规与 sidebar 一脉。
-   依赖：shared/tokens.css + shared/shell.css 的 --cc-*/原语(.ibtn/.chev/.scroll-fade)（只读）。
+   依赖：shared/tokens.css + shared/shell.css 的 --cc- 表面色与原语(.ibtn/.chev/.scroll-fade)（只读）。
    ⚠ 右岛是「本海洋的」：.doc-aside 的框 + 内容都在这（外壳只给 Shell.body 让我 append）。
    视觉宪法：① 内容区放宽外壳禁横线（分隔线/下划线/表格线可用，大范围学 Notion）；② 但正文不用灰填充块（代码/引用=白底描边或左竖线）；③ 行内代码不学 Notion 的红；④ --accent 只点正在发生；⑤ 动效走 --ease-spring。 */
 
@@ -79,6 +79,14 @@
 .doc-code pre { margin: 0; font-family: var(--mono); font-size: 13px; line-height: 1.7; color: var(--ink); white-space: pre; }
 .doc-code pre code { border: 0; padding: 0; font-size: inherit; }
 .doc-code .lang { position: absolute; top: 8px; right: 12px; font-family: var(--mono); font-size: 10px; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+/* 代码语法高亮：自包含轻量 tokenizer 着色（Atom One 风、克制；token 仅 scoped 在 .doc-code、不进内核 tokens.css） */
+.doc-code { --cd-com: #a0a1a7; --cd-kw: #a626a4; --cd-str: #50a14f; --cd-num: #986801; --cd-fn: #4078f2; }
+[data-theme="dark"] .doc-code { --cd-com: #7f848e; --cd-kw: #c678dd; --cd-str: #98c379; --cd-num: #d19a66; --cd-fn: #61afef; }
+.doc-code .hl-com { color: var(--cd-com); font-style: italic; }
+.doc-code .hl-kw { color: var(--cd-kw); }
+.doc-code .hl-str { color: var(--cd-str); }
+.doc-code .hl-num { color: var(--cd-num); }
+.doc-code .hl-fn { color: var(--cd-fn); }
 
 /* 表格：细线分隔（放宽禁线），无填充无斑马 */
 .doc-table { width: 100%; margin: 20px 0; border-collapse: collapse; font-size: 13px; }
