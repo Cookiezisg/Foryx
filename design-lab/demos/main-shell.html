@@ -15,9 +15,9 @@
   --cc-desk:   #d4d5d9;   /* 桌面底（窗外，衬出浮窗） */
   --cc-win:    #ffffff;   /* 海（中间对话）= 白 */
   --cc-side:   #ffffff;   /* 岛 = 同样的白 */
-  --cc-bubble: #ffffff;   /* 用户气泡 = 白 + 海岸线 */
+  --cc-bubble: #f0f0f2;   /* 用户气泡 = 浅灰药丸（不走海岸线，按 Claude/图1） */
   --cc-input:  #ffffff;
-  --cc-hover:  #f1f1f3;   /* 岛内 item hover/选中（唯一的浅灰填充） */
+  --cc-hover:  #f1f1f3;   /* 岛内 item hover/选中（浅灰填充） */
   --cc-active: #e9e9ec;
 }
 [data-theme="dark"] {
@@ -25,7 +25,7 @@
   --cc-desk:   #000000;
   --cc-win:    #1c1c1e;
   --cc-side:   #1c1c1e;
-  --cc-bubble: #1c1c1e;
+  --cc-bubble: #2c2c2f;
   --cc-input:  #1c1c1e;
   --cc-hover:  #2a2a2d;
   --cc-active: #323236;
@@ -71,10 +71,17 @@ code, .mono { font-family: var(--mono); }
   border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04);
   display: flex; flex-direction: column; padding: 8px; overflow: hidden; }
 
-.modeseg { display: flex; gap: 2px; background: var(--cc-active); border-radius: 9px; padding: 3px; margin-bottom: 10px; }
-.modeseg button { flex: 1; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center;
-  gap: 6px; color: var(--ink-2); font-size: 12px; font-weight: 600; transition: all .15s; }
-.modeseg button.on { background: var(--island); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+/* 三切换：抄 Notion 原理（选中展开成 图标+文字 药丸，未选只图标，丝滑切换）；风格用我们的 */
+.modeseg { display: flex; gap: 2px; margin-bottom: 10px; }
+.modeseg button { display: flex; align-items: center; gap: 7px; height: 32px; padding: 0 7px; border-radius: 9px;
+  color: var(--ink-2); font-size: 13px; font-weight: 600; background: transparent;
+  transition: background .2s, color .2s, padding .34s cubic-bezier(.2,.85,.25,1); }
+.modeseg button:hover { background: var(--cc-hover); }
+.modeseg button .ico { flex: none; display: grid; place-items: center; }
+.modeseg button .lbl { max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap;
+  transition: max-width .34s cubic-bezier(.2,.85,.25,1), opacity .22s; }
+.modeseg button.on { background: var(--cc-active); color: var(--ink); padding: 0 11px; }
+.modeseg button.on .lbl { max-width: 120px; opacity: 1; }
 
 .sact { display: flex; flex-direction: column; gap: 1px; }
 .sitem { display: flex; align-items: center; gap: 11px; height: 32px; padding: 0 10px; border-radius: 8px;
@@ -115,7 +122,7 @@ code, .mono { font-family: var(--mono); }
 /* 消息 */
 .turn { margin-bottom: 26px; }
 .umsg { display: flex; justify-content: flex-end; margin-bottom: 26px; }
-.umsg .b { background: var(--cc-bubble); border: 1px solid var(--line); border-radius: 16px;
+.umsg .b { background: var(--cc-bubble); border-radius: 16px;
   padding: 10px 15px; max-width: 80%; line-height: 1.55; }
 .spark { display: flex; align-items: center; gap: 0; margin-bottom: 12px; color: var(--accent); }
 .amsg { font-size: 14px; line-height: 1.65; }
@@ -186,9 +193,9 @@ code, .mono { font-family: var(--mono); }
         <button class="ibtn" id="i_search"></button>
       </div>
       <div class="modeseg" id="modeseg">
-        <button data-m="chat"><span id="i_chat"></span></button>
-        <button data-m="tasks"><span id="i_tasks"></span></button>
-        <button class="on" data-m="code"><span id="i_code"></span> Code</button>
+        <button data-m="chat"><span class="ico" id="i_chat"></span><span class="lbl">Chat</span></button>
+        <button data-m="tasks"><span class="ico" id="i_tasks"></span><span class="lbl">Tasks</span></button>
+        <button class="on" data-m="code"><span class="ico" id="i_code"></span><span class="lbl">Code</span></button>
       </div>
 
       <div class="sact">
