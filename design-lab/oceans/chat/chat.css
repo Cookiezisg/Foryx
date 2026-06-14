@@ -124,12 +124,21 @@
 .approval-card.settled .ac-pulse, .approval-card.settled .ac-head, .approval-card.settled .ac-body { display: none; }
 .approval-card.settled .ac-settled { display: flex; }
 
-/* ===== todo 自管清单（六型外的信号；LLM 整表替换、只读；内联在回合顶、不进右岛） ===== */
-.todo-panel { margin: 0 0 18px; border: 1px solid var(--line); border-radius: 14px;
-  background: var(--cc-side); box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04); padding: 9px 6px 7px; }
-.todo-head { display: flex; align-items: center; gap: 7px; padding: 2px 8px 8px; }
-.todo-head .tt { font-size: 11px; font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; }
-.todo-head .tc { margin-left: auto; font-size: 11px; color: var(--ink-3); font-family: var(--mono); }
+/* ===== todo 自管清单（LLM 整表替换、只读）→ 底部常驻进度坞（贴 composer 上方，可看进展、可折叠） ===== */
+.todo-dock { flex: none; display: none; padding: 0 32px 10px; }
+.todo-dock.show { display: block; }
+.td-wrap { max-width: 860px; margin: 0 auto; border: 1px solid var(--line); border-radius: 12px;
+  background: var(--cc-side); box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04); overflow: hidden; }
+.td-head { display: flex; align-items: center; gap: 9px; padding: 9px 13px; cursor: pointer; }
+.td-head .tt { font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.td-head .prog { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.td-head .cur { flex: 1; font-size: 12px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.td-head .chev { color: var(--ink-3); transition: transform .3s var(--ease-spring); transform: rotate(90deg); }   /* 展开态箭头朝下 */
+.todo-dock.collapsed .td-head .chev { transform: rotate(0deg); }
+.td-body { display: grid; grid-template-rows: 1fr; transition: grid-template-rows .3s var(--ease-spring); }
+.todo-dock.collapsed .td-body { grid-template-rows: 0fr; }
+.td-body > .w { overflow: hidden; min-height: 0; }
+.td-body > .w > div { padding: 0 7px 7px; }
 .todo-row { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 0 8px; border-radius: 8px; font-size: 13px; color: var(--ink); }
 .todo-row.enter { animation: dlineIn .32s var(--ease-spring) both; }
 .todo-row .mk { width: 15px; height: 15px; flex: none; display: grid; place-items: center; }
@@ -188,18 +197,6 @@
 /* ===== composer（纠正为产品真相：去 git/PR/Auto/Ultracode/mic；加 dialogue 模型 / @提及 / 附件 / 生成中 cancel） ===== */
 .composer { flex: none; padding: 0 32px 18px; }
 .cwrap { max-width: 860px; margin: 0 auto; }
-.ctx { display: flex; align-items: center; gap: 8px; padding: 7px 11px; margin-bottom: 8px;
-  background: var(--cc-input); border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 1px 2px rgba(0,0,0,.04); font-size: 12px; color: var(--ink-2); }
-.ctx .cchip { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px 3px 7px; border-radius: 999px; background: var(--cc-active); border: 1px solid var(--line); color: var(--ink-2); }
-.ctx .cchip .ico { display: grid; place-items: center; color: var(--ink-3); }
-.ctx .cchip.mention { color: var(--ink); }
-.ctx .gen { display: none; align-items: center; gap: 6px; color: var(--accent); font-weight: 500; }
-.ctx .gen .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease infinite; }
-.ctx .stop { margin-left: auto; display: none; align-items: center; gap: 6px; height: 26px; padding: 0 11px; border-radius: 7px;
-  border: 1px solid var(--line); color: var(--ink-2); font-weight: 600; transition: background .15s, color .15s; }
-.ctx .stop:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
-.composer.gen .ctx .gen { display: inline-flex; }
-.composer.gen .ctx .stop { display: inline-flex; }
 .box { border: 1px solid var(--line); border-radius: 16px; background: var(--cc-input); box-shadow: 0 1px 2px rgba(0,0,0,.03); }
 .box:focus-within { border-color: var(--line-strong); }
 .box .field { display: flex; align-items: center; gap: 8px; padding: 13px 14px 6px; }
@@ -214,7 +211,10 @@
 .bar .right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
 .bar .right .spin { display: none; color: var(--ink-3); place-items: center; }
 .bar .right .spin svg { animation: spin 1s linear infinite; }
+.bar .stop { display: none; align-items: center; gap: 5px; color: var(--ink-2); border: 1px solid var(--line); height: 26px; }
+.bar .stop:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
 .composer.gen .bar .right .spin { display: grid; }
+.composer.gen .bar .stop { display: inline-flex; }
 
 /* @ 提及选择器（输入框上方弹出；.tag/.aside-tabs 习惯） */
 .mention-pop { display: none; margin-bottom: 8px; border: 1px solid var(--line); border-radius: 12px; background: var(--cc-input); box-shadow: var(--shadow-pop); overflow: hidden; }

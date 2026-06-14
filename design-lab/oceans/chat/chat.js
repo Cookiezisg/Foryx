@@ -45,6 +45,7 @@
     build(sea) {
       sea.innerHTML = `
         <div class="conv" id="conv"><div class="col" id="col"></div></div>
+        <div class="todo-dock" id="todoDock"></div>
         <div class="composer" id="composer">
           <div class="cwrap">
             <div class="mention-pop" id="mpop">
@@ -55,17 +56,13 @@
               <div class="mention-row"><span class="ico">${icon('workflow', 16)}</span><span class="nm">weekly_report</span><span class="kd">wf_</span></div>
               <div class="mention-row"><span class="ico">${icon('doc', 16)}</span><span class="nm">竞品列表.md</span><span class="kd">doc</span></div>
             </div>
-            <div class="ctx">
-              <span class="cchip"><span class="ico">${icon('doc', 12)}</span>竞品列表.md</span>
-              <span class="gen"><span class="dot"></span>生成中…</span>
-              <button class="stop" id="b_stop">${icon('stop', 13)} 停止</button>
-            </div>
             <div class="box">
               <div class="field"><input id="ta" placeholder="发消息，@ 提及实体，或继续上一回合…"><span class="enter" data-i="enter"></span></div>
               <div class="bar">
                 <button class="cbtn ic" id="b_at" title="@ 提及实体">${icon('at', 17)}</button>
                 <button class="cbtn ic" id="b_plus" title="附件">${icon('plus', 17)}</button>
                 <span class="right">
+                  <button class="cbtn stop" id="b_stop">${icon('stop', 13)} 停止</button>
                   <span class="spin">${icon('spin', 14)}</span>
                   <button class="cbtn model">本对话模型 · <b>claude-opus-4-8</b> ${icon('chevd', 13)}</button>
                 </span>
@@ -84,6 +81,7 @@
       sea.querySelectorAll('.mention-row').forEach(r => r.onclick = () => $('#mpop').classList.remove('show'));
       $('#b_stop').onclick = () => { runId++; setGen(false); };   // 停止 = POST :cancel（中断当前回合）
 
+      dock = buildDock();
       run();
     },
   });
@@ -119,7 +117,7 @@
       el: w, box,
       status(t) { tk.textContent = t; toBottom(); },
       open() { w.classList.add('open'); toBottom(); },
-      settle(s) { sum.classList.remove('run'); tk.textContent = s; chev.style.display = ''; w.classList.add('open'); toBottom(); },
+      settle(s) { sum.classList.remove('run'); tk.textContent = s; chev.style.display = ''; toBottom(); },   // 默认折叠：只留摘要行，点击展开
     };
   }
   // 工具项（一行；danger 仅 cautious/dangerous 显徽章——safe 不显）
@@ -151,16 +149,24 @@
     const cap = el('div', 'res-cap'); cap.textContent = '返回结果（单一 JSON）'; parentW.appendChild(cap);
     const b = el('div', 'tbox'); b.innerHTML = `<div class="out">${json}</div>`; parentW.appendChild(b); toBottom();
   }
-  // todo 自管清单（整表替换、只读）
-  function todoPanel(body) {
-    const p = el('div', 'todo-panel');
-    p.innerHTML = `<div class="todo-head"><span class="tt">Todo</span><span class="tc" data-tc></span></div><div data-rows></div>`;
-    body.appendChild(p); toBottom();
-    const rows = $('[data-rows]', p), tc = $('[data-tc]', p);
-    return { el: p, set(items) {
-      rows.innerHTML = items.map(([t, st]) => `<div class="todo-row ${st} enter"><span class="mk">${st === 'completed' ? icon('check', 13) : '<span class="circle"></span>'}</span><span class="t">${t}</span></div>`).join('');
-      tc.textContent = `${items.length} / 64`; toBottom();
-    } };
+  // todo 自管清单（整表替换、只读）→ 底部常驻进度坞（show 一次、随回合 set 更新进展；点头折叠）
+  let dock = null;
+  function buildDock() {
+    const d = $('#todoDock'); if (!d) return null;
+    d.innerHTML = `<div class="td-wrap"><div class="td-head"><span class="tt">Todo</span><span class="prog" data-prog></span><span class="cur" data-cur></span><span class="chev">${icon('chevr', 13)}</span></div><div class="td-body"><div class="w"><div data-rows></div></div></div></div>`;
+    $('.td-head', d).onclick = () => d.classList.toggle('collapsed');
+    return {
+      show() { d.classList.add('show'); },
+      hide() { d.classList.remove('show', 'collapsed'); },
+      set(items) {
+        const rows = $('[data-rows]', d); if (!rows) return;
+        rows.innerHTML = items.map(([t, st]) => `<div class="todo-row ${st}"><span class="mk">${st === 'completed' ? icon('check', 13) : '<span class="circle"></span>'}</span><span class="t">${t}</span></div>`).join('');
+        const done = items.filter(i => i[1] === 'completed').length;
+        $('[data-prog]', d).textContent = `${done}/${items.length}`;
+        const cur = items.find(i => i[1] === 'in-progress');
+        $('[data-cur]', d).textContent = cur ? '· ' + cur[0] : (done === items.length ? '· 全部完成' : '');
+      },
+    };
   }
   // 人在环危险闸：内联审批卡（危险工具 / ask_user 两味）
   function approvalCard(body, o) {
@@ -240,7 +246,7 @@
   async function run() {
     const id = ++runId;
     col().innerHTML = ''; ChatEntityCard.hide(); if (ChatEntityCard.el) ChatEntityCard.el.innerHTML = '';
-    setGen(true);
+    setGen(true); if (dock) dock.hide();
 
     compaction(col(), 128);   // 第六型块：压缩标记（高处一处）
 
@@ -248,13 +254,13 @@
     userMsg(`帮我搭一个每天早上自动汇总竞品动态、写进 Notion 的流程。背景看 ${refPill('doc', '竞品列表.md')}。`);
     await sleep(550); if (!alive(id)) return;
     const t = aiTurn();
+    reasonBlock(t, '用户要一条「抓取→汇总→发布」的每日自动化。拆解：无状态抓取函数（function）+ 常驻 Notion 写手（handler，已有）+ 一个润色 LLM 员工（agent）+ 一张每天 08:00 触发的编排图（workflow）。先写待办、逐个锻造、跑通后编排。');
     await typeInto(para(t), '好的。我会先锻造一个抓取 + 汇总的函数，跑通后接上常驻的 Notion 写手，最后编排成每天触发的 workflow。先把任务拆出来：', 70);
     if (!alive(id)) return; await sleep(160);
     const tw = toolGroup(t); tw.status('todo_write…'); await sleep(620); if (!alive(id)) return;
     toolItem(tw.box, { name: 'todo_write', detailHTML: '<div class="tbox"><div class="out">整表替换写入 · 4 项 · LLM 自管、只读</div></div>' });
     tw.settle('已更新待办 · todo_write');
-    const todo = todoPanel(t);
-    todo.set([['抓取竞品动态并汇总（function）', 'in-progress'], ['接 Notion 写手（handler）', 'pending'], ['编排每日 workflow', 'pending'], ['上线 + 验证一次', 'pending']]);
+    if (dock) { dock.show(); dock.set([['抓取竞品动态并汇总（function）', 'in-progress'], ['接 Notion 写手（handler）', 'pending'], ['编排每日 workflow', 'pending'], ['上线 + 验证一次', 'pending']]); }
     await sleep(750); if (!alive(id)) return;
 
     // BEAT 2 — create_function → 右岛 function 卡实时填充（THE 签名交互，泛化到 Function）
@@ -273,17 +279,19 @@
       ChatEntityCard.$('[data-f="deps"] [data-dc]', card).textContent = tl.children.length;
     }
     await sleep(750); if (!alive(id)) return; ChatEntityCard.setEnv('ready'); ChatEntityCard.setLive(false);
-    toolItem(cf.box, { verb: 'Forged', name: 'create_function(weekly_digest)', open: true,
+    toolItem(cf.box, { verb: 'Forged', name: 'create_function(weekly_digest)',
       detailHTML: `<div class="diff-cap">实体版本 diff · v1（ops 锻造，非 git diff）</div><div class="tbox"><div class="diff">
         <div class="dline add"><span class="s">+</span><span class="c">def weekly_digest(sources, since): …</span></div>
         <div class="dline add"><span class="s">+</span><span class="c">deps += feedparser, httpx, beautifulsoup4</span></div>
         <div class="dline add"><span class="s">+</span><span class="c">env → ready</span></div></div></div>` });
-    cf.settle('已锻造 · create_function'); await sleep(550); if (!alive(id)) return;
+    cf.settle('已锻造 · create_function');
+    if (dock) dock.set([['抓取竞品动态并汇总（function）', 'completed'], ['接 Notion 写手（handler）', 'in-progress'], ['编排每日 workflow', 'pending'], ['上线 + 验证一次', 'pending']]);
+    await sleep(550); if (!alive(id)) return;
 
     // BEAT 3 — run_function → progress 块（实时 stderr）+ 独立 result 框
     await typeInto(para(t), '跑一次看看输出。', 58); if (!alive(id)) return; await sleep(140);
-    const rf = toolGroup(t); rf.status('run_function(weekly_digest)…'); rf.open();
-    const ti = toolItem(rf.box, { name: 'run_function(weekly_digest)', open: true });
+    const rf = toolGroup(t); rf.status('run_function(weekly_digest)…');
+    const ti = toolItem(rf.box, { name: 'run_function(weekly_digest)' });
     const det = $('.ti-det > .w', ti);
     const pb = progressBox(det);
     for (const ln of ['fetch arxiv.org/list … 12 条', 'fetch openai.com/blog … 3 条', 'fetch anthropic.com/news … 5 条', 'dedupe → 17 条', 'summarize via dialogue model …'])
@@ -302,20 +310,18 @@
     ap.settle(act === 'deny' ? '已拒绝 · 反馈给模型' : '已批准 · 本会话内始终允许');
     await sleep(250); if (!alive(id)) return;
     if (act !== 'deny') {
-      const ti2 = toolItem(ch.box, { name: 'call_handler(notion_writer.publish)', danger: 'dangerous', open: true });
+      const ti2 = toolItem(ch.box, { name: 'call_handler(notion_writer.publish)', danger: 'dangerous' });
       const det2 = $('.ti-det > .w', ti2); const pb2 = progressBox(det2);
       for (const ln of ['connect notion … ok', 'create page 竞品摘要 · 06-14', 'append 17 blocks … done'])
         { await sleep(350); if (!alive(id)) return; pb2.add(ln); }
       pb2.done(); ch.settle('已发布 · call_handler');
     } else { ch.settle('已拒绝 · call_handler'); }
+    if (dock) dock.set([['抓取竞品动态并汇总（function）', 'completed'], ['接 Notion 写手（handler）', 'completed'], ['编排每日 workflow', 'in-progress'], ['上线 + 验证一次', 'pending']]);
     await sleep(560); if (!alive(id)) return;
 
     // BEAT 5 — Subagent(Plan) 子树（E3 嵌套）+ create_workflow → 右岛 workflow 卡
-    await typeInto(para(t), '接下来把这些接成每天触发的 workflow。我派一个 Plan 子 agent 先理清接线。', 64); if (!alive(id)) return; await sleep(150);
-    const sp = toolGroup(t); sp.status('Subagent(type=Plan)…'); await sleep(560); if (!alive(id)) return;
-    toolItem(sp.box, { name: 'Subagent(type=Plan)', detailHTML: '<div class="tbox"><div class="out">隔离子 agent · 25 轮 · 模型 = workspace dialogue · 深度 1（子不能再派子）</div></div>' });
-    sp.settle('子 agent 完成 · Subagent');
-    const sub = subtree(t, 'Subagent · Plan');
+    await typeInto(para(t), '接下来把这些接成每天触发的 workflow。我派一个 Plan 子 agent 先理清接线。', 64); if (!alive(id)) return; await sleep(450);
+    const sub = subtree(t, 'Subagent · Plan');   // 子树即子 agent 标记（隔离 · 25 轮 · workspace dialogue · 深度 1）
     reasonBlock(sub, '触发用 cron（每天 08:00）；trigger → action(weekly_digest) → agent(摘要润色) → approval(人工过目) → action(notion_writer.publish)。回边只在 approval 上闭合（环纪律）。');
     await sleep(420); if (!alive(id)) return;
     const cw = toolGroup(sub); cw.status('Forging weekly_report…'); await sleep(520); if (!alive(id)) return;
@@ -329,13 +335,15 @@
       ChatEntityCard.$('[data-f="graph"] [data-nc]', wcard).textContent = wnodes.children.length + ' 节点';
     }
     await sleep(550); if (!alive(id)) return; ChatEntityCard.setLive(false);
-    toolItem(cw.box, { verb: 'Forged', name: 'create_workflow(weekly_report)', open: true,
+    toolItem(cw.box, { verb: 'Forged', name: 'create_workflow(weekly_report)',
       detailHTML: `<div class="diff-cap">实体版本 diff · 图 ops（add_node ×5）</div><div class="tbox"><div class="diff">
         <div class="dline add"><span class="s">+</span><span class="c">add_node daily (trigger · cron 08:00)</span></div>
         <div class="dline add"><span class="s">+</span><span class="c">add_node fetch (action · fn_weekly_digest)</span></div>
         <div class="dline add"><span class="s">+</span><span class="c">add_node polish (agent) + review (approval)</span></div>
         <div class="dline add"><span class="s">+</span><span class="c">add_node publish (action · hd_notion_writer.publish)</span></div></div></div>` });
-    cw.settle('已锻造 · create_workflow'); await sleep(560); if (!alive(id)) return;
+    cw.settle('已锻造 · create_workflow');
+    if (dock) dock.set([['抓取竞品动态并汇总（function）', 'completed'], ['接 Notion 写手（handler）', 'completed'], ['编排每日 workflow', 'completed'], ['上线 + 验证一次', 'in-progress']]);
+    await sleep(560); if (!alive(id)) return;
 
     // BEAT 6 — trigger_workflow → durable flowrun，逐节点推进，approval 节点 park → 通过/驳回
     await typeInto(para(t), '先手动触发一次，看整条链路跑通没。', 60); if (!alive(id)) return; await sleep(150);
