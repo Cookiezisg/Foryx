@@ -171,6 +171,34 @@ code, .mono { font-family: var(--mono); }
 .dl.add .s { color: var(--ok); } .dl.add .c { color: var(--ink); }
 .dl.del { background: color-mix(in srgb, var(--danger) 9%, transparent); }
 .dl.del .s { color: var(--danger); } .dl.del .c { color: var(--ink-3); }
+
+/* 工具调用：复刻 Claude Code —— 折叠=一行(无框)；展开=外框+工具列表；每工具各自展开详情 */
+.tg { }
+.tg-sum { display: inline-flex; align-items: center; gap: 6px; color: var(--ink-3); font-size: 13px; cursor: pointer; padding: 2px 0; }
+.tg-sum:hover { color: var(--ink-2); }
+.tg-sum .chev { color: var(--ink-3); transition: transform .18s; }
+.tg.open > .tg-sum .chev { transform: rotate(90deg); }
+.tg-list { display: none; margin-top: 8px; border: 1px solid var(--line); border-radius: 12px; padding: 4px; }
+.tg.open > .tg-list { display: block; }
+.ti-sum { display: flex; align-items: center; gap: 7px; color: var(--ink-3); font-size: 13px; cursor: pointer; padding: 7px 9px; border-radius: 8px; }
+.ti-sum:hover { background: var(--cc-hover); }
+.ti-sum .v { color: var(--ink-3); }
+.ti-sum .nm { color: var(--ink); font-family: var(--mono); font-size: 12.5px; }
+.ti-sum .chev { margin-left: auto; color: var(--ink-3); transition: transform .18s; }
+.ti.open > .ti-sum .chev { transform: rotate(90deg); }
+.ti-det { display: none; padding: 0 9px 8px; }
+.ti.open > .ti-det { display: block; }
+.tbox { border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+.tbox .lbl { padding: 6px 11px; font-size: 12px; color: var(--ink-2); border-bottom: 1px solid var(--line); background: var(--cc-active); font-family: var(--mono); }
+.tbox .out { padding: 9px 12px; font-family: var(--mono); font-size: 12px; line-height: 1.85; color: var(--ink-2); white-space: pre-wrap; }
+.tbox .diff { padding: 6px 0; }
+.dline { display: flex; padding: 0 12px; line-height: 1.85; font-family: var(--mono); font-size: 12px; }
+.dline .s { width: 14px; flex: none; color: var(--ink-3); }
+.dline .c { flex: 1; white-space: pre-wrap; color: var(--ink-2); }
+.dline.add { background: color-mix(in srgb, var(--ok) 11%, transparent); }
+.dline.add .s { color: var(--ok); } .dline.add .c { color: var(--ink); }
+.dline.del { background: color-mix(in srgb, var(--danger) 9%, transparent); }
+.dline.del .s { color: var(--danger); } .dline.del .c { color: var(--ink-3); }
 </style>
 </head>
 <body>
@@ -214,57 +242,50 @@ code, .mono { font-family: var(--mono); }
   <!-- 工具调用块 -->
   <div class="sect">
     <h2>四 · 工具调用块（对话内的框 × 右侧面板的框，成对设计）</h2>
-    <p class="note" style="margin-bottom:18px">规矩：工具调用在对话里是一个<b>紧凑的框</b>（默认折叠 + 操作数 <span class="stat"><span class="a">+N</span> <span class="d">−M</span></span>）；点开看<b>操作列表</b>，再点开看<b>带行号、绿增红删的 diff</b>。实体变更落到<b>右侧面板</b>看全貌——对话内框与右侧框<b>同一设计语言</b>。</p>
+    <p class="note" style="margin-bottom:18px">复刻 Claude Code 的 tool call：<b>平时一行、无框</b>；<b>展开</b>是一个外框，里面是工具列表；<b>点某个工具</b>展开它自己的详情框（命令=终端输出，编辑=绿增红删 diff）。<b>不自创</b>。点下面试试。</p>
     <div class="tc-demos">
       <div class="demo wide">
-        <div class="lab">① 工具卡 + 变更 diff（行号 · 绿增红删）—— tool call 的主形态</div>
-        <div class="tcx open" data-tcx>
-          <div class="tcx-h">Used 2 tools <span class="stat"><span class="a">+3</span> <span class="d">−2</span></span> <span class="chev"></span></div>
-          <div class="tcx-body">
-            <div class="opr"><span class="dot"></span><code>read_agent</code><span class="tgt">Researcher</span></div>
-            <div class="opr"><span class="dot"></span><code>update_agent</code><span class="tgt">Researcher</span><span class="stat"><span class="a">+3</span> <span class="d">−2</span></span></div>
-            <div class="dvwrap"><div class="dv">
-              <div class="dv-h"><code>agent · Researcher</code><span class="stat"><span class="a">+3</span> <span class="d">−2</span></span></div>
-              <div class="dv-b">
-                <div class="dl del"><span class="n">12</span><span class="s">−</span><span class="c">model: claude-sonnet-4-6</span></div>
-                <div class="dl add"><span class="n">12</span><span class="s">+</span><span class="c">model: claude-opus-4-8</span></div>
-                <div class="dl"><span class="n">18</span><span class="s"></span><span class="c">system: |</span></div>
-                <div class="dl"><span class="n">19</span><span class="s"></span><span class="c">  你是严谨的调研助手。检索、交叉验证、给出结构化综述。</span></div>
-                <div class="dl add"><span class="n">20</span><span class="s">+</span><span class="c">  务必为每条结论附引用来源（行内链接）。</span></div>
-                <div class="dl del"><span class="n">24</span><span class="s">−</span><span class="c">tools: [web_fetch, read_file, python, summarize]</span></div>
-                <div class="dl add"><span class="n">24</span><span class="s">+</span><span class="c">tools: [web_fetch, read_file, python, summarize, web_search]</span></div>
-              </div>
-            </div></div>
+        <div class="lab">② 展开（外框 + 工具列表）+ 点开单个工具看它的详情</div>
+        <div class="tg open" data-tg>
+          <div class="tg-sum">Used 2 tools <span class="chev"></span></div>
+          <div class="tg-list">
+            <div class="ti">
+              <div class="ti-sum"><span class="v">Used</span> <span class="nm">read_agent(Researcher)</span> <span class="chev"></span></div>
+              <div class="ti-det"><div class="tbox"><div class="lbl">read_agent → Researcher</div><div class="out">model: claude-sonnet-4-6 · tools: web_fetch, read_file, python, summarize</div></div></div>
+            </div>
+            <div class="ti open">
+              <div class="ti-sum"><span class="v">Used</span> <span class="nm">update_agent(Researcher)</span> <span class="chev"></span></div>
+              <div class="ti-det"><div class="tbox"><div class="lbl">update_agent → agent Researcher</div><div class="diff">
+                <div class="dline del"><span class="s">−</span><span class="c">model: claude-sonnet-4-6</span></div>
+                <div class="dline add"><span class="s">+</span><span class="c">model: claude-opus-4-8</span></div>
+                <div class="dline add"><span class="s">+</span><span class="c">system += 务必为每条结论附引用来源（行内链接）</span></div>
+                <div class="dline add"><span class="s">+</span><span class="c">tools += web_search</span></div>
+              </div></div></div>
+            </div>
           </div>
         </div>
       </div>
       <div class="demo">
-        <div class="lab">② 命令（终端输出）</div>
-        <div class="tcx open" data-tcx>
-          <div class="tcx-h">Ran <code>flutter analyze</code> <span class="ok" data-ck></span> <span class="chev"></span></div>
-          <div class="tcx-body"><div class="dvwrap"><div class="term">$ flutter analyze
+        <div class="lab">① 折叠态（平时，一行无框）</div>
+        <div class="tg" data-tg>
+          <div class="tg-sum">Used 2 tools <span class="chev"></span></div>
+          <div class="tg-list">
+            <div class="ti"><div class="ti-sum"><span class="v">Used</span> <span class="nm">read_agent(Researcher)</span> <span class="chev"></span></div><div class="ti-det"><div class="tbox"><div class="lbl">read_agent → Researcher</div><div class="out">model: claude-sonnet-4-6</div></div></div></div>
+            <div class="ti"><div class="ti-sum"><span class="v">Used</span> <span class="nm">update_agent(Researcher)</span> <span class="chev"></span></div><div class="ti-det"><div class="tbox"><div class="lbl">update_agent</div><div class="diff"><div class="dline add"><span class="s">+</span><span class="c">model: claude-opus-4-8</span></div></div></div></div></div>
+          </div>
+        </div>
+      </div>
+      <div class="demo">
+        <div class="lab">③ 只有一个工具（无外框，直接一行 + 展开详情）</div>
+        <div class="ti open" data-ti style="margin:0">
+          <div class="ti-sum" style="padding-left:0"><span class="v">Ran</span> <span class="nm">flutter analyze</span> <span class="ok" data-ck></span> <span class="chev"></span></div>
+          <div class="ti-det" style="padding:0"><div class="tbox"><div class="lbl">Bash</div><div class="out">$ flutter analyze
 Analyzing forgify…
 No issues found! (ran in 4.1s)</div></div></div>
         </div>
       </div>
-      <div class="demo">
-        <div class="lab">③ 折叠态（默认）</div>
-        <div class="tcx" data-tcx>
-          <div class="tcx-h">Used 2 tools <span class="stat"><span class="a">+3</span> <span class="d">−2</span></span> <span class="chev"></span></div>
-          <div class="tcx-body"><div class="opr"><span class="dot"></span><code>read_agent</code><span class="tgt">Researcher</span></div><div class="opr"><span class="dot"></span><code>update_agent</code><span class="tgt">Researcher</span></div></div>
-        </div>
-        <p class="note" style="font-size:12px;margin-top:10px">点标题展开 / 收起。</p>
-      </div>
-      <div class="demo wide">
-        <div class="lab">④ 实体变更块（对话内缩影 → 点开右侧岛看全貌）</div>
-        <div class="tc-entity">
-          <span class="etype" data-ag></span>
-          <span class="en"><b>Researcher</b><span class="d"><code>update_agent</code> · <span class="to">v4 → v5</span></span></span>
-          <span class="go">在右侧查看 →</span>
-        </div>
-        <p class="note" style="font-size:12px;margin-top:10px">↑ 它与「三 · 实体卡」是<b>同一张卡的两态</b>：对话内是缩影（日志），点开在右侧岛展开全貌、流式编辑——这就是「对话内框 × 右侧框」的成对设计。</p>
-      </div>
     </div>
+    <p class="note" style="font-size:12px;margin-top:14px">实体类工具（如 <code>update_agent</code>）在对话里就是上面这样；执行的同时会<b>唤出右侧实体卡</b>（见「三」）看全貌、流式编辑。对话不再单独放「实体缩影」块。</p>
   </div>
 
   <!-- 其它组件 -->
@@ -298,7 +319,8 @@ $('#seg').innerHTML = `<button class="on">${svg('chat',15)} Chat</button><button
 document.querySelectorAll('.chev').forEach(c => { if(!c.innerHTML) c.innerHTML = svg('chevr',14); });
 document.querySelectorAll('[data-ck]').forEach(c => c.innerHTML = svg('check',14));
 document.querySelectorAll('[data-ag]').forEach(c => c.innerHTML = svg('agent',17));
-document.querySelectorAll('[data-tcx] .tcx-h').forEach(h => h.onclick = () => h.closest('.tcx').classList.toggle('open'));
+document.querySelectorAll('[data-tg] .tg-sum').forEach(s => s.onclick = () => s.closest('.tg').classList.toggle('open'));
+document.querySelectorAll('.ti-sum').forEach(s => s.onclick = () => s.closest('.ti').classList.toggle('open'));
 
 // 配色 swatches
 const SW = [
