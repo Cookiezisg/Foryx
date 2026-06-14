@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forgify — 设置·概览(调性预览)</title>
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/shell.css">
+<style>
+  /* 设置面「概览」调性预览：用真实 tokens.css + shell.css(系统字/白·近黑/海岸线/accent)。
+     仅供 judge 调性,非最终结构。真实里左侧还有常驻侧栏;此处聚焦设置两栏 + 概览。 */
+  body { padding: 22px; }
+  .win { height: auto; min-height: 600px; max-width: 1000px; margin: 0 auto; }
+
+  /* 主区头：返回 + 面包屑 */
+  .stop { display: flex; align-items: center; gap: 8px; height: 44px; flex: none; padding: 0 16px; font-size: var(--t-md); }
+  .stop .bk { display: flex; align-items: center; gap: 5px; color: var(--ink-2); }
+  .stop .bk svg { width: 16px; height: 16px; }
+  .stop .sep { color: var(--ink-3); } .stop .cur { color: var(--ink); font-weight: 500; }
+
+  /* 两栏：左类目岛 + 右详情海 */
+  .pane { flex: 1; min-height: 0; display: flex; gap: var(--s2); padding: var(--s2); }
+  .catnav { flex: none; width: 200px; background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-card);
+    box-shadow: var(--shadow-island); padding: var(--s2); display: flex; flex-direction: column; gap: 1px; }
+  .catnav .ci { display: flex; align-items: center; height: 34px; padding: 0 12px; border-radius: 8px; font-size: var(--t-md); color: var(--ink-2); }
+  .catnav .ci:hover { background: var(--cc-hover); color: var(--ink); }
+  .catnav .ci.on { background: var(--cc-active); color: var(--ink); font-weight: 500; }
+  .catnav .grp { padding: 12px 12px 5px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); }
+
+  .detail { flex: 1; min-width: 0; overflow-y: auto; padding: 8px 16px 16px; display: flex; flex-direction: column; gap: var(--s5); }
+
+  /* 身份头(铺在海上,无卡) */
+  .idrow { display: flex; align-items: center; gap: 13px; margin-top: 6px; }
+  .av { flex: none; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: var(--cc-active); color: var(--ink-2); font-size: 18px; font-weight: 600; }
+  .idrow .nm { font-size: var(--t-xl); font-weight: 600; color: var(--ink); }
+  .idrow .sub { font-size: var(--t-sm); color: var(--ink-3); margin-top: 2px; }
+
+  /* 统计：四座小岛 */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--s2); }
+  .stat { background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-island); padding: 13px 15px; }
+  .stat .lab { font-size: var(--t-sm); color: var(--ink-3); }
+  .stat .num { font-size: var(--t-2xl); font-weight: 600; color: var(--ink); margin-top: 3px; letter-spacing: -.01em; }
+
+  /* 热力图岛 */
+  .hmcard { background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-island); padding: 16px 18px; }
+  .hmhead { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .hmhead .ttl { font-size: var(--t-md); color: var(--ink-2); }
+  .hmhead .ttl b { color: var(--ink); font-weight: 600; }
+  .seg { display: flex; gap: 2px; }
+  .seg button { height: 28px; padding: 0 12px; border: 0; background: transparent; border-radius: var(--r-chip); font: inherit; font-size: var(--t-sm); color: var(--ink-2); cursor: pointer; transition: background var(--d-fast); }
+  .seg button:hover { background: var(--cc-hover); }
+  .seg button.on { background: var(--cc-active); color: var(--ink); font-weight: 500; }
+
+  .months { display: flex; margin: 0 0 5px 22px; font-size: var(--t-xs); color: var(--ink-3); }
+  .hm { display: flex; }
+  .wd { display: flex; flex-direction: column; gap: 3px; margin-right: 6px; }
+  .wd span { height: 11px; line-height: 11px; font-size: 10px; color: var(--ink-3); }
+  .grid { display: flex; gap: 3px; }
+  .col { display: flex; flex-direction: column; gap: 3px; }
+  .c { width: 11px; height: 11px; border-radius: 3px; background: var(--island-3); }
+  .legend { display: flex; align-items: center; justify-content: flex-end; gap: 5px; margin-top: 12px; font-size: var(--t-xs); color: var(--ink-3); }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; }
+</style>
+</head>
+<body>
+  <div class="win">
+    <div class="stop">
+      <span class="bk"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m15 6-6 6 6 6"/></svg>返回</span>
+      <span class="sep">·</span><span class="cur">设置</span>
+    </div>
+    <div class="pane">
+      <nav class="catnav">
+        <div class="ci on">概览</div>
+        <div class="ci">通用</div>
+        <div class="ci">模型与密钥</div>
+        <div class="ci">搜索与嵌入</div>
+        <div class="ci">运行时与磁盘</div>
+        <div class="ci">工作区</div>
+        <div class="ci">连接器</div>
+        <div class="ci">系统</div>
+        <div class="ci">关于</div>
+      </nav>
+      <section class="detail">
+        <div class="idrow">
+          <div class="av">P</div>
+          <div><div class="nm">Personal</div><div class="sub">本地工作区 · 活跃 142 天 · 自 2026-01-03</div></div>
+        </div>
+        <div class="stats">
+          <div class="stat"><div class="lab">对话</div><div class="num">1,284</div></div>
+          <div class="stat"><div class="lab">锻造实体</div><div class="num">47</div></div>
+          <div class="stat"><div class="lab">工作流</div><div class="num">12</div></div>
+          <div class="stat"><div class="lab">运行</div><div class="num">3,902</div></div>
+        </div>
+        <div class="hmcard">
+          <div class="hmhead">
+            <div class="ttl">过去一年的活动 · 共 <b>5,233</b> 次</div>
+            <div class="seg"><button class="on">全部</button><button>对话</button><button>运行</button><button>锻造</button></div>
+          </div>
+          <div class="months" id="months"></div>
+          <div class="hm">
+            <div class="wd"><span></span><span>一</span><span></span><span>三</span><span></span><span>五</span><span></span></div>
+            <div class="grid" id="grid"></div>
+          </div>
+          <div class="legend">少
+            <i style="background:var(--island-3)"></i>
+            <i style="background:rgba(0,113,227,.28)"></i>
+            <i style="background:rgba(0,113,227,.5)"></i>
+            <i style="background:rgba(0,113,227,.74)"></i>
+            <i style="background:rgba(0,113,227,.98)"></i>多
+          </div>
+        </div>
+      </section>
+    </div>
+  </div>
+  <script>
+    (function () {
+      const grid = document.getElementById('grid'), months = document.getElementById('months');
+      const cols = 34, fills = ['var(--island-3)', 'rgba(0,113,227,.28)', 'rgba(0,113,227,.5)', 'rgba(0,113,227,.74)', 'rgba(0,113,227,.98)'];
+      for (let w = 0; w < cols; w++) {
+        const col = document.createElement('div'); col.className = 'col';
+        for (let d = 0; d < 7; d++) {
+          const c = document.createElement('div'); c.className = 'c';
+          const r = Math.random(), wknd = (d === 0 || d === 6);
+          let lvl = r > (wknd ? 0.62 : 0.34) ? 1 + Math.floor(Math.random() * 4) : 0;
+          if (w < 3 && Math.random() > 0.5) lvl = 0;
+          c.style.background = fills[lvl];
+          col.appendChild(c);
+        }
+        grid.appendChild(col);
+      }
+      ['7月', '8月', '9月', '10月', '11月', '12月', '1月', '2月', '3月', '4月', '5月', '6月'].forEach(m => {
+        const s = document.createElement('span'); s.textContent = m; s.style.width = (cols * 14 / 12) + 'px'; months.appendChild(s);
+      });
+    })();
+  </script>
+</body>
+</html>
