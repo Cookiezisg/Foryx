@@ -6,11 +6,11 @@
      · 红线①：正文内不用灰色填充块——代码/引用/标签一律「白底 + 描边圈」或「左竖线」，不靠灰底划块。
      · 红线②：行内代码绝不学 Notion 的红——白底 + 细描边 + 中性色等宽字。
      · 仍守：少强调色（--accent 只点「正在发生」：caret/选区/AI 流光/编辑中●）、系统字非衬线、32 紧凑。
-   依赖：shared/tokens.css + shared/shell.css 的 --cc-*/原语（只读）。shimmer/caret/typeInto 自包含。
+   依赖：shared/tokens.css + shared/shell.css 的 --cc- 表面色与原语（只读）。shimmer / caret / typeInto 自包含。
    ⚠ 右岛是「本海洋的」：.doc-aside 框+内容都在这，外壳只给 Shell.body 让我 append。 */
 
 /* ===== 阅读列：单列纵向滚动，正文平铺在海上 ===== */
-.doc-scroll { flex: 1; overflow-y: auto; position: relative; }
+.doc-scroll { flex: 1; min-height: 0; overflow-y: auto; position: relative; }   /* min-height:0 关键：flex 子项不加它会撑到内容全高、overflow 失效（滚不动） */
 .doc { position: relative; max-width: 720px; margin: 0 auto; padding: 36px var(--s5) 200px; }
 
 /* 文档头：靠纯留白与正文分 */
