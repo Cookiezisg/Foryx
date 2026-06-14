@@ -84,6 +84,41 @@ func TestCreate_TrimsTitle_EmitsCreated(t *testing.T) {
 	}
 }
 
+type fakeQuerier struct{ generating map[string]bool }
+
+func (f fakeQuerier) IsGenerating(id string) bool { return f.generating[id] }
+
+// TestDerivesIsGenerating: Get/List fill the derived IsGenerating from the injected querier; with
+// no querier wired it stays false (never crashes, never invents state).
+func TestDerivesIsGenerating(t *testing.T) {
+	svc, _, _, ctx := newSvc(t)
+	a, _ := svc.Create(ctx, "a")
+	b, _ := svc.Create(ctx, "b")
+	svc.SetGeneratingQuerier(fakeQuerier{generating: map[string]bool{a.ID: true}})
+
+	ga, _ := svc.Get(ctx, a.ID)
+	gb, _ := svc.Get(ctx, b.ID)
+	if !ga.IsGenerating || gb.IsGenerating {
+		t.Errorf("Get: a=%v b=%v, want a=true b=false", ga.IsGenerating, gb.IsGenerating)
+	}
+	rows, _, err := svc.List(ctx, ListFilter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	for _, c := range rows {
+		if want := c.ID == a.ID; c.IsGenerating != want {
+			t.Errorf("List: %s isGenerating=%v want %v", c.ID, c.IsGenerating, want)
+		}
+	}
+
+	// No querier wired (default) → derived flag stays false, no panic.
+	svc2, _, _, ctx2 := newSvc(t)
+	c, _ := svc2.Create(ctx2, "c")
+	if gc, _ := svc2.Get(ctx2, c.ID); gc.IsGenerating {
+		t.Error("nil querier → IsGenerating must be false")
+	}
+}
+
 func TestCreateWithSystemPrompt(t *testing.T) {
 	svc, _, _, ctx := newSvc(t)
 	c, err := svc.CreateWithSystemPrompt(ctx, "", "You are helpful")

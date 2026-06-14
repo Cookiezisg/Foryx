@@ -275,6 +275,9 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 	// post-build injection breaks the chat→conversation→chat cycle).
 	// 删对话连带取消在途生成（chat 满足该端口；后注入破 chat→conversation→chat 环）。
 	conv.SetGenerationCanceler(chat)
+	// List/Get derive each row's isGenerating from chat's in-flight registry (same post-build port).
+	// List/Get 据 chat 在途登记派生每行 isGenerating（同款后注入端口）。
+	conv.SetGeneratingQuerier(chat)
 
 	// apikey delete-guard (RefScanner): refuse to delete a key still referenced, so the
 	// reference never dangles. Two real sources — a workspace's scenario default models /

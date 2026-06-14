@@ -132,19 +132,24 @@ func (q *Query[T]) Pluck(ctx context.Context, col string, dst any) error {
 	return nil
 }
 
-// Page returns one keyset page ordered by (created, pk) descending. It applies
-// the tuple cursor, fetches limit+1 rows to detect a next page, trims to
-// limit, and returns the next cursor ("" when exhausted). Requires created + pk
-// columns. limit <= 0 falls back to 50.
+// Page returns one keyset page ordered by (keyset, pk) descending, where the keyset column is the
+// created column by default or whatever PageKeyset set (e.g. last_message_at). It applies the tuple
+// cursor, fetches limit+1 rows to detect a next page, trims to limit, and returns the next cursor
+// ("" when exhausted). Requires the keyset (created by default) + pk columns. limit <= 0 → 50.
 //
-// Page 返回一页 keyset 结果，按 (created, pk) 降序。套用元组游标、多取一行探测下页、
-// 裁剪到 limit，返回下一页游标（取尽为 ""）。需 created + pk 列。limit <= 0 取 50。
+// Page 返回一页 keyset 结果，按 (keyset, pk) 降序——keyset 列默认 created 列，或 PageKeyset 指定的列
+// （如 last_message_at）。套用元组游标、多取一行探测下页、裁剪到 limit、返回下一页游标（取尽为 ""）。
+// 需 keyset（默认 created）+ pk 列。limit <= 0 取 50。
 func (q *Query[T]) Page(ctx context.Context, cursor string, limit int) ([]*T, string, error) {
 	if limit <= 0 {
 		limit = 50
 	}
-	if q.meta.created == nil || q.meta.pk == nil {
-		return nil, "", fmt.Errorf("orm: Page requires a created + pk column on %s", q.table)
+	ks := q.keyset
+	if ks == nil {
+		ks = q.meta.created
+	}
+	if ks == nil || q.meta.pk == nil {
+		return nil, "", fmt.Errorf("orm: Page requires a keyset (created or PageKeyset) + pk column on %s", q.table)
 	}
 
 	if cursor != "" {
@@ -152,19 +157,21 @@ func (q *Query[T]) Page(ctx context.Context, cursor string, limit int) ([]*T, st
 		if err := paginationpkg.DecodeCursor(cursor, &c); err != nil {
 			return nil, "", fmt.Errorf("orm: page cursor: %w", err)
 		}
-		q.Where("("+q.meta.created.name+", "+q.meta.pk.name+") < (?, ?)", c.CreatedAt, c.ID)
+		q.Where("("+ks.name+", "+q.meta.pk.name+") < (?, ?)", c.Key, c.ID)
 	}
-	// Default keyset order is (created, pk) DESC — matching the cursor's tuple
-	// comparison. A caller MAY override via a prior .Order() (kept intentionally):
-	// conversation lists pinned-first ("pinned DESC, created_at DESC, id DESC"). The
-	// cursor stays created-keyed, which is good enough since pins are few and land on
-	// page one — do NOT "fix" this by forcing the default order (it breaks pinned-first).
+	// Default keyset order is (keyset, pk) DESC — matching the cursor's tuple comparison. A caller
+	// MAY prepend a leading clause via a prior .Order() (kept intentionally): conversation lists are
+	// pinned-first ("pinned DESC, last_message_at DESC, id DESC"). The cursor keys only (keyset, pk),
+	// so the leading pinned partition relies on all pins landing on page one (few, single-user) —
+	// that assumption, not the default order, is what makes pinned-first safe. Whatever column the
+	// .Order() sorts by MUST match PageKeyset, or pages skip/duplicate rows.
 	//
-	// 默认 keyset 排序 (created, pk) DESC，与游标元组比较一致。调用方可用先前 .Order() 覆盖
-	// （有意保留）：conversation 置顶优先列表（"pinned DESC, created_at DESC, id DESC"）。此时
-	// 游标仍按 created 键——够用（置顶少、都在首页）。别"修"成强制默认序（会破置顶优先）。
+	// 默认 keyset 排序 (keyset, pk) DESC，与游标元组比较一致。调用方可用先前 .Order() 前置一个引导子句
+	// （有意保留）：conversation 置顶优先（"pinned DESC, last_message_at DESC, id DESC"）。游标只键
+	// (keyset, pk)，故置顶分区靠"所有置顶都落首页"（少、单用户）——是这个假设而非默认序让置顶优先安全。
+	// .Order() 所按的列必须与 PageKeyset 一致，否则跨页漏行/重行。
 	if q.order == "" {
-		q.order = q.meta.created.name + " DESC, " + q.meta.pk.name + " DESC"
+		q.order = ks.name + " DESC, " + q.meta.pk.name + " DESC"
 	}
 	q.limit = limit + 1
 
@@ -176,9 +183,9 @@ func (q *Query[T]) Page(ctx context.Context, cursor string, limit int) ([]*T, st
 	var next string
 	if len(rows) > limit {
 		last := reflect.ValueOf(rows[limit-1]).Elem()
-		createdAt, _ := last.Field(q.meta.created.index).Interface().(time.Time)
+		key, _ := last.Field(ks.index).Interface().(time.Time)
 		id, _ := last.Field(q.meta.pk.index).Interface().(string)
-		next, err = paginationpkg.EncodeCursor(paginationpkg.Cursor{CreatedAt: createdAt, ID: id})
+		next, err = paginationpkg.EncodeCursor(paginationpkg.Cursor{Key: key, ID: id})
 		if err != nil {
 			return nil, "", fmt.Errorf("orm: page cursor encode: %w", err)
 		}

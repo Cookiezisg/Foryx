@@ -1,11 +1,11 @@
 // Package conversation is the orm-backed conversationdomain.Repository: a workspace-scoped,
 // soft-deleted thread table. Workspace isolation + soft-delete are automatic (orm fills/filters
-// from ctx), so no method hand-writes a predicate. List sorts pinned-first then newest,
-// keyset-paginated on (created_at, id).
+// from ctx), so no method hand-writes a predicate. List sorts pinned-first then most-recently-
+// active, keyset-paginated on (last_message_at, id).
 //
 // Package conversation 是 conversationdomain.Repository 的 orm 实现：按 workspace、软删的线程表。
-// workspace 隔离 + 软删自动（orm 据 ctx 填/过滤），故无方法手写谓词。List 置顶优先再最新、按
-// (created_at, id) keyset 分页。
+// workspace 隔离 + 软删自动（orm 据 ctx 填/过滤），故无方法手写谓词。List 置顶优先再最近活跃、按
+// (last_message_at, id) keyset 分页。
 package conversation
 
 import (
@@ -13,6 +13,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	conversationdomain "github.com/sunweilin/forgify/backend/internal/domain/conversation"
 	ormpkg "github.com/sunweilin/forgify/backend/internal/pkg/orm"
@@ -39,9 +40,10 @@ var Schema = []string{
 		model_override           TEXT,
 		created_at               DATETIME NOT NULL,
 		updated_at               DATETIME NOT NULL,
+		last_message_at          DATETIME NOT NULL,
 		deleted_at               DATETIME
 	)`,
-	`CREATE INDEX IF NOT EXISTS idx_conversations_ws_list ON conversations(workspace_id, pinned DESC, created_at DESC, id DESC) WHERE deleted_at IS NULL`,
+	`CREATE INDEX IF NOT EXISTS idx_conversations_ws_list ON conversations(workspace_id, pinned DESC, last_message_at DESC, id DESC) WHERE deleted_at IS NULL`,
 }
 
 // Store implements conversationdomain.Repository over pkg/orm.
@@ -90,12 +92,14 @@ func (s *Store) GetBatch(ctx context.Context, ids []string) ([]*conversationdoma
 	return rows, nil
 }
 
-// List returns one page: pinned-first then newest, keyset cursor on (created_at, id). The
-// cursor keys (created_at, id) only — pinned floats favorites within a page but, on a local
-// single-user app where conversations ≪ the page limit, does not drift across pages.
+// List returns one page: pinned-first then most-recently-active, keyset cursor on
+// (last_message_at, id). The cursor keys (last_message_at, id) only — the leading pinned partition
+// relies on all pins landing on page one (few, single-user), so it never drifts across pages.
+// PageKeyset aligns the cursor column with the ORDER BY's last_message_at (the keyset invariant).
 //
-// List 返一页：置顶优先再最新，游标键 (created_at, id)。游标只键 (created_at, id)——pinned 在页内
-// 浮顶收藏，但单用户本地（对话数 ≪ 页大小）不会跨页漂移。
+// List 返一页：置顶优先再最近活跃，游标键 (last_message_at, id)。游标只键 (last_message_at, id)——
+// 置顶分区靠「所有置顶都落首页」（少、单用户）故不跨页漂移。PageKeyset 让游标列与 ORDER BY 的
+// last_message_at 对齐（keyset 不变量）。
 func (s *Store) List(ctx context.Context, filter conversationdomain.ListFilter) ([]*conversationdomain.Conversation, string, error) {
 	q := s.repo.Query()
 	if filter.Archived == nil {
@@ -106,11 +110,21 @@ func (s *Store) List(ctx context.Context, filter conversationdomain.ListFilter) 
 	if term := strings.TrimSpace(filter.Search); term != "" {
 		q = q.Where("title LIKE ?", "%"+term+"%")
 	}
-	rows, next, err := q.Order("pinned DESC, created_at DESC, id DESC").Page(ctx, filter.Cursor, filter.Limit)
+	rows, next, err := q.Order("pinned DESC, last_message_at DESC, id DESC").PageKeyset("last_message_at").Page(ctx, filter.Cursor, filter.Limit)
 	if err != nil {
 		return nil, "", fmt.Errorf("conversationstore.List: %w", err)
 	}
 	return rows, next, nil
+}
+
+// TouchLastMessage sets last_message_at on one conversation (chat calls it when a message lands).
+//
+// TouchLastMessage 把某对话的 last_message_at 设为 t（chat 在消息落地时调）。
+func (s *Store) TouchLastMessage(ctx context.Context, id string, t time.Time) error {
+	if _, err := s.repo.Query().WhereEq("id", id).Updates(ctx, map[string]any{"last_message_at": t}); err != nil {
+		return fmt.Errorf("conversationstore.TouchLastMessage: %w", err)
+	}
+	return nil
 }
 
 func (s *Store) Update(ctx context.Context, c *conversationdomain.Conversation) error {

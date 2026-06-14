@@ -20,12 +20,15 @@ import (
 // （pagination 不依赖任何上层）。
 var ErrMalformedCursor = errorspkg.New(errorspkg.KindInvalid, "MALFORMED_CURSOR", "pagination: malformed cursor")
 
-// Cursor is the standard (created_at, id) keyset tuple; short JSON tags keep encoded cursors compact.
+// Cursor is the keyset tuple (sortKey, id); Key holds the value of whatever time column the query
+// paginates on (created_at by default, last_message_at for the conversation list, …). Short JSON
+// tags keep encoded cursors compact; the wire tag "c" is unchanged for backward compatibility.
 //
-// Cursor 是标准 (created_at, id) keyset 元组；短 JSON tag 让编码后的 cursor 紧凑。
+// Cursor 是 keyset 元组 (sortKey, id)；Key 持查询所按的时间列之值（默认 created_at，对话列表按
+// last_message_at…）。短 JSON tag 让编码后 cursor 紧凑；线缆 tag "c" 不变（向后兼容）。
 type Cursor struct {
-	CreatedAt time.Time `json:"c"`
-	ID        string    `json:"i"`
+	Key time.Time `json:"c"`
+	ID  string    `json:"i"`
 }
 
 // EncodeCursor marshals v as base64url(JSON); a nil v maps to "" (signals no further pages).

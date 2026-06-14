@@ -15,6 +15,7 @@ import (
 	"context"
 	"strings"
 	"sync"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -78,6 +79,12 @@ type ConversationReader interface {
 	//
 	// Unarchive 清归档标志——Send 自动解档（给归档线程发消息即隐式唤回）。
 	Unarchive(ctx context.Context, id string) error
+	// TouchLastMessage records that a message just landed (Send calls it per user turn) so the
+	// conversation list re-sorts by recent activity. Best-effort — a failed touch only mis-sorts.
+	//
+	// TouchLastMessage 记一条消息刚落地（Send 每用户回合调），使对话列表按最近活跃重排。best-effort——
+	// touch 失败只是排序略偏。
+	TouchLastMessage(ctx context.Context, id string, t time.Time) error
 }
 
 // ContentCapabilities is what the resolved model can natively ingest — supplied by the resolver
@@ -311,6 +318,12 @@ func (s *Service) Send(ctx context.Context, conversationID string, in SendInput)
 	}
 	s.notifySearchMessage(ctx, conversationID, userMsg.ID)
 	s.emitUserMessage(ctx, conversationID, userMsg, in.Content)
+	// Bump the conversation's recency key so the list re-sorts by latest activity. Best-effort:
+	// a failed touch only mis-sorts the list, it must not fail the turn.
+	// 刷新对话最近活跃键，使列表按最新活动重排。best-effort：touch 失败只是排序略偏，绝不能让回合失败。
+	if err := s.deps.Conversations.TouchLastMessage(ctx, conversationID, time.Now().UTC()); err != nil {
+		s.log.Warn("chat: touch last_message_at failed", zap.String("conversation", conversationID), zap.Error(err))
+	}
 
 	// Open the assistant turn (streaming, no blocks yet) to mint its id for the live stream
 	// anchor and reqctx seed, then emit message_start.
@@ -387,6 +400,27 @@ func (q *convQueue) setRunning(v bool) {
 	q.mu.Lock()
 	q.running = v
 	q.mu.Unlock()
+}
+
+// IsGenerating reports whether a conversation has an in-flight assistant turn — running, or queued
+// in the brief window before the runner dequeues it. Read accessor over the same per-conversation
+// queue registry :cancel uses; race-safe against teardown (absent / torn-down entry → false, since
+// teardown clears running + drains the channel under q.mu before deleting). conversation.List/Get
+// calls it to fill each row's derived IsGenerating so a reconnecting client cold-starts its dots.
+//
+// IsGenerating 报告对话是否有在途 assistant 回合——运行中，或 runner 取走前的短暂排队窗。读访问器，
+// 走 :cancel 同款 per-conversation 队列登记；对拆卸竞争安全（缺失/已拆条目 → false，因拆卸在删除前于
+// q.mu 下清 running + 抽干 channel）。conversation.List/Get 调它填每行派生 IsGenerating，使重连客户端
+// 冷启动圆点。
+func (s *Service) IsGenerating(conversationID string) bool {
+	v, ok := s.queues.Load(conversationID)
+	if !ok {
+		return false
+	}
+	q := v.(*convQueue)
+	q.mu.Lock()
+	defer q.mu.Unlock()
+	return q.running || len(q.ch) > 0
 }
 
 // enqueue gets-or-creates the conversation's queue and offers the task; a full buffer means a

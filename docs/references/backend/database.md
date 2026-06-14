@@ -94,7 +94,7 @@ ID：`mcp_`/`mcl_` · `doc_`（skill 无 id——slug 即身份）
 
 | 表 | 关键列 | 说明 |
 |---|---|---|
-| `conversations` | title · auto_titled · system_prompt · **summary / summary_covers_up_to_seq**（压缩器写）· attached_documents(json) · archived/pinned · model_override(json) | 软删；`cv_` |
+| `conversations` | title · auto_titled · system_prompt · **summary / summary_covers_up_to_seq**（压缩器写）· attached_documents(json) · archived/pinned · model_override(json) · **last_message_at**（最近活跃排序键：创建时=now、chat 每用户回合刷；列表索引 `(ws, pinned DESC, last_message_at DESC, id DESC)` + keyset 游标键此列） | 软删；`cv_` |
 | `messages` | conversation_id · **subagent_id**（≠'' = subagent 产出）· role/status(CHECK) · stop_reason · error_code/message · input/output_tokens · provider/model_id（溯源）· attrs(json：附件/提及快照) | **append-only**（D1）；`msg_` |
 | `message_blocks` | message_id · parent_block_id · **seq**（落盘分配）· type(CHECK 六型含 progress/compaction) · attrs/content · status · **context_role**(CHECK hot/warm/cold/archived——压缩投影) | append-only；`blk_` |
 | `attachments` | sha256(内容寻址，非唯一) · filename · mime_type · kind(image/document/text/audio/video/other) · size_bytes · blob 字节在 infra/fs/blob 按 sha256 寻址 | 软删；`att_`；≤50MB |

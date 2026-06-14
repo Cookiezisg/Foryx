@@ -1,6 +1,9 @@
 package orm
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Query[T] is a chainable builder for table T. Every chain method returns the
 // same *Query[T], so calls compose; state only accumulates — nothing hits the
@@ -18,6 +21,7 @@ type Query[T any] struct {
 	offset   int
 	unscoped bool
 	crossWS  bool
+	keyset   *column // keyset-pagination time column; nil → Page defaults to the created column
 }
 
 // cond is one WHERE fragment plus its args; fragments join with AND.
@@ -70,6 +74,25 @@ func (q *Query[T]) WhereNotNull(col string) *Query[T] { return q.Where(col + " I
 //
 // Order 设置 ORDER BY 子句（不含关键字），替换之前的。
 func (q *Query[T]) Order(clause string) *Query[T] { q.order = clause; return q }
+
+// PageKeyset overrides the time column Page keys its cursor on (default = the created column). The
+// named column must exist on the table and be a time.Time. Use it when the list's ORDER BY sorts by
+// a non-created time column (e.g. conversations by last_message_at) so the keyset cursor's WHERE and
+// next-cursor encode track the SAME column as the sort — otherwise pages skip/duplicate rows. A
+// missing column name is a programming error (panics, like meta config errors).
+//
+// PageKeyset 覆盖 Page 游标所键的时间列（默认 created 列）。列须存在且为 time.Time。当列表 ORDER BY
+// 按非 created 的时间列排序（如 conversations 按 last_message_at）时用它，使游标 WHERE 与下一页 encode
+// 跟同一列对齐——否则跨页漏行/重行。列名写错是编程错误（panic，与 meta 配置错同）。
+func (q *Query[T]) PageKeyset(col string) *Query[T] {
+	for i := range q.meta.cols {
+		if q.meta.cols[i].name == col {
+			q.keyset = &q.meta.cols[i]
+			return q
+		}
+	}
+	panic(fmt.Sprintf("orm: PageKeyset column %q not found on %s", col, q.table))
+}
 
 // Limit caps the row count (<= 0 means no limit).
 //

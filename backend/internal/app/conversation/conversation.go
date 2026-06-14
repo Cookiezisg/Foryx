@@ -15,6 +15,7 @@ import (
 	"context"
 	"maps"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
@@ -53,6 +54,15 @@ type Service struct {
 	// canceler 是可选生成钩子（chatapp，与 relations 同款后注入）：Delete 取消在途生成，使已删
 	// 对话不再烧 token、不再对空推流。nil → 只删除。
 	canceler GenerationCanceler
+
+	// querier is the optional in-flight-generation reader (chatapp, injected post-build): Get/List
+	// derive each row's IsGenerating from it so a freshly-connected client cold-starts its live
+	// activity dots. Symmetric to canceler — same DIP port that breaks the chat↔conversation cycle.
+	// nil → IsGenerating stays false.
+	//
+	// querier 是可选在途生成读取器（chatapp，后注入）：Get/List 据它派生每行 IsGenerating，使刚连上的
+	// 客户端冷启动活动圆点。与 canceler 对称——同款 DIP 端口破 chat↔conversation 环。nil → IsGenerating 恒 false。
+	querier GeneratingQuerier
 }
 
 // GenerationCanceler stops a conversation's in-flight generation (chatapp.Service satisfies it).
@@ -68,6 +78,37 @@ type GenerationCanceler interface {
 // SetGenerationCanceler 构造后注入 chat cancel 钩子（bootstrap 以此破 chat→conversation→chat
 // 环，与 SetRelationSyncer 同款）。
 func (s *Service) SetGenerationCanceler(c GenerationCanceler) { s.canceler = c }
+
+// GeneratingQuerier reports whether a conversation has an in-flight assistant turn (chatapp.Service
+// satisfies it via its per-conversation queue registry).
+//
+// GeneratingQuerier 报告某对话是否有在途 assistant 回合（chatapp.Service 经其 per-conversation 队列
+// 登记满足之）。
+type GeneratingQuerier interface {
+	IsGenerating(conversationID string) bool
+}
+
+// SetGeneratingQuerier injects the chat generation-state reader post-construction (same cycle-break
+// as SetGenerationCanceler).
+//
+// SetGeneratingQuerier 构造后注入 chat 生成态读取器（与 SetGenerationCanceler 同款破环）。
+func (s *Service) SetGeneratingQuerier(q GeneratingQuerier) { s.querier = q }
+
+// markGenerating fills the derived IsGenerating flag on each row from the chat registry (no-op when
+// the querier is unwired). Pure in-memory reads — no DB/IO — so it is cheap even per-row in List.
+//
+// markGenerating 据 chat 登记给每行填派生 IsGenerating 标志（querier 未接时 no-op）。纯内存读、无
+// DB/IO，故即便 List 逐行也廉价。
+func (s *Service) markGenerating(rows ...*conversationdomain.Conversation) {
+	if s.querier == nil {
+		return
+	}
+	for _, c := range rows {
+		if c != nil {
+			c.IsGenerating = s.querier.IsGenerating(c.ID)
+		}
+	}
+}
 
 // New constructs a Service; panics on nil logger. A nil emitter disables notifications (best-effort).
 //
@@ -103,6 +144,10 @@ func (s *Service) CreateWithSystemPrompt(ctx context.Context, title, systemPromp
 		ID:           idgenpkg.New("cv"),
 		Title:        strings.TrimSpace(title),
 		SystemPrompt: systemPrompt,
+		// Seed recency to creation time so a brand-new (message-less) thread sorts by when it was
+		// opened until chat bumps it on the first message (last_message_at is NOT NULL).
+		// 用创建时间种 recency，使全新（无消息）线程在 chat 首条消息刷新前按开启时间排序（NOT NULL）。
+		LastMessageAt: time.Now().UTC(),
 	}
 	if err := s.repo.Insert(ctx, c); err != nil {
 		return nil, err
@@ -115,14 +160,35 @@ func (s *Service) CreateWithSystemPrompt(ctx context.Context, title, systemPromp
 //
 // Get 按 id 取一条对话（orm 层按 workspace 过滤）。
 func (s *Service) Get(ctx context.Context, id string) (*conversationdomain.Conversation, error) {
-	return s.repo.Get(ctx, id)
+	c, err := s.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	s.markGenerating(c)
+	return c, nil
 }
 
-// List returns a page of conversations.
+// List returns a page of conversations, each row's derived IsGenerating filled from the chat
+// registry (recency-sorted by last_message_at in the store).
 //
-// List 返回对话的一页。
+// List 返回对话的一页，每行派生 IsGenerating 据 chat 登记填（store 按 last_message_at 最近活跃排序）。
 func (s *Service) List(ctx context.Context, filter ListFilter) ([]*conversationdomain.Conversation, string, error) {
-	return s.repo.List(ctx, filter)
+	rows, next, err := s.repo.List(ctx, filter)
+	if err != nil {
+		return nil, "", err
+	}
+	s.markGenerating(rows...)
+	return rows, next, nil
+}
+
+// TouchLastMessage records that a message just landed in a conversation — chat calls it on each
+// user turn so the list re-sorts by recent activity. A single cheap UPDATE; best-effort (a failed
+// touch only mis-sorts the list, never blocks the turn).
+//
+// TouchLastMessage 记一条消息刚落入对话——chat 每个用户回合调，使列表按最近活跃重排。一次廉价 UPDATE；
+// best-effort（touch 失败只是列表排序略偏，绝不阻塞回合）。
+func (s *Service) TouchLastMessage(ctx context.Context, id string, t time.Time) error {
+	return s.repo.TouchLastMessage(ctx, id, t)
 }
 
 // Update applies a PATCH (nil = leave; for ModelOverride nil = leave, &nil = clear, &(&ref) = set).

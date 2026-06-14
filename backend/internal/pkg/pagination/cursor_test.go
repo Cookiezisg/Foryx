@@ -7,7 +7,7 @@ import (
 )
 
 func TestEncodeDecodeRoundTrip(t *testing.T) {
-	in := Cursor{CreatedAt: time.Now().UTC().Truncate(time.Second), ID: "wf_abc"}
+	in := Cursor{Key: time.Now().UTC().Truncate(time.Second), ID: "wf_abc"}
 	enc, err := EncodeCursor(in)
 	if err != nil {
 		t.Fatalf("encode: %v", err)
@@ -19,7 +19,7 @@ func TestEncodeDecodeRoundTrip(t *testing.T) {
 	if err := DecodeCursor(enc, &out); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	if !out.CreatedAt.Equal(in.CreatedAt) || out.ID != in.ID {
+	if !out.Key.Equal(in.Key) || out.ID != in.ID {
 		t.Fatalf("round trip = %+v, want %+v", out, in)
 	}
 }

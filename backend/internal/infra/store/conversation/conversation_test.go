@@ -47,7 +47,10 @@ func seed(t *testing.T, s *Store, ctx context.Context, id, title string, pinned,
 	if err := s.Insert(ctx, c); err != nil {
 		t.Fatalf("insert %s: %v", id, err)
 	}
-	if _, err := s.db.Exec(ctx, "UPDATE conversations SET created_at = ? WHERE id = ?", at.UTC(), id); err != nil {
+	// Set both created_at and last_message_at to `at`: last_message_at is the List sort/cursor key,
+	// created_at backs other assertions. (Seeding bypasses the app layer, so set them explicitly.)
+	// created_at 与 last_message_at 都设为 at：last_message_at 是 List 排序/游标键，created_at 撑其他断言。
+	if _, err := s.db.Exec(ctx, "UPDATE conversations SET created_at = ?, last_message_at = ? WHERE id = ?", at.UTC(), at.UTC(), id); err != nil {
 		t.Fatalf("seed time %s: %v", id, err)
 	}
 }
@@ -208,6 +211,38 @@ func TestList_CursorPaging(t *testing.T) {
 	}
 	if next2 != "" {
 		t.Errorf("unexpected next2: %q", next2)
+	}
+}
+
+// TestList_RecencySortByLastMessage decorrelates id-order from activity-order to prove the list
+// keys on last_message_at, not id or created_at: ids descend (cv_z > cv_m > cv_a) OPPOSITE to
+// recency (cv_a most recent). A regression that sorted by id/created_at would flip the result and
+// the keyset cursor would skip/duplicate. Also exercises the cursor across the boundary.
+//
+// TestList_RecencySortByLastMessage 把 id 序与活跃序解耦，证明列表按 last_message_at 而非 id/created_at：
+// id 降序(cv_z>cv_m>cv_a)与活跃度(cv_a 最近)相反。若回归成按 id/created_at 排，结果会翻转、游标会漏/重。
+func TestList_RecencySortByLastMessage(t *testing.T) {
+	s := newStore(t)
+	ctx := ctxWS("ws_1")
+	// id order (z>m>a) is the REVERSE of recency (cv_a newest t3, cv_m t2, cv_z oldest t1).
+	seed(t, s, ctx, "cv_z", "z", false, false, t1)
+	seed(t, s, ctx, "cv_m", "m", false, false, t2)
+	seed(t, s, ctx, "cv_a", "a", false, false, t3)
+	rows, _, err := s.List(ctx, conversationdomain.ListFilter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if got := ids(rows); !equal(got, []string{"cv_a", "cv_m", "cv_z"}) {
+		t.Fatalf("recency order = %v, want [cv_a cv_m cv_z] (most-recent last_message_at first)", got)
+	}
+	// Keyset cursor must walk last_message_at, not id: page 1 = [cv_a], page 2 = [cv_m].
+	p1, next, err := s.List(ctx, conversationdomain.ListFilter{Limit: 1})
+	if err != nil || len(p1) != 1 || p1[0].ID != "cv_a" || next == "" {
+		t.Fatalf("page1 = %v next=%q err=%v, want [cv_a] with cursor", ids(p1), next, err)
+	}
+	p2, _, err := s.List(ctx, conversationdomain.ListFilter{Limit: 1, Cursor: next})
+	if err != nil || len(p2) != 1 || p2[0].ID != "cv_m" {
+		t.Fatalf("page2 = %v err=%v, want [cv_m] (cursor walks last_message_at, not id)", ids(p2), err)
 	}
 }
 

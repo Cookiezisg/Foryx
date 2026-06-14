@@ -44,7 +44,24 @@ type Conversation struct {
 	ModelOverride        *modeldomain.ModelRef             `db:"model_override,json"      json:"modelOverride,omitempty"`
 	CreatedAt            time.Time                         `db:"created_at,created"       json:"createdAt"`
 	UpdatedAt            time.Time                         `db:"updated_at,updated"       json:"updatedAt"`
-	DeletedAt            *time.Time                        `db:"deleted_at,deleted"       json:"-"`
+	// LastMessageAt is the recency-sort key: the time of the most recent message added to the
+	// thread (set at creation, bumped by chat on each user turn). It is a plain column — NOT the
+	// ,updated tag — so pin/rename/model-override (which bump updated_at) never reorder the list.
+	//
+	// LastMessageAt 是最近活跃排序键：线程最后一条消息加入的时间（创建时设、chat 每个用户回合刷）。
+	// 它是普通列、非 ,updated tag——故 pin/改名/换模型（刷 updated_at）不会重排列表。
+	LastMessageAt time.Time  `db:"last_message_at" json:"lastMessageAt"`
+	DeletedAt     *time.Time `db:"deleted_at,deleted" json:"-"`
+
+	// IsGenerating is a derived runtime flag (NOT persisted, db:"-"): true when chat has an
+	// in-flight assistant turn for this conversation. Filled per-row in the app layer from the
+	// chat registry (GeneratingQuerier) so a freshly-connected client can cold-start its live
+	// activity dots; read-only on the wire, never accepted in PATCH.
+	//
+	// IsGenerating 是派生运行时标志（不落库，db:"-"）：chat 有该对话在途 assistant 回合时为 true。
+	// 由 app 层据 chat 登记（GeneratingQuerier）逐行填，使刚连上的客户端能冷启动活动圆点；线缆只读、
+	// 不进 PATCH。
+	IsGenerating bool `db:"-" json:"isGenerating"`
 }
 
 // ListFilter narrows the conversation list. Archived: nil = exclude archived (default),
@@ -96,5 +113,11 @@ type Repository interface {
 	GetBatch(ctx context.Context, ids []string) ([]*Conversation, error)
 	List(ctx context.Context, filter ListFilter) (items []*Conversation, next string, err error)
 	Update(ctx context.Context, c *Conversation) error
+	// TouchLastMessage sets last_message_at on one conversation (chat calls it when a message is
+	// added) — a single cheap UPDATE; the ORM ,updated tag also bumps updated_at, as expected.
+	//
+	// TouchLastMessage 把某对话的 last_message_at 设为 t（chat 在消息加入时调）——一次廉价 UPDATE；
+	// ORM ,updated tag 顺带刷 updated_at，符合预期。
+	TouchLastMessage(ctx context.Context, id string, t time.Time) error
 	SoftDelete(ctx context.Context, id string) error
 }

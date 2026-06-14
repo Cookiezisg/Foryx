@@ -31,7 +31,7 @@ audience: [human, ai]
 | **软删** | 有 `deleted` 列且非 `Unscoped` → `Delete` 设 `deleted_at`、查询自动 `deleted_at IS NULL`；否则物理删 | D1；逃生 `Unscoped()` |
 | **时间戳** | `stamp`：`created`（首次/零值）+ `updated`（每次）自动设 | — |
 | **UNIQUE 冲突 → `ErrConflict`** | `writeErr` 翻译 SQLite 约束错 | 业务层不手搓（强化地基，CLAUDE 原则 #8） |
-| **keyset 分页** | `Page(cursor, limit)`：`(created, pk)` DESC 元组游标、`limit+1` 探下页 | N4；`Page` 给**默认** `(created, pk)` DESC 序、**可被先前 `.Order()` 覆盖**（如 conversation 置顶优先） |
+| **keyset 分页** | `Page(cursor, limit)`：`(keyset, pk)` DESC 元组游标、`limit+1` 探下页；keyset 列默认 `created`、`PageKeyset(col)` 可改（如 conversation 的 `last_message_at`） | N4；`Page` 给**默认** `(created, pk)` DESC 序、**可被先前 `.Order()` 覆盖**（如 conversation 置顶优先）；`PageKeyset` 让游标列与 `.Order()` 排序列对齐 |
 
 ## 4. API 面
 
@@ -47,7 +47,7 @@ audience: [human, ai]
 - **ctx 驱动隔离** = 多租户**安全网**：取代每处手写 `WHERE workspace_id`，杜绝跨 workspace 误读/误写。
 - **扁平事务**（无 savepoint）= 组合多个事务型 store 方法安全。
 - **边界（可接受取舍）**：`Where`/`Order`/`Pluck`/`WhereEq` 的列名是**裸字符串**、不对 meta 校验——拼错是运行时错而非编译期。精简换灵活的取舍（要编译期列名安全得上重得多的 API，单用户本地不值）。
-- `Page` 给**默认** `(created, pk)` DESC 序，但**可被先前 `.Order()` 覆盖**（conversation 置顶优先列表 `pinned DESC, created_at DESC` 即如此）——此时游标仍按 created 键，置顶少、都在首页，够用。这是有意保留的灵活，注释已写明「别强制默认序」。
+- `Page` 给**默认** `(created, pk)` DESC 序，但**可被先前 `.Order()` 覆盖**（conversation 置顶优先列表 `pinned DESC, last_message_at DESC` 即如此）。游标默认键 `created`；当排序列不是 created 时用 **`PageKeyset(col)`** 把游标列对齐到该列（conversation 用 `last_message_at`），否则游标 WHERE 与 ORDER BY 不一致会跨页漏/重行。前导 `pinned DESC` 分区靠「置顶少、都在首页」成立（单用户）——是这个假设、而非默认序，让置顶优先安全。
 
 ## 6. 集成
 

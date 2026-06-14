@@ -33,12 +33,19 @@ import (
 // fakeClient 每次 Stream 调用回放一份脚本（每 ReAct 步一份）。可选 gate 阻塞每次 Stream 直到释放
 // ——用于把一个回合钉在飞行中以触发 STREAM_IN_PROGRESS。
 type fakeClient struct {
-	script []llminfra.StreamEvent
-	gate   chan struct{}
+	script  []llminfra.StreamEvent
+	gate    chan struct{}
+	entered chan struct{} // optional: signaled (non-blocking) when Stream is entered, before the gate
 }
 
 func (c *fakeClient) Stream(_ context.Context, _ llminfra.Request) iter.Seq[llminfra.StreamEvent] {
 	return func(yield func(llminfra.StreamEvent) bool) {
+		if c.entered != nil {
+			select {
+			case c.entered <- struct{}{}:
+			default:
+			}
+		}
 		if c.gate != nil {
 			<-c.gate
 		}
@@ -278,6 +285,32 @@ func TestSend_StreamInProgress(t *testing.T) {
 	if !gotInProgress {
 		t.Fatal("expected STREAM_IN_PROGRESS once a turn is in flight + buffer full")
 	}
+}
+
+// TestIsGenerating: the read accessor reports false for unknown/idle conversations and true while a
+// turn is in flight. Deterministic via the entered signal — runQueue sets running=true before the
+// loop reaches Stream, so by the time Stream signals `entered` the flag is observable.
+func TestIsGenerating(t *testing.T) {
+	gate := make(chan struct{})
+	entered := make(chan struct{}, 1)
+	svc, _ := newSvc(t, &fakeClient{script: textTurn(), gate: gate, entered: entered}, newRecordBridge())
+	ctx := ctxWS("ws_1")
+
+	if svc.IsGenerating("cv_unknown") {
+		t.Error("unknown conversation must report not-generating")
+	}
+	if _, err := svc.Send(ctx, "cv_1", SendInput{Content: "hi"}); err != nil {
+		t.Fatalf("send: %v", err)
+	}
+	<-entered // the turn is now inside Stream → running was set true by runQueue beforehand
+	if !svc.IsGenerating("cv_1") {
+		close(gate)
+		t.Fatal("cv_1 must report generating while its turn is in flight")
+	}
+	if svc.IsGenerating("cv_2") {
+		t.Error("a different conversation must report not-generating")
+	}
+	close(gate) // release the turn to drain
 }
 
 func TestBuildSystemPrompt_Sections(t *testing.T) {
@@ -551,3 +584,5 @@ func TestSystemPromptPreview(t *testing.T) {
 }
 
 func (f fakeConvs) Unarchive(context.Context, string) error { return nil }
+
+func (f fakeConvs) TouchLastMessage(context.Context, string, time.Time) error { return nil }
