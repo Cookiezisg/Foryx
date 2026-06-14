@@ -34,13 +34,13 @@ code, .mono { font-family: var(--mono); }
 .win { height: 100%; display: flex; flex-direction: column; background: var(--cc-win);
   border-radius: 14px; box-shadow: 0 16px 50px rgba(0,0,0,.20); overflow: hidden; }
 .body { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 8px; }
-.main { flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
-.main-head { display: flex; align-items: center; gap: 8px; height: 44px; flex: none; padding: 0 12px 0 16px; }
-.crumb { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; }
-.crumb .ico { color: var(--ink-3); display: grid; place-items: center; }
-.crumb .sep { color: var(--ink-3); font-weight: 400; }
-.crumb .muted { color: var(--ink-2); font-weight: 400; }
-.sea { flex: 1; min-height: 0; display: flex; flex-direction: column; }   /* ← 海洋渲染进这里 */
+.main { position: relative; flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+/* 主区头 = 不占流的「顶部浮层」：只让角落控件占位，正文 .sea 铺满全高（内容滚到顶、不被一条横带切掉）。
+   透明 + pointer-events:none，仅 head-lead / head-extra / 主题钮可点；中间空档让滚动/点击穿透到正文。 */
+.main-head { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 10px 0 14px; pointer-events: none; }
+.main-head #head-lead, .main-head #head-extra, .main-head #i_theme { pointer-events: auto; }
+.sea { flex: 1; min-height: 0; display: flex; flex-direction: column; }   /* ← 海洋渲染进这里（现铺满 .main 全高） */
 
 /* 侧栏宽度/收起：内核管 .body 行内回流（侧栏宽度全仓库唯一定义处 --side-w；状态由 sidebar 写 html[data-side]）。
    只碰布局量、绝不碰 .side 皮肤(border/radius/shadow 归 sidebar)；属性选择器(0,1,1)稳压 .side(0,1,0)，不用 !important。 */
