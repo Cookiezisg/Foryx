@@ -124,12 +124,16 @@
     const stVals = Object.values(run.state), hasParked = stVals.includes('parked');
     const badge = (run.runState === 'running' && hasParked) ? 'waiting' : run.runState;
     const metric = (k, v) => `<span class="sch-m"><span class="sch-m-k">${k}</span><span class="sch-m-v">${v}</span></span>`;
-    const metrics = [
-      `<span class="sch-m"><span class="sch-m-k">进度</span><span class="sch-m-v"><b>${run.pos}</b> 节点</span></span>`,
+    // 工作流级排程（跟工作流、不跟单次运行）：触发方式 + 下次
+    const sched = [
       `<span class="sch-m"><span class="sch-m-k">${icon(run.trigger ? 'trigger' : 'play', 12)} 触发</span><span class="sch-m-v">${wf.triggerLabel || '手动'}</span></span>`,
-      metric('版本', run.version),
+      wf.next ? metric('下次运行', wf.next) : '',
+    ].filter(Boolean).join('');
+    // 运行级指标（跟选中那次运行）：进度 + 用时 + 版本 + 重试
+    const runMetrics = [
+      `<span class="sch-m"><span class="sch-m-k">进度</span><span class="sch-m-v"><b>${run.pos}</b> 节点</span></span>`,
       metric('用时', run.dur || '—'),
-      wf.next ? metric('下次', wf.next) : '',
+      metric('版本', run.version),
       run.replay ? metric('重试', `第 ${run.replay} 次`) : '',
     ].filter(Boolean).join('');
 
@@ -152,17 +156,25 @@
 
     stage.innerHTML = `
       <div class="sch-col">
-        <div class="sch-hd">
-          <div class="sch-hd-top">${RunChip.headBadge(badge)}<h1 class="sch-title">${name}</h1><span class="grow"></span><span class="sch-when">${run.when}</span></div>
-          <div class="sch-metrics">${metrics}</div>
+        <div class="sch-wfhd">
+          <span class="sch-wf-ico">${icon('scheduler', 18)}</span>
+          <h1 class="sch-title">${name}</h1>
+          <span class="grow"></span>
+          <span class="sch-wf-sched">${sched}</span>
         </div>
-        ${stuck}
-        <div class="sch-graph" id="schGraph"></div>
-        <div class="sch-na-wrap">
-          <div class="sch-sec-h">节点活动</div>
-          <div class="sch-na-list" id="schNodes">${rows}</div>
+        <div class="sch-hist">
+          <div class="sch-sec-h">运行历史</div>
+          <div class="sch-rail" id="schRail"></div>
         </div>
-        <div class="sch-rail" id="schRail"></div>
+        <div class="sch-run">
+          <div class="sch-run-hd">${RunChip.headBadge(badge)}<span class="sch-run-when">${run.when}</span><span class="grow"></span><span class="sch-run-metrics">${runMetrics}</span></div>
+          ${stuck}
+          <div class="sch-graph" id="schGraph"></div>
+          <div class="sch-na-wrap">
+            <div class="sch-sec-h">节点活动</div>
+            <div class="sch-na-list" id="schNodes">${rows}</div>
+          </div>
+        </div>
       </div>`;
 
     RunGraph.render(stage.querySelector('#schGraph'), Object.assign({ onNode: id => openNode(wf, run, id) }, run));

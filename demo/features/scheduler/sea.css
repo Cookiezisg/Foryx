@@ -6,12 +6,27 @@
 .sch-col { max-width: 880px; margin: 0 auto; padding: 44px 28px 48px; }
 .sch-empty { padding-top: 90px; text-align: center; color: var(--ink-3); font-size: var(--t-md); }
 
-/* 抬头：状态徽 + 工作流名 + 相对时间 + 指标条（无任何 ID） */
-.sch-hd { margin-bottom: 18px; }
-.sch-hd-top { display: flex; align-items: center; gap: 10px; }
+/* 工作流抬头：图标 + 名 + 右侧排程（触发/下次——工作流级，跟工作流不跟单次运行；无任何 ID） */
+.sch-wfhd { display: flex; align-items: center; gap: 11px; margin-bottom: 24px; }
+.sch-wf-ico { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: var(--r-btn); background: var(--cc-active); color: var(--ink-2); }
+.sch-wf-ico svg { display: block; }
 .sch-title { font-size: 18px; font-weight: 600; color: var(--ink); margin: 0; letter-spacing: -.01em; }
-.sch-when { font-size: var(--t-sm); color: var(--ink-3); }
-.sch-metrics { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-top: 14px; }
+.sch-wf-sched { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 18px; }
+.sch-wf-sched .sch-m { flex-direction: row; align-items: center; gap: 5px; }
+.sch-wf-sched .sch-m-v { font-size: var(--t-sm); color: var(--ink-2); }
+
+/* 运行历史：置顶的执行主轴（最重要——工作流的健康时间线 + 选哪次运行的导航入口） */
+.sch-hist { margin-bottom: 28px; }
+.sch-hist .sch-sec-h { margin: 0 0 10px; }
+.sch-hist .fg-runrail { margin-top: 0; padding-top: 0; }
+.sch-hist .fg-runrail-label { display: none; }   /* 本节已有「运行历史」标题，隐组件自带 label 免重复 */
+
+/* 选中那次运行的详情头：状态徽 + 相对时间 + 运行级指标（进度/用时/版本/重试） */
+.sch-run-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+.sch-run-when { font-size: var(--t-sm); color: var(--ink-3); }
+.sch-run-metrics { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; }
+
+/* 指标小块（k 小灰 over v） */
 .sch-m { display: inline-flex; flex-direction: column; gap: 2px; }
 .sch-m-k { display: inline-flex; align-items: center; gap: 4px; font-size: var(--t-xs); color: var(--ink-3); }
 .sch-m-k svg { display: block; }
@@ -34,8 +49,6 @@
 .sch-na-iter { flex: none; font-size: var(--t-xs); font-weight: 600; color: var(--accent); }
 .sch-na-out { flex: 1; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-sm); color: var(--ink-3); }
 .sch-na.failed .sch-na-out { color: var(--danger); }
-
-.sch-rail { margin-top: 22px; }
 
 /* ===== 右岛：运行概览 ===== */
 .sch-ov-back { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: var(--r-btn); color: var(--ink-2); transition: background var(--d-fast), color var(--d-fast); }
