@@ -37,14 +37,14 @@
 
 /* 文档树（Notion 度量：行首 20 格 + 图标 16 + 间距 8 + 每级缩进 18） */
 .doc-rail-node.branch:not(.open) > .doc-rail-children { display: none; }
-.doc-rail-row { position: relative; display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 8px; border-radius: var(--r-btn);
+.doc-rail-row { position: relative; display: flex; align-items: center; gap: 5px; height: 32px; padding: 0 8px; border-radius: var(--r-btn);
   color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background var(--d-fast); }   /* color 不入过渡：无头渲染器冻初值致灰默认失效 */
 .doc-rail-row:hover { background: var(--cc-hover); color: var(--ink); }
 .doc-rail-row.on { background: var(--cc-active); color: var(--ink); }
 .doc-rail-flat { padding-left: 8px; }   /* Recent 行无深度，与树 depth-0 对齐 */
 
 /* 行首槽：图标 + 折叠箭头共用一格（20×20）。默认显图标；branch hover → 图标淡出、箭头淡入（同 Notion，不另占 chevron 列） */
-.doc-rail-lead { flex: none; position: relative; width: 18px; height: 18px; }   /* 贴合 16 图标、削去 dead space，icon↔文字 ~7px 不发飘 */
+.doc-rail-lead { flex: none; position: relative; width: 16px; height: 16px; }   /* 格=图标尺寸、零 dead space，icon↔文字 ~5px 贴实 */
 .doc-rail-lead > * { position: absolute; inset: 0; display: grid; place-items: center; }
 .doc-rail-ico { color: var(--ink-3); }   /* opacity 即时切换、不入过渡：无头渲染器会把 opacity 过渡冻在起点(1) 致默认态错乱 */
 .doc-rail-ico svg { display: block; }

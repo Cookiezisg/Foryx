@@ -30,7 +30,7 @@
 .ent-tree { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
 
 /* 折叠通用（分组 / 类型两层共用 .ent-tog + .ent-cbody + .ent-chev） */
-.ent-tog { display: flex; align-items: center; gap: 6px; width: 100%; border-radius: var(--r-btn); transition: background var(--d-fast); }
+.ent-tog { display: flex; align-items: center; gap: 5px; width: 100%; border-radius: var(--r-btn); transition: background var(--d-fast); }
 .ent-tog:hover { background: var(--cc-hover); }
 .ent-chev { flex: none; display: inline-grid; place-items: center; color: var(--ink-3); transition: transform .2s var(--ease-spring); }
 .ent-chev svg { display: block; }
@@ -50,7 +50,7 @@
 /* 类型头（可展开）：行首 icon↔chevron 共享一格（Notion 式，默认显类型图标、hover 现折叠箭头），名 + 计数在尾 */
 .ent-ty-h { height: 32px; padding: 0 10px; font-size: var(--t-md); font-weight: 500; color: var(--ink-2); }
 .ent-ty-h:hover { color: var(--ink); }   /* 侧栏字色铁律：灰默认、hover 才黑；色不入过渡——按钮 color 过渡在无头渲染器冻初值 */
-.ent-ty-lead { flex: none; position: relative; width: 18px; height: 18px; }   /* 贴合 16 图标、削去 dead space，icon↔文字 ~7px 不发飘 */
+.ent-ty-lead { flex: none; position: relative; width: 16px; height: 16px; }   /* 格=图标尺寸、零 dead space，icon↔文字 ~5px 贴实 */
 .ent-ty-lead > * { position: absolute; inset: 0; display: grid; place-items: center; }
 .ent-ty-ico { color: var(--ink-2); }
 .ent-ty-lead .ent-chev { opacity: 0; }   /* 类型头箭头默认藏、hover 现（与图标同格切换）；分组头箭头不在 lead 内、常驻可见 */
