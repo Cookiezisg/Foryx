@@ -65,6 +65,12 @@ window.ICONS = {
   // —— Entities 海洋:连接器 / 技能 ——
   mcp:'<rect x="6" y="7" width="12" height="8" rx="2.5"/><path d="M10 7V3.5M14 7V3.5"/><path d="M12 15v2.5a3 3 0 0 0 3 3h2.5"/>',  // 插头 = MCP 外部连接器
   skill:'<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 4v16"/><path d="M12.5 9.5h3.5M12.5 13.5h3.5"/>',  // 手册/playbook = 技能(文件式指令)
+  // —— Chat 海洋 v2:trigger 四源 + 时钟（审批倒计时）——
+  clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7.5V12l3 1.8"/>',                                  // 时钟 = 超时/倒计时
+  webhook:'<circle cx="12" cy="8" r="3"/><path d="M9.5 9.8 6 16M14.5 9.8 18 16"/><circle cx="6" cy="17" r="2.5"/><circle cx="18" cy="17" r="2.5"/>',  // webhook 源
+  cron:'<circle cx="12" cy="13" r="7.5"/><path d="M12 9.5V13l2.5 1.5M9 3h6M12 3v2.5"/>',                 // 定时闹钟 = cron 源
+  sensor:'<path d="M12 13v.01"/><path d="M8.5 9.5a5 5 0 0 1 7 0M5.5 6.5a9 9 0 0 1 13 0"/><path d="M10 16.5h4"/>',  // 探测波 = sensor 源
+  fsnotify:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M12 11v4M10 13h4"/>',  // 文件夹+变化 = 文件监听源
 };
 window.icon = (k, n = 16, w = 1.7) =>
   `<svg width="${n}" height="${n}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${w}" stroke-linecap="round" stroke-linejoin="round">${ICONS[k] || ''}</svg>`;

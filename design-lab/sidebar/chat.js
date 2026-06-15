@@ -12,12 +12,13 @@
   }
 
   // 示意数据。接后端：列表/置顶/归档/标题滤/排序(List sort) 已有；状态点=B3 isGenerating + humanloop；分组+时间戳=B4 last_message_at。
-  const PINNED = [{ t: '竞品动态日报流程' }, { t: 'Researcher agent 调优', on: true }];
+  // 每个会话绑一个 chat 场景 id（→ window.ChatOcean.open）。id 缺省的行只选中、不切场景（安全 no-op）。
+  const PINNED = [{ t: '竞品动态日报流程', id: 'wf-weekly-report', on: true }, { t: 'Researcher agent 调优', id: 'agent-researcher-tune' }];
   const GROUPS = [
-    ['Today', [{ t: '修复 CEL 校验器', st: 'run', time: '14:32' }, { t: 'Webhook 入库 handler', st: 'wait', time: '11:08' }]],
-    ['Yesterday', [{ t: '周报自动汇总 workflow', st: 'err', time: 'Tue' }, { t: '文档问答 agent', st: 'done', time: 'Tue' }]],
-    ['Previous 7 days', [{ t: '账单对账流程', time: 'Jun 9' }, { t: 'Slack 通知 trigger', time: 'Jun 8' }, { t: 'PDF 提取 function', time: 'Jun 7' }]],
-    ['Older', [{ t: 'Notion 同步实验', time: 'May 28' }, { t: '旧版迁移笔记', time: 'May 20' }]],
+    ['Today', [{ t: '修复 CEL 校验器', st: 'run', time: '14:32', id: 'control-cel-fix' }, { t: 'Webhook 入库 handler', st: 'wait', time: '11:08', id: 'webhook-handler' }]],
+    ['Yesterday', [{ t: '周报自动汇总 workflow', st: 'done', time: 'Tue', id: 'wf-weekly-report' }, { t: '文档问答 agent', st: 'done', time: 'Tue', id: 'document-qa-agent' }]],
+    ['Previous 7 days', [{ t: '发布前过目 approval', time: 'Jun 9', id: 'approval-publish-gate' }, { t: 'Slack 通知 trigger', time: 'Jun 8', id: 'trigger-slack-webhook' }, { t: 'PDF 提取 function', time: 'Jun 7', id: 'fn-pdf-extract' }]],
+    ['Older', [{ t: 'Notion 同步实验', time: 'May 28', id: 'mcp-notion-sync' }, { t: '账单对账流程', time: 'Jun 9', id: 'wf-weekly-report' }, { t: '旧版迁移笔记', time: 'May 20' }]],
   ];
   const ARCHIVED = [{ t: '临时调试 agent' }, { t: '废弃的爬虫流程' }, { t: '一次性数据清洗' }];
 
@@ -25,7 +26,7 @@
   let sort = 'recent', group = true, showTime = false;
 
   // 行：状态点在首(空心=闲置 / 蓝脉冲=生成中 / 橙脉冲=提问 / 红=失败 / 绿=待查看) + 标题 + 时间戳(可选) + 悬浮 ⋯
-  const row = c => `<div class="cv${c.on ? ' on' : ''}"><span class="cv-st ${c.st || 'idle'}"></span><span class="cv-t">${c.t}</span><span class="cv-time">${c.time || ''}</span><span class="cv-more">${icon('more', 16)}</span></div>`;
+  const row = c => `<div class="cv${c.on ? ' on' : ''}" data-cid="${c.id || ''}"><span class="cv-st ${c.st || 'idle'}"></span><span class="cv-t">${c.t}</span><span class="cv-time">${c.time || ''}</span><span class="cv-more">${icon('more', 16)}</span></div>`;
   const opt = (k, v, on, label) => `<button class="cm-opt${on ? ' on' : ''}" data-${k}="${v}"><span class="cm-ck">${icon('check', 14)}</span>${label}</button>`;
   const sec = (cls, head, rows) => `<div class="cvsec ${cls}">${head}<div class="cvsec-body">${rows}</div></div>`;
 
@@ -64,6 +65,8 @@
     host.querySelectorAll('.cv').forEach(it => it.onclick = e => {
       if (e.target.closest('.cv-more')) return;
       host.querySelectorAll('.cv').forEach(x => x.classList.remove('on')); it.classList.add('on');
+      const cid = it.dataset.cid;   // 绑定的 chat 场景；标题用行标签覆盖（多会话复用同场景各显其名）。ChatOcean 未就绪则只选中（安全）
+      if (cid && window.ChatOcean) window.ChatOcean.open(cid, it.querySelector('.cv-t').textContent);
     });
     // 展示菜单（filter 行 sliders，作用于全部）：排序单选(示意) + 分组/时间戳开关(实时改 .cvlist 类)
     const btn = host.querySelector('.cm-btn'), menu = host.querySelector('.cm-menu'), list = host.querySelector('.cvlist');

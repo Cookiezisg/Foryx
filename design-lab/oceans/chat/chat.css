@@ -302,3 +302,100 @@
 .lifecycle.active .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease infinite; }
 .lifecycle.inactive { color: var(--ink-3); background: var(--cc-active); }
 .lifecycle.draining { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+
+/* ===== v2 ：状态徽章新轴（复用 ready/syncing/pending/failed 像素，只重着色/脉冲） ===== */
+.statebadge.valid { color: var(--ok); } .statebadge.valid .dot { background: var(--ok); }
+.statebadge.invalid { color: var(--danger); } .statebadge.invalid .dot { background: var(--danger); }
+.statebadge.crashed { color: var(--danger); } .statebadge.crashed .dot { background: var(--danger); }
+.statebadge.compiling { color: var(--ink-2); } .statebadge.compiling .dot { background: var(--accent); animation: pulse 1.4s ease infinite; }
+.statebadge.connecting { color: var(--ink-2); } .statebadge.connecting .dot { background: var(--accent); animation: pulse 1.4s ease infinite; }
+.statebadge.degraded { color: var(--warn); } .statebadge.degraded .dot { background: var(--warn); }
+.ec-kv .v.flash { animation: flash 1.4s ease; }
+
+/* ===== v2 实体卡适配件：源徽章 / 路径 / mcp 源 / 掩码设置链 / 指针 / mount 健康点 ===== */
+.src-badge { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; color: var(--ink-2); padding: 2px 9px 2px 7px; border-radius: 999px; background: var(--cc-active); }
+.src-badge .ico { display: grid; place-items: center; color: var(--ink-3); }
+.ec-source { font-family: var(--mono); font-size: 11px; background: var(--cc-active); color: var(--ink-2); padding: 0 6px; border-radius: 5px; }
+.ec-path { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.ec-kv .set-link { color: var(--ink-2); font-weight: 500; cursor: pointer; }
+.ec-kv .set-link:hover { color: var(--ink); }
+.ec-pointer { display: flex; align-items: baseline; gap: 8px; padding: 3px 0; font-size: 12px; color: var(--ink-3); }
+.ec-row .mh-dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.mh-dot.ok { background: var(--ok); } .mh-dot.bad { background: var(--danger); }
+.mh-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; padding: 1px 8px; border-radius: 6px; }
+.mh-chip.ok { color: var(--ok); background: var(--ok-soft); } .mh-chip.warn { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.cel-tok { color: var(--accent); font-family: var(--mono); }
+.wikilink-pill { display: inline-flex; align-items: center; padding: 0 6px; border-radius: 5px; background: var(--accent-soft); color: var(--accent); font-size: .92em; }
+.ec-size.warn { color: var(--warn); }
+
+/* control 分支组（first-true-wins 有序；坏分支 danger 描边；末条 catchall 绿点） */
+.branch-row { display: flex; align-items: flex-start; gap: 9px; padding: 7px 9px; border-radius: 8px; border: 1px solid transparent; }
+.branch-row.new { animation: popin .3s var(--ease-spring); }
+.branch-row.bad { border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); background: color-mix(in srgb, var(--danger) 6%, transparent); }
+.branch-row .bnum { flex: none; width: 17px; height: 17px; border-radius: 5px; display: grid; place-items: center; background: var(--cc-active); color: var(--ink-3); font-size: 11px; font-family: var(--mono); margin-top: 1px; }
+.branch-row.catchall .bnum { background: var(--ok-soft); color: var(--ok); }
+.branch-row .bbody { flex: 1; min-width: 0; }
+.branch-row .bwhen { font-family: var(--mono); font-size: 12px; color: var(--ink); white-space: pre-wrap; }
+.branch-row.bad .bwhen { color: var(--danger); }
+.branch-row .bemit { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+.branch-row .bport { flex: none; font-size: 11px; font-family: var(--mono); color: var(--ink-2); background: var(--cc-active); padding: 1px 7px; border-radius: 5px; }
+
+/* 图节点 FromPort 注解（control/approval 出口 + flowrun control 节点 resolved-port） */
+.nport { font-size: 10px; font-family: var(--mono); color: var(--ink-2); background: var(--cc-active); padding: 0 5px; border-radius: 4px; }
+
+/* ===== v2 中间卡：flowrun 失败/resolved-port · fire-strip · conn-strip · ledger · inbox · doc-tree ===== */
+.fr-node.failed .nico, .fr-node.failed .nstatus { color: var(--danger); }
+.fr-node .nport { margin-left: 7px; }
+
+/* fire-strip = flowrun 变体（trigger :fire；ephemeral，无记忆化/replay 语义） */
+.fire-strip { margin: 13px 0; border: 1px solid var(--line); border-radius: 14px; background: var(--cc-side); box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04); padding: 9px 6px 8px; }
+.seg-label { padding: 6px 8px 4px; font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.firing-row { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 3px 8px; border-radius: 8px; }
+.firing-row .nid { font-family: var(--mono); font-size: 12.5px; color: var(--ink); flex: 1; }
+.firing-row .nstatus { font-size: 12px; color: var(--ink-3); display: inline-flex; align-items: center; gap: 6px; }
+.firing-row.ok .nstatus { color: var(--ok); } .firing-row.started .nstatus { color: var(--accent); }
+.firing-row.skipped .nstatus, .firing-row.superseded .nstatus, .firing-row.shed .nstatus { color: var(--warn); }
+
+/* conn-strip = mcp 连接态机（借 flowrun 皮肤；非耐久） */
+.conn-strip { margin: 13px 0; border: 1px solid var(--line); border-radius: 14px; background: var(--cc-side); box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04); padding: 9px 6px 8px; }
+.conn-row { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 3px 10px; border-radius: 8px; font-size: 13px; color: var(--ink-2); }
+.conn-row .ci { display: grid; place-items: center; flex: none; }
+.conn-row.ok { color: var(--ok); } .conn-row.connecting { color: var(--ink-2); } .conn-row.connecting .shimmer { font-style: normal; }
+.conn-row.degraded { color: var(--warn); }
+.conn-reconnect { margin-left: auto; font-size: 12px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--line); border-radius: 7px; padding: 3px 11px; transition: background .15s, color .15s; }
+.conn-reconnect:hover { color: var(--accent); background: var(--accent-soft); }
+
+/* ledger = 共享执行/调用台账（function executions / mcp calls / handler·agent calls） */
+.ledger { margin: 12px 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.ledger-head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; font-size: 12px; color: var(--ink-3); }
+.ledger-head .agg { margin-left: auto; font-family: var(--mono); font-size: 11px; }
+.cl-row { display: flex; align-items: center; gap: 10px; min-height: 32px; padding: 4px 12px; font-size: 12.5px; color: var(--ink-2); cursor: pointer; border-top: 1px solid var(--line); transition: background .12s; }
+.cl-row:hover { background: var(--cc-hover); }
+.cl-row .cl-st { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.cl-row.ok .cl-st { background: var(--ok); } .cl-row.failed .cl-st { background: var(--danger); }
+.cl-row .cl-name { flex: 1; font-family: var(--mono); color: var(--ink); }
+.cl-row .cl-meta { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+.cl-row .chev { margin-left: 4px; }
+.cl-row.open .chev { transform: rotate(90deg); }
+.cl-logs { display: none; padding: 0 12px 9px 30px; font-family: var(--mono); font-size: 11.5px; line-height: 1.8; color: var(--ink-3); white-space: pre-wrap; border-top: 1px solid var(--line); }
+.cl-row.open + .cl-logs { display: block; padding-top: 8px; }
+
+/* inbox-card = approval 决策面（借审批卡骨架；shield+clock，yes/no+reason，无「始终批准」——区别 chat 危险闸） */
+.inbox-card { margin: 14px 0; border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); border-radius: 14px; background: var(--cc-side); box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04); overflow: hidden; }
+.inbox-card .ib-head { display: flex; align-items: center; gap: 10px; padding: 12px 13px 8px; }
+.inbox-card .ib-shield { width: 28px; height: 28px; border-radius: 8px; flex: none; display: grid; place-items: center; background: color-mix(in srgb, var(--warn) 12%, transparent); color: var(--warn); }
+.inbox-card .ib-tt { flex: 1; min-width: 0; }
+.inbox-card .ib-tt b { display: block; font-size: 14px; font-weight: 600; }
+.inbox-card .ib-tt .sub { font-size: 12px; color: var(--ink-2); }
+.inbox-countdown { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--warn); }
+.inbox-card .ib-body { padding: 0 13px 11px; }
+.ec-rendered { background: var(--cc-input); border: 1px solid var(--line); border-radius: 9px; padding: 9px 11px; font-size: 12.5px; line-height: 1.6; color: var(--ink-2); white-space: pre-wrap; margin-bottom: 11px; }
+.inbox-card .ib-foot { font-size: 11px; color: var(--ink-3); margin-top: 9px; }
+
+/* doc-tree = 文档树面板（借 flowrun 外框；缩进行，无 pulse/状态——非 run） */
+.doc-tree { margin: 12px 0; border: 1px solid var(--line); border-radius: 12px; background: var(--cc-side); box-shadow: 0 1px 3px rgba(0,0,0,.05), 0 6px 16px rgba(0,0,0,.04); padding: 8px 6px; }
+.doc-tree-row { display: flex; align-items: center; gap: 8px; min-height: 30px; padding: 0 8px; border-radius: 8px; font-size: 13px; color: var(--ink-2); }
+.doc-tree-row .ico { display: grid; place-items: center; color: var(--ink-3); flex: none; }
+.doc-tree-row.cur { background: var(--cc-active); color: var(--ink); }
+.ec-snippet { color: var(--ink-2); } .ec-snippet mark { background: var(--accent-soft); color: var(--accent); padding: 0 2px; border-radius: 3px; }
+.tag.fixed { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 35%, var(--line)); background: var(--ok-soft); animation: popin .3s var(--ease-spring); }
