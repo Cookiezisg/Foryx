@@ -74,7 +74,7 @@
     function(b, a) {
       prose(b, a.desc);
       CodeEditor.mount(sec(b, 'Code'), { code: a.code, corner: a.lang, onDirty: markDirty });
-      const g = tag('div.ent-2col'); b.appendChild(g);
+      const g = b;   // 单列流：原 2 栏并排失衡（对齐 documents 单列），分节直接堆叠到主体
       const inSec = sec(g, 'Inputs', a.inputs.length);
       ThinTable.table(inSec, ['参数', '类型'], ioRows(a.inputs));
       const addBtn = addRow(inSec, '添加入参', () => {
@@ -107,7 +107,7 @@
       prose(b, a.desc);
       prose(sec(b, 'System prompt'), a.system, 'ent-block');
       Tags.mount(sec(b, 'Mounted tools', a.tools.length), { items: a.tools, icon: 'code', onChange: markDirty });
-      const g = tag('div.ent-2col'); b.appendChild(g);
+      const g = b;   // 单列流：原 2 栏并排失衡（对齐 documents 单列），分节直接堆叠到主体
       KV.defs(sec(g, 'Model'), [['model', a.model, { edit: true, mono: true }], ['maxSteps', a.maxSteps, { edit: true, mono: true }]]);
       Tags.mount(sec(g, 'Skill · 0–1'), { items: a.skill ? [a.skill] : [], icon: 'skill', mode: 'single', addLabel: '挂技能', onChange: markDirty });
       Tags.mount(sec(b, 'Knowledge', a.knowledge.length), { items: a.knowledge, onChange: markDirty });
@@ -127,7 +127,7 @@
         onNode: id => openNode(a, id),
       });
       gwrap.insertAdjacentHTML('beforeend', '<div class="ent-ghint">点击节点 → 右岛检视引用与记忆化结果 · 深度运行历史在 Scheduler 海</div>');
-      const g = tag('div.ent-2col'); b.appendChild(g);
+      const g = b;   // 单列流：原 2 栏并排失衡（对齐 documents 单列），分节直接堆叠到主体
       KV.defs(sec(g, 'Run'), [
         ['lifecycle', '', { html: a.life === 'active' ? `${StatusDot.dot('run')}<span class="ent-inlabel">已激活</span>` : `${StatusDot.dot('idle')}<span class="ent-inlabel">未上线</span>` }],
         ['concurrency', a.concurrency, { edit: true, mono: true }],
@@ -149,7 +149,7 @@
     approval(b, a) {
       prose(b, a.desc);
       CodeEditor.mount(sec(b, 'Template · {{input.*}} 插值'), { code: a.template, corner: 'jinja+cel', onDirty: markDirty });
-      const g = tag('div.ent-2col'); b.appendChild(g);
+      const g = b;   // 单列流：原 2 栏并排失衡（对齐 documents 单列），分节直接堆叠到主体
       KV.defs(sec(g, 'Decision rules'), a.rules.map(([k, v]) => [k, v, { edit: true, mono: true }]));
       ThinTable.table(sec(g, 'Input schema', a.inputs.length), ['字段', '类型'], ioRows(a.inputs));
     },
@@ -166,7 +166,7 @@
     skill(b, a) {
       prose(b, a.desc);
       CodeEditor.mount(sec(b, 'Playbook · $n / ${...} 插值'), { code: a.body, corner: 'markdown', onDirty: markDirty });
-      const g = tag('div.ent-2col'); b.appendChild(g);
+      const g = b;   // 单列流：原 2 栏并排失衡（对齐 documents 单列），分节直接堆叠到主体
       KV.defs(sec(g, 'Frontmatter'), a.frontmatter.map(([k, v]) => [k, v, { edit: true, mono: true }]));
       Tags.mount(sec(g, 'Allowed tools', a.allowed.length), { items: a.allowed, icon: 'code', onChange: markDirty });
     },
@@ -312,23 +312,21 @@
     stage.innerHTML = `<div class="ent-doc ent-morph">
       <div class="ent-path"><span class="ent-path-ic">${icon(k.icon, 13)}</span><span>${esc(k.label)}</span><span class="ent-sep">/</span><span>${esc(id)}</span></div>
       <div class="ent-title" contenteditable="true" spellcheck="false">${esc(id)}</div>
-      <div class="ent-meta">${meta.join('<span class="ent-sep">·</span>')}</div>
+      <div class="ent-meta"><span class="ent-mrow">${meta.join('<span class="ent-sep">·</span>')}</span><span class="ent-mact"><span class="ent-saved"><span class="ent-saved-ic">${icon('check', 13)}</span>已保存</span><button class="ibtn ent-more" data-more title="更多">${icon('more', 16)}</button></span></div>
       <div class="ent-body"></div>
     </div>`;
     stage.querySelector('.ent-title').addEventListener('input', markDirty);
 
     const body = stage.querySelector('.ent-body');
     SPEC[a.kind](body, a);                                   // 静态定义（可编辑）
-    relationsInto(foldSec(body, '关系', true), a.rel || [{ title: 'Referenced by', rows: [] }]);
-    versionsInto(foldSec(body, a.kind === 'mcp' ? '编辑历史' : '版本', false), a);
+    versionsInto(foldSec(body, a.kind === 'mcp' ? '编辑历史' : '版本', true), a);   // 版本比关系重要：排前、默认展开
+    relationsInto(foldSec(body, '关系', false), a.rel || [{ title: 'Referenced by', rows: [] }]);
 
-    // 顶栏：保存态 + 试运行面板开关 + ⋯ 更多（迭代降级进这里）
-    Shell.headExtra(`<span class="ent-saved"><span class="ent-saved-ic">${icon('check', 13)}</span>已保存</span>` +
-      `<button class="ent-dbg${islandOpen ? ' on' : ''}" data-dbg>${icon(k.vico || 'play', 14)}<span>试运行</span></button>` +
-      `<button class="ibtn" data-more title="更多">${icon('more', 16)}</button>`);
-    savedEl = document.querySelector('#head-extra .ent-saved');
+    // 顶栏右上只留「试运行」面板开关（icon panel，全海洋统一）；保存态与 ⋯ 已移入 meta 行
+    Shell.headExtra(`<button class="ibtn ent-pan${islandOpen ? ' on' : ''}" data-dbg title="试运行 / 调试">${icon('panel', 18)}</button>`);
     document.querySelector('#head-extra [data-dbg]').onclick = () => toggleDebug(a);
-    const moreBtn = document.querySelector('#head-extra [data-more]');
+    savedEl = stage.querySelector('.ent-saved');
+    const moreBtn = stage.querySelector('.ent-more');
     moreBtn.onclick = () => openMore(a, moreBtn);
 
     // 右岛内容随选中实体重建；开合态跨切换保留
