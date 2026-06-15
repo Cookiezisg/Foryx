@@ -1,6 +1,6 @@
 /* Forgify design-lab — 【Documents 海洋】左侧栏样式（由 sidebar/documents.js 自注入）。
-   文档库树导航：新建 + 名字过滤 + Recent(可折叠) + 嵌套文档树(展开折叠/选中/hover ＋·⋯)。
-   依赖 tokens.css + shell.css 的 cc-* 表面色、ink、accent、ease-spring（只读）。类名全 dt- 专属，避让 doc-/da-/cv-/cm- 等。 */
+   文档库树导航：新建 + 名字过滤 + 排序/筛选菜单 + Recent(可折叠) + 嵌套文档树。数值对齐 chat.css。
+   依赖 tokens.css + shell.css 的 cc-* 表面色、ink、accent、ease-spring（只读）。类名全 dt- 专属，避让 doc-/da-/cv-/cm-。 */
 
 /* 新建文档（文字用 span 包，避免 button 默认居中把裸文字推开） */
 .dt-new { display: flex; align-items: center; gap: 11px; height: 34px; padding: 0 10px; border-radius: 8px;
@@ -14,52 +14,50 @@
 .dt-filter input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
 .dt-filter input::placeholder { color: var(--ink-3); }
 
-/* 排序/筛选菜单（sliders 按钮 + 下拉：Sort by 单选 + Show recent 开关） */
-.dt-disp { flex: none; width: 26px; height: 26px; display: grid; place-items: center; color: var(--ink-3); border-radius: 7px; transition: color .12s, background .12s; }
-.dt-disp:hover, .dt-disp.on { color: var(--ink); background: var(--cc-hover); }
-.dt-disp svg { display: block; }
-.dt-disp-menu { position: absolute; top: calc(100% + 4px); right: 6px; z-index: 5; min-width: 180px;
+/* 排序/筛选菜单：sliders 按钮 + 下拉（Sort by 单选 + Show recent 开关）。值同 chat 的 .cm-* */
+.dt-mbtn { flex: none; width: 26px; height: 26px; display: grid; place-items: center; color: var(--ink-3); border-radius: 7px; transition: color .12s, background .12s; }
+.dt-mbtn:hover, .dt-mbtn.on { color: var(--ink); background: var(--cc-hover); }
+.dt-mbtn svg { display: block; }
+.dt-menu { position: absolute; top: calc(100% + 4px); right: 6px; z-index: 5; min-width: 180px;
   background: var(--cc-side); border: 1px solid var(--line); border-radius: 10px; padding: 5px;
   box-shadow: 0 8px 24px rgba(0,0,0,.12); display: none; }
-.dt-disp-menu.open { display: block; }
-.dt-disp-h { padding: 6px 8px 3px; font-size: 11px; font-weight: 600; color: var(--ink-3); }
-.dt-disp-h:first-child { padding-top: 3px; }
-.dt-disp-opt { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border-radius: 7px; text-align: left; color: var(--ink); font-size: 13px; transition: background .12s; }
-.dt-disp-opt:hover { background: var(--cc-hover); }
-.dt-disp-ck { flex: none; width: 14px; display: grid; place-items: center; color: var(--ink); opacity: 0; }
-.dt-disp-opt.on .dt-disp-ck { opacity: 1; }
-.dt-disp-ck svg { display: block; }
+.dt-menu.open { display: block; }
+.dt-mh { padding: 6px 8px 3px; font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.dt-mh:first-child { padding-top: 3px; }
+.dt-opt { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border-radius: 7px; text-align: left; color: var(--ink); font-size: 13px; transition: background .12s; }
+.dt-opt:hover { background: var(--cc-hover); }
+.dt-ck { flex: none; width: 14px; display: grid; place-items: center; color: var(--ink); opacity: 0; }
+.dt-opt.on .dt-ck { opacity: 1; }
+.dt-ck svg { display: block; }
 
+/* 列表 + Recent 折叠区（值同 chat 的 .cvlist/.cvsec） */
 .dt-list { flex: 1; min-height: 0; overflow-y: auto; }
-
-/* Recent 区（可折叠；纯前端按 updated_at 派生） */
 .dt-sec { margin-bottom: 8px; }
 .dt-sec-h { display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 10px; border-radius: 8px;
   font-size: 11px; font-weight: 600; color: var(--ink-3); transition: background .12s; }
 .dt-sec-h:hover { background: var(--cc-hover); }
-.dt-sec-h .dt-sec-t { flex: 1; text-align: left; }
-.dt-sec:not(.open) > .dt-sec-h .dt-chev { transform: rotate(-90deg); }   /* 收起时箭头朝右 */
+.dt-sec-t { flex: 1; }
 .dt-sec:not(.open) > .dt-sec-body { display: none; }
 
-/* 树 */
-.dt-tree { padding-bottom: 4px; }
+/* 文档树 */
 .dt-node.branch:not(.open) > .dt-children { display: none; }
-.dt-node.branch.open > .dt-row .dt-chev { transform: rotate(90deg); }     /* 展开时箭头朝下 */
-
 .dt-row { display: flex; align-items: center; gap: 4px; height: 32px; padding: 0 6px 0 8px; border-radius: 8px;
   color: var(--ink-2); font-size: 13px; transition: background .12s, color .12s; }
 .dt-row:hover { background: var(--cc-hover); color: var(--ink); }
 .dt-row.on { background: var(--cc-active); color: var(--ink); }
-.dt-rrow { padding-left: 10px; }   /* Recent 行无 chevron，单独左缩进对齐 */
+.dt-flat { padding-left: 10px; }   /* Recent 行无 chevron，单独左缩进 */
 
-.dt-chev { flex: none; width: 16px; height: 16px; display: inline-grid; place-items: center; color: var(--ink-3);
-  transition: transform .2s var(--ease-spring); }
+/* chevron：树节点 / Recent 区 共用一套；open 时朝下 */
+.dt-chev { flex: none; width: 16px; height: 16px; display: inline-grid; place-items: center; color: var(--ink-3); transition: transform .2s var(--ease-spring); }
 .dt-chev svg { display: block; }
+.dt-node.branch.open > .dt-row .dt-chev,
+.dt-sec.open > .dt-sec-h .dt-chev { transform: rotate(90deg); }
+
 .dt-ico { flex: none; display: grid; place-items: center; color: var(--ink-3); }
 .dt-ico svg { display: block; }
 .dt-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* 行尾操作：hover 才露出（低对比、opacity 过渡） */
+/* 行尾操作：hover 才露出 */
 .dt-act { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px;
   color: var(--ink-3); opacity: 0; transition: opacity .12s, background .12s, color .12s; }
 .dt-act svg { display: block; }
