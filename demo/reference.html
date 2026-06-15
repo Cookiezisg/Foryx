@@ -30,7 +30,7 @@
 <div class="wrap">
   <button class="ibtn theme-btn" id="themeBtn" title="明暗"></button>
   <h1>组件库 · 活体规格</h1>
-  <p class="lead">core/components/* 的单一事实源视觉真相 · 18 件。每个组件一文件、自载 CSS、只读令牌、fg- 前缀。海洋只组合这些、不重造。</p>
+  <p class="lead">core/components/* 的单一事实源视觉真相 · 21 件。每个组件一文件、自载 CSS、只读令牌、fg- 前缀。海洋只组合这些、不重造。</p>
   <div id="gallery"></div>
 </div>
 
@@ -62,6 +62,9 @@
 <script src="core/components/run-debug.js"></script>
 <script src="core/components/block-kit.js"></script>
 <script src="core/components/run-graph.js"></script>
+<script src="core/components/version-diff.js"></script>
+<script src="core/components/flowrun.js"></script>
+<script src="core/components/entity-card.js"></script>
 
 <script>
   document.getElementById('themeBtn').innerHTML = icon('moon');
@@ -117,6 +120,24 @@
         loopbacks: [['route', 'summarize']],
         state: { cron: 'completed', fetch: 'completed', parse: 'completed', summarize: 'running', route: 'completed', publish: 'future', notify: 'future' },
         taken: ['cron>fetch', 'cron>parse', 'fetch>summarize', 'parse>summarize', 'summarize>route'], ghost: [], live: 'route>summarize', iters: { summarize: 3 }, ports: { route: 'retry' },
+      }) },
+    { name: 'flowrun', api: 'Flowrun.strip(host,frid,{variant}) · addNode→{running,ok,okPort,fail,park}', note: 'durable 节点条（chat 内联 run）。running→ok/okPort/fail；park 内联 ApprovalGate(durable)。三变体 flowrun/fire/conn。', col: 1,
+      build: d => { const fr = Flowrun.strip(d, 'fr_3a9c2f', { variant: 'flowrun' }); fr.addNode('trigger', 'cron').ok('fired 02:00'); fr.addNode('action', 'fetch').ok('42 commits'); fr.addNode('agent', 'summarize').okPort('done'); fr.addNode('approval', 'approve').park(); } },
+    { name: 'version-diff', api: 'VersionDiff.mount(host,{versions,field,caption}) · .lineDiff(a,b)', note: '实体版本 diff（非 git）：版本列 + LCS 行级增删。着色走 CodeEditor.highlight，行入场错峰。', col: 1,
+      build: d => VersionDiff.mount(d, { field: 'code', caption: 'Function 版本 diff · 非 git', versions: [
+        { v: 3, active: true, t: '当前', reason: '加 currency 归一', code: 'def process_invoice(file: bytes, currency="USD") -> Invoice:\n    doc = pdfplumber.open(io.BytesIO(file))\n    fields = extract_fields(doc)\n    fields["currency"] = currency.upper()\n    return Invoice.model_validate(fields)' },
+        { v: 2, t: '前一版', reason: '换 pdfplumber', code: 'def process_invoice(file: bytes, currency="USD") -> Invoice:\n    doc = pdfplumber.open(io.BytesIO(file))\n    fields = extract_fields(doc)\n    return Invoice.model_validate(fields)' },
+        { v: 1, t: '初版', reason: '首次保存', code: 'def process_invoice(file: bytes) -> Invoice:\n    doc = PyPDF2.PdfReader(io.BytesIO(file))\n    fields = extract_fields(doc)\n    return Invoice(**fields)' },
+      ] }) },
+    { name: 'entity-card', api: 'EntityCard.mount(host,entity) → {setLive,setSt,reveal,fill,show,hide,destroy}', note: '九类全能右岛卡：头部(图标+名+版本+live 徽) + 概览/版本/运行/迭代 tab + per-kind 字段集。组合 RightIsland/Tabs/CodeEditor/Tags/KV/StatusDot/RunGraph/RefPill/VersionDiff。流式 reveal/fill 锻造逐字段。', col: 1,
+      build: d => EntityCard.mount(d, {
+        kind: 'function', name: 'process_invoice', version: 5, id: 'fn_3f9a2c1b', runs: 1284,
+        desc: '解析上传的发票 PDF / 图片，抽取结构化字段（供应商、金额、税号、行项目），校验后返回 JSON。',
+        python: '3.12', env: 'ready', lang: 'python 3.12',
+        code: 'def process_invoice(file: bytes, currency: str = "USD") -> Invoice:\n    doc = pdfplumber.open(io.BytesIO(file))\n    fields = extract_fields(doc)          # 正则 + 版面启发式\n    inv = Invoice.model_validate(fields)\n    inv.currency = currency\n    return inv',
+        inputs: [['file', 'bytes', true], ['currency', 'string', false]],
+        deps: ['pdfplumber', 'pydantic', 'regex'],
+        execs: [['ok', 'chat', '412ms', '2 小时前'], ['ok', 'workflow', '388ms', '今天 02:00'], ['failed', 'manual', '—', '昨天']],
       }) },
   ];
 

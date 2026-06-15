@@ -1,0 +1,86 @@
+/* Forgify demo — flowrun 皮肤（retarget 自 chat .flowrun / .fr-node / .fr-head + fire-strip + conn-strip 三态同骨）。
+   三变体共一外框（line 描边浮卡 + 同度量阴影/圆角/内距，与原 .flowrun 字节级同度量）；只换头标签，节点行皆同。
+   视觉宪法：海与岛同色靠岸线分；语义色仅 ok/warn/danger；--accent 只点正在发生（live pulse + running 图标）；动效走 spring/ease。
+   节点状态点(StatusDot)与 park 决策面(ApprovalGate durable)由组件注入，本皮肤只管行容器与文案色。 */
+
+/* 外框：line 描边 + 双层浮岛阴影（与原审批/flowrun 卡同度量；padding 9px 6px 6px） */
+.fg-fr {
+  margin: 13px 0;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--cc-side);
+  box-shadow: var(--shadow-float);
+  padding: 9px 6px 6px;
+}
+
+/* 头：variant 标签(uppercase 灰) + frid(mono，可点 run 引用) + live pulse 点 */
+.fg-fr-head { display: flex; align-items: center; gap: 8px; padding: 2px 8px 8px; }
+.fg-fr-fl {
+  font-size: 11px; font-weight: 600; color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: .05em;
+}
+.fg-fr-fid {
+  font-family: var(--mono); font-size: 12px; color: var(--ink-2);
+  cursor: pointer; border-radius: 4px; transition: color .15s, background .15s;
+}
+.fg-fr-fid:hover { color: var(--accent); background: var(--accent-soft); }
+.fg-fr-fid:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 1px; }
+
+/* live pulse：accent 点 + 涟漪外扩（run 仍在推进；finish 后 .off 熄灭） */
+.fg-fr-pulse {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+  margin-left: 2px; animation: fgFrPulse 1.4s ease infinite;
+}
+.fg-fr-pulse.off { display: none; }
+
+/* 节点行：状态点 + kind 图标 + nid(mono) + kind 标 + 右侧状态文案；enter 行 spring 入场 */
+.fg-fr-node {
+  display: flex; align-items: center; gap: 10px;
+  min-height: 32px; padding: 4px 8px; border-radius: 8px;
+}
+.fg-fr-node.enter { animation: fgFrLineIn .34s var(--ease-spring) both; }
+.fg-fr-dot { display: inline-flex; align-items: center; flex: none; }
+.fg-fr-nico { width: 18px; height: 18px; flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.fg-fr-nid { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+.fg-fr-nkind { font-size: 11px; color: var(--ink-3); }
+.fg-fr-nstatus {
+  margin-left: auto; font-size: 12px; color: var(--ink-3);
+  display: inline-flex; align-items: center; gap: 6px;
+}
+
+/* 记忆化徽（durable record-once 的视觉证）+ control 解析出口标 */
+.fg-fr-memo { font-size: 11px; color: var(--ink-3); margin-left: 7px; opacity: .85; }
+.fg-fr-port {
+  font-size: 10px; font-family: var(--mono); color: var(--ink-2);
+  background: var(--cc-active); padding: 0 5px; border-radius: 4px; margin-left: 7px;
+}
+
+/* 态色：running 图标 accent / ok 绿 / parked 暖 / failed 红（点由 StatusDot 自带色，此处只管图标与文案） */
+.fg-fr-node.running .fg-fr-nico { color: var(--accent); }
+.fg-fr-node.ok .fg-fr-nico { color: var(--ok); }
+.fg-fr-node.ok .fg-fr-nstatus { color: var(--ok); }
+.fg-fr-node.parked .fg-fr-nico { color: var(--warn); }
+.fg-fr-node.parked .fg-fr-nstatus { color: var(--warn); }
+.fg-fr-node.failed .fg-fr-nico,
+.fg-fr-node.failed .fg-fr-nstatus { color: var(--danger); }
+
+/* park 决策面宿主：ApprovalGate(durable) 内联挂此处，缩进对齐节点行左缘 */
+.fg-fr-gate { padding: 0 8px; }
+.fg-fr-gate .fg-apg { margin: 4px 0 10px; }
+
+/* running 文案 shimmer（墨色扫光；与原 .shimmer 同度量 1.5s 线性循环） */
+.fg-fr-shimmer {
+  background: linear-gradient(105deg, var(--ink-3) 36%, var(--ink) 50%, var(--ink-3) 64%);
+  background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: fgFrShimmer 1.5s linear infinite;
+}
+
+/* —— keyframes（组件自包含；与原 chat pulse/shimmer/dlineIn 字节级同度量）—— */
+@keyframes fgFrPulse {
+  0%   { box-shadow: 0 0 0 0 var(--accent-soft); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+@keyframes fgFrShimmer { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+@keyframes fgFrLineIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
