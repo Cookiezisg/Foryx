@@ -1,6 +1,10 @@
-/* Foryx 原语 — Row 皮肤(核心)。密度全走 token;opacity 互换一律即时(不入过渡,SPEC §2.5)。 */
+/* Foryx 原语 — Row 皮肤(核心)。
+   模版铁律:行 = 三列网格 [lead 固定 --lead | label 1fr | trail auto],对齐由结构保证、绝不靠手量。
+   行首槽内容(dot/icon/chevron)统一叠放居中(grid-area+place-self),小点和图标同心。
+   opacity 互换一律即时(不入过渡,SPEC §2.5)。 */
 .fy-row {
-  position: relative; display: flex; align-items: center; gap: var(--gap);
+  position: relative;
+  display: grid; grid-template-columns: var(--lead) 1fr auto; align-items: center; column-gap: var(--gap);
   height: var(--row); padding: 0 var(--pad-row); border-radius: var(--r-btn);
   color: var(--ink-2); font-size: var(--t-body); cursor: pointer;
   transition: background var(--d-fast);   /* 字色不入过渡(无头渲染器冻初值) */
@@ -8,27 +12,28 @@
 .fy-row:hover { background: var(--island-3); color: var(--ink); }
 .fy-row.on   { background: var(--island-4); color: var(--ink); }
 
-/* 行首槽:16 格 = 图标尺寸,零死白。icon ↔ chevron 共享一格 */
-.fy-row-lead { flex: none; position: relative; width: var(--lead); height: var(--lead); }
-.fy-row-lead > * { position: absolute; inset: 0; display: grid; place-items: center; color: var(--ink-3); }
-.fy-row-ico svg, .fy-row-chev svg { width: var(--icon); height: var(--icon); }
-.fy-collapsible .fy-row-chev { opacity: 0; transition: transform .2s var(--ease-spring); }   /* 仅 transform 入过渡,opacity 即时 */
+/* 行首槽:固定 --lead 列。所有内容叠在同一格、各自居中 → 点/图标/箭头同心,模版保证对齐 */
+.fy-row-lead { width: var(--lead); height: var(--lead); display: grid; }
+.fy-row-lead > * { grid-area: 1 / 1; place-self: center; color: var(--ink-3); }
+.fy-row-ico, .fy-row-chev { display: grid; place-items: center; }
+.fy-row-ico svg, .fy-row-chev svg { display: block; width: var(--icon); height: var(--icon); }
+.fy-collapsible .fy-row-chev { opacity: 0; transition: transform .2s var(--ease-spring); }   /* 仅 transform 入过渡 */
 .fy-collapsible:hover .fy-row-ico  { opacity: 0; }
 .fy-collapsible:hover .fy-row-chev { opacity: 1; }
 .fy-collapsible.open .fy-row-chev  { transform: rotate(90deg); }   /* 收起=右 展开=下 */
 
-.fy-row-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fy-row-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* 尾槽:meta 常驻靠右 ↔ 动作 hover 浮现于同槽(meta 同步 opacity 让位,不重排) */
-.fy-row-meta { flex: none; font-size: var(--t-meta); color: var(--ink-3); }
+/* 尾槽:meta 常驻(col3)↔ 动作 hover 浮现于同位(meta opacity 让位,不重排) */
+.fy-row-meta { font-size: var(--t-meta); color: var(--ink-3); white-space: nowrap; }
 .fy-row:hover .fy-row-meta { opacity: 0; }
 .fy-row-acts {
   position: absolute; right: var(--pad-row); top: 50%; transform: translateY(-50%);
   display: flex; align-items: center; gap: 2px; opacity: 0; padding-left: 20px;
-  background: linear-gradient(to right, transparent, var(--island-3) 45%);   /* 渐隐遮罩防长名穿透 */
+  background: linear-gradient(to right, transparent, var(--island-3) 45%);
 }
 .fy-row.on:hover .fy-row-acts { background: linear-gradient(to right, transparent, var(--island-4) 45%); }
 .fy-row:hover .fy-row-acts { opacity: 1; }
 .fy-row-act { width: 22px; height: 22px; display: grid; place-items: center; border-radius: var(--r-tag); color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast); }
 .fy-row-act:hover { background: var(--island-4); color: var(--ink); }
-.fy-row-act svg { width: 16px; height: 16px; }
+.fy-row-act svg { display: block; width: 16px; height: 16px; }

@@ -10,15 +10,16 @@
     close:   '<path d="M6 6l12 12M18 6L6 18"/>',
     search:  '<circle cx="11" cy="11" r="7"/><path d="M21 21l-4-4"/>',
     sliders: '<path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.2"/><circle cx="9" cy="16" r="2.2"/>',
-    doc:     '<path d="M7 3h7l5 5v13H7z"/><path d="M14 3v5h5"/>',
-    folder:  '<path d="M3 7h6l2 2h10v10H3z"/>',
-    func:    '<path d="M5 20V8a3.5 3.5 0 013.5-3.5M9 13h6"/>',
-    handler: '<rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 12h6"/>',
-    agent:   '<circle cx="12" cy="8" r="3.2"/><path d="M5 20a7 7 0 0114 0"/>',
-    workflow:'<circle cx="6" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8 6h6a4 4 0 014 4v6"/>',
-    bell:    '<path d="M6 9a6 6 0 0112 0c0 5 2 6 2 6H4s2-1 2-6"/><path d="M10 20a2 2 0 004 0"/>',
-    gear:    '<circle cx="12" cy="12" r="3.2"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.5 5.5l2 2M16.5 16.5l2 2M18.5 5.5l-2 2M7.5 16.5l-2 2"/>',
-    chat:    '<path d="M4 5h16v11H8l-4 4z"/>',
+    /* —— 实体/UI 图标:全部画在居中艺术板内(墨迹光学中心 ≈ 12,12),与点点同心,模版对齐 —— */
+    doc:     '<path d="M7 4h6l4 4v12H7z"/><path d="M13 4v4h4"/>',
+    folder:  '<path d="M4 7h5l2 2h9v9H4z"/>',
+    func:    '<path d="M14.5 5.5H13A2.5 2.5 0 0010.5 8v9"/><path d="M8 11.5h6"/>',
+    handler: '<rect x="5" y="5" width="14" height="14" rx="3"/><path d="M10 12h4"/>',
+    agent:   '<circle cx="12" cy="8.5" r="3"/><path d="M6.5 19a5.5 5.5 0 0111 0"/>',
+    workflow:'<circle cx="6.5" cy="12" r="2.2"/><circle cx="17.5" cy="7.5" r="2.2"/><circle cx="17.5" cy="16.5" r="2.2"/><path d="M8.6 11l6.8-2.6M8.6 13l6.8 2.6"/>',
+    bell:    '<path d="M6.5 10a5.5 5.5 0 0111 0c0 4 1.5 5 1.5 5H5s1.5-1 1.5-5"/><path d="M10.5 19a1.7 1.7 0 003 0"/>',
+    gear:    '<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/>',
+    chat:    '<path d="M5 5.5h14v9H9l-4 4z"/>',
   };
   window.icon = function (name, size, stroke) {
     size = size || 16; stroke = stroke || 1.7;

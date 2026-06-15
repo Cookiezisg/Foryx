@@ -1,0 +1,20 @@
+/* Foryx 原语 — SidebarList 皮肤。整条侧栏共享 Row 网格 → 行首列结构对齐,不靠手量。 */
+.fy-sl { display: flex; flex-direction: column; }
+
+/* New / 过滤 都是 Row(同模版)→ + 与 🔍 与实体图标 同列同心 */
+.fy-sl-action { text-align: left; }
+.fy-sl-filter { cursor: default; }
+.fy-sl-filter:hover { background: transparent; }
+.fy-sl-input { width: 100%; min-width: 0; border: 0; background: none; font: inherit; font-size: var(--t-body); color: var(--ink); }
+.fy-sl-input::placeholder { color: var(--ink-3); }
+.fy-sl-sliders { color: var(--ink-3); }
+
+/* 分组标签:对齐到 label 列(= pad + lead + gap),与行标签同起点 */
+.fy-sl-grp {
+  padding: var(--sp-2) var(--pad-row) 2px calc(var(--pad-row) + var(--lead) + var(--gap));
+  font-size: var(--t-meta); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3);
+}
+
+/* 类型折叠 */
+.fy-sl-type:not(.open) > .fy-sl-rows { display: none; }
+.fy-sl-type.open > .fy-collapsible .fy-row-chev { transform: rotate(90deg); }

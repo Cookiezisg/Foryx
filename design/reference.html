@@ -12,6 +12,7 @@
 <script src="core/primitives/button.js"></script>
 <script src="core/primitives/section.js"></script>
 <script src="core/primitives/row.js"></script>
+<script src="core/primitives/sidebar-list.js"></script>
 <style>
   body { padding: var(--sp-8); }
   .wrap { max-width: var(--w-content); margin: 0 auto; }
@@ -61,21 +62,25 @@
     FyRow.html({ leading: { dot: 'done' }, label: 'parse_pdf', meta: 'v1', actions: [{ icon: 'more' }] }) +
     FyRow.html({ leading: { icon: 'workflow' }, label: 'Workflows', collapsible: true, open: true, meta: '3' });
 
-  // —— 合成侧栏 ——
+  // —— 合成侧栏:整条走 SidebarList 模版(New/过滤/类型头/实体行 共享行网格,行首列永远对齐)——
   var panel = tag('div.panel');
-  panel.innerHTML =
-    FyButton.html({ label: 'New entity', icon: 'plus', variant: 'ghost', block: true }) +
-    '<div class="filter">' + icon('search', 16) + '<input placeholder="Search entities…">' + FyButton.html({ icon: 'sliders', variant: 'icon' }) + '</div>' +
-    '<div class="grp-label">Quadrinity</div>' +
-    FyRow.html({ leading: { icon: 'func' }, label: 'Functions', collapsible: true, open: true, meta: '3' }) +
-    '<div style="padding-left:var(--indent)">' +
-      FyRow.html({ leading: { dot: 'done' }, label: 'process_invoice', meta: 'v5', selected: true, actions: [{ icon: 'more' }, { icon: 'plus' }] }) +
-      FyRow.html({ leading: { dot: 'run' }, label: 'fetch_news', meta: 'v2', actions: [{ icon: 'more' }, { icon: 'plus' }] }) +
-      FyRow.html({ leading: { dot: 'idle' }, label: 'parse_pdf', meta: 'v1', actions: [{ icon: 'more' }, { icon: 'plus' }] }) +
-    '</div>' +
-    FyRow.html({ leading: { icon: 'handler' }, label: 'Handlers', collapsible: true, meta: '2' }) +
-    FyRow.html({ leading: { icon: 'agent' }, label: 'Agents', collapsible: true, meta: '2' });
   qs('#rail').appendChild(panel);
+  FySidebarList.mount(panel, {
+    newLabel: 'New entity',
+    filterPlaceholder: 'Search entities…',
+    groups: [{
+      label: 'Quadrinity',
+      types: [
+        { icon: 'func', label: 'Functions', count: 3, open: true, rows: [
+          { leading: { dot: 'done' }, label: 'process_invoice', meta: 'v5', selected: true, actions: [{ icon: 'more' }, { icon: 'plus' }] },
+          { leading: { dot: 'run' }, label: 'fetch_news', meta: 'v2', actions: [{ icon: 'more' }, { icon: 'plus' }] },
+          { leading: { dot: 'idle' }, label: 'parse_pdf', meta: 'v1', actions: [{ icon: 'more' }, { icon: 'plus' }] },
+        ] },
+        { icon: 'handler', label: 'Handlers', count: 2, rows: [] },
+        { icon: 'agent', label: 'Agents', count: 2, rows: [] },
+      ],
+    }],
+  });
 
   // —— Section ——
   qs('#secs').innerHTML =

@@ -233,6 +233,8 @@ OceanFooter (可选, flex:none)   ← 仅 chat 的 composer 之类
 > 这是**强制层**。每个面板 = 调原语,几乎不写自有 CSS。每个原语:**职责 / 解剖 / API / 正反例**。
 > 命名 `fy-<name>`(Foryx 前缀,区别于 demo 的 fg-)。
 
+> **🔒 对齐铁律(模版化,错位结构上不可能)**:凡"行类"元素(Row / New / 过滤 / 类型头 / 分组标签),一律走**同一三列网格** `grid-template-columns: var(--lead) 1fr auto`(行首固定列 / 标签 / 尾槽),**绝不靠 padding/width 手量对齐**。行首内容(状态点 / 图标 / 折叠箭头)统一**叠放居中**(`grid-area:1/1; place-self:center`)→ 7px 点与 16px 图标**同心**。图标墨迹画在**居中艺术板**(光学中心 ≈ 12,12),与点同心。于是 New 的 `+`、Search 的 🔍、类型图标、实体点 **永远同列对齐**(已测:同级 leading-center 与 label-left 像素相等)。❌ demo 的"每个 rail 各自摆 leading"是错位之源。
+
 ### §4.1 `Page`(记录页骨架)—— 杀掉 sec()/foldSec() 手搓
 - **职责**:一个"记录/文档型"海洋 = `Page(header, sections[], rightIsland?)`。
 - **解剖**:`OceanHeader` + 居中 `--w-content` 列 + `Section` 堆叠。
