@@ -166,35 +166,49 @@ func (h *DocumentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	responsehttpapi.NoContent(w)
 }
 
-// postOnDoc dispatches POST /api/v1/documents/{id}:move and :iterate.
+// postOnDoc dispatches POST /api/v1/documents/{id}:move / :iterate / :duplicate.
 //
-// postOnDoc 派发 POST /api/v1/documents/{id}:move 和 :iterate。
+// postOnDoc 派发 POST /api/v1/documents/{id}:move / :iterate / :duplicate。
 func (h *DocumentHandler) postOnDoc(w http.ResponseWriter, r *http.Request) {
 	id, action, ok := idAndAction(r, "idAction")
 	if !ok {
 		responsehttpapi.FromDomainError(w, h.log, errorspkg.ErrNotFound)
 		return
 	}
-	if action == "iterate" {
+	switch action {
+	case "iterate":
 		iterateEntity(w, r, h.log, h.aispawn, mentiondomain.MentionDocument, id)
-		return
-	}
-	if action != "move" {
+	case "move":
+		var req moveDocumentRequest
+		if err := decodeJSON(r, &req); err != nil {
+			responsehttpapi.FromDomainError(w, h.log, err)
+			return
+		}
+		d, err := h.svc.Move(r.Context(), id, documentdomain.MoveInput{ParentID: req.ParentID, Position: req.Position})
+		if err != nil {
+			responsehttpapi.FromDomainError(w, h.log, err)
+			return
+		}
+		responsehttpapi.Success(w, http.StatusOK, d)
+	case "duplicate":
+		// Optional body {parentId}: null/omit → copy lands as a sibling of the source.
+		// 可选 body {parentId}：null/缺省 → 副本落为源的兄弟。
+		var req struct {
+			ParentID *string `json:"parentId,omitempty"`
+		}
+		if r.ContentLength != 0 {
+			if err := decodeJSON(r, &req); err != nil {
+				responsehttpapi.FromDomainError(w, h.log, err)
+				return
+			}
+		}
+		d, err := h.svc.Duplicate(r.Context(), id, req.ParentID)
+		if err != nil {
+			responsehttpapi.FromDomainError(w, h.log, err)
+			return
+		}
+		responsehttpapi.Created(w, d) // a new subtree → 201 bare entity (the new root)
+	default:
 		responsehttpapi.FromDomainError(w, h.log, errorspkg.ErrNotFound)
-		return
 	}
-	var req moveDocumentRequest
-	if err := decodeJSON(r, &req); err != nil {
-		responsehttpapi.FromDomainError(w, h.log, err)
-		return
-	}
-	d, err := h.svc.Move(r.Context(), id, documentdomain.MoveInput{
-		ParentID: req.ParentID,
-		Position: req.Position,
-	})
-	if err != nil {
-		responsehttpapi.FromDomainError(w, h.log, err)
-		return
-	}
-	responsehttpapi.Success(w, http.StatusOK, d)
 }

@@ -62,6 +62,48 @@ func TestUpdate_PathCascade(t *testing.T) {
 	}
 }
 
+func TestDuplicate_SubtreeDeepCopy(t *testing.T) {
+	svc, ctx := newSvc(t)
+	root, _ := svc.Create(ctx, CreateInput{Name: "Root", Content: "# root body"})
+	child, _ := svc.Create(ctx, CreateInput{Name: "Child", ParentID: &root.ID, Content: "child body"})
+	gc, _ := svc.Create(ctx, CreateInput{Name: "Grand", ParentID: &child.ID})
+
+	dup, err := svc.Duplicate(ctx, root.ID, nil) // nil parent → sibling of root (root level)
+	if err != nil {
+		t.Fatalf("duplicate: %v", err)
+	}
+	// New root: fresh id, name auto-uniquified ("Root" taken → "Root 2"), same content, root-level.
+	if dup.ID == root.ID {
+		t.Fatal("duplicate must mint a new id")
+	}
+	if dup.Name != "Root 2" || dup.ParentID != nil || dup.Path != "/Root 2" {
+		t.Fatalf("dup root = name:%q parent:%v path:%q, want Root 2 / nil / /Root 2", dup.Name, dup.ParentID, dup.Path)
+	}
+	if dup.Content != "# root body" {
+		t.Errorf("content not copied: %q", dup.Content)
+	}
+	// The whole subtree is copied with new ids + remapped paths; the original is untouched.
+	kids, _ := svc.ListByParent(ctx, &dup.ID)
+	if len(kids) != 1 || kids[0].Name != "Child" || kids[0].ID == child.ID || kids[0].Path != "/Root 2/Child" || kids[0].Content != "child body" {
+		t.Fatalf("dup child wrong: %+v", kids)
+	}
+	grandKids, _ := svc.ListByParent(ctx, &kids[0].ID)
+	if len(grandKids) != 1 || grandKids[0].Name != "Grand" || grandKids[0].ID == gc.ID || grandKids[0].Path != "/Root 2/Child/Grand" {
+		t.Fatalf("dup grandchild wrong: %+v", grandKids)
+	}
+	// Original subtree unchanged.
+	if origKids, _ := svc.ListByParent(ctx, &root.ID); len(origKids) != 1 || origKids[0].ID != child.ID {
+		t.Errorf("original subtree mutated: %+v", origKids)
+	}
+}
+
+func TestDuplicate_NotFound(t *testing.T) {
+	svc, ctx := newSvc(t)
+	if _, err := svc.Duplicate(ctx, "doc_ghost", nil); !errors.Is(err, documentdomain.ErrNotFound) {
+		t.Errorf("duplicate missing = %v, want ErrNotFound", err)
+	}
+}
+
 func TestMove_CycleGuard(t *testing.T) {
 	svc, ctx := newSvc(t)
 	root, _ := svc.Create(ctx, CreateInput{Name: "Root"})

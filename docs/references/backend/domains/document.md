@@ -26,4 +26,4 @@ audience: [human, ai]
 
 ## 3. 契约（引用）
 
-端点（CRUD + `POST {id}:move` 防环 + `POST {id}:iterate` AI 编辑 + `GET ?parentId=` 直接子节点 + `GET /tree` 整树 metadata）→ [api.md](../api.md) · 表 `documents`（path/position/size_bytes 物化列）→ [database.md](../database.md) · 码 `DOCUMENT_*` 6+3 → [error-codes.md](../error-codes.md) · ID：`doc_` · 通知 `document.*`。LLM 工具 7 个（薄适配、domain 错误转软失败串供自纠）。消费方：@ 提及（快照内容）、agent knowledge 挂载（注入正文）、workflow 节点 attach、catalog。
+端点（CRUD + `POST {id}:move` 防环 + `POST {id}:duplicate` 深拷子树（BFS 自顶向下铸新 id、重映射 parent/path、复制 content、新根名去重、逐节点 Insert 非原子；可选 `{parentId}` 默认落为兄弟）+ `POST {id}:iterate` AI 编辑 + `GET ?parentId=` 直接子节点 + `GET /tree` 整树 metadata）→ [api.md](../api.md) · 表 `documents`（path/position/size_bytes 物化列）→ [database.md](../database.md) · 码 `DOCUMENT_*` 6+3 → [error-codes.md](../error-codes.md) · ID：`doc_` · 通知 `document.*`。LLM 工具 7 个（薄适配、domain 错误转软失败串供自纠）。消费方：@ 提及（快照内容）、agent knowledge 挂载（注入正文）、workflow 节点 attach、catalog。

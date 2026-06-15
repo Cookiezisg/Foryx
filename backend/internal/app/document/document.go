@@ -130,6 +130,113 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*documentdomain.D
 	return d, nil
 }
 
+// Duplicate deep-copies a document and its whole subtree. newParentID picks where the copy lands
+// (nil → a sibling of the source); new ids are minted, parent pointers + materialized paths remapped
+// top-down (BFS, parents before children), content/description/tags copied. The new root's name is
+// auto-uniquified among its target siblings; descendants keep their names (already unique within the
+// fresh copy). Wikilink relations re-sync per copy. Best-effort/non-atomic (per-node Insert) — a
+// mid-copy DB error leaves a partial copy the user can delete; fine for a local single-user app.
+//
+// Duplicate 深拷一个文档及其整棵子树。newParentID 选副本落点（nil → 源的兄弟）；铸新 id、自顶向下
+// （BFS、父先于子）重映射 parent 指针与物化 path、复制 content/description/tags。新根名在目标兄弟间
+// 自动去重；后裔保留原名（在新副本内本就唯一）。逐副本重同步 wikilink relation。逐节点 Insert、非原子
+// ——拷贝中途出错留半棵副本（用户可删）；本地单用户可接受。
+func (s *Service) Duplicate(ctx context.Context, sourceID string, newParentID *string) (*documentdomain.Document, error) {
+	src, err := s.repo.Get(ctx, sourceID)
+	if err != nil {
+		return nil, err // ErrNotFound bubbles
+	}
+	if newParentID == nil {
+		newParentID = src.ParentID // default: land as a sibling of the source
+	}
+	newParentPath := ""
+	if newParentID != nil {
+		parent, perr := s.repo.Get(ctx, *newParentID)
+		if errors.Is(perr, documentdomain.ErrNotFound) {
+			return nil, documentdomain.ErrParentNotFound
+		}
+		if perr != nil {
+			return nil, fmt.Errorf("documentapp.Duplicate: parent lookup: %w", perr)
+		}
+		newParentPath = parent.Path
+	}
+
+	ids, err := s.repo.ListSubtreeIDs(ctx, sourceID) // BFS: parents precede children
+	if err != nil {
+		return nil, fmt.Errorf("documentapp.Duplicate: subtree: %w", err)
+	}
+	srcDocs, err := s.repo.GetBatch(ctx, ids)
+	if err != nil {
+		return nil, fmt.Errorf("documentapp.Duplicate: fetch: %w", err)
+	}
+	byID := make(map[string]*documentdomain.Document, len(srcDocs))
+	for _, d := range srcDocs {
+		byID[d.ID] = d
+	}
+
+	idMap := make(map[string]string, len(ids))   // old id → new id
+	pathMap := make(map[string]string, len(ids)) // new id → new path
+	var newRoot *documentdomain.Document
+
+	for _, oldID := range ids { // BFS order → a node's parent copy is already inserted
+		so := byID[oldID]
+		if so == nil {
+			continue
+		}
+		newID := idgenpkg.New("doc")
+		idMap[oldID] = newID
+		tags := so.Tags
+		if tags == nil {
+			tags = []string{}
+		}
+		cp := &documentdomain.Document{
+			ID:          newID,
+			Name:        so.Name,
+			Description: so.Description,
+			Content:     so.Content,
+			Tags:        tags,
+			SizeBytes:   so.SizeBytes,
+			Position:    so.Position,
+		}
+		if oldID == sourceID {
+			cp.ParentID = newParentID
+			maxPos, mErr := s.repo.MaxSiblingPosition(ctx, newParentID)
+			if mErr != nil {
+				return nil, fmt.Errorf("documentapp.Duplicate: MaxSiblingPosition: %w", mErr)
+			}
+			cp.Position = maxPos + 1
+			base, insErr := so.Name, error(nil)
+			for retry := 1; retry <= 100; retry++ { // root lands among existing siblings → uniquify
+				cp.Path = newParentPath + "/" + cp.Name
+				if insErr = s.repo.Insert(ctx, cp); insErr == nil {
+					break
+				}
+				if !errors.Is(insErr, documentdomain.ErrNameConflict) {
+					return nil, fmt.Errorf("documentapp.Duplicate: %w", insErr)
+				}
+				cp.Name = fmt.Sprintf("%s %d", base, retry+1)
+			}
+			if insErr != nil {
+				return nil, fmt.Errorf("documentapp.Duplicate: %w", insErr)
+			}
+			newRoot = cp
+		} else {
+			pid := idMap[*so.ParentID] // parent copy minted earlier in the BFS
+			cp.ParentID = &pid
+			cp.Path = pathMap[pid] + "/" + cp.Name
+			if err := s.repo.Insert(ctx, cp); err != nil { // descendant names are unique by construction
+				return nil, fmt.Errorf("documentapp.Duplicate: descendant insert: %w", err)
+			}
+		}
+		pathMap[newID] = cp.Path
+		s.syncRelationsForDocumentBody(ctx, newID, so.Content)
+	}
+
+	s.publish(ctx, "created", newRoot) // one tree-refresh signal for the new subtree
+	s.log.Info("document duplicated", zap.String("source_id", sourceID), zap.String("new_root_id", newRoot.ID), zap.Int("nodes", len(idMap)))
+	return newRoot, nil
+}
+
 func (s *Service) Get(ctx context.Context, id string) (*documentdomain.Document, error) {
 	return s.repo.Get(ctx, id)
 }
