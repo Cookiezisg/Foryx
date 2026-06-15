@@ -1,0 +1,32 @@
+/* Forgify demo — 全局重置 + 字体 + 通用原语（核心，只读消费）。
+   只放跨全站的基底：box/body/button 重置、MiSans、滚动条自隐、.ibtn/.chev/.grow/.scroll-fade、spin。
+   布局框架在 shell.css；组件皮肤在 components/*；颜色一律走 tokens。 */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { font-family: var(--font); font-size: var(--t-md); line-height: 1.5; color: var(--ink);
+  background: var(--cc-desk); -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; padding: 16px;
+  transition: background var(--d-mid) var(--ease-out), color var(--d-mid) var(--ease-out); }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+code, .mono { font-family: var(--mono); }
+::selection { background: var(--accent-soft); }
+
+/* 滚动条自隐（macOS 风）：默认透明，仅滚动期(html[data-scrolling]) / hover 时显 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: transparent; border-radius: 99px; border: 3px solid transparent; background-clip: content-box; }
+html[data-scrolling] ::-webkit-scrollbar-thumb, ::-webkit-scrollbar-thumb:hover { background: var(--line-strong); }
+::-webkit-scrollbar-track { background: transparent; }
+
+/* 通用原语 */
+.grow { flex: 1; }
+.ibtn { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; color: var(--ink-2); transition: background .15s, color .15s; }
+.ibtn:hover { background: var(--cc-hover); color: var(--ink); }
+.ibtn svg { display: block; }
+.chev { display: inline-grid; place-items: center; color: var(--ink-3); transition: transform .3s var(--ease-spring); }
+.chev svg { display: block; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* 滚动容器柔化上下缘（海洋给自己的滚动元素加 .scroll-fade；--fade 默认 28px，内容上下 padding 应 ≥ 它） */
+.scroll-fade {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade, 28px), #000 calc(100% - var(--fade, 28px)), transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 var(--fade, 28px), #000 calc(100% - var(--fade, 28px)), transparent 100%);
+}

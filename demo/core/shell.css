@@ -1,0 +1,27 @@
+/* Forgify demo — 外壳布局（核心，只读消费）。圆角浮窗 + 三槽(#left/#sea/#body)。
+   令牌全在 tokens.css；原语/滚动条在 reset.css；本文件只布局框架。 */
+
+/* 圆角浮窗 + 三槽 */
+.win { height: 100%; display: flex; flex-direction: column; background: var(--cc-win);
+  border-radius: var(--r-win); box-shadow: var(--shadow-win); overflow: hidden; }
+.body { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 8px; }
+.main { position: relative; flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+/* 主区头 = 不占流的顶部浮层：只让角落控件占位，正文 .sea 铺满全高（内容滚到顶、不被横带切）。
+   透明 + pointer-events:none，仅 head-lead/head-extra/主题钮可点。 */
+.main-head { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 10px 0 14px; pointer-events: none; }
+.main-head #head-lead, .main-head #head-extra, .main-head #i_theme { pointer-events: auto; }
+.main-head #head-lead, .main-head #head-extra { display: flex; align-items: center; gap: 4px; }
+.crumb { display: flex; align-items: center; gap: 7px; font-size: var(--t-md); font-weight: 500; pointer-events: auto; }
+.crumb .ico { color: var(--ink-3); display: grid; place-items: center; }
+.crumb .sep { color: var(--ink-3); font-weight: 400; }
+.crumb .muted { color: var(--ink-2); font-weight: 400; }
+.sea { flex: 1; min-height: 0; display: flex; flex-direction: column; }   /* ← 海洋渲染进这里（铺满 .main 全高） */
+
+/* 侧栏宽度/收起：核心管 .body 行内回流（--side-w 全仓库唯一定义处在此；状态由 sidebar 写 html[data-side]）。
+   只碰布局量、不碰 .side 皮肤(归 sidebar)；属性选择器(0,1,1)稳压 .side(0,1,0)，不用 !important。 */
+.side { width: var(--side-w, 240px);
+  transition: width var(--d-slow) var(--ease-spring), opacity var(--d-mid), margin-right var(--d-slow) var(--ease-spring); }
+html[data-side="off"] .side { width: 0; min-width: 0; opacity: 0; margin-right: calc(-1 * var(--s2)); overflow: hidden; pointer-events: none; }
+html[data-side-dragging] .side { transition: none; }

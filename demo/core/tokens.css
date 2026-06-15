@@ -1,0 +1,106 @@
+/* Forgify demo — 设计令牌（唯一调色板事实源）。
+   契约：自定义属性【只能】在本文件定义；features/components 一律走令牌、禁裸 hex。
+   语义名为真（sea · island · ink · accent · 语义色 · line · r · s · t · ease 等）；
+   cc- 前缀 = 旧交互别名（保 design-lab 现值，字节级不漂移：窗口背景 cc-win=白=岛，不是 sea）。
+   字体打包 MiSans（双语·苹果味）；design-lab 经 CDN 引、Flutter 打包文件。 */
+@import url('https://cdn.jsdelivr.net/npm/cn-fontsource-mi-sans-vf/font.css');
+
+:root {
+  /* 海与岛 sea & islands ---------------------------------------- */
+  --sea:        #f5f5f7;   /* 递归海面（留作组件可用的下沉面；窗口背景实际走 --cc-win=岛白） */
+  --island:     #ffffff;   /* 浮岛 */
+  --island-2:   #fbfbfd;   /* 岛内嵌套面 */
+  --island-3:   #f0f0f3;   /* 更深一层 / hover 底 */
+  --island-4:   #e9e9ec;   /* 选中底 */
+
+  /* 墨 ink ------------------------------------------------------ */
+  --ink:        #1d1d1f;
+  --ink-2:      #6e6e73;
+  --ink-3:      #8e8e93;
+  --ink-on-accent: #ffffff;
+
+  /* 线 lines ---------------------------------------------------- */
+  --line:        rgba(0,0,0,.08);
+  --line-strong: rgba(0,0,0,.13);
+
+  /* 强调与语义 accent & semantic -------------------------------- */
+  --accent:       #0071e3;
+  --accent-hover: #0077ed;
+  --accent-soft:  rgba(0,113,227,.10);
+  --accent-line:  rgba(0,113,227,.30);
+  --ok:      #2da44e;  --ok-soft: rgba(45,164,78,.12);
+  --warn:    #bf6a02;  --warn-soft: rgba(191,106,2,.12);
+  --danger:  #d70015;  --danger-soft: rgba(215,0,21,.10);
+  --live:    #0071e3;
+
+  /* 代码高亮 Atom One（语法着色，组件 code-editor / version-diff 共用） */
+  --cd-com: #a0a1a7; --cd-kw: #a626a4; --cd-str: #50a14f; --cd-num: #986801; --cd-fn: #4078f2;
+
+  /* 阴影 shadows ------------------------------------------------ */
+  --shadow-island: 0 1px 2px rgba(0,0,0,.03), 0 3px 10px rgba(0,0,0,.035);
+  --shadow-float:  0 1px 3px rgba(0,0,0,.05), 0 8px 22px rgba(0,0,0,.045);
+  --shadow-pop:    0 2px 8px rgba(0,0,0,.06), 0 12px 32px rgba(0,0,0,.10);
+  --shadow-win:    0 16px 50px rgba(0,0,0,.20);
+
+  /* 圆角 radii -------------------------------------------------- */
+  --r-island: 20px; --r-card: 14px; --r-win: 14px; --r-chip: 10px; --r-btn: 8px; --r-pill: 999px;
+
+  /* 间距 spacing ------------------------------------------------ */
+  --s1: 4px; --s2: 8px; --s3: 12px; --s4: 16px; --s5: 20px; --s6: 24px; --s8: 32px;
+  --row: 32px;
+
+  /* 字体 type --------------------------------------------------- */
+  --font: "MiSans", -apple-system, "SF Pro Text", "Inter", "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --mono: "SF Mono", "JetBrains Mono", "Roboto Mono", ui-monospace, monospace;
+  --t-xs: 11px; --t-sm: 12px; --t-md: 13px; --t-lg: 15px; --t-xl: 19px; --t-2xl: 24px;
+
+  /* 动效 motion ------------------------------------------------- */
+  --ease-spring: cubic-bezier(.2, .9, .25, 1);
+  --ease-out:    cubic-bezier(.16, 1, .3, 1);
+  --d-fast: 160ms; --d-mid: 240ms; --d-slow: 340ms;
+
+  /* —— 旧交互别名（design-lab 现值，字节级保形；新代码请用语义名）—— */
+  --cc-desk:   #d4d5d9;        /* 桌面底（窗外） */
+  --cc-win:    var(--island);  /* 窗口/海面背景 = 岛白（非 --sea；保「海与岛同色」验证态） */
+  --cc-side:   var(--island);
+  --cc-input:  var(--island);
+  --cc-bubble: #f0f0f2;        /* 用户气泡（唯一灰填充例外） */
+  --cc-hover:  #f1f1f3;
+  --cc-active: var(--island-4);
+}
+
+[data-theme="dark"] {
+  --sea:        #0a0a0a;
+  --island:     #1c1c1e;       /* 统一暗岛 = design-lab shell.css 验证值（非 #1a1a1c） */
+  --island-2:   #232326;
+  --island-3:   #2a2a2d;
+  --island-4:   #323236;
+
+  --ink:        #f5f5f7;
+  --ink-2:      #a1a1a6;
+  --ink-3:      #6e6e73;
+  --ink-on-accent: #ffffff;
+
+  --line:        rgba(255,255,255,.10);
+  --line-strong: rgba(255,255,255,.16);
+
+  --accent:       #0a84ff;
+  --accent-hover: #409cff;
+  --accent-soft:  rgba(10,132,255,.16);
+  --accent-line:  rgba(10,132,255,.40);
+  --ok:      #30d158;  --ok-soft: rgba(48,209,88,.16);
+  --warn:    #ff9f0a;  --warn-soft: rgba(255,159,10,.16);
+  --danger:  #ff453a;  --danger-soft: rgba(255,69,58,.16);
+  --live:    #0a84ff;
+
+  --cd-com: #7f848e; --cd-kw: #c678dd; --cd-str: #98c379; --cd-num: #d19a66; --cd-fn: #61afef;
+
+  --shadow-island: 0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
+  --shadow-float:  0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
+  --shadow-pop:    0 8px 24px rgba(0,0,0,.55), 0 20px 50px rgba(0,0,0,.6);
+  --shadow-win:    0 16px 50px rgba(0,0,0,.5);
+
+  --cc-desk:   #000000;
+  --cc-bubble: #2c2c2f;
+  --cc-hover:  #2a2a2d;
+}
