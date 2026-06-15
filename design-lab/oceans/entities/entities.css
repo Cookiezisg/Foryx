@@ -1,0 +1,151 @@
+/* Forgify design-lab — 实体海洋（单独，一人负责整个 oceans/entities/ 文件夹）。
+   海面 = 选中实体的【工作台】：脊柱统一（类型徽 + 名 + 版本/状态 + 执行动词 + Iterate），体按四型分魂
+   （Function=代码+I/O+deps · Handler=类+方法目录+config+健康 · Agent=system prompt+model+工具 · Workflow=图画布）。
+   侧栏(列表)点行 → Shell.openEntity(id) → 海面 morph（沿用 documents 的 Shell.openDocument 范式）。
+   视觉宪法：海与岛同色靠海岸线分；无横向 divider（分区靠留白+留白标签）；--accent 只点「正在发生」；动效走 --ease-spring。
+   类名全 eo- 专属，避让 chat(cv-/.aside/.field) 与 sidebar(en-)。依赖 tokens.css + shell.css 的 cc-*（只读）。 */
+
+/* ===== 海面骨架 ===== */
+.eo { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.eo-scroll { flex: 1; min-height: 0; overflow-y: auto; }
+.eo-col { max-width: 940px; margin: 0 auto; padding: 56px 36px 48px; }
+.eo-morph { animation: eoMorph .34s var(--ease-spring) both; }
+@keyframes eoMorph { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ===== 空态（无选中：一句引导 + 四型计数）===== */
+.eo-empty { flex: 1; display: grid; place-items: center; padding: 40px; }
+.eo-empty .in { text-align: center; max-width: 460px; }
+.eo-empty .gico { width: 58px; height: 58px; border-radius: 16px; margin: 0 auto 18px; display: grid; place-items: center;
+  background: var(--cc-active); color: var(--ink-3); }
+.eo-empty h2 { font-size: 18px; font-weight: 600; margin: 0 0 7px; color: var(--ink); letter-spacing: -.01em; }
+.eo-empty p { font-size: 13px; color: var(--ink-3); margin: 0 0 22px; line-height: 1.65; }
+.eo-stats { display: flex; gap: 9px; justify-content: center; flex-wrap: wrap; }
+.eo-stat { display: inline-flex; align-items: center; gap: 8px; padding: 8px 13px; border-radius: 11px;
+  background: var(--cc-side); border: 1px solid var(--line); box-shadow: 0 1px 2px rgba(0,0,0,.03); }
+.eo-stat .ico { display: grid; place-items: center; color: var(--ink-2); }
+.eo-stat b { font-size: 15px; font-weight: 700; color: var(--ink); font-variant-numeric: tabular-nums; }
+.eo-stat span { font-size: 12px; color: var(--ink-3); }
+
+/* ===== 实体头（脊柱）===== */
+.eo-head { display: flex; align-items: flex-start; gap: 15px; margin-bottom: 8px; }
+.eo-etype { width: 46px; height: 46px; border-radius: 13px; flex: none; display: grid; place-items: center;
+  background: var(--cc-active); color: var(--ink-2); }                  /* 类型靠图标分，绝不上色块（少强调色） */
+.eo-htext { flex: 1; min-width: 0; padding-top: 1px; }
+.eo-htext h1 { font-size: 23px; font-weight: 650; letter-spacing: -.015em; margin: 0; color: var(--ink);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.eo-sub { display: flex; align-items: center; gap: 9px; margin-top: 6px; font-size: 12px; color: var(--ink-3); }
+.eo-sub .sep { color: var(--ink-3); opacity: .6; }
+.eo-ver { font-family: var(--mono); background: var(--cc-active); color: var(--ink-2); padding: 1px 7px; border-radius: 6px; font-size: 11px; }
+.eo-actions { display: flex; align-items: center; gap: 7px; flex: none; }
+.eo-btn { height: 32px; padding: 0 13px; border-radius: 9px; display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; font-weight: 600; color: var(--ink-2); border: 1px solid var(--line);
+  transition: background .14s, color .14s, border-color .14s; }
+.eo-btn:hover { background: var(--cc-hover); color: var(--ink); }
+.eo-btn svg { display: block; }
+.eo-btn.primary { background: var(--accent); color: var(--ink-on-accent); border-color: transparent; }
+.eo-btn.primary:hover { background: var(--accent-hover); }
+.eo-btn.ic { width: 32px; padding: 0; justify-content: center; }
+
+/* 状态徽（与侧栏 en-st 同义：done绿 / run蓝脉冲 / wait橙脉冲 / err红 / idle空心）*/
+.eo-st { display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+.eo-st .dot { width: 7px; height: 7px; border-radius: 50%; box-sizing: border-box; }
+.eo-st.done { color: var(--ok); } .eo-st.done .dot { background: var(--ok); }
+.eo-st.run  { color: var(--accent); } .eo-st.run .dot  { background: var(--accent); animation: eoPulse 1.5s ease infinite; }
+.eo-st.wait { color: var(--warn); } .eo-st.wait .dot { background: var(--warn); animation: eoPulse 1.5s ease infinite; }
+.eo-st.err  { color: var(--danger); } .eo-st.err .dot  { background: var(--danger); }
+.eo-st.idle { color: var(--ink-3); } .eo-st.idle .dot { border: 1.5px solid var(--ink-3); }
+@keyframes eoPulse { 50% { opacity: .3; } }
+
+/* ===== 次级 tab（概览 / 版本 / 运行 / 迭代）===== */
+.eo-tabs { display: flex; gap: 3px; margin: 18px 0 24px; }
+.eo-tabs button { font-size: 13px; color: var(--ink-3); padding: 6px 12px; border-radius: 8px; font-weight: 500;
+  transition: background .14s, color .14s; }
+.eo-tabs button:hover { color: var(--ink-2); }
+.eo-tabs button.on { background: var(--cc-active); color: var(--ink); font-weight: 600; }
+
+/* ===== 段（label 在上、留白分区；禁横线）===== */
+.eo-desc { font-size: 14px; color: var(--ink-2); line-height: 1.62; margin: 14px 0 24px; }
+.eo-sec { margin-bottom: 24px; }
+.eo-sec > label { display: flex; align-items: center; gap: 8px; font-size: 11px; font-weight: 600; color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px; }
+.eo-sec > label .ct { color: var(--ink-3); font-weight: 500; text-transform: none; letter-spacing: 0; }
+.eo-grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+/* 代码 / 类（白底海岸线 + 等宽 + 右上语言角标）*/
+.eo-code { position: relative; background: var(--cc-input); border: 1px solid var(--line); border-radius: 12px;
+  padding: 14px 16px; font-family: var(--mono); font-size: 12.5px; line-height: 1.75; color: var(--ink);
+  white-space: pre; overflow-x: auto; }
+.eo-code .lang { position: absolute; top: 9px; right: 11px; font-size: 10px; font-weight: 600; letter-spacing: .03em;
+  color: var(--ink-3); text-transform: uppercase; }
+
+/* 盒子（中性容器）+ 文本值 */
+.eo-box { background: var(--cc-input); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.eo-prose { font-size: 13px; color: var(--ink); line-height: 1.62; white-space: pre-wrap; }
+
+/* 标签药丸（依赖 / 工具 / 知识 / 输入）*/
+.eo-tags { display: flex; flex-wrap: wrap; gap: 7px; }
+.eo-tag { display: inline-flex; align-items: center; gap: 6px; padding: 4px 11px; border-radius: 999px;
+  background: var(--cc-input); border: 1px solid var(--line); font-size: 12px; font-family: var(--mono); color: var(--ink-2); }
+.eo-tag .ico { display: grid; place-items: center; color: var(--ink-3); }
+.eo-empty-note { font-size: 12px; color: var(--ink-3); font-family: var(--mono); }
+
+/* 键值（Init args / 元信息）*/
+.eo-kv { display: flex; align-items: baseline; gap: 12px; padding: 6px 0; font-size: 13px; }
+.eo-kv .k { color: var(--ink-3); min-width: 128px; flex: none; }
+.eo-kv .v { color: var(--ink); font-family: var(--mono); font-size: 12.5px; word-break: break-all; }
+.eo-mask { font-family: var(--mono); letter-spacing: 1.5px; color: var(--ink-3); }
+
+/* 方法目录 / IO 行（一行一可调项）*/
+.eo-rows { display: flex; flex-direction: column; }
+.eo-row { display: flex; align-items: center; gap: 11px; min-height: 36px; padding: 5px 11px; border-radius: 9px;
+  transition: background .12s; }
+.eo-row:hover { background: var(--cc-hover); }
+.eo-row .nico { width: 18px; flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.eo-row .nm { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+.eo-row .args { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+.eo-row .rt { margin-left: auto; font-size: 12px; color: var(--ink-3); }
+.eo-io-t { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-left: auto; }
+
+/* 状态徽（env 物化 / config / 连接）*/
+.eo-badge { display: inline-flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 500; }
+.eo-badge .dot { width: 7px; height: 7px; border-radius: 50%; }
+.eo-badge.ready { color: var(--ok); } .eo-badge.ready .dot { background: var(--ok); }
+.eo-badge.syncing { color: var(--ink-2); } .eo-badge.syncing .dot { background: var(--accent); animation: eoPulse 1.5s ease infinite; }
+.eo-badge.pending { color: var(--ink-3); } .eo-badge.pending .dot { background: var(--ink-3); }
+.eo-badge.failed { color: var(--danger); } .eo-badge.failed .dot { background: var(--danger); }
+.eo-note { font-size: 11px; color: var(--ink-3); margin-left: 8px; }
+
+/* lifecycle 药丸（workflow / handler 常驻态）*/
+.eo-life { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 11px; border-radius: 8px; }
+.eo-life.active { color: var(--accent); background: var(--accent-soft); }
+.eo-life.active .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: eoPulse 1.5s ease infinite; }
+.eo-life.draining { color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
+.eo-life.inactive { color: var(--ink-3); background: var(--cc-active); }
+
+/* attention 行（需处理：橙描边软底）*/
+.eo-attn { display: flex; align-items: center; gap: 10px; padding: 11px 13px; border-radius: 12px; font-size: 13px; color: var(--ink-2);
+  border: 1px solid color-mix(in srgb, var(--warn) 40%, var(--line)); background: color-mix(in srgb, var(--warn) 5%, transparent); margin-bottom: 24px; }
+.eo-attn .ico { color: var(--warn); display: grid; place-items: center; flex: none; }
+
+/* ===== Workflow 图画布（showpiece：节点 + 边，全 SVG 自适应缩放）===== */
+.eo-graph { background: var(--cc-input); border: 1px solid var(--line); border-radius: 14px; padding: 6px; overflow: hidden; }
+.eo-graph svg { display: block; width: 100%; height: auto; }
+.eo-edges path { fill: none; stroke: var(--line-strong); stroke-width: 1.5; }
+marker#eoArrow path { fill: var(--line-strong); }
+.eo-gn rect { fill: var(--cc-active); stroke: var(--line); stroke-width: 1; transition: stroke .2s, fill .2s; }
+.eo-gn .ic { color: var(--ink-2); }
+.eo-gn .nid { fill: var(--ink); font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+.eo-gn .nkind { fill: var(--ink-3); font-family: var(--mono); font-size: 10.5px; }
+.eo-gn.run rect { stroke: var(--accent); fill: var(--accent-soft); }
+.eo-gn.run .ic { color: var(--accent); }
+.eo-gn.run .rp { fill: var(--accent); animation: eoPulse 1.4s ease infinite; }
+.eo-gn.parked rect { stroke: var(--warn); fill: color-mix(in srgb, var(--warn) 9%, transparent); }
+.eo-gn.parked .ic { color: var(--warn); }
+.eo-gn.parked .rp { fill: var(--warn); animation: eoPulse 1.4s ease infinite; }
+
+/* foot（id + runs，安静耳语）*/
+.eo-foot { display: flex; align-items: center; gap: 9px; margin-top: 30px; font-size: 11px; color: var(--ink-3); }
+.eo-foot .mono { font-family: var(--mono); }
+.eo-foot .gap { flex: 1; }
+.eo-foot .lnk { color: var(--ink-2); font-weight: 500; cursor: pointer; }
+.eo-foot .lnk:hover { color: var(--ink); }

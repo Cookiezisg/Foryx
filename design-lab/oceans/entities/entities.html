@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Forgify · 实体海洋</title>
+<!-- 内核（只读） -->
+<link rel="stylesheet" href="../../shared/tokens.css">
+<link rel="stylesheet" href="../../shared/shell.css">
+<!-- 侧栏模块 -->
+<link rel="stylesheet" href="../../sidebar/sidebar.css">
+<!-- 本海洋 -->
+<link rel="stylesheet" href="./entities.css">
+</head>
+<body>
+<!-- 加载顺序：图标 → 外壳(搭框开槽) → 侧栏(进#left) → 海洋块 → 挂载 -->
+<script src="../../shared/icons.js"></script>
+<script src="../../shared/shell.js"></script>
+<script src="../../sidebar/sidebar.js"></script>
+<script src="./entities.js"></script>
+<script>
+  Shell.mount('entities');
+  document.querySelector('#modeseg [data-m="entities"]')?.click();   // 侧栏四导航高亮到 Entities（用侧栏自己的 click 行为，并懒加载 sidebar/entities.js）
+</script>
+</body>
+</html>

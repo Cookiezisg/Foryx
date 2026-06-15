@@ -49,7 +49,7 @@
   const row = e => {
     const dot = e.ty === 'skill' ? `<span class="en-st none"></span>` : `<span class="en-st ${e.st || 'idle'}"></span>`;
     const meta = e.ty === 'skill' ? `<span class="en-meta">⚷ ${e.tools}</span>` : (e.ver ? `<span class="en-meta">v${e.ver}</span>` : '');
-    return `<div class="en${e.on ? ' on' : ''}">${dot}<span class="en-t">${e.name}</span>${meta}<span class="en-more">${icon('more', 16)}</span></div>`;
+    return `<div class="en${e.on ? ' on' : ''}" data-id="${e.name}">${dot}<span class="en-t">${e.name}</span>${meta}<span class="en-more">${icon('more', 16)}</span></div>`;
   };
   const sortOpt = (v, label) => `<button class="en-opt${sort === v ? ' on' : ''}" data-sort="${v}"><span class="en-ck">${icon('check', 14)}</span>${label}</button>`;
 
@@ -86,6 +86,7 @@
     host.querySelectorAll('.en').forEach(it => it.onclick = e => {
       if (e.target.closest('.en-more')) return;
       host.querySelectorAll('.en').forEach(x => x.classList.remove('on')); it.classList.add('on');
+      if (window.Shell && Shell.openEntity) Shell.openEntity(it.dataset.id);   // 选中 → 海面 morph 成该实体（外壳通道；海洋未挂则仅高亮）
     });
     // 排序菜单(对齐 chat:sliders + 单选,示意;接后端 = List sort 参数)
     const disp = host.querySelector('.en-disp'), menu = host.querySelector('.en-menu');
