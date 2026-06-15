@@ -128,6 +128,30 @@ func TestResolve_FunctionMount(t *testing.T) {
 	}
 }
 
+// TestCheckHealth_MixedMounts: per-mount status, no fail-fast — a healthy mount carries its name,
+// a deleted target / unknown scheme is reported broken (the rest still evaluated).
+func TestCheckHealth_MixedMounts(t *testing.T) {
+	fn := &fakeFn{f: fixtureFn()} // fn_1 exists
+	r := NewResolver(fn, nil, nil)
+	health := r.CheckHealth(context.Background(), []agentdomain.ToolRef{
+		{Ref: "fn_1"},     // resolvable
+		{Ref: "fn_ghost"}, // deleted/missing target → broken
+		{Ref: "xyz_bad"},  // unknown ref scheme → broken
+	})
+	if len(health) != 3 {
+		t.Fatalf("want 3 results (no fail-fast), got %d", len(health))
+	}
+	if !health[0].Healthy || health[0].Ref != "fn_1" || health[0].Name != "add_numbers" {
+		t.Errorf("mount 0 = %+v, want healthy add_numbers", health[0])
+	}
+	if health[1].Healthy || health[1].Error == "" {
+		t.Errorf("mount 1 (missing fn) must be unhealthy with an error: %+v", health[1])
+	}
+	if health[2].Healthy || health[2].Error == "" {
+		t.Errorf("mount 2 (unknown scheme) must be unhealthy with an error: %+v", health[2])
+	}
+}
+
 // TestResolve_HandlerMount: hd_<id>.<method> becomes <handlerName>__<method> bound to that
 // method's spec, calling with TriggeredBy=agent.
 //

@@ -51,6 +51,21 @@ type ToolRef struct {
 	Name string `json:"name"` // display name (resolved at runtime)
 }
 
+// MountHealth is one mount's resolvability at a point in time — the on-demand pre-invoke check (a
+// deleted function / offline mcp server surfaces as Healthy=false BEFORE the user invokes, instead
+// of only when the invoke fails). Same resolution path as invoke, so a broken mount here is exactly
+// what an invoke would reject.
+//
+// MountHealth 是某挂载此刻的可解析性——按需的 invoke 前预检（被删 function / 离线 mcp server 在用户
+// invoke 前就以 Healthy=false 暴露，而非等 invoke 失败才知）。与 invoke 同一解析路径，故此处坏的挂载
+// 正是 invoke 会拒的那个。
+type MountHealth struct {
+	Ref     string `json:"ref"`
+	Name    string `json:"name,omitempty"` // resolved display name when healthy
+	Healthy bool   `json:"healthy"`
+	Error   string `json:"error,omitempty"` // why it's broken (deleted / offline / invalid ref)
+}
+
 // Version is one immutable snapshot of an agent's config. Version is a monotonic counter
 // assigned at write time (max+1) — never reassigned, never renumbered.
 //

@@ -115,6 +115,43 @@ func (r *Resolver) Resolve(ctx context.Context, refs []agentdomain.ToolRef) ([]t
 	return tools, nil
 }
 
+// CheckHealth resolves each mount INDEPENDENTLY (no fail-fast) and reports per-mount status — the
+// on-demand counterpart to Resolve, for an agent's mount-health precheck. Reuses the same per-ref
+// resolvers (so a broken mount here is exactly what would fail an invoke), but collects every
+// result instead of stopping at the first failure.
+//
+// CheckHealth 独立解析每个挂载（不 fail-fast）并报告逐挂载状态——Resolve 的按需对应物，给 agent 挂载
+// 健康预检。复用同一批 per-ref 解析器（故此处坏的挂载正是 invoke 会失败的那个），但收集每条结果而非
+// 遇首个失败即停。
+func (r *Resolver) CheckHealth(ctx context.Context, refs []agentdomain.ToolRef) []agentdomain.MountHealth {
+	out := make([]agentdomain.MountHealth, 0, len(refs))
+	for _, tr := range refs {
+		ref := strings.TrimSpace(tr.Ref)
+		var (
+			t   toolapp.Tool
+			err error
+		)
+		switch {
+		case strings.HasPrefix(ref, "fn_"):
+			t, err = r.functionTool(ctx, ref)
+		case strings.HasPrefix(ref, "hd_"):
+			t, err = r.handlerTool(ctx, ref)
+		case strings.HasPrefix(ref, "mcp:"):
+			t, err = r.mcpTool(ctx, ref)
+		default:
+			err = fmt.Errorf("unknown ref scheme: %w", agentdomain.ErrMountInvalid)
+		}
+		h := agentdomain.MountHealth{Ref: ref, Healthy: err == nil}
+		if err != nil {
+			h.Error = err.Error()
+		} else {
+			h.Name = t.Name()
+		}
+		out = append(out, h)
+	}
+	return out
+}
+
 // --- function mount (fn_<id>) ------------------------------------------------
 
 func (r *Resolver) functionTool(ctx context.Context, ref string) (toolapp.Tool, error) {

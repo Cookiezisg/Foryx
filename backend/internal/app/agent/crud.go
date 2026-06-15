@@ -75,6 +75,44 @@ func (s *Service) Get(ctx context.Context, id string) (*agentdomain.Agent, error
 	return a, nil
 }
 
+// MountHealthReport is the per-mount resolvability of an agent's active version — the on-demand
+// precheck the UI calls before an invoke (red dot if any mount is broken).
+//
+// MountHealthReport 是 agent active 版本各挂载的可解析性——UI 在 invoke 前调的按需预检（有坏挂载就红点）。
+type MountHealthReport struct {
+	Mounts     []agentdomain.MountHealth `json:"mounts"`
+	AllHealthy bool                      `json:"allHealthy"`
+}
+
+// MountHealth checks every mount of the agent's active version (deleted fn/hd, offline mcp server)
+// without invoking — the on-demand counterpart to invoke's fail-fast resolution. An agent with no
+// active version / no mounts is trivially healthy (empty list).
+//
+// MountHealth 不 invoke 即检 agent active 版本的每个挂载（被删 fn/hd、离线 mcp server）——invoke
+// fail-fast 解析的按需对应物。无 active 版本 / 无挂载的 agent 平凡健康（空列表）。
+func (s *Service) MountHealth(ctx context.Context, agentID string) (*MountHealthReport, error) {
+	a, err := s.Get(ctx, agentID) // hydrates ActiveVersion
+	if err != nil {
+		return nil, err
+	}
+	if s.invoke.Mounts == nil {
+		return nil, fmt.Errorf("agentapp.MountHealth: no MountResolver wired")
+	}
+	var refs []agentdomain.ToolRef
+	if a.ActiveVersion != nil {
+		refs = a.ActiveVersion.Tools
+	}
+	mounts := s.invoke.Mounts.CheckHealth(ctx, refs)
+	report := &MountHealthReport{Mounts: mounts, AllHealthy: true}
+	for _, m := range mounts {
+		if !m.Healthy {
+			report.AllHealthy = false
+			break
+		}
+	}
+	return report, nil
+}
+
 // ListVersions returns one keyset page of an agent's versions (newest first, N4).
 //
 // ListVersions 返 agent 版本的一页 keyset（新→旧，N4）。

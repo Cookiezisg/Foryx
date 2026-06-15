@@ -67,6 +67,12 @@ type KnowledgeProvider interface {
 // Read / Bash）；其工具宇宙恰是其挂载。
 type MountResolver interface {
 	Resolve(ctx context.Context, refs []agentdomain.ToolRef) ([]toolapp.Tool, error)
+	// CheckHealth resolves each mount independently (no fail-fast) for the on-demand mount-health
+	// precheck — same resolution path as Resolve, but per-mount status instead of all-or-nothing.
+	//
+	// CheckHealth 独立解析每个挂载（不 fail-fast），给按需挂载健康预检——与 Resolve 同解析路径，但逐
+	// 挂载状态而非全或无。
+	CheckHealth(ctx context.Context, refs []agentdomain.ToolRef) []agentdomain.MountHealth
 }
 
 // SkillGuide renders the version's mounted skill into an execution-guide string injected into

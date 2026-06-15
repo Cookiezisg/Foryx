@@ -48,6 +48,7 @@ func (h *AgentHandler) Register(mux Registrar) {
 	mux.HandleFunc("PATCH /api/v1/agents/{id}", h.UpdateMeta)
 	mux.HandleFunc("DELETE /api/v1/agents/{id}", h.Delete)
 	mux.HandleFunc("POST /api/v1/agents/{idAction}", h.postOnAgent)
+	mux.HandleFunc("GET /api/v1/agents/{id}/mount-health", h.MountHealth)
 	mux.HandleFunc("GET /api/v1/agents/{id}/versions", h.ListVersions)
 	mux.HandleFunc("GET /api/v1/agents/{id}/versions/{version}", h.GetVersion)
 	mux.HandleFunc("GET /api/v1/agents/{id}/executions", h.ListExecutions)
@@ -118,6 +119,20 @@ func (h *AgentHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	responsehttpapi.Success(w, http.StatusOK, ag)
+}
+
+// MountHealth handles GET /agents/{id}/mount-health — the on-demand precheck of whether the agent's
+// active-version mounts (fn/hd/mcp) still resolve, so the UI can warn before invoke.
+//
+// MountHealth 处理 GET /agents/{id}/mount-health——按需预检 agent active 版本的挂载（fn/hd/mcp）是否
+// 仍可解析，使 UI 在 invoke 前预警。
+func (h *AgentHandler) MountHealth(w http.ResponseWriter, r *http.Request) {
+	report, err := h.svc.MountHealth(r.Context(), r.PathValue("id"))
+	if err != nil {
+		responsehttpapi.FromDomainError(w, h.log, err)
+		return
+	}
+	responsehttpapi.Success(w, http.StatusOK, report)
 }
 
 func (h *AgentHandler) UpdateMeta(w http.ResponseWriter, r *http.Request) {

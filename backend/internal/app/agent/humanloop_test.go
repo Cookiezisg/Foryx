@@ -64,6 +64,14 @@ func (m fakeMounts) Resolve(context.Context, []agentdomain.ToolRef) ([]toolapp.T
 	return m.tools, nil
 }
 
+func (m fakeMounts) CheckHealth(_ context.Context, refs []agentdomain.ToolRef) []agentdomain.MountHealth {
+	out := make([]agentdomain.MountHealth, len(refs))
+	for i, r := range refs {
+		out[i] = agentdomain.MountHealth{Ref: r.Ref, Name: r.Name, Healthy: true}
+	}
+	return out
+}
+
 // TestInvoke_DangerGateFromBrokerInCtx is the nested human-in-the-loop proof: an agent run
 // given a humanloop broker via ctx (exactly how a chat turn's broker flows into an invoke_agent
 // sub-run) blocks at the shared loop's danger gate before a dangerous tool executes, and a resolve

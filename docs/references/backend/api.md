@@ -70,6 +70,7 @@ audience: [human, ai]
 | `POST /agents/{id}:edit` | 全量 Config 替换 → 新版本（**非** ops、非合并） |
 | `POST /agents/{id}:iterate` | 开 AI 编辑对话 |
 | `GET /agents/{id}/versions` · `/versions/{version}` | 版本分页 · 单版本（接受版本号或 agv_ id） |
+| `GET /agents/{id}/mount-health` | 按需预检 active 版本各挂载（fn/hd/mcp）是否仍可解析（被删/离线/坏 ref），返 `{data:{mounts:[{ref,name?,healthy,error?}], allHealthy}}`——与 invoke 同解析路径、不 fail-fast。供 invoke 前红点预警（无 active 版本/无挂载 = 平凡健康） |
 | `GET /agents/{id}/executions` | 执行日志分页（同款过滤）；返 `{data:{executions, aggregates}, nextCursor, hasMore}`(同 function/handler/mcp 同形) |
 | `GET /agent-executions/{id}` | 单执行详情（含完整 transcript） |
 
