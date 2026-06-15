@@ -1,0 +1,61 @@
+/* Forgify design-lab — 【Entities 海洋】左侧栏内容样式（由 sidebar/entities.js 自注入）。
+   New + 搜索 → 类型按钮条 → 类型分组/扁平列表 + 行首状态点。类名全 en- 前缀,勿与 chat(cv-/cm-)及海洋海面 CSS 撞名。
+   依赖 tokens.css + shell.css 的 cc-* 表面色、ink、accent、语义色（只读）。 */
+
+/* 新建实体（文字用 span 包，避免 button 默认居中） */
+.en-new { display: flex; align-items: center; gap: 11px; height: 34px; padding: 0 10px; border-radius: 8px;
+  color: var(--ink); font-size: 13px; font-weight: 500; transition: background .12s; }
+.en-new:hover { background: var(--cc-hover); }
+.en-new svg { color: var(--ink-2); display: block; }
+
+/* 搜索（跨实体内容检索的入口；此处示意做名字快滤） */
+.en-filter { display: flex; align-items: center; gap: 11px; height: 32px; margin-bottom: 8px; padding: 0 10px; }
+.en-filter > svg { flex: none; display: block; color: var(--ink-3); }
+.en-filter input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: 13px; }
+.en-filter input::placeholder { color: var(--ink-3); }
+
+/* 类型按钮条（All + 9 类，带计数；点击展开该类型。选中=灰药丸） */
+.en-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.en-chip { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; border-radius: 8px;
+  color: var(--ink-2); font-size: 12px; font-weight: 500; background: transparent; transition: background .12s, color .12s; }
+.en-chip:hover { background: var(--cc-hover); color: var(--ink); }
+.en-chip.on { background: var(--cc-active); color: var(--ink); }
+.en-chip svg { flex: none; display: block; color: var(--ink-2); }
+.en-chip.on svg { color: var(--ink-2); }
+.en-chip-n { color: var(--ink-3); font-weight: 500; }
+
+/* 列表 + 分组（All 视图按组折叠；复用 chat .cvsec 套路） */
+.en-body { flex: 1; min-height: 0; overflow-y: auto; }
+.ensec { margin-bottom: 8px; }
+.ensec-h { display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 10px; border-radius: 8px;
+  font-size: 11px; font-weight: 600; color: var(--ink-3); }
+.ensec-h.tog { transition: background .12s; }
+.ensec-h.tog:hover { background: var(--cc-hover); }
+.ensec-h .cnt { font-weight: 500; }
+.ensec-h .chev { margin-left: auto; display: inline-grid; place-items: center; color: var(--ink-3); transition: transform .2s var(--ease-spring); }
+.ensec-h .chev svg { display: block; }
+.collapsible.open > .ensec-h .chev { transform: rotate(90deg); }
+.collapsible:not(.open) > .ensec-body { display: none; }
+
+/* 实体行：行首状态点 + 名 + 类型标 + 版本/技能数 + 悬浮 ⋯ */
+.en { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border-radius: 8px;
+  color: var(--ink-2); font-size: 13px; transition: background .12s, color .12s; }
+.en:hover { background: var(--cc-hover); color: var(--ink); }
+.en.on { background: var(--cc-active); color: var(--ink); }
+.en-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.en-ty { flex: none; font-size: 10px; font-weight: 600; letter-spacing: .03em; text-transform: uppercase; color: var(--ink-3); }
+.en-ver, .en-tools { flex: none; font-size: 11px; color: var(--ink-3); }
+.en-more { flex: none; opacity: 0; color: var(--ink-3); display: grid; place-items: center; transition: opacity .12s; }
+.en-more svg { display: block; }
+.en:hover .en-more { opacity: 1; }
+
+/* 状态点：行首 7px（复用 Chat 五态）。空心=闲置 / 蓝脉冲=锻造·监听 / 橙脉冲=需处理 / 红=失败 / 绿=就绪。
+   .none = skill 占位(文件式无状态,留位对齐、不画点)。 */
+.en-st { flex: none; width: 7px; height: 7px; border-radius: 50%; box-sizing: border-box; }
+.en-st.idle { border: 1.5px solid var(--ink-3); }
+.en-st.run { background: var(--accent); animation: enPulse 1.5s ease infinite; }
+.en-st.wait { background: var(--warn); animation: enPulse 1.5s ease infinite; }
+.en-st.err { background: var(--danger); }
+.en-st.done { background: var(--ok); }
+.en-st.none { background: none; }
+@keyframes enPulse { 50% { opacity: .3; } }
