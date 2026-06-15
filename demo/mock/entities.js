@@ -39,7 +39,7 @@
       ],
       execs: [['ok', 'chat', '412ms', '2 小时前'], ['ok', 'workflow', '388ms', '今天 02:00'], ['failed', 'manual', '—', '昨天'], ['ok', 'agent', '455ms', '昨天']],
       rel: [
-        { title: 'Forged in', rows: [{ kind: 'conversation', name: '前端设计 (fork)', meta: 'cv_3f' }] },
+        { title: 'Forged in', rows: [{ kind: 'conversation', name: '前端设计 (fork)' }] },
         { title: 'Used by', rows: [{ kind: 'workflow', name: 'invoice_flow', meta: 'extract' }, { kind: 'agent', name: 'summarizer', meta: 'tool' }] },
       ],
     },

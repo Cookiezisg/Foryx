@@ -15,13 +15,13 @@
     return `<span class="fg-runbadge ${st}">${window.StatusDot.dot(st, { size: 7 })}<span class="fg-runbadge-t">${esc(window.StatusDot.label(st))}</span></span>`;
   }
 
-  // run chip 一枚：StatusDot（parked→等审批用 wait，否则随 run.state 折正）+ mono id + 相对时间 + 可选 LIVE
+  // run chip 一枚：StatusDot（parked→等审批用 wait，否则随 run.state 折正）+ 相对时间 + 可选 LIVE
+  // 运行靠人读的相对时间辨识（id 只作路由数据 data-run，不显——机器 ID 不给人看）
   function chipHTML(r, on, live) {
     const dotState = r.state === 'running' && r.parked ? 'waiting' : r.state;
     const tag = live ? `<span class="fg-runchip-live">LIVE</span>` : '';
     return `<button class="fg-runchip${on ? ' on' : ''}" data-run="${esc(r.id)}">`
       + window.StatusDot.dot(dotState, { size: 7 })
-      + `<span class="fg-runchip-id">${esc(r.id)}</span>`
       + `<span class="fg-runchip-t">${esc(r.when)}</span>${tag}</button>`;
   }
 

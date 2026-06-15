@@ -21,7 +21,7 @@
     groups: [
       { label: '今天', items: [
         { id: 'ntf_b1', type: 'handler.crashed',        title: 'Webhook 入库 handler 崩溃（已自动重启）', st: 'err',  time: '13:40', unread: true,  refKind: 'handler',  refId: 'hd_webhook',  refLabel: 'Webhook 入库' },
-        { id: 'ntf_b2', type: 'workflow.run_failed',     title: '账单对账流 运行失败 · extract 超时',        st: 'err',  time: '11:22', unread: true,  refKind: 'run',      refId: 'fr_5b3c10',   refLabel: 'fr_5b3c10' },
+        { id: 'ntf_b2', type: 'workflow.run_failed',     title: '账单对账流 运行失败 · extract 超时',        st: 'err',  time: '11:22', unread: true,  refKind: 'run',      refId: 'fr_5b3c10',   refLabel: '账单对账流' },
         { id: 'ntf_b3', type: 'function.edited',         title: 'PDF 提取 function 已发布新版本 v5',          st: 'done', time: '10:08', unread: true,  refKind: 'function', refId: 'fn_process_invoice', refLabel: 'process_invoice' },
         { id: 'ntf_b4', type: 'conversation.compacted',  title: '「Researcher 调优」会话已压缩',              st: 'idle', time: '09:30', refKind: 'conversation', refId: 'cv_researcher', refLabel: 'Researcher 调优' },
       ] },

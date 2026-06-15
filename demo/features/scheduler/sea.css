@@ -1,28 +1,69 @@
 /* Forgify demo — 运行海洋海面布局（薄；像素几乎全在组件库）。
-   头部/历史直接铺白底（documents 调性，无盒），图是 RunGraph 自带 canvas。类名 sch- 专属。只读令牌。 */
+   居中列（对齐 documents/settings，非沾满）：抬头 + 指标条 + stuck + 活运行图 + 节点活动清单 + 历史。
+   右岛 = 运行概览 / 节点详情。类名 sch- 专属。只读令牌、零裸 hex（语义色走 --ok/--accent/--warn/--danger）。 */
 .sch { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .sch-scroll { flex: 1; min-height: 0; overflow-y: auto; }
-.sch-col { max-width: 1040px; margin: 0 auto; padding: 52px 28px 40px; }
+.sch-col { max-width: 880px; margin: 0 auto; padding: 44px 28px 48px; }
 .sch-empty { padding-top: 90px; text-align: center; color: var(--ink-3); font-size: var(--t-md); }
 
-/* 运行头（直接铺白底、无盒；状态徽来自 RunChip.headBadge） */
-.sch-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
-.sch-rid { font-family: var(--mono); font-size: var(--t-sm); color: var(--ink); }
-.sch-pos { font-size: var(--t-sm); color: var(--ink-2); }
-.sch-pos b { color: var(--ink); font-weight: 600; }
-.sch-ver { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); background: var(--cc-active); padding: 1px 6px; border-radius: var(--r-tag); }
-.sch-src { display: inline-flex; align-items: center; gap: 5px; font-size: var(--t-sm); color: var(--ink-3); }
-.sch-src svg { display: block; }
+/* 抬头：状态徽 + 工作流名 + 相对时间 + 指标条（无任何 ID） */
+.sch-hd { margin-bottom: 18px; }
+.sch-hd-top { display: flex; align-items: center; gap: 10px; }
+.sch-title { font-size: 18px; font-weight: 600; color: var(--ink); margin: 0; letter-spacing: -.01em; }
 .sch-when { font-size: var(--t-sm); color: var(--ink-3); }
+.sch-metrics { display: flex; flex-wrap: wrap; gap: 8px 26px; margin-top: 14px; }
+.sch-m { display: inline-flex; flex-direction: column; gap: 2px; }
+.sch-m-k { display: inline-flex; align-items: center; gap: 4px; font-size: var(--t-xs); color: var(--ink-3); }
+.sch-m-k svg { display: block; }
+.sch-m-v { font-size: var(--t-md); color: var(--ink); }
+.sch-m-v b { font-weight: 600; }
 
-.sch-graph { margin-top: 4px; }
-.sch-rail { margin-top: 16px; }
+.sch-graph { margin: 4px 0 6px; }
 
-/* 右岛节点详情（RightIsland body 内容） */
-.sch-ndh { flex: 1; min-width: 0; }
-.sch-ndh b { display: block; font-size: var(--t-lg); font-weight: 600; font-family: var(--mono); }
-.sch-ndsub { display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--ink-3); margin-top: 1px; }
-.sch-ndref { font-size: var(--t-sm); color: var(--ink-3); margin: 4px 0 14px; display: flex; align-items: center; gap: 6px; }
-.sch-mono { font-family: var(--mono); }
-.sch-nderr { background: var(--cc-input); border: 1px solid var(--line); border-radius: var(--r-card); padding: 11px 13px; font-family: var(--mono); font-size: var(--t-sm); line-height: 1.6; color: var(--danger); white-space: pre-wrap; }
-.sch-ndout { background: var(--cc-input); border: 1px solid var(--line); border-radius: var(--r-card); padding: 11px 13px; font-family: var(--mono); font-size: var(--t-sm); color: var(--ink); white-space: pre-wrap; }
+/* 节点活动清单：人读 timeline（状态点 + 节点名 + 实体 + 迭代 + 记忆化结果摘要靠右） */
+.sch-sec-h { font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); letter-spacing: .02em; margin: 22px 2px 8px; }
+.sch-na-list { display: flex; flex-direction: column; }
+.sch-na { display: flex; align-items: center; gap: 9px; width: 100%; height: 36px; padding: 0 10px; border-radius: var(--r-btn);
+  text-align: left; color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background var(--d-fast); }
+.sch-na:hover { background: var(--cc-hover); }
+.sch-na.future { opacity: .55; }
+.sch-na-st { flex: none; display: grid; place-items: center; width: 14px; }
+.sch-na-fut { width: 7px; height: 7px; border-radius: 50%; border: 1.5px solid var(--line-strong); }
+.sch-na-nm { flex: none; color: var(--ink); font-weight: 500; }
+.sch-na-ref { flex: none; font-size: var(--t-xs); color: var(--ink-3); }
+.sch-na-iter { flex: none; font-size: var(--t-xs); font-weight: 600; color: var(--accent); }
+.sch-na-out { flex: 1; min-width: 0; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--t-sm); color: var(--ink-3); }
+.sch-na.failed .sch-na-out { color: var(--danger); }
+
+.sch-rail { margin-top: 22px; }
+
+/* ===== 右岛：运行概览 ===== */
+.sch-ov-back { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border-radius: var(--r-btn); color: var(--ink-2); transition: background var(--d-fast), color var(--d-fast); }
+.sch-ov-back:hover { background: var(--cc-hover); color: var(--ink); }
+.sch-ov-back svg { display: block; transform: rotate(180deg); }
+.sch-ov-hd { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+.sch-ov-when { font-size: var(--t-sm); color: var(--ink-3); }
+.sch-ov-empty { padding: 30px 8px; text-align: center; color: var(--ink-3); font-size: var(--t-sm); }
+
+/* 节点分解条 */
+.sch-ov-bd { margin: 16px 0 4px; }
+.sch-ov-bd-h { font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); margin-bottom: 7px; }
+.sch-ov-bar { display: flex; gap: 2px; height: 6px; border-radius: var(--r-pill); overflow: hidden; }
+.sch-ov-seg { display: block; border-radius: 2px; }
+.sch-ov-seg.done { background: var(--ok); }
+.sch-ov-seg.run { background: var(--accent); }
+.sch-ov-seg.park { background: var(--warn); }
+.sch-ov-seg.fail { background: var(--danger); }
+.sch-ov-bd-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 9px; }
+.sch-ov-lg { display: inline-flex; align-items: center; gap: 5px; font-size: var(--t-xs); color: var(--ink-2); }
+
+.sch-ov-sec { margin-top: 18px; }
+.sch-ov-sec-h { display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); margin-bottom: 8px; }
+.sch-ov-sec-h svg { display: block; }
+
+/* ===== 右岛：节点详情 ===== */
+.sch-ndsub { display: flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ink-3); margin-bottom: 12px; }
+.sch-ndref { font-size: var(--t-sm); color: var(--ink-3); margin: 0 0 14px; display: flex; align-items: center; gap: 6px; }
+.sch-ndver { font-size: var(--t-xs); color: var(--ink-3); background: var(--cc-active); padding: 1px 6px; border-radius: var(--r-tag); }
+.sch-nderr { background: var(--cc-input); border: 1px solid var(--line); border-radius: var(--r-card); padding: 11px 13px; font-size: var(--t-sm); line-height: 1.6; color: var(--danger); white-space: pre-wrap; }
+.sch-ndout { background: var(--cc-input); border: 1px solid var(--line); border-radius: var(--r-card); padding: 11px 13px; font-size: var(--t-sm); color: var(--ink); white-space: pre-wrap; }

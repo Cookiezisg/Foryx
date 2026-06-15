@@ -72,7 +72,7 @@
 .chat-mrow:hover { background: var(--cc-hover); }
 .chat-mico { width: 18px; display: grid; place-items: center; color: var(--ink-2); }
 .chat-mnm { font-size: var(--t-md); color: var(--ink); }
-.chat-mkd { margin-left: auto; font-size: var(--t-xs); color: var(--ink-3); font-family: var(--mono); }
+.chat-mkd { margin-left: auto; font-size: var(--t-xs); color: var(--ink-3); }   /* 实体类型标签（人读，非 id 前缀） */
 
 /* ===== 主区头左角：对话标题 + 快捷操作菜单 ===== */
 .chat-titlebar { position: relative; }

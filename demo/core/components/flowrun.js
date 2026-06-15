@@ -26,20 +26,17 @@
     const el = window.tag(`div.fg-fr.fg-fr-v-${variant}`);
     el.innerHTML =
       `<div class="fg-fr-head">
-         <span class="fg-fr-fl">${esc(HEAD[variant])}</span>
-         <span class="fg-fr-fid" role="button" tabindex="0">${esc(frid)}</span>
+         <span class="fg-fr-fl"${frid ? ' role="button" tabindex="0"' : ''}>${esc(HEAD[variant])}</span>
          <span class="fg-fr-pulse" data-pulse></span>
        </div>
        <div class="fg-fr-nodes" data-nodes></div>`;
 
-    // frid 是 run 引用：选中走 Intent 一个前门（kind:run）；非空 frid 才挂可点意图
-    const fid = window.qs('.fg-fr-fid', el);
-    if (frid) {
+    // frid 是 run 引用（机器 ID，只作路由不显）：点变体标签 → Intent 一个前门派发 kind:run
+    const fid = window.qs('.fg-fr-fl', el);
+    if (frid && fid) {
       const go = () => window.Intent && Intent.select({ kind: 'run', id: String(frid) });
       fid.onclick = go;
       fid.onkeydown = e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } };
-    } else if (fid) {
-      fid.removeAttribute('role'); fid.removeAttribute('tabindex');
     }
 
     if (h) h.appendChild(el);

@@ -255,10 +255,10 @@
           <div class="chat-cwrap">
             <div class="chat-mpop" id="chatMpop">
               <div class="chat-mh">提及一个实体（freeze-on-send · 发送时快照内容）</div>
-              <div class="chat-mrow"><span class="chat-mico">${icon('function', 16)}</span><span class="chat-mnm">weekly_digest</span><span class="chat-mkd">fn_</span></div>
-              <div class="chat-mrow"><span class="chat-mico">${icon('handler', 16)}</span><span class="chat-mnm">notion_writer</span><span class="chat-mkd">hd_</span></div>
-              <div class="chat-mrow"><span class="chat-mico">${icon('agent', 16)}</span><span class="chat-mnm">摘要润色</span><span class="chat-mkd">ag_</span></div>
-              <div class="chat-mrow"><span class="chat-mico">${icon('workflow', 16)}</span><span class="chat-mnm">weekly_report</span><span class="chat-mkd">wf_</span></div>
+              <div class="chat-mrow"><span class="chat-mico">${icon('function', 16)}</span><span class="chat-mnm">weekly_digest</span><span class="chat-mkd">Function</span></div>
+              <div class="chat-mrow"><span class="chat-mico">${icon('handler', 16)}</span><span class="chat-mnm">notion_writer</span><span class="chat-mkd">Handler</span></div>
+              <div class="chat-mrow"><span class="chat-mico">${icon('agent', 16)}</span><span class="chat-mnm">摘要润色</span><span class="chat-mkd">Agent</span></div>
+              <div class="chat-mrow"><span class="chat-mico">${icon('workflow', 16)}</span><span class="chat-mnm">weekly_report</span><span class="chat-mkd">Workflow</span></div>
             </div>
             <div class="chat-box">
               <div class="chat-field"><input id="chatTa" placeholder="说说你想自动化什么…"><span class="chat-enter" id="chatEnter">${icon('send', 16)}</span></div>
