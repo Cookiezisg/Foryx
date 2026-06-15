@@ -22,7 +22,7 @@
   ];
   let sort = 'attention';   // 默认按「需关注」排（运行中/等你/失败 浮顶）
 
-  const row = w => `<div class="wf wf-${w.st}${w.on ? ' on' : ''}"><span class="wf-st"></span><span class="wf-t">${w.n}</span><span class="wf-meta">${w.meta}</span><span class="wf-more">${icon('more', 16)}</span></div>`;
+  const row = w => `<div class="wf wf-${w.st}${w.on ? ' on' : ''}" data-id="${w.n}"><span class="wf-st"></span><span class="wf-t">${w.n}</span><span class="wf-meta">${w.meta}</span><span class="wf-more">${icon('more', 16)}</span></div>`;
   const opt = (v, on, label) => `<button class="sm-opt${on ? ' on' : ''}" data-sort="${v}"><span class="sm-ck">${icon('check', 14)}</span>${label}</button>`;
 
   function build() {
@@ -45,6 +45,7 @@
     host.querySelectorAll('.wf').forEach(it => it.onclick = e => {
       if (e.target.closest('.wf-more')) return;
       host.querySelectorAll('.wf').forEach(x => x.classList.remove('on')); it.classList.add('on');
+      if (window.Shell && Shell.openWorkflow) Shell.openWorkflow(it.dataset.id);   // 选中 → 海面驾驶舱切到该 wf 的 run（外壳通道；海洋未挂则仅高亮）
     });
     // 排序菜单（示意单选；真排序接后端 List sort / 派生态）
     const btn = host.querySelector('.sm-btn'), menu = host.querySelector('.sm-menu');
