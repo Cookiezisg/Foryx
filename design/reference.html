@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>Foryx · 原语 reference</title>
+<link rel="stylesheet" href="core/tokens.css">
+<link rel="stylesheet" href="core/reset.css">
+<script src="core/cssload.js"></script>
+<script src="core/dom.js"></script>
+<script src="core/icons.js"></script>
+<script src="core/primitives/status-dot.js"></script>
+<script src="core/primitives/button.js"></script>
+<script src="core/primitives/section.js"></script>
+<script src="core/primitives/row.js"></script>
+<style>
+  body { padding: var(--sp-8); }
+  .wrap { max-width: var(--w-content); margin: 0 auto; }
+  h1 { font-size: var(--t-h1); letter-spacing: -.02em; line-height: var(--lh-tight); }
+  .sub { color: var(--ink-3); font-size: var(--t-body); margin: var(--sp-2) 0 var(--sp-6); }
+  .card { background: var(--island); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-island); padding: var(--sp-6); margin-bottom: var(--sp-6); }
+  .card > h2 { font-size: var(--t-strong); line-height: var(--lh-tight); margin-bottom: var(--sp-4); }
+  .card > h2 em { font-style: normal; color: var(--ink-3); font-size: var(--t-meta); font-weight: 400; margin-left: var(--sp-2); }
+  .demo { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
+  .panel { width: var(--side-w); background: var(--island); border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--sp-2); }
+  .filter { display: flex; align-items: center; gap: var(--gap); height: var(--row); padding: 0 var(--pad-row); color: var(--ink-3); }
+  .filter input { flex: 1; min-width: 0; border: 0; background: none; font-size: var(--t-body); color: var(--ink); }
+  .filter > svg { width: 16px; height: 16px; flex: none; }
+  .grp-label { font-size: var(--t-meta); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); padding: var(--sp-2) var(--pad-row) 2px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Foryx · 原语</h1>
+  <p class="sub">活体规格台。每个原语 = 一份实现、一个主人、自载 CSS、只读 token。拼它就自动合规、漂移不可能。</p>
+
+  <div class="card"><h2>Button <em>ghost · primary · danger · icon</em></h2><div class="demo" id="btns"></div></div>
+  <div class="card"><h2>StatusDot <em>idle · run(呼吸) · wait · err · done</em></h2><div class="demo" id="dots"></div></div>
+  <div class="card"><h2>Row <em>核心 · 行首 icon↔chevron · 行尾 meta↔action(hover 同槽互换)</em></h2><div id="rows" style="max-width:320px"></div></div>
+  <div class="card"><h2>合成:侧栏 <em>New + 过滤 + 类型头(可折叠) + 实体行 —— 全是 Row/Button,一个原语顶 demo 五份手搓 rail</em></h2><div id="rail"></div></div>
+  <div class="card"><h2>Section <em>小节标题(大写灰) + 内容岛</em></h2><div id="secs"></div></div>
+</div>
+
+<script>
+  // —— Button ——
+  qs('#btns').innerHTML =
+    FyButton.html({ label: 'New entity', icon: 'plus', variant: 'ghost' }) +
+    FyButton.html({ label: '批准', variant: 'primary' }) +
+    FyButton.html({ label: '删除', variant: 'danger' }) +
+    FyButton.html({ icon: 'sliders', variant: 'icon', title: '显示选项' }) +
+    FyButton.html({ icon: 'more', variant: 'icon' });
+
+  // —— StatusDot ——
+  qs('#dots').innerHTML = ['idle', 'run', 'wait', 'err', 'done'].map(function (s) {
+    return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--t-meta);color:var(--ink-3)">' + FyDot.dot(s) + s + '</span>';
+  }).join('');
+
+  // —— Row(核心)——
+  qs('#rows').innerHTML =
+    FyRow.html({ leading: { icon: 'func' }, label: 'process_invoice', meta: 'v5', selected: true, actions: [{ icon: 'more' }] }) +
+    FyRow.html({ leading: { dot: 'run' }, label: 'fetch_news', meta: 'v2', actions: [{ icon: 'more' }] }) +
+    FyRow.html({ leading: { dot: 'done' }, label: 'parse_pdf', meta: 'v1', actions: [{ icon: 'more' }] }) +
+    FyRow.html({ leading: { icon: 'workflow' }, label: 'Workflows', collapsible: true, open: true, meta: '3' });
+
+  // —— 合成侧栏 ——
+  var panel = tag('div.panel');
+  panel.innerHTML =
+    FyButton.html({ label: 'New entity', icon: 'plus', variant: 'ghost', block: true }) +
+    '<div class="filter">' + icon('search', 16) + '<input placeholder="Search entities…">' + FyButton.html({ icon: 'sliders', variant: 'icon' }) + '</div>' +
+    '<div class="grp-label">Quadrinity</div>' +
+    FyRow.html({ leading: { icon: 'func' }, label: 'Functions', collapsible: true, open: true, meta: '3' }) +
+    '<div style="padding-left:var(--indent)">' +
+      FyRow.html({ leading: { dot: 'done' }, label: 'process_invoice', meta: 'v5', selected: true, actions: [{ icon: 'more' }, { icon: 'plus' }] }) +
+      FyRow.html({ leading: { dot: 'run' }, label: 'fetch_news', meta: 'v2', actions: [{ icon: 'more' }, { icon: 'plus' }] }) +
+      FyRow.html({ leading: { dot: 'idle' }, label: 'parse_pdf', meta: 'v1', actions: [{ icon: 'more' }, { icon: 'plus' }] }) +
+    '</div>' +
+    FyRow.html({ leading: { icon: 'handler' }, label: 'Handlers', collapsible: true, meta: '2' }) +
+    FyRow.html({ leading: { icon: 'agent' }, label: 'Agents', collapsible: true, meta: '2' });
+  qs('#rail').appendChild(panel);
+
+  // —— Section ——
+  qs('#secs').innerHTML =
+    FySection.html({ label: '外观与语言', body: '<div style="height:var(--row);display:flex;align-items:center;color:var(--ink-2);font-size:var(--t-body)">主题 · 语言(Field 原语稍后)</div>' }) +
+    FySection.html({ label: 'API 密钥', body: '<div style="height:var(--row);display:flex;align-items:center;color:var(--ink-2);font-size:var(--t-body)">本地保险箱 · AES-GCM</div>' });
+</script>
+</body>
+</html>

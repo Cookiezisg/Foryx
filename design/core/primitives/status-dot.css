@@ -1,0 +1,12 @@
+/* Foryx 原语 — StatusDot 皮肤。语义色;run 呼吸(唯一 accent 动效)。 */
+.fy-dot { flex: none; display: inline-block; width: 7px; height: 7px; border-radius: var(--r-pill); }
+.fy-dot-idle { background: var(--ink-3); }
+.fy-dot-run  { background: var(--accent); animation: fyDotPulse 1.8s var(--ease-out) infinite; }
+.fy-dot-wait { background: var(--warn); }
+.fy-dot-err  { background: var(--danger); }
+.fy-dot-done { background: var(--ok); }
+@keyframes fyDotPulse {
+  0%   { box-shadow: 0 0 0 0 var(--accent-soft); }
+  70%  { box-shadow: 0 0 0 5px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}

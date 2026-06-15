@@ -1,0 +1,12 @@
+/* Foryx 原语 — Section 皮肤。小节标题 = meta 大写灰;内容岛 = 白卡海岸线。 */
+.fy-sec { margin-bottom: var(--sp-6); }
+.fy-sec-label {
+  font-size: var(--t-meta); font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--ink-3); line-height: 1.3; margin: 0 2px var(--sp-2);
+}
+.fy-sec-body {
+  background: var(--island); border: 1px solid var(--line); border-radius: var(--r-card);
+  box-shadow: var(--shadow-island); padding: 2px var(--sp-4);
+}
+/* 岛内行分隔(发丝线) */
+.fy-sec-body > .fy-field + .fy-field { border-top: 1px solid var(--line); }

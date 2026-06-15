@@ -1,0 +1,29 @@
+/* Foryx 原语 — Button 皮肤。只读 token,无裸值。 */
+.fy-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: var(--ctl); padding: 0 14px; border-radius: var(--r-btn);
+  font-size: var(--t-body); font-weight: 500; color: var(--ink-2); white-space: nowrap;
+  transition: background var(--d-fast), color var(--d-fast);
+}
+.fy-btn-ico { display: grid; place-items: center; flex: none; }
+.fy-btn:active { transform: scale(.98); }
+.fy-btn[disabled] { opacity: .4; pointer-events: none; }
+
+/* ghost — 默认中性 */
+.fy-btn-ghost:hover { background: var(--island-3); color: var(--ink); }
+
+/* primary — accent 主 CTA(克制:仅主动作) */
+.fy-btn-primary { background: var(--accent); color: var(--ink-on-accent); font-weight: 600; }
+.fy-btn-primary:hover { background: var(--accent-hover); }
+
+/* danger */
+.fy-btn-danger { color: var(--danger); }
+.fy-btn-danger:hover { background: var(--danger-soft); }
+
+/* icon — 方钮,仅图标 */
+.fy-btn-icon { width: var(--ctl); padding: 0; color: var(--ink-3); }
+.fy-btn-icon:hover { background: var(--island-3); color: var(--ink); }
+
+/* 尺寸 / 块 */
+.fy-btn-sm { height: 24px; padding: 0 10px; font-size: var(--t-meta); }
+.fy-btn-block { width: 100%; justify-content: flex-start; }
