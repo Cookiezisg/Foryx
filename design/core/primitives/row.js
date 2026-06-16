@@ -14,19 +14,22 @@
 
   function html(o) {
     o = o || {};
+    var hasActs = !!(o.actions && o.actions.length);
     var meta = (o.meta != null && o.meta !== '') ? '<span class="fy-row-meta">' + window.esc(o.meta) + '</span>' : '';
-    var acts = (o.actions && o.actions.length)
+    var acts = hasActs
       ? '<span class="fy-row-acts">' + o.actions.map(function (a) {
           return '<button type="button" class="fy-row-act" data-act="' + window.esc(a.act || '') + '" title="' + window.esc(a.title || '') + '">' + window.icon(a.icon, 16) + '</button>';
         }).join('') + '</span>'
       : '';
-    var cls = 'fy-row' + (o.selected ? ' on' : '') + (o.collapsible ? ' fy-collapsible' : '') + (o.open ? ' open' : '');
+    // 尾槽:meta 与动作【叠放同一格、共用中心】→ swap 绕光学中心切换、不平移
+    var trail = (meta || acts) ? '<span class="fy-row-trail">' + meta + acts + '</span>' : '';
+    var cls = 'fy-row' + (o.selected ? ' on' : '') + (o.collapsible ? ' fy-collapsible' : '') + (o.open ? ' open' : '') + (hasActs ? ' fy-has-acts' : '');
     var style = o.depth ? ' style="padding-left:calc(var(--pad-row) + ' + (o.depth | 0) + ' * var(--indent))"' : '';
     var data = (o.id != null) ? ' data-id="' + window.esc(o.id) + '"' : '';
     return '<div class="' + cls + '"' + data + style + '>'
       + leadHtml(o)
       + '<span class="fy-row-label">' + window.esc(o.label) + '</span>'
-      + meta + acts + '</div>';
+      + trail + '</div>';
   }
 
   function mount(host, o) {

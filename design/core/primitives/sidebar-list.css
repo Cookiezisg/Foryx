@@ -9,9 +9,10 @@
 .fy-sl-input::placeholder { color: var(--ink-3); }
 .fy-sl-sliders { color: var(--ink-3); }
 
-/* 分组标签:对齐到 label 列(= pad + lead + gap),与行标签同起点 */
+/* 分组标签:对齐到 label 列(= pad + lead + gap),与行标签同起点。
+   纵向走【邻近原则】token 化:上 = 分组分隔(sp-2)、下 = 贴附本组(sp-1)——标签属于下方的组,故贴近下、远离上(规则强制,非手摆)。 */
 .fy-sl-grp {
-  padding: var(--sp-2) var(--pad-row) 2px calc(var(--pad-row) + var(--lead) + var(--gap));
+  padding: var(--sp-2) var(--pad-row) var(--sp-1) calc(var(--pad-row) + var(--lead) + var(--gap));
   font-size: var(--t-meta); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3);
 }
 

@@ -24,15 +24,13 @@
 
 .fy-row-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* 尾槽:meta 常驻(col3)↔ 动作 hover 浮现于同位(meta opacity 让位,不重排) */
+/* 尾槽:meta 与动作【叠放同一格、共用光学中心】→ swap 绕中心切换、不平移(同行首槽叠放律)。
+   格宽 = max(meta,动作),hover 互换不重排;锚点是中心、不是右边缘。 */
+.fy-row-trail { display: grid; justify-items: center; align-items: center; }
+.fy-row-trail > * { grid-area: 1 / 1; }
 .fy-row-meta { font-size: var(--t-meta); color: var(--ink-3); white-space: nowrap; }
-.fy-row:hover .fy-row-meta { opacity: 0; }
-.fy-row-acts {
-  position: absolute; right: var(--pad-row); top: 50%; transform: translateY(-50%);
-  display: flex; align-items: center; gap: 2px; opacity: 0; padding-left: 20px;
-  background: linear-gradient(to right, transparent, var(--island-3) 45%);
-}
-.fy-row.on:hover .fy-row-acts { background: linear-gradient(to right, transparent, var(--island-4) 45%); }
+.fy-row.fy-has-acts:hover .fy-row-meta { opacity: 0; }   /* 仅"有动作"的行 hover 才让位;无动作的(类型头计数)常驻 */
+.fy-row-acts { display: flex; align-items: center; gap: 2px; opacity: 0; }
 .fy-row:hover .fy-row-acts { opacity: 1; }
 .fy-row-act { width: 22px; height: 22px; display: grid; place-items: center; border-radius: var(--r-tag); color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast); }
 .fy-row-act:hover { background: var(--island-4); color: var(--ink); }
