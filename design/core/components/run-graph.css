@@ -1,0 +1,60 @@
+/* Foryx demo — run-graph 皮肤（Conducted Keynote 活运行图；逐像素移植 design-lab scheduler 的 .rn-* 验证态）。
+   keynote 纯净白卡：只靠图标分 kind、颜色只在最小标记里；--accent 只点「正在发生」、--warn 只在 parked 呼吸。
+   边三档：taken 实线（已走）· future 淡线（未走分支）· ghost 虚影（control 未选支，从未执行）· live accent 导电流。
+   焦点景深三层只调透明度不糊文字。keyframes 本地重声明（一组件一主人，不仰赖外部）。 */
+
+/* 画布（svg 直接坐落宿主，无独立 panel 填充） */
+.fg-rng { display: block; }
+.fg-rng svg { display: block; width: 100%; height: auto; }
+
+/* —— 边（只有走过的是实线；未走的分支是淡线；control 未选支是虚影；当前一条在导电）—— */
+.fg-rng-edge { fill: none; }
+.fg-rng-edge.taken { stroke: var(--ink-3); stroke-width: 1.5; }
+.fg-rng-edge.future { stroke: var(--line); stroke-width: 1; }
+.fg-rng-edge.ghost { stroke: var(--line); stroke-width: 1; stroke-dasharray: 2 5; opacity: .4; }
+.fg-rng-edge.live { stroke: var(--accent); stroke-width: 1.6; stroke-dasharray: 6 200; animation: fgRngWireFlow .9s linear infinite; }
+.fg-rng-loopback { fill: none; stroke: var(--ink-3); stroke-width: 1.5; stroke-dasharray: 2 4; }
+.fg-rng-mk path { fill: var(--ink-3); }
+.fg-rng-mk-fut path { fill: var(--line); }
+.fg-rng-comet { fill: var(--accent); }
+
+/* —— 节点（keynote 纯净白卡；类型只靠图标分，颜色只在标记里）—— */
+.fg-rng-node { cursor: pointer; transform-box: fill-box; transform-origin: center; }
+.fg-rng-card { fill: var(--cc-side); stroke: var(--line); stroke-width: 1; transition: stroke var(--d-mid); }
+.fg-rng-node:hover .fg-rng-card { stroke: var(--line-strong); }
+.fg-rng-ic { color: var(--ink-3); }
+.fg-rng-id { fill: var(--ink); font-family: var(--mono); font-size: 12.5px; font-weight: 600; }
+.fg-rng-refbg { fill: var(--cc-active); }
+.fg-rng-ref { fill: var(--ink-3); font-family: var(--mono); font-size: 10.5px; }
+.fg-rng-port-bg { fill: var(--cc-active); }
+.fg-rng-port-tx { fill: var(--ink-2); font-family: var(--mono); font-size: 10px; }
+.fg-rng-iter-bg { fill: var(--cc-active); stroke: var(--line); stroke-width: 1; }
+.fg-rng-iter-tx { fill: var(--ink-2); font-family: var(--mono); font-size: 10px; font-weight: 600; }
+.fg-rng-iter.failed .fg-rng-iter-bg { stroke: color-mix(in srgb, var(--warn) 45%, var(--line)); }
+.fg-rng-stack rect { fill: var(--cc-side); stroke: var(--line); stroke-width: 1; }
+.fg-rng-rp { transition: fill var(--d-mid); }
+
+/* 焦点景深三层（只调透明度，不糊文字） */
+.fg-rng-node.f0 { opacity: 1; }
+.fg-rng-node.f1 { opacity: .82; }
+.fg-rng-node.f2 { opacity: .42; }
+
+/* 状态（最小强调色：全场只一个 accent[running] + 一个 warn-glow[parked] 在呼吸） */
+.fg-rng-node.completed .fg-rng-rp { fill: var(--ok); }
+.fg-rng-node.failed .fg-rng-card { stroke: color-mix(in srgb, var(--danger) 42%, var(--line)); }
+.fg-rng-node.failed .fg-rng-ic { color: var(--danger); }
+.fg-rng-node.failed .fg-rng-rp { fill: var(--danger); }
+.fg-rng-node.parked .fg-rng-card { stroke: color-mix(in srgb, var(--warn) 46%, var(--line)); fill: color-mix(in srgb, var(--warn) 7%, var(--cc-side)); }
+.fg-rng-node.parked .fg-rng-ic { color: var(--warn); }
+.fg-rng-node.parked .fg-rng-rp { fill: var(--warn); animation: fgRngGlow 1.6s ease infinite; }
+.fg-rng-node.running .fg-rng-card { stroke: var(--accent-line); stroke-width: 1.4; fill: color-mix(in srgb, var(--accent) 7%, var(--cc-side)); }
+.fg-rng-node.running .fg-rng-ic { color: var(--accent); }
+.fg-rng-node.running .fg-rng-id { fill: var(--ink); }
+.fg-rng-node.running .fg-rng-rp { fill: var(--accent); animation: fgRngGlow 1.5s ease infinite; }
+.fg-rng-node.running { animation: fgRngIgnite .26s var(--ease-spring); }
+.fg-rng-node.future .fg-rng-rp { fill: none; stroke: var(--ink-3); stroke-width: 1.4; }
+
+/* ===== keyframes（本地重声明，一组件一主人）===== */
+@keyframes fgRngWireFlow { to { stroke-dashoffset: -206; } }
+@keyframes fgRngIgnite { 50% { transform: scale(1.04); } }
+@keyframes fgRngGlow { 0% { filter: drop-shadow(0 0 0 transparent); } 50% { filter: drop-shadow(0 0 3px currentColor); } 100% { filter: drop-shadow(0 0 0 transparent); } }

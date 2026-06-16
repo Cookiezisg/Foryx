@@ -1,0 +1,42 @@
+/* Foryx demo — 外壳布局（核心，只读消费）。圆角浮窗 + 三槽(#left/#sea/#body)。
+   令牌全在 tokens.css；原语/滚动条在 reset.css；本文件只布局框架。 */
+
+/* 圆角浮窗 + 三槽 */
+.win { height: 100%; display: flex; flex-direction: column; background: var(--cc-win);
+  border-radius: var(--r-win); box-shadow: var(--shadow-win); overflow: hidden; }
+.body { flex: 1; min-height: 0; display: flex; gap: var(--sp-2); padding: var(--sp-2); }
+.main { position: relative; flex: 1; min-width: 0; overflow: hidden; display: flex; flex-direction: column; }
+
+/* 主区头 = 不占流的顶部浮层：只让角落控件占位，正文 .sea 铺满全高（内容滚到顶、不被横带切）。
+   透明 + pointer-events:none，仅 head-lead/head-extra/主题钮可点。 */
+.main-head { position: absolute; top: 0; left: 0; right: 0; z-index: 5; display: flex; align-items: center; gap: var(--gap);
+  height: var(--island-head); padding: 0 var(--sp-2) 0 var(--sp-3); pointer-events: none; }
+.main-head #head-lead, .main-head #head-extra { pointer-events: auto; display: flex; align-items: center; gap: 4px; }
+.sea { flex: 1; min-height: 0; display: flex; flex-direction: column; }   /* ← 海洋渲染进这里（铺满 .main 全高） */
+.sea, .sea * { scrollbar-gutter: auto !important; }
+
+/* 侧栏宽度/收起：核心管 .body 行内回流（--side-w 全仓库唯一定义处在此；状态由 sidebar 写 html[data-side]）。
+   只碰布局量、不碰 .side 皮肤(归 sidebar)；属性选择器(0,1,1)稳压 .side(0,1,0)，不用 !important。 */
+.side { width: var(--side-w, 240px);
+  transition: width var(--d-slow) var(--ease-spring), opacity var(--d-mid), margin-right var(--d-slow) var(--ease-spring); }
+html[data-side="off"] .side {
+  width: 0; min-width: 0; padding: 0; border-width: 0;
+  opacity: 0; margin-right: calc(-1 * var(--sp-2)); overflow: hidden; pointer-events: none;
+}
+html[data-side-dragging] .side { transition: none; }
+
+/* 岛屿可滚但不显滚轮、不占 gutter；海洋负责可见滚动反馈。 */
+.side, .side *,
+.fg-island, .fg-island * {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+  scrollbar-gutter: auto !important;
+}
+.side::-webkit-scrollbar,
+.side *::-webkit-scrollbar,
+.fg-island::-webkit-scrollbar,
+.fg-island *::-webkit-scrollbar {
+  width: 0 !important;
+  height: 0 !important;
+  display: none !important;
+}

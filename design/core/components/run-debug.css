@@ -1,0 +1,57 @@
+/* Foryx demo — run-debug 皮肤。白底细描边块：args 编辑器(顶,无独立边)→ 运行条 → stdout → result。
+   形态字节级复刻 design-lab entities 的 eo-debug/eo-dbg-/eo-gate/eo-shimmer；只读令牌、fg- 前缀。 */
+
+/* 外壳：单条细描边圆角块,内部分段用顶边线分隔 */
+.fg-rd { border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; }
+
+/* args 编辑器（嵌在块顶,去自身边与圆角,贴合外壳）------------------------------- */
+.fg-rd-args .fg-rd-code { border: 0; border-radius: 0; }
+.fg-rd-code { position: relative; display: flex; border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; transition: border-color .14s; }
+.fg-rd-code:focus-within { border-color: var(--line-strong); }
+.fg-rd-gut { flex: none; padding: 12px 0; text-align: right; color: var(--ink-3); font-family: var(--mono); font-size: var(--t-md); line-height: 1.7; user-select: none; opacity: .5; }
+.fg-rd-gut i { display: block; padding: 0 10px 0 14px; font-style: normal; }
+.fg-rd-area { position: relative; flex: 1; min-width: 0; }
+.fg-rd-area pre, .fg-rd-area textarea { margin: 0; padding: 12px 14px 12px 4px; font-family: var(--mono); font-size: var(--t-md); line-height: 1.7; white-space: pre; tab-size: 4; border: 0; }
+.fg-rd-area pre { color: var(--ink); pointer-events: none; min-width: 100%; box-sizing: border-box; overflow-x: auto; }
+.fg-rd-area pre code { font: inherit; }
+.fg-rd-area textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; outline: none; background: transparent; color: transparent; caret-color: var(--accent); overflow: hidden; }
+.fg-rd-area textarea::selection { background: var(--accent-soft); }
+.fg-rd-lang { position: absolute; top: 8px; right: 12px; z-index: 2; font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; pointer-events: none; }
+
+/* 语法着色（与 code-editor / version-diff 共用 --cd-* 令牌,定义在 tokens.css） */
+.fg-rd-code .hl-com { color: var(--cd-com); font-style: italic; }
+.fg-rd-code .hl-kw  { color: var(--cd-kw); }
+.fg-rd-code .hl-str { color: var(--cd-str); }
+.fg-rd-code .hl-num { color: var(--cd-num); }
+.fg-rd-code .hl-fn  { color: var(--cd-fn); }
+.fg-rd-code .hl-arg { color: var(--accent); font-weight: 600; }
+
+/* 运行条：输入参数 token（mono,运行时 shimmer)+ 撑开 + 运行钮 --------------------- */
+.fg-rd-bar { display: flex; align-items: center; gap: 9px; padding: 9px 12px; font-size: var(--t-sm); color: var(--ink-3); border-top: 1px solid var(--line); }
+.fg-rd-tk { font-family: var(--mono); }
+.fg-rd-grow { flex: 1; }
+
+.fg-rd-run { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 11px; border-radius: var(--r-btn); font-size: var(--t-sm); font-weight: 600; color: var(--ink); border: 1px solid var(--line-strong); background: transparent; cursor: pointer; transition: background .12s, border-color .12s; white-space: nowrap; }
+.fg-rd-run:hover { background: var(--cc-hover); }
+.fg-rd-run svg { display: block; color: var(--ink-2); }
+
+/* stdout：等宽逐行,默认收起、运行时展开 ---------------------------------------- */
+.fg-rd-out { padding: 11px 14px; font-family: var(--mono); font-size: var(--t-sm); line-height: 1.85; color: var(--ink-2); white-space: pre-wrap; display: none; border-top: 1px solid var(--line); }
+.fg-rd-out.show { display: block; }
+
+/* result 摘要：StatusDot 点 + 状态词 + 等宽输出 + 毫秒 ------------------------- */
+.fg-rd-res { display: none; padding: 11px 14px; border-top: 1px solid var(--line); align-items: center; gap: 10px; font-size: var(--t-sm); }
+.fg-rd-res.show { display: flex; }
+.fg-rd-st { display: inline-flex; align-items: center; gap: 5px; font-weight: 500; }
+.fg-rd-res:has(.fg-dot.done) .fg-rd-st { color: var(--ok); }
+.fg-rd-res:has(.fg-dot.err) .fg-rd-st { color: var(--danger); }
+.fg-rd-ev { font-family: var(--mono); color: var(--ink); flex: 1; min-width: 0; white-space: pre-wrap; }
+.fg-rd-ms { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); }
+
+/* 闸态：环境/配置未就绪,只一行盾说明（无运行链路）--------------------------- */
+.fg-rd-gate { display: flex; align-items: center; gap: 9px; padding: 12px 14px; font-size: var(--t-sm); color: var(--ink-3); }
+.fg-rd-gateico { color: var(--warn); display: grid; place-items: center; }
+
+/* 运行中 token 微光扫描（文字渐变裁切）------------------------------------- */
+.fg-rd-shimmer { background: linear-gradient(105deg, var(--ink-3) 36%, var(--ink) 50%, var(--ink-3) 64%); background-size: 220% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: fgRdShimmer 1.5s linear infinite; }
+@keyframes fgRdShimmer { from { background-position: 130% 0; } to { background-position: -30% 0; } }

@@ -13,7 +13,7 @@
    纵向走【邻近原则】token 化:上 = 分组分隔(sp-2)、下 = 贴附本组(sp-1)——标签属于下方的组,故贴近下、远离上(规则强制,非手摆)。 */
 .fy-sl-grp {
   padding: var(--sp-2) var(--pad-row) var(--sp-1) calc(var(--pad-row) + var(--lead) + var(--gap));
-  font-size: var(--t-meta); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3);
+  font-size: var(--t-meta); font-weight: 600; text-transform: uppercase; letter-spacing: 0; color: var(--ink-3);
 }
 
 /* 类型折叠 */

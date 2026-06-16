@@ -1,0 +1,82 @@
+/* Foryx demo — 设置海洋海面布局（薄；控件像素全在组件库：Segmented/Dropdown/KV/StatusDot/ThinTable）。
+   仅详情白海（类目导航在侧栏接管，像素见 rail.css）；性冷淡，accent 仅热力图/活态/选中点。
+   类名 set- 专属。只读令牌、零裸 hex（热力图浓度档由 sea.js 经 color-mix(--accent) 算）。 */
+
+/* 详情海撑满海面（单子，无左导航岛） */
+.set-root { flex: 1; min-height: 0; display: flex; padding: 0 var(--s2) var(--s2); }
+
+/* 详情海（白，内容 = 岛 + 留白分区） */
+.set-detail { flex: 1; min-width: 0; background: var(--cc-win); border-radius: var(--r-card); overflow-y: auto; padding: 22px 30px 40px; }
+.set-detail.center { display: flex; flex-direction: column; align-items: center; }
+.set-detail.center > * { width: 100%; max-width: var(--w-content); }
+.set-htitle { font-size: 17px; font-weight: 500; color: var(--ink); margin: 0 0 20px; }
+
+/* 配置分区：uppercase 小标题 + 白岛（无横线，靠留白分） */
+.set-sec { margin-bottom: 24px; }
+.set-seclab { font-size: var(--t-xs); font-weight: 500; color: var(--ink-3); margin: 0 2px 8px; letter-spacing: .02em; }
+.set-island { background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-island); padding: 2px 14px; }
+.set-row { display: flex; align-items: center; gap: 16px; min-height: 48px; padding: 8px 0; }
+.set-row + .set-row { border-top: 1px solid var(--line); }   /* 岛内行分隔 = 细发丝（属同岛内列表，非分区横线） */
+.set-rl { flex: 1; min-width: 0; }
+.set-rk { display: flex; align-items: center; gap: 8px; font-size: var(--t-md); color: var(--ink); }
+.set-rh { font-size: var(--t-sm); color: var(--ink-3); margin-top: 2px; }
+.set-rc { flex: none; display: flex; align-items: center; gap: 8px; }
+
+/* 局部展示控件：按钮 / 图标钮 / 输入 / 元信息 / chip（非组件库；settings 私有） */
+.set-btn { height: 30px; padding: 0 13px; border: 1px solid var(--line); border-radius: var(--r-btn); background: var(--cc-win); font: inherit; font-size: var(--t-sm); color: var(--ink); cursor: pointer; transition: background var(--d-fast); }
+.set-btn:hover { background: var(--cc-hover); }
+.set-btn.ghost { border-color: transparent; color: var(--ink-2); display: inline-flex; align-items: center; gap: 5px; }
+.set-btn.ghost:hover { color: var(--ink); }
+.set-btn.ghost svg { display: block; }
+.set-btn.danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 30%, transparent); }
+.set-btn.danger:disabled { opacity: .5; cursor: default; }
+.set-icbtn { width: 28px; height: 28px; display: grid; place-items: center; border: 0; background: transparent; border-radius: 7px; color: var(--ink-3); cursor: pointer; }
+.set-icbtn:hover { background: var(--cc-hover); color: var(--ink); }
+.set-icbtn svg { width: 15px; height: 15px; }
+.set-in { height: 32px; min-width: 180px; padding: 0 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--cc-win); font: inherit; font-size: var(--t-md); color: var(--ink); }
+.set-in.mono { font-family: var(--mono); font-size: var(--t-sm); }
+.set-in.full { flex: 1; min-width: 0; }
+.set-in.set-num { min-width: 80px; text-align: center; }
+.set-meta { font-size: var(--t-md); color: var(--ink-2); }
+.set-meta.mono { font-family: var(--mono); font-size: var(--t-sm); color: var(--ink-3); }
+.set-chip { font-size: var(--t-xs); font-weight: 600; width: 26px; height: 26px; flex: none; border-radius: 7px; display: grid; place-items: center; background: var(--island-3); color: var(--ink-2); }
+
+/* 工作区列：ThinTable 槽 + 切换钮就地对齐 */
+.set-tblslot { padding: 6px 0; }
+.set-tswitch { float: right; }
+.set-cur { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); color: var(--ok); }
+
+/* 危险区 */
+.set-danger { margin-top: 36px; border: 1px solid color-mix(in srgb, var(--danger) 22%, transparent); border-radius: var(--r-card);
+  background: color-mix(in srgb, var(--danger) 4%, transparent); padding: 16px 18px; }
+.set-danger .dl { font-size: var(--t-sm); font-weight: 500; color: var(--danger); margin-bottom: 4px; }
+.set-danger .dd { font-size: var(--t-sm); color: var(--ink-2); margin-bottom: 12px; line-height: 1.5; }
+.set-dangerrow { display: flex; gap: 8px; }
+
+/* ===== 概览专属 ===== */
+.set-hero { display: flex; flex-direction: column; align-items: center; gap: 3px; margin-bottom: 26px; }
+.set-av { width: 78px; height: 78px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-size: 29px; font-weight: 500; }
+.set-hero .set-nm { font-size: 20px; font-weight: 500; color: var(--ink); margin-top: 12px; letter-spacing: -.01em; }
+.set-hero .set-sub { font-size: var(--t-md); color: var(--ink-3); }
+.set-stats { display: flex; background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-island); padding: 17px 6px; margin-bottom: 24px; }
+.set-stat { flex: 1; text-align: center; padding: 0 6px; }
+.set-stat .num { font-size: 18px; font-weight: 500; color: var(--ink); letter-spacing: -.01em; }
+.set-stat .lab { font-size: var(--t-sm); color: var(--ink-3); margin-top: 4px; }
+.set-actv { margin-bottom: 26px; }
+.set-actvhd { display: flex; align-items: center; justify-content: space-between; margin-bottom: 13px; }
+.set-actvhd .t { font-size: var(--t-lg); font-weight: 500; color: var(--ink); }
+.set-grid { display: flex; gap: 3px; }
+.set-hcol { display: flex; flex-direction: column; gap: 3px; flex: 1; }
+.set-hc { aspect-ratio: 1; border-radius: 3px; background: var(--island-3); }
+.set-months { display: flex; margin-top: 6px; font-size: var(--t-xs); color: var(--ink-3); }
+.set-months span { flex: 1; }
+.set-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--s8); }
+.set-cols h3 { font-size: var(--t-lg); font-weight: 500; color: var(--ink); margin: 0 0 10px; }
+.set-ents { display: flex; flex-direction: column; }
+.set-erow { display: flex; align-items: center; gap: 10px; height: 40px; border-radius: var(--r-btn); padding: 0 6px; margin: 0 -6px; cursor: pointer; transition: background var(--d-fast); }
+.set-erow:hover { background: var(--cc-hover); }
+.set-ei { width: 26px; height: 26px; flex: none; border-radius: 7px; display: grid; place-items: center; background: var(--island-3); color: var(--ink-2); }
+.set-ei svg { width: 16px; height: 16px; }
+.set-erow .nm { flex: 1; min-width: 0; font-size: var(--t-md); color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.set-erow .nm em { color: var(--ink-3); font-style: normal; font-size: var(--t-sm); margin-left: 6px; }
+.set-erow .ct { font-size: var(--t-sm); color: var(--ink-3); }

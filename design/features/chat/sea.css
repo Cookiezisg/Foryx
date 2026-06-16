@@ -1,0 +1,105 @@
+/* Foryx demo — 对话海洋海面样式（薄；教学脊块/审批/flowrun/实体卡像素全在组件库）。
+   只画：对话流容器 + user 气泡 + AI 回合 spark + caret + composer + @提及弹层 + 标题栏 + dock 宿主 + 几枚流式临时件。
+   类名 chat- 专属；无 fg-（组件）/无裸全局；颜色/度量走 token、零硬编码色。视觉宪法：海岛同色、描边分、accent 只点正在发生、--ease-spring。 */
+
+/* ===== 对话流 ===== */
+.chat-conv { flex: 1; min-height: 0; overflow-y: auto; }
+.chat-col { max-width: var(--w-content); margin: 0 auto; padding: 28px 32px 8px; }
+.chat-turn { margin-bottom: 26px; }
+
+/* user 气泡（右对齐；唯一灰填充例外 cc-bubble） */
+.chat-umsg { display: flex; justify-content: flex-end; margin-bottom: 26px; }
+.chat-ub { background: var(--cc-bubble); border-radius: 16px; padding: 10px 15px; max-width: 80%; line-height: 1.55; font-size: var(--t-md); color: var(--ink); }
+
+/* AI 回合：spark（accent，每回合一枚）+ 全宽 markdown */
+.chat-spark { display: flex; align-items: center; color: var(--accent); margin-bottom: 12px; }
+.chat-amsg { font-size: var(--t-md); line-height: 1.65; color: var(--ink); }
+.chat-amsg p { margin: 0 0 12px; }
+.chat-amsg p:last-child { margin-bottom: 0; }
+.chat-amsg b { font-weight: 600; }
+.chat-amsg code { font-family: var(--mono); font-size: .9em; background: var(--cc-active); padding: 1px 5px; border-radius: var(--r-tag); }
+
+/* 打字光标 */
+.chat-caret { display: inline-block; width: 6px; height: 1em; vertical-align: -2px; background: var(--accent); border-radius: 1px; margin-left: 1px; animation: chatBlink 1s steps(2) infinite; }
+@keyframes chatBlink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+
+/* ===== 流式临时件（锻造逐字段揭示用；收口后由组件接管） ===== */
+.chat-code-stream { font-family: var(--mono); font-size: var(--t-sm); line-height: 1.6; color: var(--ink); white-space: pre-wrap; margin: 0; }
+.chat-tag-new { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; margin: 0 5px 5px 0; border-radius: var(--r-tag);
+  background: var(--cc-active); border: 1px solid var(--line); font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-2);
+  animation: chatTagIn .32s var(--ease-spring) both; }
+@keyframes chatTagIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+/* workflow 图字段逐节点流入（锻造时图未成形，落节点行；收口由组件图接管） */
+.chat-ec-rows { display: flex; flex-direction: column; gap: 2px; }
+.chat-ec-row { display: flex; align-items: center; gap: 9px; min-height: 30px; padding: 0 8px; border-radius: var(--r-btn);
+  animation: chatTagIn .34s var(--ease-spring) both; }
+.chat-ec-rico { width: 18px; flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.chat-ec-rid { font-family: var(--mono); font-size: var(--t-sm); color: var(--ink); }
+.chat-ec-rref { margin-left: auto; font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); }
+
+/* 底部常驻 todo 进度坞经 BlockKit.dock 挂进 #chatDock：坞自带 padding/max-width/居中，本文件不再加壳。 */
+
+/* ===== composer（dialogue 模型 / @提及 / 附件 / 生成中 cancel） ===== */
+.chat-composer { flex: none; padding: 0 32px 18px; }
+.chat-cwrap { max-width: var(--w-content); margin: 0 auto; }
+.chat-box { border: 1px solid var(--line); border-radius: 16px; background: var(--cc-input); box-shadow: var(--shadow-island); }
+.chat-box:focus-within { border-color: var(--line-strong); }
+.chat-field { display: flex; align-items: center; gap: 8px; padding: 13px 14px 6px; }
+.chat-field input { flex: 1; min-width: 0; border: 0; outline: 0; background: none; font: inherit; font-size: var(--t-md); color: var(--ink); }
+.chat-field input::placeholder { color: var(--ink-3); }
+.chat-enter { display: grid; place-items: center; color: var(--ink-3); cursor: pointer; transition: color var(--d-fast); }
+.chat-enter:hover { color: var(--accent); }
+
+.chat-bar { display: flex; align-items: center; gap: 4px; padding: 4px 8px 8px; }
+.chat-cbtn { height: 28px; padding: 0 9px; border-radius: var(--r-btn); display: inline-flex; align-items: center; gap: 6px; color: var(--ink-2); font-size: var(--t-sm); font-weight: 500; transition: background .12s, color .12s; }
+.chat-cbtn:hover { background: var(--cc-hover); color: var(--ink); }
+.chat-cbtn.ic { width: 28px; padding: 0; justify-content: center; }
+.chat-cbtn.model b { font-weight: 600; color: var(--ink); }
+.chat-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+.chat-spin { display: none; color: var(--ink-3); place-items: center; }
+.chat-spin svg { animation: chatSpin 1s linear infinite; }
+@keyframes chatSpin { to { transform: rotate(360deg); } }
+.chat-cbtn.stop { display: none; align-items: center; gap: 5px; color: var(--ink-2); border: 1px solid var(--line); height: 26px; }
+.chat-cbtn.stop:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.chat-composer.gen .chat-spin { display: grid; }
+.chat-composer.gen .chat-cbtn.stop { display: inline-flex; }
+
+/* @提及弹层 */
+.chat-mpop { display: none; margin-bottom: 8px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--cc-input); box-shadow: var(--shadow-pop); overflow: hidden; }
+.chat-mpop.show { display: block; }
+.chat-mh { padding: 8px 12px 4px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+.chat-mrow { display: flex; align-items: center; gap: 9px; padding: 7px 12px; cursor: pointer; transition: background .12s; }
+.chat-mrow:hover { background: var(--cc-hover); }
+.chat-mico { width: 18px; display: grid; place-items: center; color: var(--ink-2); }
+.chat-mnm { font-size: var(--t-md); color: var(--ink); }
+.chat-mkd { margin-left: auto; font-size: var(--t-xs); color: var(--ink-3); }   /* 实体类型标签（人读，非 id 前缀） */
+
+/* ===== 主区头左角：对话标题 + 快捷操作菜单 ===== */
+.chat-titlebar { position: relative; }
+.chat-title { display: inline-flex; align-items: center; gap: 5px; height: 30px; max-width: 300px; padding: 0 8px 0 10px; border-radius: var(--r-btn);
+  color: var(--ink); font-weight: 400; font-size: var(--t-md); transition: background .15s; }
+.chat-title:hover, .chat-title.open { background: var(--cc-hover); }
+.chat-tt { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chat-chev { display: grid; place-items: center; color: var(--ink-3); transition: transform .2s var(--ease-spring); }
+.chat-title.open .chat-chev { transform: rotate(180deg); }
+.chat-qa { display: none; position: absolute; top: 34px; left: 0; min-width: 160px; padding: 5px; border: 1px solid var(--line); border-radius: var(--r-card);
+  background: var(--cc-input); box-shadow: var(--shadow-pop); z-index: 40; }
+.chat-qa.show { display: block; }
+.chat-qaitem { padding: 7px 10px; border-radius: var(--r-btn); font-size: var(--t-md); color: var(--ink); cursor: pointer; transition: background .12s; }
+.chat-qaitem:hover { background: var(--cc-hover); }
+.chat-qaitem.danger { color: var(--danger); }
+.chat-qaitem.danger:hover { background: color-mix(in srgb, var(--danger) 9%, transparent); }
+
+/* 右岛空态：实体选择列表页（分组 → 类型 → 实体行，点选预览）。渲进 RightIsland body，类名 chat-elist- 专属。 */
+.chat-elist { display: flex; flex-direction: column; }
+.chat-elist-grp { padding: 13px 4px 4px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; }
+.chat-elist-grp:first-child { padding-top: 2px; }
+.chat-elist-ty { display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 8px; font-size: var(--t-sm); font-weight: 500; color: var(--ink-2); }
+.chat-elist-tyico { flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.chat-elist-tynm { flex: 1; min-width: 0; }
+.chat-elist-cnt { flex: none; font-size: var(--t-xs); color: var(--ink-3); }
+.chat-elist-row { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 8px 0 28px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background var(--d-fast); }   /* color 不入过渡：无头渲染器冻初值 */
+.chat-elist-row:hover { background: var(--cc-hover); color: var(--ink); }
+.chat-elist-dot { flex: none; display: grid; place-items: center; }
+.chat-elist-nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

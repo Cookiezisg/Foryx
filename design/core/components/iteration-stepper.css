@@ -1,0 +1,28 @@
+/* Foryx demo — iteration-stepper 皮肤（镜像 scheduler .sa-iter：iter N 等宽墨灰 + 标记格 + 省略尾的输出文案）。
+   一行一迭代；ok 标记绿 · fail 标记红 · running 转圈；hover 浅底、点选 on 深底。度量字节级保形原始值。 */
+.fg-itstep { display: flex; flex-direction: column; }
+
+.fg-itstep-row {
+  display: flex; align-items: center; gap: 9px;
+  min-height: 32px; padding: 5px 9px;
+  border-radius: var(--r-btn);
+  cursor: pointer;
+  transition: background var(--d-fast);
+}
+.fg-itstep-row:hover { background: var(--cc-hover); }
+.fg-itstep-row.on    { background: var(--cc-active); }
+
+/* iter N — 等宽、墨灰、定宽对齐，防输出文案左缘抖动 */
+.fg-itstep-n { font-family: var(--mono); font-size: 11px; color: var(--ink-3); flex: none; width: 44px; }
+
+/* 标记格：居中放 13px 图标 */
+.fg-itstep-mk { width: 15px; flex: none; display: grid; place-items: center; }
+.fg-itstep-row.ok      .fg-itstep-mk { color: var(--ok); }
+.fg-itstep-row.fail    .fg-itstep-mk { color: var(--danger); }
+.fg-itstep-row.running .fg-itstep-mk { color: var(--accent); }
+.fg-itstep-row.running .fg-itstep-mk svg { animation: fgItstepSpin 0.9s linear infinite; }
+
+/* 输出文案：吃满剩余宽、单行省略 */
+.fg-itstep-ot { flex: 1; min-width: 0; font-size: 12px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@keyframes fgItstepSpin { to { transform: rotate(360deg); } }

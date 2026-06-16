@@ -2,107 +2,11 @@
 <html lang="zh">
 <head>
 <meta charset="utf-8">
-<title>Foryx · 实体页(样板)</title>
-<link rel="stylesheet" href="core/tokens.css">
-<link rel="stylesheet" href="core/reset.css">
-<script src="core/cssload.js"></script>
-<script src="core/dom.js"></script>
-<script src="core/icons.js"></script>
-<script src="core/primitives/status-dot.js"></script>
-<script src="core/primitives/button.js"></script>
-<script src="core/primitives/badge.js"></script>
-<script src="core/primitives/input.js"></script>
-<script src="core/primitives/field.js"></script>
-<script src="core/primitives/section.js"></script>
-<script src="core/primitives/row.js"></script>
-<script src="core/primitives/sidebar-list.js"></script>
-<script src="core/primitives/tabs.js"></script>
-<script src="core/primitives/ocean-header.js"></script>
-<script src="core/primitives/page.js"></script>
-<script src="core/primitives/right-island.js"></script>
-<style>
-  /* 三岛外壳:左侧栏岛 + 中央海洋 + 右岛(SPEC §3.1,宽全走 token) */
-  .app { display: flex; height: 100vh; background: var(--sea); overflow: hidden; }
-  .app-left { width: var(--side-w); flex: none; background: var(--island); border-right: 1px solid var(--line); padding: var(--sp-2); overflow-y: auto; }
-  .app-sea { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .app-right { width: var(--island-w); flex: none; padding: var(--sp-3); }
-  /* 代码块(CodeEditor 原语待补,先本地皮) */
-  .code { background: var(--island-2); border: 1px solid var(--line); border-radius: var(--r-btn); padding: var(--sp-3) var(--sp-4); font-family: var(--mono); font-size: var(--t-meta); color: var(--ink-2); line-height: 1.65; white-space: pre; overflow-x: auto; }
-  .code .kw { color: #a626a4; } .code .str { color: #50a14f; } .code .fn { color: #4078f2; } .code .com { color: var(--ink-3); }
-  .deps { display: flex; flex-wrap: wrap; gap: var(--sp-2); padding: var(--sp-2) 0; }
-  .prose { font-size: var(--t-body); line-height: var(--lh-prose); color: var(--ink-2); padding: var(--sp-1) 0; }
-  .dbg-l { font-size: var(--t-meta); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); margin: var(--sp-3) 0 var(--sp-2); }
-  .dbg-l:first-child { margin-top: 0; }
-  .dbg-out { margin-top: var(--sp-3); }
-</style>
+<meta http-equiv="refresh" content="0; url=app.html#entities">
+<title>Foryx · Entities</title>
+<link rel="canonical" href="app.html#entities">
 </head>
 <body>
-<div class="app">
-  <aside class="app-left" id="left"></aside>
-  <main class="app-sea" id="sea"></main>
-  <aside class="app-right" id="right"></aside>
-</div>
-
-<script>
-  // ===== 左岛:侧栏(SidebarList 模版)=====
-  FySidebarList.mount(qs('#left'), {
-    newLabel: 'New entity', filterPlaceholder: 'Search entities…',
-    groups: [{ label: 'Quadrinity', types: [
-      { icon: 'func', label: 'Functions', count: 3, open: true, rows: [
-        { leading: { dot: 'done' }, label: 'process_invoice', meta: 'v5', selected: true, actions: [{ icon: 'more' }] },
-        { leading: { dot: 'run' }, label: 'fetch_news', meta: 'v2', actions: [{ icon: 'more' }] },
-        { leading: { dot: 'idle' }, label: 'parse_pdf', meta: 'v1', actions: [{ icon: 'more' }] },
-      ] },
-      { icon: 'handler', label: 'Handlers', count: 2, rows: [] },
-      { icon: 'agent', label: 'Agents', count: 2, rows: [] },
-      { icon: 'workflow', label: 'Workflows', count: 3, rows: [] },
-    ] }],
-  });
-
-  // ===== 中央海洋:Page(头 + Tabs + 段)=====
-  var page = FyPage.mount(qs('#sea'), {});
-  page.col.innerHTML = FyOceanHeader.html({
-    crumb: ['Function', 'process_invoice'],
-    title: 'process_invoice',
-    meta: FyBadge.html({ label: 'v5', tone: 'neutral' })
-        + FyBadge.html({ label: '就绪', dot: 'done', tone: 'ok' })
-        + '<span>1284 runs</span>'
-        + '<span class="fy-mono" style="font-family:var(--mono)">fn_25f2af17</span>',
-    actions: FyButton.html({ label: 'Run', icon: 'play', variant: 'primary' }),
-  });
-
-  function overview(p) {
-    p.innerHTML =
-      FySection.html({ body: '<div class="prose">解析上传的发票 PDF / 图片,抽取结构化字段(供应商、金额、税号、行项目),校验后返回 JSON。</div>' }) +
-      FySection.html({ label: 'Code', body: '<div class="code"><span class="kw">def</span> <span class="fn">process_invoice</span>(file: bytes, currency: str = <span class="str">"USD"</span>) -> Invoice:\n    doc = pdfplumber.<span class="fn">open</span>(io.BytesIO(file))\n    text = <span class="str">"\\n"</span>.join(p.extract_text() <span class="kw">for</span> p <span class="kw">in</span> doc.pages)\n    fields = <span class="fn">extract_fields</span>(text)   <span class="com"># 正则 + 版面启发式</span>\n    inv = Invoice.<span class="fn">model_validate</span>(fields)\n    <span class="kw">return</span> inv</div>' }) +
-      FySection.html({ label: 'Inputs', body:
-        FyField.html({ label: 'file', hint: '必填 · 发票 PDF/图片字节流', control: FyBadge.html({ label: 'bytes', tone: 'neutral' }) }) +
-        FyField.html({ label: 'currency', hint: '默认 USD', control: FyBadge.html({ label: 'str', tone: 'neutral' }) }) }) +
-      FySection.html({ label: 'Output', body:
-        FyField.html({ label: '返回', control: '<span class="fy-field-v">Invoice</span>' }) +
-        FyField.html({ label: '字段', control: '<span class="fy-field-v fy-mono">vendor · total · tax_id · line_items[]</span>' }) }) +
-      FySection.html({ label: '依赖', body: '<div class="deps">' +
-        FyBadge.html({ label: 'pdfplumber', tone: 'neutral' }) + FyBadge.html({ label: 'pydantic', tone: 'neutral' }) + FyBadge.html({ label: 'Pillow', tone: 'neutral' }) + '</div>' });
-  }
-  var ph = p => p.innerHTML = '<div class="prose" style="color:var(--ink-3)">（' + p.dataset.k + ' 内容待接入）</div>';
-  FyTabs.mount(page.col, { items: [
-    { key: 'overview', label: '概览', render: overview },
-    { key: 'version', label: '版本', render: p => { p.dataset.k = '版本历史'; ph(p); } },
-    { key: 'runs', label: '运行', render: p => { p.dataset.k = '运行记录'; ph(p); } },
-    { key: 'iterate', label: '迭代', render: p => { p.dataset.k = 'AI 迭代'; ph(p); } },
-  ] });
-
-  // ===== 右岛:调试运行(跟海洋走)=====
-  FyRightIsland.mount(qs('#right'), {
-    title: '调试运行', icon: 'play',
-    body:
-      '<div class="dbg-l">参数</div>' +
-      FyInput.html({ multiline: true, mono: true, full: true, value: '{\n  "currency": "USD"\n}' }) +
-      '<div style="margin-top:var(--sp-3);display:flex;gap:var(--sp-2)">' + FyButton.html({ label: 'Run', icon: 'play', variant: 'primary' }) + FyButton.html({ label: '清空', variant: 'ghost' }) + '</div>' +
-      '<div class="dbg-out"><div class="dbg-l">输出</div>' +
-        FyBadge.html({ label: '已完成 · 1.2s', dot: 'done', tone: 'ok' }) +
-        '<div class="code" style="margin-top:var(--sp-2)">{\n  <span class="str">"vendor"</span>: <span class="str">"Acme Co."</span>,\n  <span class="str">"total"</span>: 1240.50,\n  <span class="str">"tax_id"</span>: <span class="str">"US-99-1"</span>\n}</div></div>',
-  });
-</script>
+<script>location.replace('app.html#entities');</script>
 </body>
 </html>

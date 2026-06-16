@@ -1,0 +1,38 @@
+/* Foryx demo — tabs 皮肤。文字下划线页签：active 墨色变深 + 一条弹簧滑入的短下划线；可选计数走 tabular-nums。
+   镜像 design-lab entities 的 eo-tab 度量（gap 18 · 字号 13 · 下划线 2px · body padding-top 22）。 */
+.fg-tabs { display: flex; flex-direction: column; }
+
+.fg-tabs-nav { display: flex; gap: var(--s5); margin: 18px 0 4px; }
+
+.fg-tab {
+  position: relative;
+  display: inline-flex; align-items: baseline; gap: 3px;
+  font-family: var(--font);
+  font-size: var(--t-md);
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--ink-3);
+  padding: var(--s1) 0;
+  background: none; border: none; cursor: pointer;
+  transition: color var(--d-fast) var(--ease-spring);
+}
+.fg-tab:hover { color: var(--ink-2); }
+.fg-tab.on { color: var(--ink); }
+
+/* 短下划线：用 scaleX 让它从 active 中点弹出来（弹簧），切换有滑入感而非硬跳 */
+.fg-tab::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+  height: 2px; border-radius: 2px;
+  background: var(--ink);
+  transform: scaleX(0); transform-origin: center;
+  transition: transform var(--d-mid) var(--ease-spring);
+}
+.fg-tab.on::after { transform: scaleX(1); }
+
+.fg-tab-cnt {
+  color: var(--ink-3); font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.fg-tab-body { padding-top: 22px; }
+.fg-tab-pane[hidden] { display: none; }

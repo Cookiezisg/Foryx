@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foryx · Onboarding</title>
+<!-- 独立首启页（mini index）：自持 <html>，加载 core 令牌/重置 + 用到的组件 <script> + cssload，再载本页 onboarding.js。
+     不连后端、无 Shell/SideBar 接入（standalone，无 owned Intent kind）。像素全在 fg-seg / fg-dd 组件库；本页只组合。 -->
+<link rel="stylesheet" href="../../core/tokens.css">
+<link rel="stylesheet" href="../../core/reset.css">
+</head>
+<body>
+<div class="onb-win"><div class="onb-center"><div class="onb" id="onb">
+  <div class="onb-mark" id="onbMark"></div>
+  <div class="onb-head">
+    <h1 id="onbTitle">Make it yours</h1>
+    <p id="onbSub">Pick a look and language — both apply instantly</p>
+    <div class="onb-dots"><i class="on" data-d="0"></i><i data-d="1"></i></div>
+  </div>
+
+  <!-- 步 0：外观 + 语言（即时生效） -->
+  <div class="onb-step on" data-s="0">
+    <div class="onb-lbl" data-t="langLabel">Language</div>
+    <div class="onb-seg-host" id="onbLang"></div>
+
+    <div class="onb-lbl" data-t="appearance">Appearance</div>
+    <div class="onb-seg-host" id="onbTheme"></div>
+  </div>
+
+  <!-- 步 1：连接模型（大模型 key 必填）+ 网络搜索（可选） -->
+  <div class="onb-step" data-s="1">
+    <div class="onb-island">
+      <div class="onb-vendors">
+        <div class="onb-vh" data-t="providerH">Provider</div>
+        <div class="onb-vgrid" id="onbVgrid"></div>
+      </div>
+      <div class="onb-cfg">
+        <div class="onb-vname" id="onbVname">Anthropic</div>
+        <div class="onb-lbl" data-t="name">Name</div>
+        <div class="onb-input"><input id="onbKeyName" type="text" placeholder="Anthropic" autocomplete="off"></div>
+        <div class="onb-lbl" data-t="apiKey">API key</div>
+        <div class="onb-keyrow">
+          <div class="onb-input"><input id="onbApiKey" type="password" data-tp="keyPlaceholder" placeholder="Paste your API key" autocomplete="off"></div>
+          <button class="onb-test" id="onbTestBtn"><span class="onb-ico"></span><span class="onb-tt">Test</span></button>
+        </div>
+        <div class="onb-reveal" id="onbReveal">
+          <div class="onb-lbl"><span data-t="model">Model</span> <span class="onb-ct" data-t="dialogue">dialogue</span></div>
+          <div id="onbModelDD"></div>
+          <label class="onb-check on" id="onbUtil">
+            <span class="onb-box" data-ico="check" data-n="12"></span>
+            <span class="onb-ct"><span data-t="utilTitle">Also use for utility tasks</span><small data-t="utilSub">Auto-titles, compaction, search summaries</small></span>
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="onb-foot-note">
+      <span class="onb-priv" data-t="privacy">Keys are encrypted (AES-GCM) in local SQLite and never leave your machine.</span>
+    </div>
+
+    <!-- 网络搜索：可选，设工作区默认搜索 -->
+    <div class="onb-lbl" data-t="searchH">Web search (optional)</div>
+    <div class="onb-island">
+      <div class="onb-vendors">
+        <div class="onb-vh" data-t="searchProviderH">Search provider</div>
+        <div class="onb-vgrid" id="onbSgrid"></div>
+      </div>
+      <div class="onb-cfg">
+        <div class="onb-vname" id="onbSvname">Brave</div>
+        <div class="onb-lbl" data-t="name">Name</div>
+        <div class="onb-input"><input id="onbSKeyName" type="text" placeholder="Brave" autocomplete="off"></div>
+        <div class="onb-lbl" data-t="apiKey">API key</div>
+        <div class="onb-keyrow">
+          <div class="onb-input"><input id="onbSApiKey" type="password" data-tp="searchKeyPlaceholder" placeholder="Paste your search API key" autocomplete="off"></div>
+          <button class="onb-test" id="onbSTestBtn"><span class="onb-ico"></span><span class="onb-tt">Test</span></button>
+        </div>
+      </div>
+    </div>
+    <div class="onb-foot-note">
+      <span class="onb-priv" data-t="searchFoot">Optional — lets the assistant search the web. Add or change it anytime in Settings.</span>
+    </div>
+  </div>
+
+  <div class="onb-nav">
+    <button class="onb-btn ghost" id="onbBack" data-t="back" style="visibility:hidden">Back</button>
+    <span class="grow"></span>
+    <button class="onb-btn primary" id="onbNext"><span class="onb-tt">Next</span><span class="onb-ico" data-ico="chevr" data-n="16"></span></button>
+  </div>
+</div></div></div>
+
+<!-- 内核（令牌/图标/DOM 微件）+ 用到的组件 + 本页脚本 -->
+<script src="../../core/cssload.js"></script>
+<script src="../../core/dom.js"></script>
+<script src="../../core/icons.js"></script>
+<script src="../../core/components/segmented.js"></script>
+<script src="../../core/components/dropdown.js"></script>
+<script src="onboarding.js"></script>
+</body>
+</html>

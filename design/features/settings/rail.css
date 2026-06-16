@@ -1,0 +1,25 @@
+/* Foryx demo — 设置侧栏接管样式（头像轴；薄）。镜像 notifications 接管 #sidebody：← 返回 + 搜索 + 分组类目导航。
+   类名 set- 专属（详情海面像素在 sea.css）；只读令牌。类目行遵守侧栏字色铁律：灰默认、hover/选中才黑。 */
+
+/* ← 返回来源海洋 */
+.set-back { display: flex; align-items: center; gap: 7px; height: 32px; margin-bottom: 4px; padding: 0 8px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background var(--d-fast); }
+.set-back:hover { background: var(--cc-hover); color: var(--ink); }   /* color 不入过渡：按钮 color 过渡在无头渲染器冻初值 */
+.set-back svg { width: 16px; height: 16px; flex: none; }
+
+/* 搜索 */
+.set-search { display: flex; align-items: center; gap: 8px; height: 32px; margin: 2px 2px 8px; padding: 0 9px;
+  border: 1px solid var(--line); border-radius: 9px; color: var(--ink-3); }
+.set-search svg { width: 15px; height: 15px; flex: none; }
+.set-search input { flex: 1; min-width: 0; border: 0; background: transparent; font: inherit; font-size: var(--t-md); color: var(--ink); }
+.set-search input::placeholder { color: var(--ink-3); }
+
+/* 分组类目（侧栏自身即容器，无岛边框；nav 填满剩余高度可滚） */
+.set-nav { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: auto; }
+.set-grp { padding: 9px 10px 4px; font-size: var(--t-xs); font-weight: 500; color: var(--ink-3); }
+.set-cat { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background var(--d-fast); }   /* color 不入过渡：无头渲染器冻初值致灰默认失效 */
+.set-cat:hover { background: var(--cc-hover); color: var(--ink); }
+.set-cat.on { background: var(--cc-active); color: var(--ink); font-weight: 500; }
+.set-cat .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); opacity: .5; flex: none; }
+.set-cat.on .dot { background: var(--accent); opacity: 1; }

@@ -1,0 +1,15 @@
+/* Foryx demo — kv 皮肤（定义行：k 灰 132 列 + v 墨；mask 圆点掩码 / mono 等宽 / edit 焦点环）。镜像 design-lab eo-dl-row。 */
+.fg-kv { width: 100%; }
+/* 定义行（发丝线分隔）非列表行——给更舒展的上下留白，不套 32 紧凑行距 */
+.fg-kv-row { display: flex; align-items: baseline; gap: 10px; padding: 10px 0; font-size: var(--t-md); border-bottom: 1px solid var(--line); }
+.fg-kv-row:first-child { padding-top: 4px; }
+.fg-kv-row:last-child { border-bottom: 0; padding-bottom: 4px; }
+
+.fg-kv-k { width: 132px; flex: none; color: var(--ink-3); }
+.fg-kv-v { flex: 1; min-width: 0; color: var(--ink); font-size: 12.5px; outline: none; border-radius: var(--r-tag); }
+
+.fg-kv-v.mono { font-family: var(--mono); }
+.fg-kv-v.mask { letter-spacing: 1.5px; color: var(--ink-3); }
+
+.fg-kv-v[contenteditable="true"] { transition: box-shadow var(--d-fast) var(--ease-spring); }
+.fg-kv-v[contenteditable="true"]:focus { box-shadow: 0 0 0 2px var(--accent-soft); }

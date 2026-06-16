@@ -1,0 +1,179 @@
+/* Foryx demo — entity-card 皮肤（九类全能右岛卡）。逐像素移植 design-lab chat/entity-card 的流式锻造卡
+   与 entities 的版本 diff / 运行账本；令牌化、fg-ec- 前缀。富件子组件(CodeEditor/Tags/KV/StatusDot/RunGraph)各自带皮肤，此处只管卡外壳 + per-kind 字段框架 + 版本/运行 tab。
+   就地 host 模式与 RightIsland 抽屉模式共用本皮肤；抽屉的滑入/头部脚手架由 right-island.css 负责。 */
+
+.fg-ec { display: block; }
+.fg-ec.fg-ec-hidden { display: none; }
+
+/* ===== 头部（图标方块 + 名 + 副行 + live 徽）。度量镜像 chat .aside-head/.etype/.ht ===== */
+.fg-ec-head { position: relative; display: flex; align-items: center; gap: 10px; padding: 2px 0 8px; }
+.fg-ec-etype { width: 30px; height: 30px; border-radius: var(--r-btn); flex: none; display: grid; place-items: center; background: var(--cc-active); color: var(--ink-2); }
+.fg-ec-ht { flex: 1; min-width: 0; }
+.fg-ec-ht b { display: block; font-size: var(--t-lg); font-weight: 600; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fg-ec-sub { display: flex; align-items: center; gap: 7px; font-size: var(--t-xs); color: var(--ink-3); margin-top: 1px; }
+.fg-ec-ver { font-family: var(--mono); background: var(--cc-active); color: var(--ink-2); padding: 0 6px; border-radius: var(--r-tag); }
+.fg-ec-path { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); }
+
+/* ===== picker（对话右岛：名字下拉切换预览实体）===== */
+.fg-ec-namebtn { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; padding: 1px 5px 1px 4px; margin-left: -4px; border-radius: var(--r-tag); cursor: pointer; transition: background var(--d-fast); }
+.fg-ec-namebtn:hover { background: var(--cc-hover); }
+.fg-ec-namebtn .fg-ec-name { display: inline-block; max-width: 100%; }
+.fg-ec-pchev { flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.fg-ec-pmenu { position: absolute; top: calc(100% - 4px); left: 40px; z-index: 20; min-width: 200px; max-height: 70vh; overflow-y: auto;
+  background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-chip); padding: 5px; box-shadow: var(--shadow-pop); display: none; }
+.fg-ec-pmenu.open { display: block; animation: fgEcCardIn .16s var(--ease-out); }
+.fg-ec-popt { display: flex; align-items: center; gap: 9px; width: 100%; height: 34px; padding: 0 9px; border-radius: var(--r-btn); text-align: left; color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background var(--d-fast); }
+.fg-ec-popt:hover { background: var(--cc-hover); color: var(--ink); }
+.fg-ec-popt.on { background: var(--cc-active); color: var(--ink); }
+.fg-ec-pico { flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.fg-ec-pnm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fg-ec-pkd { flex: none; font-size: var(--t-xs); color: var(--ink-3); }
+
+/* 其他级联（岛内 inline 手风琴；右岛 overflow:hidden 飞不出去 → 就地展开）：hover 其他 → 类型树；hover 类型 → 其实体 */
+.fg-ec-pdiv { height: 1px; background: var(--line); margin: 5px 4px; }
+.fg-ec-pmore { flex: none; display: grid; place-items: center; color: var(--ink-3); transition: transform .15s var(--ease-spring); }
+.fg-ec-pcnt { flex: none; font-size: var(--t-xs); color: var(--ink-3); }
+.fg-ec-ptree { display: none; }
+.fg-ec-potherwrap:hover .fg-ec-ptree { display: block; }
+.fg-ec-potherwrap:hover > .fg-ec-pother .fg-ec-pmore { transform: rotate(90deg); }
+.fg-ec-pgrp { padding: 8px 9px 3px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); }
+.fg-ec-pents { display: none; }
+.fg-ec-ptype:hover .fg-ec-pents { display: block; }
+.fg-ec-ptype:hover > .fg-ec-ptyrow .fg-ec-pmore { transform: rotate(90deg); }
+.fg-ec-pent { height: 30px; padding-left: 30px; }
+.fg-ec-pent .fg-ec-pnm { font-size: var(--t-sm); }
+.fg-ec-pdot { flex: none; width: 5px; height: 5px; border-radius: 50%; background: var(--ink-3); opacity: .5; }
+
+/* 内容原位替换的入场（切换/锻造时淡入上浮——给「自动切换 + 各种动画」的感） */
+.fg-ec { animation: fgEcCardIn .3s var(--ease-out); }
+@keyframes fgEcCardIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* live 徽（锻造中/编辑中脉冲；已保存 dim）。脉冲环走 accent-soft，节奏 1.4s 同 chat */
+.fg-ec-livewrap { flex: none; }
+.fg-ec-live { display: inline-flex; align-items: center; gap: 5px; color: var(--ink-2); font-weight: 500; font-size: var(--t-xs); }
+.fg-ec-live.saved { opacity: .65; }
+.fg-ec-pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); opacity: .85; animation: fgEcPulse 1.4s ease infinite; }
+@keyframes fgEcPulse { 0% { box-shadow: 0 0 0 0 var(--accent-soft); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+/* ===== 字段框架（label 小号大写灰 + 内嵌富件槽）。镜像 chat .field/.field>label ===== */
+.fg-ec-tabs { display: block; }
+.fg-ec-desc { font-size: var(--t-md); color: var(--ink-2); line-height: 1.55; margin-bottom: 16px; }
+
+.fg-ec-field { margin-bottom: 16px; }
+.fg-ec-field > label { display: block; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+.fg-ec-ct { color: var(--ink-3); font-weight: 500; margin-left: 5px; text-transform: none; letter-spacing: 0; }
+
+/* 内嵌底盒（标签/定义行包一层白底细描边块；裸槽不包，给富件自己的框）。镜像 chat .field .val */
+.fg-ec-val { background: var(--cc-input); border: 1px solid var(--line); border-radius: var(--r-chip); padding: 9px 11px; transition: box-shadow .4s, border-color .4s, background .4s; }
+.fg-ec-slot { display: block; }
+.fg-ec-stwrap { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.fg-ec-note { font-size: var(--t-xs); color: var(--ink-3); }
+
+/* 闪烁回执（流式 reveal/fill：背景一闪回落，掩码项去掩码后高亮）。镜像 chat @keyframes flash */
+.fg-ec-flash { animation: fgEcFlash 1.4s ease; }
+@keyframes fgEcFlash { 0% { background: var(--cc-active); } 100% { background: transparent; } }
+.fg-ec-val.fg-ec-flash { animation: fgEcFlashBox 1.4s ease; }
+@keyframes fgEcFlashBox { 0% { background: var(--cc-active); border-color: var(--line-strong); } 100% { } }
+
+/* 行（节点/工具/监听）。镜像 chat .ec-row */
+.fg-ec-rows { display: flex; flex-direction: column; gap: 1px; }
+.fg-ec-row { display: flex; align-items: center; gap: 9px; padding: 6px 8px; border-radius: var(--r-btn); }
+.fg-ec-rico { width: 18px; flex: none; display: grid; place-items: center; color: var(--ink-3); }
+.fg-ec-mh { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.fg-ec-mh.ok { background: var(--ok); }
+.fg-ec-mh.bad { background: var(--danger); }
+.fg-ec-rid { font-family: var(--mono); font-size: 12.5px; color: var(--ink); }
+.fg-ec-rspacer { flex: 1; }
+.fg-ec-ref { font-size: var(--t-xs); color: var(--ink-3); font-family: var(--mono); }
+
+/* 掩码 / 文案占位 */
+.fg-ec-mask { font-family: var(--mono); letter-spacing: 1.5px; color: var(--ink-3); font-size: var(--t-md); }
+.fg-ec-iter { letter-spacing: 0; line-height: 1.6; padding: 4px 0; }
+
+/* 源徽（trigger/mcp）。镜像 chat .src-badge */
+.fg-ec-src-tag { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); font-weight: 500; color: var(--ink-2); padding: 2px 9px 2px 7px; border-radius: var(--r-pill); background: var(--cc-active); }
+.fg-ec-srcico { display: grid; place-items: center; color: var(--ink-3); }
+
+/* 生命周期徽（workflow）。镜像 chat .lifecycle */
+.fg-ec-life { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); font-weight: 600; padding: 2px 9px; border-radius: var(--r-tag); }
+.fg-ec-life.active { color: var(--accent); background: var(--accent-soft); }
+.fg-ec-life.active .fg-ec-life-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: fgEcPulse 1.4s ease infinite; }
+.fg-ec-life.inactive { color: var(--ink-3); background: var(--cc-active); }
+.fg-ec-life.draining { color: var(--warn); background: var(--warn-soft); }
+
+/* attention（workflow 需关注）。镜像 chat warn 色字段 */
+.fg-ec-attn { color: var(--warn); font-size: var(--t-md); line-height: 1.55; padding: 2px 0; }
+
+/* CEL 插值 token / approval 模板。镜像 chat .cel-tok + 模板预格式 */
+.fg-ec-cel { color: var(--accent); font-family: var(--mono); }
+.fg-ec-tpl { white-space: pre-wrap; line-height: 1.6; font-size: 12.5px; color: var(--ink-2); }
+
+/* control 分支行（first-true-wins；catchall 绿；bad 红描边）。镜像 chat .branch-row */
+.fg-ec-branch { display: flex; align-items: flex-start; gap: 9px; padding: 7px 9px; border-radius: var(--r-btn); border: 1px solid transparent; }
+.fg-ec-branch.bad { border-color: color-mix(in srgb, var(--danger) 40%, var(--line)); background: color-mix(in srgb, var(--danger) 6%, transparent); }
+.fg-ec-bnum { flex: none; width: 17px; height: 17px; border-radius: var(--r-tag); display: grid; place-items: center; background: var(--cc-active); color: var(--ink-3); font-size: var(--t-xs); font-family: var(--mono); margin-top: 1px; }
+.fg-ec-branch.catchall .fg-ec-bnum { background: var(--ok-soft); color: var(--ok); }
+.fg-ec-bbody { flex: 1; min-width: 0; }
+.fg-ec-bwhen { font-family: var(--mono); font-size: var(--t-sm); color: var(--ink); white-space: pre-wrap; }
+.fg-ec-branch.bad .fg-ec-bwhen { color: var(--danger); }
+.fg-ec-bport { flex: none; font-size: var(--t-xs); font-family: var(--mono); color: var(--ink-2); background: var(--cc-active); padding: 1px 7px; border-radius: var(--r-tag); }
+
+/* ===== 脚注（runs + 历史版本动作；不显机器 ID）。镜像 chat .ec-foot ===== */
+.fg-ec-foot { padding: 10px 0 4px; display: flex; align-items: center; gap: 6px; font-size: var(--t-xs); color: var(--ink-3); border-top: 1px solid var(--line); margin-top: 8px; }
+.fg-ec-fgap { flex: 1; }
+.fg-ec-act { color: var(--ink-2); font-weight: 500; cursor: pointer; }
+.fg-ec-act:hover { color: var(--ink); }
+
+/* ===== 版本 diff（内联兜底；公开 VersionDiff 在时本块不渲）。镜像 entities .eo-vers/.eo-diff/.eo-dl ===== */
+.fg-ec-vers { display: flex; gap: var(--s4); flex-direction: column; }
+.fg-ec-vlist { flex: none; display: flex; flex-direction: column; gap: 1px; }
+.fg-ec-vrow { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; padding: 7px 9px; border-radius: var(--r-btn); cursor: pointer; transition: background .12s; }
+.fg-ec-vrow:hover { background: var(--cc-hover); }
+.fg-ec-vrow.on { background: var(--cc-active); }
+.fg-ec-vrow .vn { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.fg-ec-vrow.cur .vn::after { content: "active"; margin-left: 6px; font-family: var(--font); font-size: 9px; font-weight: 600; color: var(--accent); vertical-align: 1px; }
+.fg-ec-vrow .vt { font-size: var(--t-xs); color: var(--ink-3); margin-left: auto; }
+.fg-ec-vrow .vd { flex-basis: 100%; font-size: var(--t-xs); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fg-ec-diff { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; }
+.fg-ec-diff-cap { display: flex; align-items: center; gap: 8px; padding: 9px 13px; font-size: var(--t-sm); color: var(--ink-2); }
+.fg-ec-diff-cap .mono { font-family: var(--mono); }
+.fg-ec-diff-cap .pm { margin-left: auto; font-family: var(--mono); font-size: var(--t-xs); }
+.fg-ec-diff-cap .pm .a { color: var(--ok); }
+.fg-ec-diff-cap .pm .d { color: var(--danger); }
+.fg-ec-diff-body { font-family: var(--mono); font-size: 12.5px; line-height: 1.8; overflow-x: auto; border-top: 1px solid var(--line); padding: 6px 0; }
+.fg-ec-dl { display: flex; padding: 0 12px; white-space: pre; animation: fgEcDlIn .3s var(--ease-spring) both; }
+.fg-ec-dl:nth-child(2) { animation-delay: .04s; }
+.fg-ec-dl:nth-child(3) { animation-delay: .08s; }
+.fg-ec-dl:nth-child(4) { animation-delay: .12s; }
+.fg-ec-dl:nth-child(5) { animation-delay: .16s; }
+@keyframes fgEcDlIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+.fg-ec-dl .ln { width: 30px; flex: none; color: var(--ink-3); opacity: .5; user-select: none; text-align: right; padding-right: 12px; }
+.fg-ec-dl .sg { width: 13px; flex: none; }
+.fg-ec-dl .ct { flex: 1; }
+.fg-ec-dl.add { background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.fg-ec-dl.add .sg { color: var(--ok); }
+.fg-ec-dl.add .ct { color: var(--ink); }
+.fg-ec-dl.del { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.fg-ec-dl.del .sg { color: var(--danger); }
+.fg-ec-dl.del .ct { color: var(--ink-3); }
+
+/* diff 区也吃 code-editor 的 --cd-* 着色类（CodeEditor.highlight 产出 fg-ce-*） */
+.fg-ec-diff-body .fg-ce-com { color: var(--cd-com); font-style: italic; }
+.fg-ec-diff-body .fg-ce-kw { color: var(--cd-kw); }
+.fg-ec-diff-body .fg-ce-str { color: var(--cd-str); }
+.fg-ec-diff-body .fg-ce-num { color: var(--cd-num); }
+.fg-ec-diff-body .fg-ce-fn { color: var(--cd-fn); }
+.fg-ec-diff-body .fg-ce-arg { color: var(--accent); font-weight: 600; }
+
+/* ===== 运行账本（聚合条 + 行）。镜像 entities .eo-agg/.eo-led/.eo-lrow ===== */
+.fg-ec-agg { display: flex; gap: var(--s4); font-size: var(--t-md); color: var(--ink-2); padding: 2px 0 12px; }
+.fg-ec-agg b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.fg-ec-agg b.ok { color: var(--ok); }
+.fg-ec-agg b.bad { color: var(--danger); }
+.fg-ec-led { display: flex; flex-direction: column; gap: 1px; }
+.fg-ec-lrow { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border-radius: var(--r-btn); cursor: pointer; transition: background .12s; }
+.fg-ec-lrow:hover { background: var(--cc-hover); }
+.fg-ec-cst { display: grid; place-items: center; flex: none; }
+.fg-ec-ctrig { font-size: var(--t-sm); color: var(--ink); }   /* 触发标签 = 这条执行的人读标识（机器 ID 不显） */
+.fg-ec-cmeta { margin-left: auto; font-size: var(--t-xs); color: var(--ink-3); }
+.fg-ec-cdur { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); min-width: 44px; text-align: right; }

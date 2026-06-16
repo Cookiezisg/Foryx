@@ -1,0 +1,18 @@
+/* Foryx demo — segmented 皮肤（镜像 onboarding .seg + settings .st-seg）。
+   pill 轨道：白底 + 海岸线 + 圆角；选中态是一颗灰胶囊在选项间弹簧滑动（唯一动效）。
+   选中文案从 ink-2 提到 ink；段宽由文案自适应，pill 用 transform+width 跟随。 */
+.fg-seg { position: relative; display: inline-flex; gap: 2px; padding: 3px;
+  background: var(--cc-input); border: 1px solid var(--line); border-radius: var(--r-pill); }
+
+/* 滑动胶囊：绝对定位、压在按钮层下，transform+width 双轴弹簧过渡 */
+.fg-seg-pill { position: absolute; left: 0; top: 0; width: 0; height: 0; z-index: 0; border-radius: var(--r-pill);
+  background: var(--cc-active);
+  transition: transform var(--d-mid) var(--ease-spring), width var(--d-mid) var(--ease-spring); }
+
+.fg-seg-btn { position: relative; z-index: 1; display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; height: 32px; padding: 0 14px; border: 0; background: none; cursor: pointer; border-radius: var(--r-pill);
+  font: inherit; font-size: var(--t-md); font-weight: 600; color: var(--ink-2); white-space: nowrap;
+  transition: color var(--d-mid) var(--ease-spring); }
+.fg-seg-btn.on { color: var(--ink); }
+.fg-seg-btn:focus-visible { outline: 2px solid var(--accent-line); outline-offset: 2px; }
+.fg-seg-l { display: inline-block; }

@@ -1,0 +1,77 @@
+/* Foryx demo — 文档海洋侧栏样式（薄）。文档库树导航：新建 + 名字过滤 + 排序菜单 + Recent(可折叠) + 嵌套文档树。
+   度量对齐外壳侧栏（行高 32 / radius 8 / 字号 13·11）；只读令牌、禁裸 hex。类名全 doc-rail- 专属。 */
+
+/* 新建文档 */
+.doc-rail-new { display: flex; align-items: center; gap: 11px; height: 34px; padding: 0 10px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-md); font-weight: 500; transition: background var(--d-fast); }
+.doc-rail-new:hover { background: var(--cc-hover); color: var(--ink); }
+.doc-rail-new svg { color: var(--ink-2); display: block; }
+
+/* 名字过滤行（含排序/筛选 sliders 按钮） */
+.doc-rail-filter { position: relative; display: flex; align-items: center; gap: 11px; height: 32px; margin-bottom: 6px; padding: 0 6px 0 10px; }
+.doc-rail-filter > svg { flex: none; display: block; color: var(--ink-3); }
+.doc-rail-filter input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--t-md); }
+.doc-rail-filter input::placeholder { color: var(--ink-3); }
+.doc-rail-mbtn { flex: none; width: 26px; height: 26px; display: grid; place-items: center; color: var(--ink-3); border-radius: 7px; transition: color var(--d-fast), background var(--d-fast); }
+.doc-rail-mbtn:hover, .doc-rail-mbtn.on { color: var(--ink); background: var(--cc-hover); }
+.doc-rail-mbtn svg { display: block; }
+
+/* 排序/筛选菜单内容（经 Floating 定位；本块只管皮，外框阴影由 Floating 兜） */
+.doc-rail-menu { min-width: 180px; background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-chip); padding: 5px; }
+.doc-rail-mh { padding: 6px 8px 3px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); }
+.doc-rail-mh:first-child { padding-top: 3px; }
+.doc-rail-opt { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border-radius: 7px; text-align: left; color: var(--ink); font-size: var(--t-md); transition: background var(--d-fast); }
+.doc-rail-opt:hover { background: var(--cc-hover); }
+.doc-rail-ck { flex: none; width: 14px; display: grid; place-items: center; color: var(--ink); opacity: 0; }
+.doc-rail-opt.on .doc-rail-ck { opacity: 1; }
+.doc-rail-ck svg { display: block; }
+
+/* 列表 + Recent 折叠区 */
+.doc-rail-list { flex: 1; min-height: 0; overflow-y: auto; }
+.doc-rail-sec { margin-bottom: 8px; }
+.doc-rail-sec-h { display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 10px; border-radius: var(--r-btn);
+  font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); transition: background var(--d-fast); }
+.doc-rail-sec-h:hover { background: var(--cc-hover); }
+.doc-rail-sec-t { flex: 1; text-align: left; }
+.doc-rail-sec:not(.open) > .doc-rail-sec-body { display: none; }
+
+/* 文档树（Notion 度量：行首 20 格 + 图标 16 + 间距 8 + 每级缩进 18） */
+.doc-rail-node.branch:not(.open) > .doc-rail-children { display: none; }
+.doc-rail-row { position: relative; display: flex; align-items: center; gap: 5px; height: 32px; padding: 0 8px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background var(--d-fast); }   /* color 不入过渡：无头渲染器冻初值致灰默认失效 */
+.doc-rail-row:hover { background: var(--cc-hover); color: var(--ink); }
+.doc-rail-row.on { background: var(--cc-active); color: var(--ink); }
+.doc-rail-flat { padding-left: 8px; }   /* Recent 行无深度，与树 depth-0 对齐 */
+
+/* 行首槽：图标 + 折叠箭头共用一格（20×20）。默认显图标；branch hover → 图标淡出、箭头淡入（同 Notion，不另占 chevron 列） */
+.doc-rail-lead { flex: none; position: relative; width: 16px; height: 16px; }   /* 格=图标尺寸、零 dead space，icon↔文字 ~5px 贴实 */
+.doc-rail-lead > * { position: absolute; inset: 0; display: grid; place-items: center; }
+.doc-rail-ico { color: var(--ink-3); }   /* opacity 即时切换、不入过渡：无头渲染器会把 opacity 过渡冻在起点(1) 致默认态错乱 */
+.doc-rail-ico svg { display: block; }
+.doc-rail-lead .doc-rail-chev { color: var(--ink-3); opacity: 0; transition: transform .2s var(--ease-spring); }
+.doc-rail-node.branch > .doc-rail-row:hover .doc-rail-ico { opacity: 0; }
+.doc-rail-node.branch > .doc-rail-row:hover .doc-rail-lead .doc-rail-chev { opacity: 1; }
+
+/* chevron 朝向：收起向右、展开向下（树节点 hover 时可见 / Recent 区头常驻） */
+.doc-rail-chev { flex: none; width: 16px; height: 16px; display: inline-grid; place-items: center; color: var(--ink-3); transition: transform .2s var(--ease-spring); }
+.doc-rail-chev svg { display: block; }
+.doc-rail-node.branch.open > .doc-rail-row .doc-rail-lead .doc-rail-chev,
+.doc-rail-sec.open > .doc-rail-sec-h .doc-rail-chev { transform: rotate(90deg); }
+
+.doc-rail-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 行尾操作：绝对定位贴右、默认 0 宽不占位（名字铺满），hover 才浮现于行尾上方；左缘渐隐遮罩防长名穿透 */
+.doc-rail-acts { position: absolute; right: 4px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; gap: 2px;
+  padding-left: 22px; opacity: 0;   /* opacity 即时切换、不入过渡（无头渲染器冻 opacity 致默认露出） */
+  background: linear-gradient(to right, transparent, var(--cc-hover) 55%); }
+.doc-rail-row:hover .doc-rail-acts { opacity: 1; }
+.doc-rail-row.on:hover .doc-rail-acts { background: linear-gradient(to right, transparent, var(--cc-active) 55%); }   /* 选中行 hover 底色更深，遮罩同步 */
+.doc-rail-act { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: var(--r-tag);
+  color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast); }
+.doc-rail-act svg { display: block; }
+.doc-rail-act:hover { background: var(--cc-active); color: var(--ink); }
+
+/* 空树态 */
+.doc-rail-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 40px 12px; color: var(--ink-3); }
+.doc-rail-empty svg { display: block; color: var(--line-strong); }
+.doc-rail-empty p { margin: 0; font-size: var(--t-md); }

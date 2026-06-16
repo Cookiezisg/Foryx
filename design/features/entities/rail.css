@@ -1,0 +1,77 @@
+/* Foryx demo — 实体海洋侧栏样式（薄）。竖向折叠树：分组 → 类型 → 实体行（行高/折叠头/过滤行+sliders 对齐 chat/scheduler 侧栏语言）。
+   状态点走组件 StatusDot（fg-dot），此处只占位 skill 的空点 + 行/折叠/菜单壳。类名全 ent- 前缀（与海面 ent- 名集不相交），只读令牌。 */
+
+/* 新建实体 */
+.ent-new { display: flex; align-items: center; gap: 11px; height: 34px; padding: 0 10px; border-radius: var(--r-btn);
+  text-align: left; color: var(--ink-2); font-size: var(--t-md); font-weight: 500; transition: background var(--d-fast); }
+.ent-new:hover { background: var(--cc-hover); color: var(--ink); }
+.ent-new svg { color: var(--ink-2); display: block; }
+
+/* 搜索 + 排序菜单 */
+.ent-filter { position: relative; display: flex; align-items: center; gap: 11px; height: 32px; margin-bottom: 6px; padding: 0 6px 0 10px; }
+.ent-filter > svg { flex: none; display: block; color: var(--ink-3); }
+.ent-filter input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--t-md); }
+.ent-filter input::placeholder { color: var(--ink-3); }
+.ent-disp { flex: none; width: 26px; height: 26px; display: grid; place-items: center; color: var(--ink-3); border-radius: 7px; transition: color var(--d-fast), background var(--d-fast); }
+.ent-disp:hover, .ent-disp.on { color: var(--ink); background: var(--cc-hover); }
+.ent-disp svg { display: block; }
+.ent-menu { position: absolute; top: calc(100% + 4px); right: 6px; z-index: 5; min-width: 170px;
+  background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-chip); padding: 5px; box-shadow: var(--shadow-pop); display: none; }
+.ent-menu.open { display: block; }
+.ent-mh { padding: 6px 8px 3px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); }
+.ent-mh:first-child { padding-top: 3px; }
+.ent-opt { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border-radius: 7px; text-align: left; color: var(--ink); font-size: var(--t-md); transition: background var(--d-fast); }
+.ent-opt:hover { background: var(--cc-hover); }
+.ent-ck { flex: none; width: 14px; display: grid; place-items: center; color: var(--ink); opacity: 0; }
+.ent-opt.on .ent-ck { opacity: 1; }
+.ent-ck svg { display: block; }
+
+/* 滚动容器：岛内不显滚轮，右侧数字靠固定行尾槽对齐。 */
+.ent-tree { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: auto; }
+
+/* 折叠通用（分组 / 类型两层共用 .ent-tog + .ent-cbody + .ent-chev） */
+.ent-tog { display: flex; align-items: center; gap: 5px; width: 100%; border-radius: var(--r-btn); transition: background var(--d-fast); }
+.ent-tog:hover { background: var(--cc-hover); }
+.ent-chev { flex: none; display: inline-grid; place-items: center; color: var(--ink-3); transition: transform .2s var(--ease-spring); }
+.ent-chev svg { display: block; }
+.ent-cnt { color: var(--ink-3); font-weight: 500; }
+.collapsible.open > .ent-tog .ent-chev { transform: rotate(90deg); }   /* 收起=右 chevr / 展开=下（对齐 documents） */
+.collapsible:not(.open) > .ent-cbody { display: none; }
+
+/* 显示开关（sliders 菜单）：精简默认藏版本号/标记；计数可关 */
+.ent-tree.hide-meta .ent-r-meta { display: none; }
+.ent-tree.hide-cnt .ent-cnt { display: none; }
+
+/* 分组头（可折叠：小字灰，箭头在尾） */
+.ent-grp { margin-bottom: 6px; }
+.ent-grp-h { height: 28px; padding: 0 10px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); letter-spacing: .02em; }
+.ent-grp-h .ent-cnt { margin-left: auto; }
+
+/* 类型头（可展开）：行首 icon↔chevron 共享一格（Notion 式，默认显类型图标、hover 现折叠箭头），名 + 计数在尾 */
+.ent-ty-h { height: 32px; padding: 0 10px; font-size: var(--t-md); font-weight: 500; color: var(--ink-2); }
+.ent-ty-h:hover { color: var(--ink); }   /* 侧栏字色铁律：灰默认、hover 才黑；色不入过渡——按钮 color 过渡在无头渲染器冻初值 */
+.ent-ty-lead { flex: none; position: relative; width: 16px; height: 16px; }   /* 格=图标尺寸、零 dead space，icon↔文字 ~5px 贴实 */
+.ent-ty-lead > * { position: absolute; inset: 0; display: grid; place-items: center; }
+.ent-ty-ico { color: var(--ink-2); }
+.ent-ty-lead .ent-chev { opacity: 0; }   /* 类型头箭头默认藏、hover 现（与图标同格切换）；分组头箭头不在 lead 内、常驻可见 */
+.ent-ty-h:hover .ent-ty-ico { opacity: 0; }
+.ent-ty-h:hover .ent-ty-lead .ent-chev { opacity: 1; }
+.ent-lbl { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ent-ty-h .ent-cnt { margin-left: auto; }
+
+/* 实体行（缩进对齐到类型名下） */
+.ent-r { position: relative; display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px 0 32px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background var(--d-fast); }   /* color 不入过渡：无头渲染器会把它冻在继承黑、灰默认失效 */
+.ent-r:hover { background: var(--cc-hover); color: var(--ink); }
+.ent-r.on { background: var(--cc-active); color: var(--ink); }
+.ent-r-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 版本号/标记：靠右常驻，行 hover 时 opacity 让位（保留占位、不重排），⋯ 浮于同槽 */
+.ent-r-meta { flex: none; font-size: var(--t-xs); color: var(--ink-3); }
+.ent-r:hover .ent-r-meta { opacity: 0; }
+/* ⋯：绝对贴右、不占位（不挤名字），hover 浮现于 meta 槽上方。opacity 即时切换、不入过渡（无头渲染器冻 opacity） */
+.ent-r-more { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); opacity: 0; color: var(--ink-3); display: grid; place-items: center; }
+.ent-r-more svg { display: block; }
+.ent-r:hover .ent-r-more { opacity: 1; }
+
+/* skill 无状态点（文件式）：占位空点，与 StatusDot 同尺寸 */
+.ent-r-st-none { flex: none; width: 7px; height: 7px; }

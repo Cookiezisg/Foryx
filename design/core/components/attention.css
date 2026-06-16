@@ -1,0 +1,20 @@
+/* Foryx demo — attention 皮肤（echo entities .eo-attn 留白 + scheduler .sch-stuck 软底）。
+   tone：warn 橙软底 · danger 红软底 · info 白底细描边（无填充，纯 doc-callout）。
+   留白对齐原件：12·14 内距、12px 圆角、13px 字、1.6 行高、左图标 10px gap、顶对齐。 */
+.fg-attn {
+  display: flex; align-items: flex-start; gap: 10px;
+  margin: 0 0 var(--s2, 8px); padding: 12px 14px;
+  border: 1px solid var(--line); border-radius: var(--r-card, 12px);
+  font-size: var(--t-md); line-height: 1.6; color: var(--ink-2);
+  transition: border-color var(--d-fast) var(--ease-spring), background var(--d-fast) var(--ease-spring);
+}
+.fg-attn.warn   { border-color: color-mix(in srgb, var(--warn) 38%, var(--line)); background: var(--warn-soft); }
+.fg-attn.danger { border-color: color-mix(in srgb, var(--danger) 36%, var(--line)); background: var(--danger-soft); }
+.fg-attn.info   { border-color: var(--line); background: transparent; }
+
+.fg-attn-ico { flex: none; margin-top: 1px; display: grid; place-items: center; color: var(--warn); }
+.fg-attn.danger .fg-attn-ico { color: var(--danger); }
+.fg-attn.info   .fg-attn-ico { color: var(--accent); }
+
+.fg-attn-body   { min-width: 0; }
+.fg-attn-body b { color: var(--ink); font-weight: 600; }

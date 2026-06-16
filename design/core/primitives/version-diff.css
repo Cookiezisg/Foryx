@@ -1,0 +1,57 @@
+/* Foryx 原语 — VersionDiff 皮肤。左版本轨 + 右差异面,不做重卡片边界。 */
+.fy-version-diff {
+  display: grid;
+  grid-template-columns: minmax(calc(var(--w-content) / 4), calc(var(--w-content) / 3)) minmax(0, 1fr);
+  gap: var(--sp-6);
+  align-items: start;
+}
+.fy-vdiff-list { display: grid; gap: var(--sp-1); }
+.fy-vdiff-row {
+  display: grid; grid-template-columns: var(--trail) 1fr; gap: var(--gap);
+  min-height: var(--field-row); padding: var(--sp-2) var(--pad-row); border: 0;
+  border-radius: var(--r-btn); background: transparent; color: var(--ink-2); text-align: left;
+  font: inherit; cursor: pointer; transition: background var(--d-fast);
+}
+.fy-vdiff-row:hover, .fy-vdiff-row.on { background: var(--island-3); color: var(--ink); }
+.fy-vdiff-v {
+  color: var(--ink-3); font-family: var(--mono); font-size: var(--t-meta);
+  line-height: var(--lh-ui); font-variant-numeric: tabular-nums;
+}
+.fy-vdiff-label {
+  display: block; color: currentColor; font-size: var(--t-body); line-height: var(--lh-ui);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fy-vdiff-reason {
+  display: block; margin-top: calc(var(--grid) / 2); color: var(--ink-3); font-size: var(--t-meta);
+  line-height: var(--lh-ui); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.fy-vdiff-main { min-width: 0; }
+.fy-vdiff-cap {
+  min-height: var(--ctl); display: flex; align-items: center; gap: var(--gap);
+  color: var(--ink-3); font-size: var(--t-meta); line-height: var(--lh-ui);
+}
+.fy-vdiff-range { color: var(--ink-2); font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.fy-vdiff-caption { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fy-vdiff-count {
+  margin-left: auto; display: inline-flex; gap: var(--gap-tight);
+  font-family: var(--mono); font-variant-numeric: tabular-nums;
+}
+.fy-vdiff-count .add { color: var(--ok); }
+.fy-vdiff-count .del { color: var(--danger); }
+.fy-vdiff-body { min-width: 0; display: grid; gap: calc(var(--grid) / 2); padding-top: var(--sp-2); }
+.fy-vdiff-line {
+  display: grid; grid-template-columns: var(--trail) var(--trail) minmax(0, 1fr);
+  min-height: var(--ctl-sm); align-items: center; border-radius: var(--r-tag);
+  color: var(--ink-2); font-family: var(--mono); font-size: var(--t-meta); line-height: var(--lh-prose);
+}
+.fy-vdiff-line.add { background: var(--ok-soft); }
+.fy-vdiff-line.del { background: var(--danger-soft); }
+.fy-vdiff-ln, .fy-vdiff-sg {
+  color: var(--ink-3); text-align: right; font-variant-numeric: tabular-nums;
+}
+.fy-vdiff-line.add .fy-vdiff-sg, .fy-vdiff-line.add .fy-vdiff-code { color: var(--ok); }
+.fy-vdiff-line.del .fy-vdiff-sg, .fy-vdiff-line.del .fy-vdiff-code { color: var(--danger); }
+.fy-vdiff-code {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: pre;
+  padding-left: var(--sp-2); color: var(--ink-2); font: inherit;
+}

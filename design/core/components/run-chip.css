@@ -1,0 +1,24 @@
+/* Foryx demo — run-chip 皮肤（镜像 scheduler 海洋 run-rail/run-chip + sch-badge 像素，点交给 StatusDot 的 fg-dot）。
+   轨 = 横向 pill 列，活/历史一目；on = 当前选中（提线 + 选中底）。徽 = 运行头 5 态色块（软底 + 同色字）。 */
+
+/* ===== 运行历史轨 ===== */
+.fg-runrail { display: flex; align-items: center; gap: var(--s2); margin-top: var(--s4); padding-top: var(--s1); overflow-x: auto; }
+.fg-runrail-label { font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; flex: none; margin-right: 2px; }
+
+.fg-runchip { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 11px; border-radius: var(--r-chip); flex: none;
+  border: 1px solid var(--line); background: var(--island); cursor: pointer; transition: background var(--d-fast), border-color var(--d-fast); }
+.fg-runchip:hover { background: var(--cc-hover); }
+.fg-runchip.on { border-color: var(--line-strong); background: var(--cc-active); }
+
+.fg-runchip-t { font-size: var(--t-sm); color: var(--ink-2); }   /* 相对时间 = 运行的人读标识（机器 id 不显） */
+.fg-runchip-live { font-size: 9px; font-weight: 700; letter-spacing: .04em; color: var(--live); background: var(--accent-soft); padding: 1px 5px; border-radius: var(--r-btn); }
+
+/* ===== 运行头状态徽（5 态各自软底 + 同色字；点的脉冲由 fg-dot 自带）===== */
+.fg-runbadge { display: inline-flex; align-items: center; gap: var(--s1); height: 26px; padding: 0 10px; border-radius: var(--r-btn);
+  font-size: var(--t-sm); font-weight: 600; }
+.fg-runbadge-t { color: inherit; }
+.fg-runbadge.running   { color: var(--accent); background: var(--accent-soft); }
+.fg-runbadge.completed { color: var(--ok);     background: var(--ok-soft); }
+.fg-runbadge.failed    { color: var(--danger); background: var(--danger-soft); }
+.fg-runbadge.cancelled { color: var(--ink-3);  background: var(--cc-active); }
+.fg-runbadge.waiting   { color: var(--warn);   background: var(--warn-soft); }

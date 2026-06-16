@@ -1,0 +1,11 @@
+/* Foryx 原语 — ActionGroup 皮肤。只负责动作排列,不制造额外边界。 */
+.fy-action-group {
+  display: inline-flex; align-items: center; justify-content: flex-start; gap: var(--sp-2);
+  min-width: 0;
+}
+.fy-action-compact { gap: var(--sp-1); }
+.fy-action-end { justify-content: flex-end; }
+.fy-action-block { display: flex; width: var(--w-full); }
+.fy-action-stack { flex-direction: column; align-items: stretch; }
+.fy-action-item { display: inline-flex; align-items: center; flex: none; min-width: 0; }
+.fy-action-stack .fy-action-item, .fy-action-stack .fy-btn { width: var(--w-full); }

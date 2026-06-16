@@ -1,0 +1,59 @@
+/* Foryx demo — 对话海洋侧栏样式（薄）。会话史三区 + 行首状态点（点来自 StatusDot 组件、本文件不画点像素）。
+   类名 chat- 专属；无 fg-（组件）/无裸全局；颜色/度量走 token、零硬编码色。 */
+
+/* 新建对话 */
+.chat-newconv { display: flex; align-items: center; gap: 11px; height: 34px; padding: 0 10px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-md); font-weight: 500; transition: background .12s; }
+.chat-newconv:hover { background: var(--cc-hover); color: var(--ink); }
+.chat-newconv svg { color: var(--ink-2); display: block; }
+
+/* 标题快滤行（含展示菜单 sliders 按钮） */
+.chat-cfilter { position: relative; display: flex; align-items: center; gap: 11px; height: 32px; margin-bottom: 6px; padding: 0 6px 0 10px; }
+.chat-cfilter > svg { flex: none; display: block; color: var(--ink-3); }
+.chat-cfilter input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--t-md); }
+.chat-cfilter input::placeholder { color: var(--ink-3); }
+
+/* 展示菜单 */
+.chat-cm-btn { flex: none; width: 26px; height: 26px; display: grid; place-items: center; color: var(--ink-3); border-radius: 7px; transition: color .12s, background .12s; }
+.chat-cm-btn:hover, .chat-cm-btn.on { color: var(--ink); background: var(--cc-hover); }
+.chat-cm-btn svg { display: block; }
+.chat-cm-menu { position: absolute; top: calc(100% + 4px); right: 6px; z-index: 5; min-width: 180px;
+  background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-chip); padding: 5px; box-shadow: var(--shadow-pop); display: none; }
+.chat-cm-menu.open { display: block; }
+.chat-cm-h { padding: 6px 8px 3px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); }
+.chat-cm-h:first-child { padding-top: 3px; }
+.chat-cm-opt { display: flex; align-items: center; gap: 8px; width: 100%; height: 30px; padding: 0 8px; border-radius: 7px; text-align: left; color: var(--ink); font-size: var(--t-md); transition: background .12s; }
+.chat-cm-opt:hover { background: var(--cc-hover); }
+.chat-cm-ck { flex: none; width: 14px; display: grid; place-items: center; color: var(--ink); opacity: 0; }
+.chat-cm-opt.on .chat-cm-ck { opacity: 1; }
+.chat-cm-ck svg { display: block; }
+
+/* 列表 + 三区 */
+.chat-cvlist { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: auto; }
+.chat-cvsec { margin-bottom: 8px; }
+.chat-cvsec-h { display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 10px; border-radius: var(--r-btn);
+  font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); }
+.chat-cvsec-h.tog { transition: background .12s; }
+.chat-cvsec-h.tog:hover { background: var(--cc-hover); }
+.chat-cnt { font-weight: 500; }
+.chat-cvsec-h .chat-chev { margin-left: auto; display: inline-grid; place-items: center; color: var(--ink-3); transition: transform .2s var(--ease-spring); }
+.chat-cvsec-h .chat-chev svg { display: block; }
+.collapsible.open > .chat-cvsec-h .chat-chev { transform: rotate(90deg); }
+.collapsible:not(.open) > .chat-cvsec-body { display: none; }
+.chat-cvsub { padding: 5px 10px 3px; font-size: var(--t-xs); color: var(--ink-3); }
+.chat-cvlist.no-group .chat-cvsub { display: none; }
+
+/* 会话行（行首状态点由 StatusDot 组件渲染，自带 flex:none；本文件不碰点像素） */
+.chat-cv { position: relative; display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 10px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background .12s; }   /* color 不入过渡：无头渲染器冻初值致灰默认失效 */
+.chat-cv:hover { background: var(--cc-hover); color: var(--ink); }
+.chat-cv.on { background: var(--cc-active); color: var(--ink); }
+.chat-cv-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* 时间戳：靠右常驻（showTime）；hover 时 opacity 让位（保留占位、不重排），⋯ 浮于同槽 */
+.chat-cv-time { flex: none; font-size: var(--t-xs); color: var(--ink-3); display: none; }
+.chat-cvlist.show-time .chat-cv-time { display: block; }
+.chat-cvlist.show-time .chat-cv:hover .chat-cv-time { opacity: 0; }
+/* ⋯：绝对贴右、不占位（默认 0 宽不挤标题），hover 浮现于时间槽上方。opacity 即时切换、不入过渡（无头渲染器冻 opacity） */
+.chat-cv-more { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); opacity: 0; color: var(--ink-3); display: grid; place-items: center; }
+.chat-cv-more svg { display: block; }
+.chat-cv:hover .chat-cv-more { opacity: 1; }

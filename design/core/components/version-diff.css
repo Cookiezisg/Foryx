@@ -1,0 +1,37 @@
+/* Foryx demo — version-diff 皮肤（版本列 airy + diff 区白底细描边；.dline 像素镜像 chat/entities）。
+   diff 增删用 color-mix 半透明铺底：add 走 --ok、del 走 --danger（与 design-lab 同百分比，故同色感）。
+   行内着色 span 由 CodeEditor.highlight 注入 fg-ce-* 类——其色经 tokens.css 全局 --cd-* 解析，本文件不复述。 */
+.fg-vd { display: flex; gap: var(--s6); }
+
+.fg-vd-list { flex: none; width: 196px; display: flex; flex-direction: column; gap: 1px; }
+.fg-vd-row { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; padding: 8px 10px; border-radius: var(--r-btn); cursor: pointer; transition: background var(--d-fast); }
+.fg-vd-row:hover { background: var(--cc-hover); }
+.fg-vd-row.on { background: var(--cc-active); }
+.fg-vd-vn { font-family: var(--mono); font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.fg-vd-row.cur .fg-vd-vn::after { content: "active"; margin-left: 6px; font-family: var(--font); font-size: 9px; font-weight: 600; color: var(--accent); vertical-align: 1px; }
+.fg-vd-vt { font-size: var(--t-xs); color: var(--ink-3); margin-left: auto; }
+.fg-vd-vd { flex-basis: 100%; font-size: var(--t-xs); color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.fg-vd-diff { flex: 1; min-width: 0; border: 1px solid var(--line); border-radius: var(--r-card); overflow: hidden; }
+.fg-vd-cap { display: flex; align-items: center; gap: var(--s2); padding: 9px 13px; font-size: var(--t-sm); color: var(--ink-2); }
+.fg-vd-mono { font-family: var(--mono); }
+.fg-vd-pm { margin-left: auto; font-family: var(--mono); font-size: var(--t-xs); }
+.fg-vd-pm .fg-vd-a { color: var(--ok); }
+.fg-vd-pm .fg-vd-d { color: var(--danger); }
+
+.fg-vd-body { font-family: var(--mono); font-size: 12.5px; line-height: 1.8; overflow-x: auto; border-top: 1px solid var(--line); padding: 6px 0; }
+.fg-vd-dl { display: flex; padding: 0 12px; white-space: pre; animation: fgVdDlIn var(--d-mid) var(--ease-spring) both; }
+.fg-vd-dl:nth-child(2) { animation-delay: .04s; }
+.fg-vd-dl:nth-child(3) { animation-delay: .08s; }
+.fg-vd-dl:nth-child(4) { animation-delay: .12s; }
+.fg-vd-dl:nth-child(5) { animation-delay: .16s; }
+@keyframes fgVdDlIn { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
+.fg-vd-ln { width: 30px; flex: none; color: var(--ink-3); opacity: .5; user-select: none; text-align: right; padding-right: 12px; }
+.fg-vd-sg { width: 13px; flex: none; }
+.fg-vd-ct { flex: 1; }
+.fg-vd-dl.add { background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.fg-vd-dl.add .fg-vd-sg { color: var(--ok); }
+.fg-vd-dl.add .fg-vd-ct { color: var(--ink); }
+.fg-vd-dl.del { background: color-mix(in srgb, var(--danger) 8%, transparent); }
+.fg-vd-dl.del .fg-vd-sg { color: var(--danger); }
+.fg-vd-dl.del .fg-vd-ct { color: var(--ink-3); }

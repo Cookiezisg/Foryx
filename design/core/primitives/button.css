@@ -1,12 +1,11 @@
 /* Foryx 原语 — Button 皮肤。只读 token,无裸值。 */
 .fy-btn {
-  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  height: var(--ctl); padding: 0 14px; border-radius: var(--r-btn);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--gap-tight);
+  height: var(--ctl); padding: 0 var(--btn-pad-x); border-radius: var(--r-btn);
   font-size: var(--t-body); font-weight: 500; color: var(--ink-2); white-space: nowrap;
   transition: background var(--d-fast), color var(--d-fast);
 }
 .fy-btn-ico { display: grid; place-items: center; flex: none; }
-.fy-btn:active { transform: scale(.98); }
 .fy-btn[disabled] { opacity: .4; pointer-events: none; }
 
 /* ghost — 默认中性 */
@@ -25,5 +24,5 @@
 .fy-btn-icon:hover { background: var(--island-3); color: var(--ink); }
 
 /* 尺寸 / 块 */
-.fy-btn-sm { height: 24px; padding: 0 10px; font-size: var(--t-meta); }
+.fy-btn-sm { height: var(--ctl-sm); padding: 0 var(--btn-pad-x-sm); font-size: var(--t-meta); }
 .fy-btn-block { width: 100%; justify-content: flex-start; }

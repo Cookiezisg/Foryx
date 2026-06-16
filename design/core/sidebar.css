@@ -1,0 +1,66 @@
+/* Foryx demo — 左侧栏【固定外壳 chrome】样式（核心）。海洋侧栏内容样式各在 features/<id>/rail.css。
+   左岛 = 同色 + 海岸线浮岛；无横向 divider；红绿灯/折叠/搜索在岛顶。宽度 --side-w 全仓库唯一处在 shell.css。 */
+
+/* 岛皮肤（宽度归 shell；这里只皮肤 + 拖拽手柄定位基准） */
+.side { position: relative; flex: none; display: flex; flex-direction: column; padding: var(--sp-2); overflow: hidden;
+  background: var(--cc-side); border: var(--hairline) solid var(--line); border-radius: var(--r-chip); box-shadow: var(--shadow-float); }
+
+/* 拖拽调宽手柄（贴右内缘，hover 一抹竖线；收起态隐藏） */
+.side-grip { position: absolute; top: 0; right: 0; width: 9px; height: 100%; cursor: col-resize; z-index: 3; }
+.side-grip::after { content: ""; position: absolute; inset: 0 1px 0 auto; width: 2px; border-radius: 2px; background: transparent; transition: background var(--d-fast); }
+.side-grip:hover::after { background: var(--line-strong); }
+html[data-side="off"] .side-grip { display: none; }
+
+/* 再展开按钮（归侧栏，但 append 进 shell 的 #head-lead；仅收起态淡入） */
+.side-reopen { width: 0; opacity: 0; margin-left: calc(-1 * var(--sp-1)); pointer-events: none; overflow: hidden;
+  transition: opacity var(--d-mid), width var(--d-slow) var(--ease-spring), margin-left var(--d-slow) var(--ease-spring); }
+html[data-side="off"] .side-reopen { width: var(--ctl); opacity: 1; margin-left: 0; pointer-events: auto; }
+
+/* 岛顶：红绿灯 + 折叠 + 搜索 */
+.side-top { display: flex; align-items: center; gap: var(--sp-1); height: var(--row); margin-bottom: var(--sp-2); }
+.lights { display: flex; gap: var(--sp-2); padding-left: calc(var(--grid) / 2); }
+.light { width: var(--icon-sm); height: var(--icon-sm); border-radius: var(--r-pill); }
+.light.r { background: #ff5f57; } .light.y { background: #febc2e; } .light.g { background: #28c840; }
+.side-top .ibtn svg, .sf-act svg, .modeseg .ico svg { display: block; }
+
+/* 四导航（Notion：选中=灰药丸图标+文字 / 未选只图标）。收窄护栏：图标 flex:none 恒显，只让选中药丸文字截断。 */
+.modeseg { display: flex; gap: 2px; margin-bottom: 10px; min-width: 0; }
+.modeseg button { flex: none; display: flex; align-items: center; gap: 0; height: 32px; padding: 0 6px; border-radius: 8px;
+  color: var(--ink-2); font-size: 13px; font-weight: 500; background: transparent;
+  transition: background .2s, color .2s, gap .34s var(--ease-spring), padding .34s var(--ease-spring); }
+.modeseg button:hover { background: var(--cc-hover); }
+.modeseg button .ico { flex: none; display: grid; place-items: center; color: var(--ink-2); }
+.modeseg button .lbl { max-width: 0; opacity: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+  transition: max-width .34s var(--ease-spring), opacity .22s; }
+.modeseg button.on { flex: 0 1 auto; min-width: 0; gap: 11px; padding: 0 10px; background: var(--cc-active); color: var(--ink); }
+.modeseg button.on .lbl { max-width: 110px; opacity: 1; }
+
+/* 海洋内容宿主 + 占位 */
+#sidebody { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.side-soon { padding: 22px 12px; color: var(--ink-3); font-size: 12px; }
+
+/* 底部：工作区(圆头像+名) + 通知(铃铛+未读点) + 设置。本地单用户、身份轴=workspace。 */
+.sfoot { display: flex; align-items: center; gap: 2px; margin-top: 6px; }
+.ws { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 6px; border-radius: 10px; color: var(--ink); transition: background .12s; }
+.ws:hover { background: var(--cc-hover); }
+.ws-ava { flex: none; width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--cc-active); color: var(--ink-2); font-size: 11px; font-weight: 600; }
+.ws-name { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 600; }
+.sf-act { flex: none; position: relative; width: 26px; height: 26px; display: grid; place-items: center; color: var(--ink-3); border-radius: 7px; transition: color .12s, background .12s; }
+.sf-act:hover { color: var(--ink); background: var(--cc-hover); }
+.sf-act.on { background: var(--cc-active); color: var(--ink); }
+.sf-dot { position: absolute; top: 4px; right: 4px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); border: 2px solid var(--cc-side); }
+
+/* 左下角 peek：贴铃铛上沿、从底 spring 滑入的极简 pill（微型岛=同色+海岸线+微阴影）。仅 actionable 到达时冒。 */
+.sf-peek { position: absolute; left: 8px; right: 8px; bottom: 58px; z-index: 6; display: flex; align-items: center; gap: 8px;
+  height: 34px; padding: 0 8px 0 11px; border-radius: var(--r-chip);
+  background: var(--cc-side); border: 1px solid var(--line); box-shadow: var(--shadow-pop);
+  opacity: 0; transform: translateY(8px); transition: opacity var(--d-mid), transform var(--d-mid) var(--ease-spring); }
+.sf-peek.in { opacity: 1; transform: none; }
+.sf-peek-d { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); animation: sbPulse 1.5s ease infinite; }
+.sf-peek-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; color: var(--ink); cursor: pointer; }
+.sf-peek-go { flex: none; font-size: 12px; font-weight: 500; color: var(--ink-2); padding: 0 4px; cursor: pointer; transition: color .12s; }
+.sf-peek-go:hover { color: var(--ink); }
+.sf-peek-x { flex: none; width: 20px; height: 20px; display: grid; place-items: center; color: var(--ink-3); border-radius: 6px; }
+.sf-peek-x:hover { color: var(--ink); background: var(--cc-hover); }
+.sf-peek-x svg { display: block; }
+@keyframes sbPulse { 50% { opacity: .3; } }

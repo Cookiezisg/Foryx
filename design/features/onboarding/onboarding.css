@@ -1,0 +1,101 @@
+/* Foryx demo — onboarding 海洋（独立首启向导）皮肤：薄；段控/下拉的像素全在组件库（fg-seg / fg-dd）。
+   视觉宪法 = reference.html + 统一 documents 调性：海与岛同色、只用海岸线（1px 线 + 圆角 + 浅影）切分；
+   --accent 只落在主 CTA；成功用语义绿；其余中性。动效只此一处——段控灰胶囊弹簧滑动（来自组件）。
+   类名 onb- 专属（无 fg-/裸类）；颜色一律走令牌，禁裸 hex。 */
+
+/* 窗：桌面底上浮一块岛白窗（独立页自持窗 chrome，区别于 app shell） */
+.onb-win { height: 100%; background: var(--cc-win); border-radius: var(--r-win); box-shadow: var(--shadow-win); overflow-y: auto; }
+.onb-center { min-height: 100%; display: grid; place-items: center; padding: 40px 28px; }
+.onb { width: 100%; max-width: 440px; margin: 0 auto; transition: max-width var(--d-slow) var(--ease-spring); }
+.onb.wide { max-width: 760px; }
+
+/* 头：品牌徽 + 标题 + 进度点 */
+.onb-mark { width: 44px; height: 44px; border-radius: var(--r-chip); margin: 0 auto 16px; overflow: hidden;
+  box-shadow: var(--shadow-island); }
+.onb-mark svg { display: block; width: 100%; height: 100%; }
+.onb-head { text-align: center; margin-bottom: 26px; }
+.onb-head h1 { font-size: var(--t-2xl); font-weight: 700; letter-spacing: -.02em; margin: 0 0 5px; line-height: 1.3; }
+.onb-head p { color: var(--ink-2); font-size: 14px; margin: 0; line-height: 1.45; }
+.onb-dots { display: flex; gap: 6px; justify-content: center; margin-top: 16px; }
+.onb-dots i { width: 6px; height: 6px; border-radius: var(--r-pill); background: var(--line-strong); transition: all var(--d-mid) var(--ease-spring); }
+.onb-dots i.on { width: 20px; background: var(--ink-3); }
+
+/* 步：进入时上浮淡入 */
+.onb-step { display: none; }
+.onb-step.on { display: block; animation: onbUp var(--d-mid) var(--ease-out); }
+@keyframes onbUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+/* 字段标签 + 文本输入 */
+.onb-lbl { display: flex; align-items: baseline; gap: 7px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3);
+  text-transform: uppercase; letter-spacing: .04em; margin: 18px 0 8px; }
+.onb-lbl:first-child { margin-top: 0; }
+.onb-lbl .onb-ct { text-transform: none; letter-spacing: 0; font-weight: 500; color: var(--ink-3); }
+
+.onb-input { display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px;
+  background: var(--cc-input); border: 1px solid var(--line); border-radius: var(--r-chip); transition: border-color var(--d-fast); }
+.onb-input:focus-within { border-color: var(--line-strong); }
+.onb-input input { flex: 1; border: 0; outline: 0; background: none; min-width: 0; font: inherit; color: inherit; }
+.onb-input input::placeholder { color: var(--ink-3); }
+
+/* 段控宿主：组件按文案自适应宽，独立页里把它撑满整行（等分视觉与原 onboarding 一致） */
+.onb-seg-host { display: block; }
+.onb-seg-host .fg-seg { display: flex; width: 100%; }
+.onb-seg-host .fg-seg-btn { flex: 1; }
+
+/* 两栏 模型/搜索 配置岛（左供应商网格 + 右配置） */
+.onb-island { background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-card);
+  box-shadow: var(--shadow-island); display: flex; gap: 18px; padding: 16px; }
+.onb-vendors { width: 238px; flex: none; }
+.onb-vh { font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .04em; margin: 2px 2px 9px; }
+.onb-vgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.onb-vendor { display: flex; align-items: center; height: 36px; padding: 0 10px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-sm); font-weight: 500; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background var(--d-fast), color var(--d-fast); }
+.onb-vendor:hover { background: var(--cc-hover); color: var(--ink); }
+.onb-vendor.on { background: var(--cc-active); color: var(--ink); font-weight: 600; }
+
+.onb-cfg { flex: 1; min-width: 0; }
+.onb-vname { font-size: var(--t-lg); font-weight: 600; margin: 1px 0 2px; }
+
+/* key 行：输入 + :test 连通性按钮 */
+.onb-keyrow { display: flex; gap: 8px; align-items: stretch; }
+.onb-keyrow .onb-input { flex: 1; }
+.onb-test { flex: none; height: 42px; padding: 0 15px; border-radius: var(--r-chip); white-space: nowrap; font-weight: 600;
+  color: var(--ink-2); background: var(--cc-input); border: 1px solid var(--line); display: inline-flex; align-items: center; gap: 7px;
+  transition: background var(--d-fast), color var(--d-fast); }
+.onb-test:hover { background: var(--cc-hover); color: var(--ink); }
+.onb-test .onb-ico { display: grid; place-items: center; }
+.onb-test.testing { color: var(--ink-3); pointer-events: none; }
+.onb-test.testing .onb-ico svg { animation: spin .9s linear infinite; }
+.onb-test.ok { color: var(--ok); pointer-events: none; }
+
+/* 模型选择揭示（:test 通过后才出现） */
+.onb-reveal { display: none; }
+.onb-reveal.show { display: block; animation: onbUp var(--d-mid) var(--ease-out); }
+
+/* 复选（辅助任务也用此模型） */
+.onb-check { display: flex; align-items: flex-start; gap: 10px; margin-top: 16px; cursor: pointer; user-select: none; }
+.onb-check .onb-box { width: 18px; height: 18px; flex: none; margin-top: 1px; border-radius: 5px; border: 1.5px solid var(--line-strong);
+  display: grid; place-items: center; color: var(--cc-win); transition: background var(--d-fast), border-color var(--d-fast); }
+.onb-check.on .onb-box { background: var(--ink); border-color: var(--ink); }
+.onb-check .onb-box svg { opacity: 0; }
+.onb-check.on .onb-box svg { opacity: 1; }
+.onb-check .onb-ct { font-size: var(--t-md); color: var(--ink); line-height: 1.45; }
+.onb-check .onb-ct small { display: block; color: var(--ink-3); font-size: var(--t-xs); margin-top: 2px; }
+
+/* 隐私脚注（强调本地存储——本地优先单用户的核心心智） */
+.onb-foot-note { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 0 2px; }
+.onb-priv { font-size: var(--t-sm); color: var(--ink-3); }
+
+/* 页脚导航：back（左）+ next/enter（右，主 CTA） */
+.onb-nav { display: flex; align-items: center; margin-top: 22px; }
+.onb-btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 38px; padding: 0 16px;
+  border-radius: var(--r-chip); font-weight: 600; font-size: var(--t-md); transition: background var(--d-fast); }
+.onb-btn.ghost { color: var(--ink-2); background: var(--cc-win); border: 1px solid var(--line); }
+.onb-btn.ghost:hover { background: var(--cc-hover); color: var(--ink); }
+.onb-btn.primary { background: var(--accent); color: var(--ink-on-accent); }
+.onb-btn.primary:hover { background: var(--accent-hover); }
+.onb-btn[disabled] { opacity: .4; pointer-events: none; }
+.onb-btn .onb-ico { display: grid; place-items: center; }
+.onb-btn.primary.waiting { pointer-events: none; }
+.onb-btn.primary.waiting .onb-ico svg { animation: spin .9s linear infinite; }

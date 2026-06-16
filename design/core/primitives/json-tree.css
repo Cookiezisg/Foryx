@@ -1,0 +1,30 @@
+/* Foryx 原语 — JsonTree 皮肤。结构化 key/value 树,继承 Row 密度与缩进。 */
+.fy-json-tree { color: var(--ink-2); font-size: var(--t-body); }
+.fy-json-node { margin: 0; }
+.fy-json-node > summary { list-style: none; }
+.fy-json-node > summary::-webkit-details-marker { display: none; }
+
+.fy-json-row {
+  display: grid; grid-template-columns: var(--lead) minmax(0, 1fr) minmax(0, 1.2fr);
+  align-items: center; column-gap: var(--gap); min-height: var(--row);
+  padding: 0 var(--pad-row) 0 calc(var(--pad-row) + var(--depth) * var(--indent));
+  border-radius: var(--r-btn); color: var(--ink-2);
+}
+.fy-json-branch { cursor: pointer; }
+.fy-json-branch:hover { background: var(--island-3); color: var(--ink); }
+.fy-json-lead { width: var(--lead); height: var(--lead); display: grid; place-items: center; color: var(--ink-3); }
+.fy-json-lead svg { display: block; width: var(--icon); height: var(--icon); transition: transform var(--d-mid) var(--ease-spring); }
+.fy-json-node[open] > .fy-json-branch .fy-json-lead svg { transform: rotate(90deg); }
+
+.fy-json-key { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; }
+.fy-json-meta,
+.fy-json-value {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  justify-self: end; font-family: var(--mono); font-size: var(--t-meta); color: var(--ink-3);
+}
+.fy-json-string { color: var(--cd-str); }
+.fy-json-number { color: var(--cd-num); }
+.fy-json-boolean { color: var(--cd-kw); }
+.fy-json-null { color: var(--cd-com); font-style: italic; }
+.fy-json-error .fy-json-key,
+.fy-json-error .fy-json-value { color: var(--danger); }

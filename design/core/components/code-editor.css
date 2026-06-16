@@ -1,0 +1,25 @@
+/* Foryx demo — code-editor 皮肤。
+   无边高亮编辑板：透明 textarea 叠在高亮 pre 上，跟正文列左边缘对齐，不制造额外块感。 */
+.fg-ce { position: relative; display: block; overflow: visible; }
+.fg-ce:focus-within { outline: 0; }
+
+.fg-ce-gut { display: none; }
+
+.fg-ce-area { position: relative; flex: 1; min-width: 0; }
+.fg-ce pre, .fg-ce textarea { margin: 0; padding: 0 var(--sp-16) 0 0; font-family: var(--mono); font-size: 13px; line-height: 1.7; white-space: pre; tab-size: 4; border: 0; }
+.fg-ce pre { color: var(--ink); pointer-events: none; min-width: 100%; box-sizing: border-box; overflow-x: auto; }
+.fg-ce pre code { font: inherit; }
+.fg-ce textarea { position: absolute; inset: 0; width: 100%; height: 100%; resize: none; outline: none; background: transparent; color: transparent; caret-color: var(--accent); overflow: hidden; }
+.fg-ce textarea::selection { background: var(--accent-soft); }
+.fg-ce textarea[readonly] { caret-color: transparent; }
+
+.fg-ce-lang { position: absolute; top: 0; right: 0; z-index: 2; font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0; pointer-events: none; }
+
+/* Atom One 着色（注释斜体灰 · 关键字紫 · 字符串绿 · 数字棕 · 函数蓝 · 插值参数强调粗体）。
+   类名同样暴露给非 textarea 渲染：CodeEditor.highlight() 产出的 pre 在 version-diff / documents 也吃这套色。 */
+.fg-ce-com { color: var(--cd-com); font-style: italic; }
+.fg-ce-kw  { color: var(--cd-kw); }
+.fg-ce-str { color: var(--cd-str); }
+.fg-ce-num { color: var(--cd-num); }
+.fg-ce-fn  { color: var(--cd-fn); }
+.fg-ce-arg { color: var(--accent); font-weight: 600; }

@@ -1,12 +1,22 @@
-/* Foryx 原语 — Section 皮肤。小节标题 = meta 大写灰;内容岛 = 白卡海岸线。 */
+/* Foryx 原语 — Section 皮肤。小节标题 + 无边内容区,默认不靠横线分割。 */
 .fy-sec { margin-bottom: var(--sp-6); }
 .fy-sec-label {
-  font-size: var(--t-meta); font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
-  color: var(--ink-3); line-height: 1.3; margin: 0 2px var(--sp-2);
+  font-size: var(--t-meta); font-weight: 600; text-transform: uppercase; letter-spacing: 0;
+  color: var(--ink-3); line-height: var(--lh-ui); margin: 0 calc(var(--grid) / 2) var(--sp-2);
 }
 .fy-sec-body {
-  background: var(--island); border: 1px solid var(--line); border-radius: var(--r-card);
-  box-shadow: var(--shadow-island); padding: 2px var(--sp-4);
+  background: transparent; border: 0; border-radius: 0;
+  box-shadow: none; padding: 0;
 }
-/* 岛内行分隔(发丝线) */
-.fy-sec-body > .fy-field + .fy-field { border-top: 1px solid var(--line); }
+.fy-sec-body > .fy-field + .fy-field { border-top: 0; }
+
+/* 文档型海洋:章节靠字号 + 留白分层,不把每段都包成卡。 */
+.fy-sec-plain { margin-bottom: var(--sp-8); }
+.fy-sec-plain .fy-sec-label {
+  font-size: var(--t-strong); font-weight: 600; text-transform: none; letter-spacing: 0;
+  color: var(--ink); line-height: var(--lh-tight); margin: 0 0 var(--sp-3);
+}
+.fy-sec-plain .fy-sec-body {
+  background: transparent; border: 0; border-radius: 0;
+  box-shadow: none; padding: 0;
+}

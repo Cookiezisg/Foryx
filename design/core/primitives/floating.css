@@ -1,0 +1,6 @@
+/* Foryx 原语 — Floating 皮肤。弹层是浮岛,不使用横向分割线。 */
+.fy-floating {
+  position: fixed; z-index: 40; max-height: calc(100vh - var(--sp-8));
+  overflow-x: hidden; overflow-y: auto; scrollbar-width: none; -ms-overflow-style: none;
+}
+.fy-floating::-webkit-scrollbar { width: 0; height: 0; }

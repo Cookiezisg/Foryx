@@ -1,0 +1,27 @@
+/* Foryx demo — dropdown 皮肤。富行 popover 替代原生 select：按钮显当前 label(+mono meta)，弹层 spring 弹入。
+   尺寸/间距对齐 design-lab onboarding .dd（按钮 42 高、弹层 6px 落差、行 8/9 内距）。 */
+.fg-dd { position: relative; }
+
+.fg-dd-btn { display: flex; align-items: center; gap: 8px; width: 100%; height: 42px; padding: 0 12px; text-align: left;
+  background: var(--cc-input); border: 1px solid var(--line); border-radius: var(--r-chip); cursor: pointer;
+  font-family: var(--font); color: var(--ink); transition: border-color var(--d-fast); }
+.fg-dd-btn:hover, .fg-dd.open .fg-dd-btn { border-color: var(--line-strong); }
+.fg-dd-btn .fg-dd-lab { flex: 1; min-width: 0; font-size: var(--t-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fg-dd-btn .fg-dd-meta { font-size: var(--t-xs); font-family: var(--mono); color: var(--ink-3); flex: none; }
+.fg-dd-caret { color: var(--ink-3); display: grid; transition: transform var(--d-fast); }
+.fg-dd.open .fg-dd-caret { transform: rotate(180deg); }
+
+.fg-dd-pop { position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; display: none;
+  background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-chip); box-shadow: var(--shadow-pop);
+  padding: 4px; max-height: 246px; overflow-y: auto; }
+.fg-dd.open .fg-dd-pop { display: block; animation: fgDdIn var(--d-fast) var(--ease-spring); }
+@keyframes fgDdIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+
+.fg-dd-opt { display: flex; align-items: center; gap: 9px; padding: 8px 9px 8px 10px; border-radius: var(--r-btn);
+  cursor: pointer; transition: background var(--d-fast); }
+.fg-dd-opt:hover { background: var(--cc-hover); }
+.fg-dd-opt.sel { background: var(--cc-active); }
+.fg-dd-opt .fg-dd-lab { flex: 1; min-width: 0; font-size: var(--t-md); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink); }
+.fg-dd-opt .fg-dd-meta { font-size: var(--t-xs); font-family: var(--mono); color: var(--ink-3); flex: none; }
+.fg-dd-opt .fg-dd-ck { display: grid; place-items: center; color: var(--ink); width: 14px; flex: none; opacity: 0; }
+.fg-dd-opt.sel .fg-dd-ck { opacity: 1; }

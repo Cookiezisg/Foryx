@@ -1,8 +1,8 @@
 /* Foryx 原语 — Tabs 皮肤。下划线选中(灰默认、选中黑),只读 token。 */
-.fy-tabs-strip { display: flex; gap: var(--sp-4); border-bottom: 1px solid var(--line); }
+.fy-tabs-strip { display: flex; gap: var(--sp-4); }
 .fy-tab {
-  height: 34px; padding: 0 2px; color: var(--ink-3); font-size: var(--t-body); font-weight: 500;
-  border-bottom: 2px solid transparent; margin-bottom: -1px; transition: color var(--d-fast);
+  height: var(--tab-h); padding: 0 calc(var(--grid) / 2); color: var(--ink-3); font-size: var(--t-body); font-weight: 500;
+  border-bottom: var(--line-2) solid transparent; transition: color var(--d-fast);
 }
 .fy-tab:hover { color: var(--ink-2); }
 .fy-tab.on { color: var(--ink); border-bottom-color: var(--ink); }

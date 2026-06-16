@@ -1,19 +1,19 @@
 /* Foryx 原语 — SidebarList。整条侧栏 = 一个模版:New / 过滤 / 分组标签 / 类型头 / 实体行 全部走同一行网格(Row),
    行首列结构共享 → New 的 + 、Search 的 🔍、类型图标、实体点 永远对齐(不靠手量,SPEC §4.6)。
-   杀掉 demo 五份手搓 rail。opts:{ newLabel, filterPlaceholder, groups:[{label, types:[{icon,label,count,open,rows:[rowOpts…]}]}] , onNew, onSelect }。 */
+   杀掉 demo 五份手搓 rail。opts:{ newLabel, filterPlaceholder, menuItems?, groups:[{label, types:[{icon,label,count,open,rows:[rowOpts…]}]}] , onNew, onSelect, onMenuPick }。 */
 (function () {
   if (window.cssNextTo) cssNextTo(document.currentScript);
 
   function newRow(label) {
     return '<button type="button" class="fy-row fy-sl-action">'
-      + '<span class="fy-row-lead"><span class="fy-row-ico">' + window.icon('plus', 16) + '</span></span>'
+      + '<span class="fy-row-lead"><span class="fy-row-ico">' + window.icon('plus') + '</span></span>'
       + '<span class="fy-row-label">' + window.esc(label) + '</span><span></span></button>';
   }
   function filterRow(ph) {
     return '<div class="fy-row fy-sl-filter">'
-      + '<span class="fy-row-lead"><span class="fy-row-ico">' + window.icon('search', 16) + '</span></span>'
+      + '<span class="fy-row-lead"><span class="fy-row-ico">' + window.icon('search') + '</span></span>'
       + '<span class="fy-row-label"><input class="fy-sl-input" placeholder="' + window.esc(ph || '') + '"></span>'
-      + '<button type="button" class="fy-row-act fy-sl-sliders" title="显示选项">' + window.icon('sliders', 16) + '</button></div>';
+      + '<button type="button" class="fy-row-act fy-sl-sliders" title="显示选项">' + window.icon('sliders') + '</button></div>';
   }
   function typeBlock(t) {
     var header = window.FyRow.html({ leading: { icon: t.icon }, label: t.label, collapsible: true, open: !!t.open, meta: (t.count != null ? String(t.count) : '') });
@@ -36,6 +36,18 @@
       + '</div>';
   }
 
+  function defaultMenuItems() {
+    return [
+      { type: 'label', label: 'Sort' },
+      { label: 'Recently updated', value: 'updated', checked: true },
+      { label: 'Name', value: 'name' },
+      { label: 'Runs', value: 'runs' },
+      { type: 'label', label: 'Display' },
+      { label: 'Show versions', value: 'versions', checked: true },
+      { label: 'Show status dots', value: 'status', checked: true },
+    ];
+  }
+
   function mount(host, o) {
     o = o || {};
     var el = window.el(html(o));
@@ -54,6 +66,15 @@
     });
     var nw = el.querySelector('.fy-sl-action');
     if (nw && o.onNew) nw.onclick = o.onNew;
+    var sliders = el.querySelector('.fy-sl-sliders');
+    if (sliders && window.FyMenu) {
+      window.FyMenu.attach(sliders, {
+        compact: true,
+        namespace: 'sidebar-menu',
+        items: o.menuItems || defaultMenuItems(),
+        onPick: o.onMenuPick,
+      });
+    }
     if (host) host.appendChild(el);
     return { el: el };
   }

@@ -1,13 +1,22 @@
 /* Foryx — DOM 公共件(全局,原语共用)。tag / qs / qsa / esc。
    esc 单一实现(`demo` 里抄了 10 遍 → 收归一份,见 SPEC §1/§7)。 */
 (function () {
-  // tag('div.a.b', attrs?, html?) → element
+  // tag('div.a.b#id', attrs?, html?) → element. Supports the demo product modules
+  // and the design primitives with the same helper.
   function tag(spec, attrs, html) {
-    var parts = String(spec).split('.');
-    var el = document.createElement(parts[0] || 'div');
-    for (var i = 1; i < parts.length; i++) if (parts[i]) el.classList.add(parts[i]);
+    var tagName = (String(spec).match(/^[A-Za-z0-9-]+/) || [])[0] || 'div';
+    var el = document.createElement(tagName);
+    var bits = String(spec).slice(tagName.length).match(/[.#][A-Za-z0-9_-]+/g) || [];
+    bits.forEach(function (bit) {
+      if (bit[0] === '.') el.classList.add(bit.slice(1));
+      if (bit[0] === '#') el.id = bit.slice(1);
+    });
     if (attrs != null && typeof attrs === 'object' && !(attrs instanceof Node)) {
-      for (var k in attrs) if (attrs[k] != null) el.setAttribute(k, attrs[k]);
+      for (var k in attrs) {
+        if (attrs[k] == null) continue;
+        if (k === 'onclick' || k.indexOf('on') === 0) el[k] = attrs[k];
+        else el.setAttribute(k, attrs[k]);
+      }
     } else if (attrs != null) { html = attrs; }
     if (html != null) el.innerHTML = html;
     return el;

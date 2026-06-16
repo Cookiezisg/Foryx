@@ -1,0 +1,39 @@
+/* Foryx demo — right-island 皮肤（归一 chat .aside / documents .doc-aside / scheduler .sch-aside 三份滑入抽屉的像素）。
+   同色 + 海岸线；默认收起(宽0)，唤出从右弹簧滑入。宽由 --fg-island-w（JS 据 width 注入，默认 372px）。
+   滑入度量字节级保形：width/.42s + opacity/.3s + margin-left/.42s，皆 var(--ease-spring)；margin-left -8px→0 收回挤压。 */
+.fg-island {
+  flex: none; width: 0; opacity: 0; overflow: hidden; margin-left: -12px;
+  background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-card);
+  box-shadow: var(--shadow-float);
+  display: flex; flex-direction: column;
+  /* 宽度瞬时到位（width 过渡在无头渲染器不推进、卡 0）；滑入感交给 opacity + margin-left。 */
+  transition: opacity .3s var(--ease-out), margin-left .42s var(--ease-spring);
+}
+.fg-island.show { opacity: 1; margin-left: 0; }   /* 宽度由 JS 内联具体 px 设置（见 right-island.js：var() 过滤不被部分引擎过渡） */
+
+/* 头部脚手架：图标方块 + 标题 + 关；度量对齐原 .aside-head（12px 8px 6px 14px / gap 10）。 */
+.fg-island-head { display: flex; align-items: center; gap: 10px; padding: 12px 8px 6px 14px; flex: none; }
+.fg-island-ico {
+  width: 30px; height: 30px; border-radius: var(--r-btn); flex: none;
+  display: grid; place-items: center; background: var(--cc-active); color: var(--ink-2);
+}
+.fg-island-ico-empty { display: none; }
+.fg-island-title {
+  flex: 1; min-width: 0; font-size: 15px; font-weight: 600;
+  color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.fg-island-x {
+  display: none;
+  width: var(--ctl); height: var(--ctl); border-radius: var(--r-btn); flex: none;
+  place-items: center; color: var(--ink-3);
+  background: transparent; border: none; cursor: pointer;
+  transition: background var(--d-fast), color var(--d-fast);
+}
+.fg-island-x:hover { background: var(--cc-hover); color: var(--ink); }
+
+/* 可滚正文：海洋自填（实体卡 / 节点深读 / 文档元信息）；岛内滚动不显滚轮。 */
+.fg-island-body {
+  flex: 1; overflow-y: auto; padding: 14px;
+  scrollbar-width: none; -ms-overflow-style: none; scrollbar-gutter: auto;
+}
+.fg-island-body::-webkit-scrollbar { width: 0; height: 0; display: none; }

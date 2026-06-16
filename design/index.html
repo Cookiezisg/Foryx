@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foryx · Design App</title>
+<!-- 生成式画廊：卡片全由 manifest 生成（gallery.js）。永不手列。 -->
+<link rel="stylesheet" href="core/tokens.css">
+<link rel="stylesheet" href="core/reset.css">
+<style>
+  body { padding: 56px 24px; background: var(--sea); }
+  .wrap { max-width: 860px; margin: 0 auto; }
+  .hero { margin-bottom: 40px; }
+  .hero .mark { width: var(--field-row); height: var(--field-row); border-radius: var(--r-chip); display: grid; place-items: center; color: var(--ink-on-accent);
+    background: var(--accent); margin-bottom: var(--sp-4); }
+  .hero h1 { font-size: var(--t-h2); font-weight: 700; letter-spacing: 0; margin: 0 0 var(--sp-2); color: var(--ink); }
+  .hero p { color: var(--ink-2); font-size: var(--t-body); max-width: 640px; margin: 0; line-height: var(--lh-prose); }
+  .sect { font-size: var(--t-meta); font-weight: 600; color: var(--ink-3); text-transform: uppercase; letter-spacing: .05em; margin: var(--sp-8) 0 var(--sp-3); }
+  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  .g-card { display: flex; flex-direction: column; gap: 7px; padding: 16px; text-decoration: none; color: inherit;
+    background: var(--island); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-island);
+    transition: transform var(--d-fast), box-shadow var(--d-fast), border-color var(--d-fast); }
+  .g-card:hover { transform: translateY(-1px); border-color: var(--line-strong); box-shadow: var(--shadow-float); }
+  .g-row { display: flex; align-items: center; gap: 9px; }
+  .g-ic { width: 30px; height: 30px; border-radius: 8px; flex: none; display: grid; place-items: center; background: var(--island-3); color: var(--ink-2); }
+  .g-card b { font-size: var(--t-lg); font-weight: 600; }
+  .g-desc { font-size: var(--t-sm); color: var(--ink-2); line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <div class="mark"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6Z"/><path d="m9 12 2 2 4-4"/></svg></div>
+    <h1>Foryx · Design App</h1>
+    <p>完整产品形态运行在 design 规范之上: token、三岛、模块装配、Intent、Live 和组件自载都从这里进入。</p>
+  </div>
+  <div class="sect">海洋 · 形态</div>
+  <div class="grid" id="demos"></div>
+  <div class="sect">读我</div>
+  <div class="grid" id="reads"></div>
+</div>
+<script src="core/icons.js"></script>
+<script src="manifest.js"></script>
+<script src="core/gallery.js"></script>
+</body>
+</html>

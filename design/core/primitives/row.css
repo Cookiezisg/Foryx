@@ -1,6 +1,7 @@
 /* Foryx 原语 — Row 皮肤(核心)。
    模版铁律:行 = 三列网格 [lead 固定 --lead | label 1fr | trail auto],对齐由结构保证、绝不靠手量。
    行首槽内容(dot/icon/chevron)统一叠放居中(grid-area+place-self),小点和图标同心。
+   尾槽内容(meta/action)共享同一个隐形锚位,右边缘锚定;数字保持文本视觉但不再漂移。
    opacity 互换一律即时(不入过渡,SPEC §2.5)。 */
 .fy-row {
   position: relative;
@@ -9,29 +10,51 @@
   color: var(--ink-2); font-size: var(--t-body); cursor: pointer;
   transition: background var(--d-fast);   /* 字色不入过渡(无头渲染器冻初值) */
 }
+.fy-row.fy-has-hint {
+  height: auto; min-height: var(--field-row);
+  padding-top: var(--sp-1); padding-bottom: var(--sp-1);
+}
 .fy-row:hover { background: var(--island-3); color: var(--ink); }
 .fy-row.on   { background: var(--island-4); color: var(--ink); }
+.fy-row.fy-passive { cursor: default; }
+.fy-row.fy-passive:hover { background: transparent; color: var(--ink-2); }
 
 /* 行首槽:固定 --lead 列。所有内容叠在同一格、各自居中 → 点/图标/箭头同心,模版保证对齐 */
 .fy-row-lead { width: var(--lead); height: var(--lead); display: grid; }
 .fy-row-lead > * { grid-area: 1 / 1; place-self: center; color: var(--ink-3); }
 .fy-row-ico, .fy-row-chev { display: grid; place-items: center; }
 .fy-row-ico svg, .fy-row-chev svg { display: block; width: var(--icon); height: var(--icon); }
-.fy-collapsible .fy-row-chev { opacity: 0; transition: transform .2s var(--ease-spring); }   /* 仅 transform 入过渡 */
+.fy-collapsible .fy-row-chev { opacity: 0; transition: transform var(--d-mid) var(--ease-spring); }   /* 仅 transform 入过渡 */
 .fy-collapsible:hover .fy-row-ico  { opacity: 0; }
 .fy-collapsible:hover .fy-row-chev { opacity: 1; }
 .fy-collapsible.open .fy-row-chev  { transform: rotate(90deg); }   /* 收起=右 展开=下 */
 
+.fy-row-main { min-width: 0; display: grid; gap: calc(var(--grid) / 2); }
 .fy-row-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fy-row.fy-has-hint .fy-row-label { color: var(--ink); }
+.fy-row-hint {
+  min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--ink-3); font-size: var(--t-meta); line-height: var(--lh-ui);
+}
 
-/* 尾槽:meta 与动作【叠放同一格、共用光学中心】→ swap 绕中心切换、不平移(同行首槽叠放律)。
-   格宽 = max(meta,动作),hover 互换不重排;锚点是中心、不是右边缘。 */
-.fy-row-trail { display: grid; justify-items: center; align-items: center; }
+/* 尾槽:meta 与动作【叠放同一格、右边缘锚定】→ 数字/版本/计数占用动作按钮同尺寸的隐形锚位、右端成线。
+   格宽 = max(meta,动作),hover 互换不重排;锚点是右边缘、不是文本中心。 */
+.fy-row-trail { display: grid; justify-items: end; align-items: center; }
 .fy-row-trail > * { grid-area: 1 / 1; }
-.fy-row-meta { font-size: var(--t-meta); color: var(--ink-3); white-space: nowrap; }
+.fy-row-meta {
+  display: inline-flex; align-items: center; justify-content: flex-end;
+  min-width: var(--trail); height: var(--trail);
+  padding: 0 var(--trail-inset) 0 var(--sp-2);
+  font-size: var(--t-meta); color: var(--ink-3); white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
 .fy-row.fy-has-acts:hover .fy-row-meta { opacity: 0; }   /* 仅"有动作"的行 hover 才让位;无动作的(类型头计数)常驻 */
-.fy-row-acts { display: flex; align-items: center; gap: 2px; opacity: 0; }
+.fy-row-acts { display: flex; align-items: center; justify-content: flex-end; gap: 0; opacity: 0; }
 .fy-row:hover .fy-row-acts { opacity: 1; }
-.fy-row-act { width: 22px; height: 22px; display: grid; place-items: center; border-radius: var(--r-tag); color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast); }
+.fy-row-act {
+  width: var(--trail); height: var(--trail);
+  display: grid; place-items: center; border-radius: var(--r-tag); color: var(--ink-3);
+  transition: background var(--d-fast), color var(--d-fast);
+}
 .fy-row-act:hover { background: var(--island-4); color: var(--ink); }
-.fy-row-act svg { display: block; width: 16px; height: 16px; }
+.fy-row-act svg { display: block; width: var(--icon); height: var(--icon); }

@@ -9,9 +9,12 @@
     var cls = 'fy-btn fy-btn-' + v
       + (o.size === 'sm' ? ' fy-btn-sm' : '')
       + (o.block ? ' fy-btn-block' : '');
-    var ic = o.icon ? '<span class="fy-btn-ico">' + window.icon(o.icon, 16) + '</span>' : '';
+    var ic = o.icon ? '<span class="fy-btn-ico">' + window.icon(o.icon) + '</span>' : '';
     var lbl = (v !== 'icon' && o.label) ? '<span>' + window.esc(o.label) + '</span>' : '';
-    var attrs = (o.disabled ? ' disabled' : '') + (o.title ? ' title="' + window.esc(o.title) + '"' : '');
+    var label = o.title || o.label || '';
+    var attrs = (o.disabled ? ' disabled' : '')
+      + (o.title ? ' title="' + window.esc(o.title) + '"' : '')
+      + (v === 'icon' && label ? ' aria-label="' + window.esc(label) + '"' : '');
     return '<button type="button" class="' + cls + '"' + attrs + '>' + ic + lbl + '</button>';
   }
 

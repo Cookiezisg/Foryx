@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Foryx — 完整 app</title>
+<!-- 生成式 host：永不按 feature 编辑。核心样式 + 组件库 + manifest 即全部；海洋 CSS/data 由模块/loader 自载。 -->
+<link rel="stylesheet" href="core/tokens.css">
+<link rel="stylesheet" href="core/reset.css">
+<link rel="stylesheet" href="core/shell.css">
+<link rel="stylesheet" href="core/sidebar.css">
+</head>
+<body class="fy-app">
+<!-- 内核 + 配置 -->
+<script src="core/cssload.js"></script>
+<script src="core/dom.js"></script>
+<script src="core/icons.js"></script>
+<script src="core/config/entity-kinds.js"></script>
+<script src="core/config/state-model.js"></script>
+<!-- 组件库（core 共享，全量常驻；海洋只组合，不各自加载。加组件 = core 加一行） -->
+<script src="core/components/status-dot.js"></script>
+<script src="core/components/ref-pill.js"></script>
+<script src="core/components/thin-table.js"></script>
+<script src="core/components/kv.js"></script>
+<script src="core/components/tabs.js"></script>
+<script src="core/components/attention.js"></script>
+<script src="core/components/tags.js"></script>
+<script src="core/components/segmented.js"></script>
+<script src="core/components/dropdown.js"></script>
+<script src="core/components/run-chip.js"></script>
+<script src="core/components/iteration-stepper.js"></script>
+<script src="core/components/code-editor.js"></script>
+<script src="core/components/floating.js"></script>
+<script src="core/components/right-island.js"></script>
+<script src="core/components/approval-gate.js"></script>
+<script src="core/components/run-debug.js"></script>
+<script src="core/components/block-kit.js"></script>
+<script src="core/components/run-graph.js"></script>
+<script src="core/components/version-diff.js"></script>
+<script src="core/components/flowrun.js"></script>
+<script src="core/components/entity-card.js"></script>
+<!-- 注册表 + 通道 + 装配（海洋 sea/rail/data 由 loader 据 manifest 懒加载） -->
+<script src="manifest.js"></script>
+<script src="core/intent.js"></script>
+<script src="core/live.js"></script>
+<script src="core/loader.js"></script>
+<script src="core/shell.js"></script>
+<script src="core/sidebar.js"></script>
+<script src="core/boot.js"></script>
+</body>
+</html>

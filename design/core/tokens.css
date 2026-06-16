@@ -4,8 +4,7 @@
      · 密度阶梯 = 2 的幂(4·8·16·32)
      · 布局宽   = 谐波 2:3:6(音乐比例,u=120)
      · 字阶     = 模数(≈大三度;display 落 4 网格)
-   字体打包 MiSans(一族覆盖中英,双语无顿挫);line-height 永远显式。 */
-@import url('https://cdn.jsdelivr.net/npm/cn-fontsource-mi-sans-vf/font.css');
+   字体栈优先 MiSans;静态 design 不运行时拉外网。line-height 永远显式。 */
 
 :root {
   /* ═══════════ 基准 BASE ═══════════ */
@@ -21,6 +20,15 @@
   --ctl:     28px;           /* 7u · 控件高 = row − grid(button/input/segmented) */
   --indent:  20px;           /* 5u · 树每级缩进 */
   --pad-row:  8px;           /* 2³ · 行左右内边距 = 尾槽内嵌 */
+  --trail:   20px;           /* 5u = ctl − sp-2 · 行尾 dense accessory slot(meta/action 锚位) */
+  --trail-inset: 4px;        /* = --grid · meta 文本右侧光学内缩,对齐 action 图标墨迹边 */
+  --gap-tight: 6px;          /* 1.5u · 低权重内联元素间距(badge/button crumb),比 --gap 更轻 */
+  --dot: 7px;                /* 7/16 icon · 状态点光学尺寸,与 16 图标同心 */
+  --dot-pulse: 5px;          /* dot − grid/2 · run 呼吸外扩半径 */
+  --hairline: 1px;           /* 1 物理线 · border/分隔线 */
+  --line-2: 2px;             /* 2 × hairline · tab 下划线 */
+  --focus-ring: 3px;         /* 3 × hairline · focus 外环 */
+  --zero: 0px;               /* 语义零 · 仅供 calc/复合属性避开局部裸 px */
 
   /* ═══════════ 间距 SPACING · 4 网格谐音(×1,2,3,4,6,8,12,16)═══════════ */
   --sp-1:  4px;  --sp-2:  8px;  --sp-3: 12px;  --sp-4: 16px;
@@ -35,7 +43,18 @@
   --w-full:        100%;     /*      逃生:宽代码/表/图铺满 */
   --side-min:      240px;    /* 2u · 拖动下限 */
   --side-max:      420px;
+  --input-min:     180px;    /* 1.5u · 文本输入最小宽,不挤压到不可读 */
   /* 整窗 1440 = 12u:侧栏2u + 内容6u + 右岛4u = 12u 恰好平铺 */
+
+  /* ═══════════ 原语尺寸 PRIMITIVE METRICS · 从密度阶梯派生 ═══════════ */
+  --ctl-sm:        24px;     /* 6u = row − gap · 小按钮/紧凑控件 */
+  --badge-h:       22px;     /* ctl − gap + grid/2 · 状态 badge 视觉高度 */
+  --btn-pad-x:     14px;     /* 3.5u · 文本按钮水平光学内边距 */
+  --btn-pad-x-sm:  10px;     /* 2.5u · 小按钮水平光学内边距 */
+  --badge-pad-x:    9px;     /* badge-h − icon + grid/2 · badge 文字内边距 */
+  --field-row:     48px;     /* 12u = sp-12 · Field 最小触达/阅读行 */
+  --island-head:   44px;     /* 11u = field-row − grid · 右岛头部高度 */
+  --tab-h:         34px;     /* row + hairline*2 · tabs hitbox */
 
   /* ═══════════ 字阶 TYPE · 模数(≈大三度;display 落 4 网格)═══════════ */
   --t-meta:   12px;          /* 3u  · meta/caption(UI 文字下限,≥12) */
@@ -91,11 +110,30 @@
   --danger: #d70015;  --danger-soft: rgba(215,0,21,.10);
   --live:   #0071e3;
 
+  /* ═══════════ 代码 CODE · 语义高亮(从 demo 收编,禁止 feature 裸 hex) ═══════════ */
+  --cd-com: #a0a1a7;  --cd-kw: #a626a4;  --cd-str: #50a14f;  --cd-num: #986801;  --cd-fn: #4078f2;
+
   /* ═══════════ 阴影 SHADOW ═══════════ */
   --shadow-island: 0 1px 2px rgba(0,0,0,.03), 0 3px 10px rgba(0,0,0,.035);
   --shadow-float:  0 1px 3px rgba(0,0,0,.05), 0 8px 22px rgba(0,0,0,.045);
   --shadow-pop:    0 2px 8px rgba(0,0,0,.06), 0 12px 32px rgba(0,0,0,.10);
   --shadow-win:    0 16px 50px rgba(0,0,0,.20);
+
+  /* ═══════════ Product Demo Compatibility · legacy names map to the grammar ═══════════
+     The migrated product modules keep their modular files, but consume this token layer. */
+  --desk:       #d4d5d9;
+  --cc-desk:   var(--desk);
+  --cc-win:    var(--island);
+  --cc-side:   var(--island);
+  --cc-input:  var(--island);
+  --cc-bubble: var(--island-3);
+  --cc-hover:  var(--island-3);
+  --cc-active: var(--island-4);
+  --r-win:     var(--r-island);
+  --s1: var(--sp-1); --s2: var(--sp-2); --s3: var(--sp-3); --s4: var(--sp-4);
+  --s5: 20px;       --s6: var(--sp-6); --s8: var(--sp-8);
+  --t-xs: 11px;     --t-sm: var(--t-meta); --t-md: var(--t-body);
+  --t-lg: 15px;     --t-xl: var(--t-h3);   --t-2xl: var(--t-h2);
 }
 
 /* ═══════════ 暗色 DARK(值阶梯一致,仅换色)═══════════ */
@@ -109,8 +147,12 @@
   --warn:   #ff9f0a;  --warn-soft:   rgba(255,159,10,.16);
   --danger: #ff453a;  --danger-soft: rgba(255,69,58,.16);
   --live:   #0a84ff;
+  --cd-com: #7f848e;  --cd-kw: #c678dd;  --cd-str: #98c379;  --cd-num: #d19a66;  --cd-fn: #61afef;
   --shadow-island: 0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
   --shadow-float:  0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
   --shadow-pop:    0 8px 24px rgba(0,0,0,.55), 0 20px 50px rgba(0,0,0,.6);
   --shadow-win:    0 16px 50px rgba(0,0,0,.5);
+  --desk: #000000;
+  --cc-bubble: #2c2c2f;
+  --cc-hover: var(--island-3);
 }

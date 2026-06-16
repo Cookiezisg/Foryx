@@ -3,34 +3,43 @@
 <head>
 <meta charset="utf-8">
 <title>Foryx · 原语 reference</title>
-<link rel="stylesheet" href="core/tokens.css">
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="core/tokens.css?v=guard">
 <link rel="stylesheet" href="core/reset.css">
 <script src="core/cssload.js"></script>
 <script src="core/dom.js"></script>
 <script src="core/icons.js"></script>
 <script src="core/primitives/status-dot.js"></script>
 <script src="core/primitives/button.js"></script>
+<script src="core/primitives/action-group.js"></script>
+<script src="core/primitives/toolbar.js"></script>
 <script src="core/primitives/section.js"></script>
 <script src="core/primitives/row.js"></script>
+<script src="core/primitives/floating.js"></script>
+<script src="core/primitives/menu.js"></script>
 <script src="core/primitives/sidebar-list.js"></script>
 <script src="core/primitives/field.js"></script>
 <script src="core/primitives/input.js"></script>
+<script src="core/primitives/code-editor.js"></script>
+<script src="core/primitives/json-tree.js"></script>
+<script src="core/primitives/info-card.js"></script>
 <script src="core/primitives/badge.js"></script>
 <script src="core/primitives/tabs.js"></script>
 <style>
   body { padding: var(--sp-8); }
   .wrap { max-width: var(--w-content); margin: 0 auto; }
-  h1 { font-size: var(--t-h1); letter-spacing: -.02em; line-height: var(--lh-tight); }
+  h1 { font-size: var(--t-h1); letter-spacing: 0; line-height: var(--lh-tight); }
   .sub { color: var(--ink-3); font-size: var(--t-body); margin: var(--sp-2) 0 var(--sp-6); }
-  .card { background: var(--island); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-island); padding: var(--sp-6); margin-bottom: var(--sp-6); }
+  .card { background: var(--island); border: var(--hairline) solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-island); padding: var(--sp-6); margin-bottom: var(--sp-6); }
   .card > h2 { font-size: var(--t-strong); line-height: var(--lh-tight); margin-bottom: var(--sp-4); }
   .card > h2 em { font-style: normal; color: var(--ink-3); font-size: var(--t-meta); font-weight: 400; margin-left: var(--sp-2); }
   .demo { display: flex; align-items: center; gap: var(--sp-4); flex-wrap: wrap; }
-  .panel { width: var(--side-w); background: var(--island); border: 1px solid var(--line); border-radius: var(--r-card); padding: var(--sp-2); }
-  .filter { display: flex; align-items: center; gap: var(--gap); height: var(--row); padding: 0 var(--pad-row); color: var(--ink-3); }
-  .filter input { flex: 1; min-width: 0; border: 0; background: none; font-size: var(--t-body); color: var(--ink); }
-  .filter > svg { width: 16px; height: 16px; flex: none; }
-  .grp-label { font-size: var(--t-meta); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-3); padding: var(--sp-2) var(--pad-row) 2px; }
+  .panel { width: var(--side-w); background: var(--island); border: var(--hairline) solid var(--line); border-radius: var(--r-card); padding: var(--sp-2); }
+  .ex-row { max-width: var(--island-w); }
+  .ex-panel { max-width: var(--island-w-wide); }
+  .ex-full { max-width: var(--w-content); }
+  .dot-demo-item { display: inline-flex; align-items: center; gap: var(--gap-tight); font-size: var(--t-meta); color: var(--ink-3); }
+  .tab-note { color: var(--ink-2); font-size: var(--t-body); }
 </style>
 </head>
 <body>
@@ -39,12 +48,17 @@
   <p class="sub">活体规格台。每个原语 = 一份实现、一个主人、自载 CSS、只读 token。拼它就自动合规、漂移不可能。</p>
 
   <div class="card"><h2>Button <em>ghost · primary · danger · icon</em></h2><div class="demo" id="btns"></div></div>
+  <div class="card"><h2>ActionGroup / Toolbar <em>动作组锚点 · 三段工具条 · 不手摆按钮</em></h2><div class="ex-panel" id="actions-demo"></div></div>
   <div class="card"><h2>StatusDot <em>idle · run(呼吸) · wait · err · done</em></h2><div class="demo" id="dots"></div></div>
-  <div class="card"><h2>Row <em>核心 · 行首 icon↔chevron · 行尾 meta↔action(hover 同槽互换)</em></h2><div id="rows" style="max-width:320px"></div></div>
+  <div class="card"><h2>Row <em>核心 · 行首 icon↔chevron · 行尾 meta↔action(hover 同槽互换)</em></h2><div class="ex-row" id="rows"></div></div>
+  <div class="card"><h2>Menu / Floating <em>锚定弹层 · Escape/外点关闭 · 无分割线菜单行</em></h2><div class="demo" id="menu-demo"></div></div>
   <div class="card"><h2>合成:侧栏 <em>New + 过滤 + 类型头(可折叠) + 实体行 —— 全是 Row/Button,一个原语顶 demo 五份手搓 rail</em></h2><div id="rail"></div></div>
-  <div class="card"><h2>Section + Field <em>小节标题 + 内容岛 + 键值行(label 列/控件列 跨行对齐)</em></h2><div id="secs" style="max-width:520px"></div></div>
+  <div class="card"><h2>Section + Field/KV <em>小节标题 + 大字段行 + 紧凑 key/value</em></h2><div class="ex-panel" id="secs"></div></div>
+  <div class="card"><h2>InfoCard <em>无边信息单元 · 不用横线切割</em></h2><div class="ex-panel" id="info-demo"></div></div>
+  <div class="card"><h2>CodeEditor <em>平铺编辑板 · 语法色 · 角标</em></h2><div class="ex-full" id="code-demo"></div></div>
+  <div class="card"><h2>JsonTree <em>JSON 展示解析成树 · 折叠 + key/value</em></h2><div class="ex-panel" id="json-demo"></div></div>
   <div class="card"><h2>Badge <em>状态药丸(语义柔底)</em></h2><div class="demo" id="badges"></div></div>
-  <div class="card"><h2>Tabs <em>下划线选中 · 懒渲染</em></h2><div id="tabs" style="max-width:520px"></div></div>
+  <div class="card"><h2>Tabs <em>下划线选中 · 懒渲染</em></h2><div class="ex-panel" id="tabs"></div></div>
 </div>
 
 <script>
@@ -56,17 +70,52 @@
     FyButton.html({ icon: 'sliders', variant: 'icon', title: '显示选项' }) +
     FyButton.html({ icon: 'more', variant: 'icon' });
 
+  // —— ActionGroup / Toolbar ——
+  qs('#actions-demo').innerHTML =
+    FyActionGroup.html({
+      items: [
+        { label: 'Run', icon: 'play', variant: 'primary' },
+        { label: 'Iterate', variant: 'ghost' },
+        { icon: 'more', variant: 'icon', title: '更多' },
+      ],
+    }) +
+    FyToolbar.html({
+      title: '调试终端',
+      meta: 'ready',
+      actions: [
+        { label: 'Run', icon: 'play', variant: 'primary' },
+        { label: 'Clear', variant: 'ghost' },
+      ],
+    });
+
   // —— StatusDot ——
   qs('#dots').innerHTML = ['idle', 'run', 'wait', 'err', 'done'].map(function (s) {
-    return '<span style="display:inline-flex;align-items:center;gap:6px;font-size:var(--t-meta);color:var(--ink-3)">' + FyDot.dot(s) + s + '</span>';
+    return '<span class="dot-demo-item">' + FyDot.dot(s) + s + '</span>';
   }).join('');
 
   // —— Row(核心)——
   qs('#rows').innerHTML =
     FyRow.html({ leading: { icon: 'func' }, label: 'process_invoice', meta: 'v5', selected: true, actions: [{ icon: 'more' }] }) +
+    FyRow.html({ leading: { dot: 'done' }, label: 'extract_invoice_fields', hint: '抽取供应商、金额、税号和行项目', meta: 'ready' }) +
     FyRow.html({ leading: { dot: 'run' }, label: 'fetch_news', meta: 'v2', actions: [{ icon: 'more' }] }) +
     FyRow.html({ leading: { dot: 'done' }, label: 'parse_pdf', meta: 'v1', actions: [{ icon: 'more' }] }) +
     FyRow.html({ leading: { icon: 'workflow' }, label: 'Workflows', collapsible: true, open: true, meta: '3' });
+
+  // —— Menu / Floating ——
+  var menuBtn = FyButton.mount(qs('#menu-demo'), { label: 'View options', icon: 'sliders', variant: 'ghost' });
+  FyMenu.attach(menuBtn.el, {
+    compact: true,
+    namespace: 'reference-menu',
+    align: 'start',
+    items: [
+      { type: 'label', label: 'Sort' },
+      { label: 'Recently updated', value: 'updated', checked: true },
+      { label: 'Name', value: 'name' },
+      { type: 'label', label: 'Display' },
+      { label: 'Show versions', value: 'versions', checked: true },
+      { label: 'Danger action', value: 'danger', danger: true },
+    ],
+  });
 
   // —— 合成侧栏:整条走 SidebarList 模版(New/过滤/类型头/实体行 共享行网格,行首列永远对齐)——
   var panel = tag('div.panel');
@@ -95,7 +144,52 @@
       FyField.html({ label: '界面语言', hint: '影响菜单与回复语言', control: FyInput.html({ value: '中文' }) }) }) +
     FySection.html({ label: 'API 密钥', body:
       FyField.html({ label: 'DeepSeek', control: FyBadge.html({ label: '已连接', dot: 'done', tone: 'ok' }) }) +
-      FyField.html({ label: '数据目录', control: '<span class="fy-field-v fy-mono">~/Library/Foryx</span>' }) });
+      FyField.html({ label: '数据目录', control: '<span class="fy-field-v fy-mono">~/Library/Foryx</span>' }) }) +
+    FySection.html({ label: '运行摘要', body:
+      KV.html([
+        ['来源', '手动运行'],
+        ['状态', '成功'],
+        ['elapsed', '1186ms'],
+      ]) });
+
+  // —— InfoCard ——
+  qs('#info-demo').innerHTML =
+    FyInfoCard.html({
+      title: '参数',
+      body: FyJsonTree.html({ data: { currency: 'USD' }, root: false }),
+      actions: FyButton.html({ label: 'Run', icon: 'play', variant: 'primary' }) + FyButton.html({ label: '清空', variant: 'ghost' }),
+    }) +
+    FyInfoCard.html({
+      title: '输出',
+      meta: FyBadge.html({ label: '已完成 · 1.2s', dot: 'done', tone: 'ok' }),
+      body: FyJsonTree.html({ data: { vendor: 'Acme Co.', total: 1240.50 }, root: false }),
+    });
+
+  // —— CodeEditor ——
+  qs('#code-demo').innerHTML = FyCodeEditor.html({
+    lang: 'python',
+    corner: 'Python',
+    code: [
+      'def process_invoice(file: bytes, currency: str = "USD") -> Invoice:',
+      '    fields = extract_fields(file)   # layout + regex',
+      '    return Invoice.model_validate(fields)',
+    ].join('\n'),
+  });
+
+  // —— JsonTree ——
+  qs('#json-demo').innerHTML = FyJsonTree.html({
+    label: 'result',
+    openDepth: 2,
+    data: {
+      vendor: 'Acme Co.',
+      total: 1240.50,
+      approved: true,
+      line_items: [
+        { name: 'consulting', amount: 980.00 },
+        { name: 'tax', amount: 260.50 },
+      ],
+    },
+  });
 
   // —— Badge ——
   qs('#badges').innerHTML =
@@ -108,9 +202,9 @@
   // —— Tabs ——
   FyTabs.mount(qs('#tabs'), {
     items: [
-      { key: 'overview', label: '概览', render: p => p.innerHTML = '<div style="color:var(--ink-2);font-size:var(--t-body)">概览内容(懒渲染:切到才建)</div>' },
-      { key: 'version', label: '版本', render: p => p.innerHTML = '<div style="color:var(--ink-2);font-size:var(--t-body)">版本历史…</div>' },
-      { key: 'runs', label: '运行', render: p => p.innerHTML = '<div style="color:var(--ink-2);font-size:var(--t-body)">运行记录…</div>' },
+      { key: 'overview', label: '概览', render: p => p.innerHTML = '<div class="tab-note">概览内容(懒渲染:切到才建)</div>' },
+      { key: 'version', label: '版本', render: p => p.innerHTML = '<div class="tab-note">版本历史…</div>' },
+      { key: 'runs', label: '运行', render: p => p.innerHTML = '<div class="tab-note">运行记录…</div>' },
     ],
   });
 </script>

@@ -1,0 +1,9 @@
+/* Foryx 原语 — InfoCard 皮肤。无边卡:没有横线、描边、阴影,只用留白和标题形成组。 */
+.fy-info-card { padding: var(--sp-1) var(--sp-2); border-radius: var(--r-btn); }
+.fy-info-card + .fy-info-card { margin-top: var(--sp-1); }
+.fy-info-head { display: flex; align-items: center; gap: var(--gap); min-height: var(--ctl); margin-bottom: var(--sp-1); }
+.fy-info-ico { display: grid; place-items: center; color: var(--ink-3); }
+.fy-info-title { flex: 1; min-width: 0; color: var(--ink-3); font-size: var(--t-meta); font-weight: 600; line-height: var(--lh-ui); }
+.fy-info-meta { flex: none; display: inline-flex; align-items: center; gap: var(--gap-tight); color: var(--ink-3); }
+.fy-info-body { min-width: 0; }
+.fy-info-actions { display: flex; align-items: center; gap: var(--sp-2); margin-top: var(--sp-3); }

@@ -1,0 +1,111 @@
+/* Foryx demo — approval-gate 皮肤（retarget 自 chat 审批卡 ac- 系 + badge 三级 + scheduler sa-inbox）。
+   两味同骨：warn 描边浮卡 + 盾牌头 + settled 收口；chat 多顶角 pulse 点与 danger 徽，durable 多倒计时与 reason。
+   视觉宪法：海与岛同色靠岸线分；语义色仅 ok/warn/danger；--accent 只点正在发生；动效走 spring/ease。 */
+
+/* 外框：warn 45% 与 line 混的暖描边 + 双层浮岛阴影（与原审批卡字节级同度量） */
+.fg-apg {
+  margin: 14px 0;
+  border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line));
+  border-radius: var(--r-card);
+  background: var(--cc-side);
+
+  overflow: hidden;
+  position: relative;
+}
+
+/* 顶角脉冲点（chat 味：正在等你；durable 不显） */
+.fg-apg-pulse {
+  position: absolute; top: 13px; right: 13px;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--accent);
+  animation: fgApgPulse 1.4s ease infinite;
+}
+
+/* 头：盾牌 + 标题/工具 + 右侧（danger 徽 or 倒计时） */
+.fg-apg-head { display: flex; align-items: center; gap: 10px; padding: 12px 13px 8px; }
+.fg-apg-shield {
+  width: 28px; height: 28px; border-radius: var(--r-btn); flex: none;
+  display: grid; place-items: center;
+  background: color-mix(in srgb, var(--warn) 12%, transparent);
+  color: var(--warn);
+}
+.fg-apg-tt { flex: 1; min-width: 0; }
+.fg-apg-tt b { display: block; font-size: 14px; font-weight: 600; }
+.fg-apg-tool { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+.fg-apg-sub { font-size: 12px; color: var(--ink-2); }
+
+/* danger 三级自报徽（S18；safe/cautious/dangerous） */
+.fg-apg-badge {
+  font-size: 10px; font-weight: 600; padding: 1px 7px; border-radius: var(--r-tag);
+  font-family: var(--mono); text-transform: uppercase; letter-spacing: .03em;
+}
+.fg-apg-badge.safe { color: var(--ink-3); background: var(--cc-active); }
+.fg-apg-badge.cautious { color: var(--warn); background: color-mix(in srgb, var(--warn) 13%, transparent); }
+.fg-apg-badge.dangerous { color: var(--danger); background: color-mix(in srgb, var(--danger) 11%, transparent); }
+
+/* durable 倒计时（warn 色 · mono 截止文案 + 内联时钟） */
+.fg-apg-countdown { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; color: var(--warn); }
+.fg-apg-clock { display: block; flex: none; }
+
+/* 主体 */
+.fg-apg-body { padding: 0 13px 11px; }
+.fg-apg-sum { font-size: 13px; color: var(--ink-2); line-height: 1.55; margin: 2px 0 10px; }
+
+/* chat 味：工具参数框（mono 灰底） */
+.fg-apg-args {
+  background: var(--cc-input); border: 1px solid var(--line); border-radius: var(--r-chip);
+  padding: 8px 11px; font-family: var(--mono); font-size: 12px; line-height: 1.7;
+  color: var(--ink-2); white-space: pre-wrap; margin-bottom: 12px;
+}
+
+/* durable 味：渲染后的 prompt（模板 substitute 后的人读文本） */
+.fg-apg-rendered {
+  background: var(--cc-input); border: 1px solid var(--line); border-radius: var(--r-chip);
+  padding: 9px 11px; font-size: 12.5px; line-height: 1.6;
+  color: var(--ink-2); white-space: pre-wrap; margin-bottom: 11px;
+}
+
+/* durable 味：可选 reason 输入（理由） */
+.fg-apg-reason {
+  width: 100%; box-sizing: border-box; background: var(--cc-input);
+  border: 1px solid var(--line); border-radius: var(--r-chip); padding: 8px 10px;
+  font: inherit; font-size: 13px; color: var(--ink); outline: 0;
+  resize: none; margin-bottom: 11px;
+}
+.fg-apg-reason:focus { border-color: var(--line-strong); }
+
+/* 动作行 + 按钮（primary 蓝填 / ghost 描边 / deny 红 hover） */
+.fg-apg-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.fg-apg-btn {
+  height: 30px; padding: 0 14px; border-radius: var(--r-btn); font-size: 13px; font-weight: 600;
+  display: inline-flex; align-items: center; gap: 6px;
+  transition: background .15s, color .15s;
+}
+.fg-apg-btn.primary { background: var(--accent); color: var(--ink-on-accent); }
+.fg-apg-btn.primary:hover { background: var(--accent-hover); }
+.fg-apg-btn.ghost { color: var(--ink-2); border: 1px solid var(--line); }
+.fg-apg-btn.ghost:hover { background: var(--cc-hover); color: var(--ink); }
+.fg-apg-btn.deny { color: var(--ink-2); }
+.fg-apg-btn.deny:hover { color: var(--danger); background: color-mix(in srgb, var(--danger) 9%, transparent); }
+
+/* chat 味：预授权小字说明 */
+.fg-apg-note { font-size: 11px; color: var(--ink-3); margin-left: 2px; }
+
+/* durable 味：first-wins 脚注 */
+.fg-apg-foot { font-size: 11px; color: var(--ink-3); margin-top: 9px; }
+
+/* settled 收口面：默认藏，settled 后亮（隐头/体 + 松暖描边为中性线） */
+.fg-apg-settled { display: none; align-items: center; gap: 8px; padding: 11px 13px; font-size: 13px; color: var(--ink-3); }
+.fg-apg-ico { display: grid; place-items: center; color: var(--ok); }
+.fg-apg.settled { border-color: var(--line); }
+.fg-apg.settled .fg-apg-pulse,
+.fg-apg.settled .fg-apg-head,
+.fg-apg.settled .fg-apg-body { display: none; }
+.fg-apg.settled .fg-apg-settled { display: flex; }
+
+/* pulse 涟漪（顶角点：accent-soft 环外扩消散；与 chat 原 keyframe 同度量 7px） */
+@keyframes fgApgPulse {
+  0%   { box-shadow: 0 0 0 0 var(--accent-soft); }
+  70%  { box-shadow: 0 0 0 7px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}

@@ -1,0 +1,18 @@
+/* Foryx demo — 运行海洋侧栏样式（薄）。每行：状态点 + 名 + meta（按状态着色）。类名 sch- 专属，只读令牌。 */
+.sch-filter { position: relative; display: flex; align-items: center; gap: 11px; height: 32px; margin-bottom: 6px; padding: 0 6px 0 10px; }
+.sch-filter > svg { flex: none; display: block; color: var(--ink-3); }
+.sch-filter input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--t-md); }
+.sch-filter input::placeholder { color: var(--ink-3); }
+
+.sch-list { flex: 1; min-height: 0; overflow-y: auto; }
+.sch-wf { display: flex; align-items: center; gap: 9px; height: 34px; padding: 0 10px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background var(--d-fast); }   /* color 不入过渡：无头渲染器冻初值致灰默认失效 */
+.sch-wf:hover { background: var(--cc-hover); color: var(--ink); }
+.sch-wf.on { background: var(--cc-active); color: var(--ink); }
+.sch-wf-t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sch-wf-meta { flex: none; font-size: var(--t-xs); color: var(--ink-3); }
+.sch-wf:hover .sch-wf-meta { display: none; }
+/* meta 按状态着色（actionable 态） */
+.sch-wf.wf-run .sch-wf-meta  { color: var(--accent); }
+.sch-wf.wf-wait .sch-wf-meta { color: var(--warn); }
+.sch-wf.wf-err .sch-wf-meta  { color: var(--danger); }

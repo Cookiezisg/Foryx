@@ -1,0 +1,22 @@
+/* Foryx demo — floating 皮肤。浮层定位原语的容器层：fixed 定位 + spring 弹入 + 弹层阴影基线。
+   原语只摆「位置 + 层叠 + 弹入」，内容外观由调用方的内容节点自带（斜杠窗/工具条/sort-menu 各自的皮）。
+   弹入复刻 design-lab docPop（scale .92 + 上移 4px，走 --ease-spring）；阴影走令牌 --shadow-pop（替代原 0 8px 24px 字面值）。 */
+.fg-float {
+  position: fixed;
+  left: 0;
+  top: 0;
+  transform-origin: top left;
+  animation: fgFloatIn var(--d-fast) var(--ease-spring);
+}
+
+/* 弹入：从略缩 + 下沉 4px 弹定，与原 docPop 同手势（菜单/工具条共用一条曲线） */
+@keyframes fgFloatIn {
+  from { opacity: 0; transform: scale(.92) translateY(4px); }
+  to   { opacity: 1; transform: none; }
+}
+
+/* 阴影基线：给直接子节点（调用方的内容容器）兜一层弹层阴影——
+   内容自带阴影时其值覆盖本基线即可，不强制；这里只保证「裸内容」也有浮起感。 */
+.fg-float > * {
+  box-shadow: var(--shadow-pop);
+}

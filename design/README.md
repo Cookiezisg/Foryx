@@ -1,7 +1,7 @@
 # Foryx — Design（重做工作区）
 
 > `design/` 是 Foryx 桌面端**重做的家**(干净重写,不在 `demo/` 上打补丁)。
-> `demo/` = 当前形态参照(旧名 Forgify,维持不动);`design/` = 下一代、规范先行、把标准焊进代码。**新代码一律叫 Foryx。**
+> `demo/` = 旧形态参照,维持不动;`design/` = 下一代、规范先行、把标准焊进代码。**新代码一律叫 Foryx。**
 
 ## 这里是什么
 
@@ -13,7 +13,7 @@
 
 - **新开对话续接 → 先读 [`PROGRESS.md`](PROGRESS.md)**(任务背景 + 进度日志 + 当前状态 + 下一步 + 操作/续接须知)。
 - **规范本身 → [`SPEC.md`](SPEC.md)**(宪法,8 节)。
-- 看效果:起 `design` 预览(端口 4191)→ `entity.html`(实体页样板)· `reference.html`(原语台)· `tokens-preview.html`(数系)。
+- 看效果:起 `design` 预览(端口 4191)→ `app.html`(完整产品 app)· `index.html`(入口画廊)· `reference.html`(原语台)· `tokens-preview.html`(数系)。`entity.html` 会跳到 `app.html#entities`。
 
 ## 一句话哲学
 

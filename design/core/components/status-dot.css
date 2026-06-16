@@ -1,0 +1,19 @@
+/* Foryx demo — status-dot 皮肤。色按 DOT key：done绿 / run蓝脉冲 / wait橙脉冲 / err红 / idle空心 / listening蓝脉冲。 */
+.fg-dot { display: inline-block; width: var(--dsz, 7px); height: var(--dsz, 7px); border-radius: 50%; box-sizing: border-box; flex: none; vertical-align: middle; }
+.fg-dot.done      { background: var(--ok); }
+.fg-dot.run       { background: var(--accent); }
+.fg-dot.wait      { background: var(--warn); }
+.fg-dot.err       { background: var(--danger); }
+.fg-dot.listening { background: var(--accent); }
+.fg-dot.idle      { background: transparent; border: 1.5px solid var(--ink-3); }
+.fg-dot.hollow    { background: transparent; border: 1.5px solid var(--ink-3); }
+.fg-dot.pulse     { animation: fgDotPulse 1.5s ease infinite; }
+@keyframes fgDotPulse { 50% { opacity: .3; } }
+
+/* 类型化徽：点 + 文案，色随点态 */
+.fg-badge { display: inline-flex; align-items: center; gap: 6px; font-size: var(--t-sm); font-weight: 500; color: var(--ink-2); }
+.fg-badge .fg-badge-t { color: inherit; }
+.fg-badge:has(.fg-dot.done) { color: var(--ok); }
+.fg-badge:has(.fg-dot.run)  { color: var(--ink-2); }
+.fg-badge:has(.fg-dot.err)  { color: var(--danger); }
+.fg-badge:has(.fg-dot.idle) { color: var(--ink-3); }

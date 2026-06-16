@@ -1,0 +1,94 @@
+/* Foryx demo — 【通知 Inbox】侧栏接管样式（铃铛轴；薄）。
+   铃铛点击 → 整个 #sidebody 被本内容接管（镜像 settings 接管海面）：← 返回 + 筛选 + 三层
+   ① Needs you（待审批，置顶不折叠，胖行内联拍板，prompt 走 Attention 组件）② 时间线（FYI 按日期）③ 已读（折叠）。
+   状态点走组件 StatusDot（.fg-dot）；实体药丸走组件 RefPill；拍板卡走组件 Attention——本文件只画布局/留白/字色。
+   类名 ntf- 专属，只读令牌（白底、细线、accent 只在 happening-now、--ease-spring）。 */
+
+/* 顶：← 返回 + 标题 + 全部已读（无横线，靠留白分） */
+.ntf-head { display: flex; align-items: center; gap: var(--s2); height: 34px; margin-bottom: 6px; padding: 0 4px; }
+.ntf-back { flex: none; display: grid; place-items: center; width: 26px; height: 26px; border-radius: var(--r-btn); color: var(--ink-2); transition: background var(--d-fast), color var(--d-fast); }
+.ntf-back:hover { background: var(--cc-hover); color: var(--ink); }
+.ntf-back svg { display: block; transform: rotate(180deg); }   /* chevr 旋 180° = 返回箭头（图标集无左向，复用右向） */
+.ntf-title { flex: 1; min-width: 0; font-size: var(--t-md); font-weight: 600; color: var(--ink); }
+.ntf-allread { flex: none; font-size: var(--t-sm); color: var(--ink-3); padding: 4px var(--s2); border-radius: var(--r-btn); transition: background var(--d-fast), color var(--d-fast); }
+.ntf-allread:hover { background: var(--cc-hover); color: var(--ink); }
+
+/* 快滤行：搜索 + sliders 菜单（类型筛选 + 按时间分组） */
+.ntf-filter { position: relative; display: flex; align-items: center; gap: 11px; height: 32px; margin-bottom: 6px; padding: 0 6px 0 10px; }
+.ntf-filter > svg { flex: none; display: block; color: var(--ink-3); }
+.ntf-filter input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--ink); font: inherit; font-size: var(--t-md); }
+.ntf-filter input::placeholder { color: var(--ink-3); }
+.ntf-mbtn { flex: none; width: 26px; height: 26px; display: grid; place-items: center; color: var(--ink-3); border-radius: var(--r-btn); transition: color var(--d-fast), background var(--d-fast); }
+.ntf-mbtn:hover, .ntf-mbtn.on { color: var(--ink); background: var(--cc-hover); }
+.ntf-mbtn svg { display: block; }
+.ntf-menu { position: absolute; top: calc(100% + 4px); right: 6px; z-index: 5; min-width: 180px;
+  background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-chip); padding: 5px;
+  box-shadow: var(--shadow-pop); display: none; }
+.ntf-menu.open { display: block; }
+.ntf-mh { padding: 6px var(--s2) 3px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); }
+.ntf-mh:first-child { padding-top: 3px; }
+.ntf-opt { display: flex; align-items: center; gap: var(--s2); width: 100%; height: 30px; padding: 0 var(--s2); border-radius: var(--r-btn); text-align: left; color: var(--ink); font-size: var(--t-md); transition: background var(--d-fast); }
+.ntf-opt:hover { background: var(--cc-hover); }
+.ntf-ck { flex: none; width: 14px; display: grid; place-items: center; color: var(--ink); opacity: 0; }
+.ntf-opt.on .ntf-ck { opacity: 1; }
+.ntf-ck svg { display: block; }
+
+/* 列表 + 三层（Needs you 常驻不折叠 / 时间线纯标签头 / 已读可折叠） */
+.ntf-list { flex: 1; min-height: 0; overflow-y: auto; scrollbar-gutter: auto; }
+.ntf-sec { margin-bottom: var(--s2); }
+.ntf-sec-h { display: flex; align-items: center; gap: 6px; width: 100%; height: 28px; padding: 0 10px; border-radius: var(--r-btn);
+  font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); }
+.ntf-sec-h.tog { transition: background var(--d-fast); }
+.ntf-sec-h.tog:hover { background: var(--cc-hover); }
+.ntf-cnt { font-weight: 500; }
+.ntf-chev { margin-left: auto; display: inline-grid; place-items: center; color: var(--ink-3); transition: transform var(--d-mid) var(--ease-spring); }
+.ntf-chev svg { display: block; }
+.collapsible.open > .ntf-sec-h .ntf-chev { transform: rotate(90deg); }
+.collapsible:not(.open) > .ntf-sec-body { display: none; }
+.ntf-sub { padding: 5px 10px 3px; font-size: var(--t-xs); color: var(--ink-3); }   /* 时间线内日期分隔 */
+.ntf-list.no-group .ntf-sub { display: none; }                                     /* 关分组 → 扁平 */
+
+/* 快滤：未读 / 待决（靠 list 类切换显隐，不重绘） */
+.ntf-list.only-unread .ntf-row:not(.unread) { display: none; }
+.ntf-list.only-unread .ntf-sec.read { display: none; }
+.ntf-list.only-action .ntf-sec.timeline,
+.ntf-list.only-action .ntf-sec.read { display: none; }
+
+/* 通知行：组件状态点 + 文案 + 时间(靠右常驻) + 悬浮 ⋯（同槽：hover 时间让位给 ⋯） */
+.ntf-row { position: relative; display: flex; align-items: center; gap: 9px; min-height: 32px; padding: 4px 10px; border-radius: var(--r-btn);
+  color: var(--ink-2); font-size: var(--t-md); cursor: pointer; transition: background var(--d-fast); }   /* color 不入过渡：无头渲染器冻初值致灰默认失效 */
+.ntf-row:hover { background: var(--cc-hover); }
+.ntf-st { flex: none; display: grid; place-items: center; }
+.ntf-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ntf-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ntf-row.unread .ntf-t { color: var(--ink); font-weight: 500; }   /* 未读靠字色明暗，不靠背景块/彩色角标 */
+.ntf-row:not(.unread) .ntf-st .fg-dot { opacity: .5; }            /* 已读：状态点淡化 */
+.ntf-time { flex: none; align-self: flex-start; margin-top: 3px; font-size: var(--t-xs); color: var(--ink-3); }
+.ntf-row:hover .ntf-time { opacity: 0; }   /* hover 让位（保留占位、不重排） */
+/* ⋯：绝对贴右、不占位，hover 浮现于时间槽上方。opacity 即时切换、不入过渡（无头渲染器冻 opacity） */
+.ntf-more { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); opacity: 0; color: var(--ink-3); display: grid; place-items: center; }
+.ntf-more svg { display: block; }
+.ntf-row:hover .ntf-more { opacity: 1; }
+
+/* Needs you 胖行：唯一例外高度（容纳 prompt + 就地拍板）。行首 wait 橙点表达「等你」，标题灰默认。 */
+.ntf-fat { padding: 6px 8px; border-radius: var(--r-btn); transition: background var(--d-fast); }
+.ntf-fat-top { display: flex; align-items: center; gap: 9px; min-height: 24px; padding: 0 2px; cursor: pointer; }
+.ntf-fat-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); font-weight: 500; }
+.ntf-fat-top:hover .ntf-fat-title { color: var(--ink); }   /* 灰默认、hover 才黑（不全黑）；color 不入过渡——无头渲染器冻初值 */
+.ntf-fat-top .ntf-time { align-self: center; margin-top: 0; }
+.ntf-fat-top .ntf-chev { flex: none; margin-left: 0; }
+.ntf-fat.open .ntf-fat-top .ntf-chev { transform: rotate(90deg); }
+
+/* 内联拍板区（行内展开、不弹窗、不离侧栏）：中性浅底平铺卡（非 warn 彩盒，不报警色），本层管展开 + 内部排版 */
+.ntf-approve { display: none; margin-top: 6px; padding: 10px 12px; background: var(--cc-active); border-radius: var(--r-btn); }
+.ntf-fat.open .ntf-approve { display: block; }
+.ntf-prompt { font-size: var(--t-sm); color: var(--ink-2); line-height: 1.55; white-space: pre-wrap; margin: 0 0 8px; }
+.ntf-ddl { display: flex; align-items: center; gap: 5px; font-size: var(--t-xs); color: var(--warn); margin: 0 0 10px; }
+.ntf-ddl svg { display: block; }
+.ntf-acts { display: flex; flex-wrap: wrap; align-items: center; gap: var(--s2); }   /* 窄栏(240)放不下时 open 换行,批准/驳回 不挤压 */
+.ntf-btn { flex: none; height: 28px; padding: 0 14px; border: 1px solid var(--line); border-radius: var(--r-btn); background: var(--cc-win);
+  font: inherit; font-size: var(--t-sm); white-space: nowrap; color: var(--ink); cursor: pointer; transition: background var(--d-fast); }
+.ntf-btn:hover { background: var(--cc-hover); }
+.ntf-btn.go { font-weight: 500; background: var(--cc-active); border-color: transparent; }
+.ntf-open { margin-left: auto; font-size: var(--t-sm); white-space: nowrap; color: var(--ink-3); cursor: pointer; transition: color var(--d-fast); }
+.ntf-open:hover { color: var(--ink); }

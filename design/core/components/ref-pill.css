@@ -1,0 +1,8 @@
+/* Foryx demo — ref-pill 皮肤（镜 design-lab chat .ref-pill：细描边药丸 + 类型图标，可点提及）。
+   色走令牌：海岛活底 + 海岸线描边；图标降一级 ink；hover 抬到 cc-hover。仅有 data-ref 的才显手型。 */
+.fg-ref { display: inline-flex; align-items: center; gap: 4px; padding: 1px 9px 1px 7px; border-radius: var(--r-pill);
+  background: var(--cc-active); color: var(--ink); border: 1px solid var(--line); font-size: 13px; font-weight: 500;
+  vertical-align: 1px; transition: background .15s var(--ease-spring); }
+.fg-ref[data-ref] { cursor: pointer; }
+.fg-ref[data-ref]:hover { background: var(--cc-hover); }
+.fg-ref-ico { display: grid; place-items: center; color: var(--ink-2); }

@@ -1,0 +1,190 @@
+/* Foryx demo — 文档海洋海面样式（薄）。文档页 = 面包屑 + 标题 + WYSIWYG 正文 + 浮层内容皮 + 右岛内容皮。
+   浮层【框】（位置/阴影/spring）走组件 Floating；右岛【框】走组件 RightIsland；代码块【高亮色】走组件 CodeEditor（fg-ce-* 全局类）。
+   本文件只画：正文排版（markdown 全类型）+ 浮层【内容】皮（斜杠/工具条/AI/块菜单）+ 右岛【内容】皮（TOC/反链/信息）。
+   视觉宪法：① 内容区放宽外壳禁横线（分隔线/下划线/表格线可用）；② 正文不用灰填充块（代码/引用=白底描边或左竖线）；③ 行内码不学 Notion 的红；④ accent 只点正在发生；⑤ 动效走 --ease-spring。只读令牌、禁裸 hex。类名全 doc-/da- 专属。 */
+
+/* ===== 阅读列：单列纵向滚动，正文平铺在海上 ===== */
+.doc-scroll { flex: 1; min-height: 0; overflow-y: auto; position: relative; }
+.doc { position: relative; max-width: var(--w-content); margin: 0 auto; padding: 44px 24px 200px; }
+
+/* 文档头：面包屑(在树哪) + 标题 + 元信息，靠留白与正文分 */
+.doc-path { display: flex; align-items: center; gap: 5px; height: 24px; font-size: var(--t-xs); color: var(--ink-3); margin-bottom: 14px; }
+.doc-path .ico { display: grid; place-items: center; }
+.doc-seg { padding: 2px 6px; border-radius: var(--r-tag); color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast); }
+.doc-seg:hover { background: var(--cc-hover); color: var(--ink-2); }
+.doc-path .sep { opacity: .5; }
+.doc-path .cur { color: var(--ink-2); font-weight: 500; }
+.doc-title { font-size: var(--t-2xl); font-weight: 700; letter-spacing: -.02em; line-height: 1.2; color: var(--ink); margin: 0 0 8px; outline: none; }
+.doc-title:empty::before { content: "无标题"; color: var(--ink-3); }
+.doc-meta { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: var(--t-xs); color: var(--ink-3); margin-bottom: 26px; }
+.doc-meta .sep { opacity: .5; }
+.doc-meta .backref { padding: 1px 5px; border-radius: var(--r-tag); color: var(--ink-2); font-weight: 500; transition: background var(--d-fast), color var(--d-fast); }
+.doc-meta .backref:hover { background: var(--cc-hover); color: var(--ink); }
+.doc-tags { display: inline-flex; gap: 6px; }
+.doc-tag { display: inline-flex; align-items: center; gap: 4px; padding: 1px 8px; border-radius: var(--r-pill); border: 1px solid var(--line); color: var(--ink-2); }
+.doc-tag .ico { display: grid; place-items: center; color: var(--ink-3); }
+
+/* ===== WYSIWYG 正文：渲染态即编辑态。内容区放宽禁横线，但不用灰填充块、行内码不红 ===== */
+.doc-body { font-size: 14px; line-height: 1.7; color: var(--ink); outline: none; cursor: text; }
+.doc-body:empty::before { content: "开始写，或敲 / 唤起命令"; color: var(--ink-3); }
+.doc-body > :first-child { margin-top: 0; }
+.doc-body h2 { position: relative; font-size: var(--t-xl); font-weight: 600; letter-spacing: -.01em; color: var(--ink); margin: 26px 0 10px; }
+.doc-body h3 { font-size: var(--t-lg); font-weight: 600; color: var(--ink); margin: 20px 0 8px; }
+.doc-body h2::before { content: "#"; position: absolute; left: -22px; color: var(--ink-3); font-weight: 400; opacity: 0; transition: opacity var(--d-fast); }
+.doc-body h2:hover::before { opacity: .5; }
+.doc-body p { margin: 0 0 14px; }
+.doc-body p:last-child { margin-bottom: 0; }
+.doc-body b, .doc-body strong { font-weight: 600; }
+.doc-body em { font-style: italic; }
+.doc-body del { text-decoration: line-through; color: var(--ink-3); }
+.doc-body mark { background: var(--accent-soft); border-radius: 3px; padding: 0 3px; }
+.doc-body a { color: var(--ink); text-decoration: underline; text-decoration-color: var(--line-strong); text-underline-offset: 2px; transition: color var(--d-fast), text-decoration-color var(--d-fast); }
+.doc-body a:hover { color: var(--accent); text-decoration-color: var(--accent); }
+/* 行内代码：白底 + 细描边 + 中性等宽（绝不学 Notion 的红） */
+.doc-body code { font-family: var(--mono); font-size: .86em; padding: 1px 5px; border: 1px solid var(--line); border-radius: 5px; color: var(--ink); }
+
+/* 列表：圆点/数字 marker，靠缩进不画连接线 */
+.doc-body ul, .doc-body ol { margin: 0 0 14px; padding-left: 22px; }
+.doc-body li { margin: 3px 0; }
+.doc-body ul { list-style: none; }
+.doc-body ul > li { position: relative; }
+.doc-body ul > li::before { content: ""; position: absolute; left: -15px; top: .62em; width: 5px; height: 5px; border-radius: 50%; background: var(--ink-3); }
+.doc-body ul ul { margin: 3px 0 0; }
+.doc-body ul ul > li::before { background: none; border: 1px solid var(--ink-3); }
+.doc-body ol { list-style: none; counter-reset: ol; }
+.doc-body ol > li { counter-increment: ol; position: relative; }
+.doc-body ol > li::before { content: counter(ol) "."; position: absolute; left: -24px; width: 20px; text-align: right; font-family: var(--mono); font-size: .9em; color: var(--ink-3); }
+
+/* 任务清单：完成框中性近黑实底 + 白勾（非 accent——完成是事实、非「正在发生」） */
+.doc-task { list-style: none; padding-left: 1px; margin: 0 0 14px; }
+.doc-task li { display: flex; align-items: flex-start; gap: 9px; margin: 3px 0; }
+.doc-task .box { flex: none; width: 16px; height: 16px; margin-top: 2px; border-radius: 5px; border: 1px solid var(--line-strong); display: grid; place-items: center; color: transparent; transition: background .2s var(--ease-spring), border-color .2s; }
+.doc-task li.done .box { background: var(--ink); border-color: var(--ink); color: var(--ink-on-accent); }
+.doc-task li.done .t { color: var(--ink-3); text-decoration: line-through; }
+
+/* 引用：左竖线 + 灰字、白底无填充（学 Notion 经典引用、去灰块） */
+.doc-body blockquote { margin: 20px 0; padding: 2px 0 2px 16px; border-left: 3px solid var(--line-strong); color: var(--ink-2); }
+.doc-body blockquote p:last-child { margin-bottom: 0; }
+
+/* 提示块 Callout：白底 + 一圈描边 + 左图标（强调而不靠底色） */
+.doc-callout { display: flex; align-items: flex-start; gap: 10px; margin: 20px 0; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--r-card); }
+.doc-callout .ico { flex: none; margin-top: 1px; color: var(--ink-2); display: grid; place-items: center; }
+.doc-callout .c { flex: 1; color: var(--ink-2); }
+.doc-callout .c b { color: var(--ink); }
+
+/* 代码块：无边高亮文本；右上角语言名。高亮色由组件 CodeEditor 的全局 fg-ce-* 类提供。 */
+.doc-code { position: relative; margin: 20px 0; padding: 0; border: 0; border-radius: 0; overflow-x: auto; }
+.doc-code pre { margin: 0; font-family: var(--mono); font-size: var(--t-md); line-height: 1.7; color: var(--ink); white-space: pre; }
+.doc-code pre code { border: 0; padding: 0; font-size: inherit; }
+.doc-code .lang { position: absolute; top: 0; right: 0; font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0; }
+
+/* 表格：细线分隔（放宽禁线），无填充无斑马 */
+.doc-table { width: 100%; margin: 20px 0; border-collapse: collapse; font-size: var(--t-md); }
+.doc-table th { text-align: left; font-weight: 600; color: var(--ink-2); padding: 7px 12px 7px 0; border-bottom: 1.5px solid var(--line-strong); }
+.doc-table td { padding: 7px 12px 7px 0; color: var(--ink); border-bottom: 1px solid var(--line); }
+.doc-table tbody tr:last-child td { border-bottom: 0; }
+
+/* 分隔线：一条细线（内容区放宽禁线） */
+.doc-body hr { border: 0; height: 0; border-top: 1px solid var(--line); margin: 32px 0; }
+
+/* 图片：圆角裁切 + 说明；占位用虚线框 */
+.doc-imgph { display: flex; align-items: center; justify-content: center; height: 150px; margin: 20px 0 6px; border: 1px dashed var(--line-strong); border-radius: var(--r-card); color: var(--ink-3); font-size: var(--t-md); }
+.doc-cap { font-size: var(--t-xs); color: var(--ink-3); text-align: center; }
+
+/* WYSIWYG 光标（6px accent blink） */
+.doc-caret { display: inline-block; width: 6px; height: 1.05em; vertical-align: -3px; margin-left: 1px; border-radius: 1px; background: var(--accent); animation: docBlink 1s steps(2) infinite; }
+@keyframes docBlink { 0%,50% { opacity: 1; } 50.01%,100% { opacity: 0; } }
+/* markdown 即输即渲：块 spring 变形 */
+@keyframes docMorph { from { transform: scale(.97); opacity: .5; } to { transform: none; opacity: 1; } }
+.doc-morph { animation: docMorph .26s var(--ease-spring); }
+/* 选区流光（AI 改写：文字 background-clip） */
+.doc-flow { background: linear-gradient(105deg, var(--ink-3) 36%, var(--accent) 50%, var(--ink-3) 64%); background-size: 220% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent; animation: docFlow 1.5s linear infinite; }
+@keyframes docFlow { from { background-position: 130% 0; } to { background-position: -30% 0; } }
+
+/* ===== 主区头状态指示（进 Shell.headExtra；已保存中性 / AI 编辑中 accent 脉冲） ===== */
+.doc-status { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; font-size: var(--t-sm); color: var(--ink-3); white-space: nowrap; }
+.doc-status .ico { display: grid; place-items: center; }
+.doc-status.busy { color: var(--accent); }
+.doc-status .pulse { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: docPulse 1.4s ease infinite; }
+@keyframes docPulse { 0% { box-shadow: 0 0 0 0 var(--accent-soft); } 70% { box-shadow: 0 0 0 7px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+
+/* ===== 浮层【内容】皮：框(位置/阴影/spring)由组件 Floating 兜，这里只画内容外观 ===== */
+/* 选中工具条：点选格式化（不用记符号）+ AI */
+.doc-tb { display: inline-flex; align-items: center; gap: 2px; padding: 4px; background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-pill); }
+.doc-tb button { min-width: 28px; height: 28px; padding: 0 7px; border-radius: 7px; display: inline-flex; align-items: center; justify-content: center; gap: 5px; color: var(--ink-2); font-size: var(--t-md); transition: background var(--d-fast), color var(--d-fast); }
+.doc-tb button:hover { background: var(--cc-hover); color: var(--ink); }
+.doc-tb button.ai { color: var(--accent); font-weight: 600; }   /* AI 一等、唯一上色 */
+.doc-tb button b { font-weight: 700; } .doc-tb button i { font-style: italic; } .doc-tb button s { text-decoration: line-through; }
+.doc-tb .hl { background: var(--accent-soft); border-radius: 3px; padding: 0 3px; }
+.doc-tb .sep { width: 1px; align-self: stretch; margin: 5px 2px; background: var(--line); }
+
+/* AI 询问输入（选中→AI：给一句自然语言指令 + 快捷动作，对齐后端 :iterate） */
+.doc-ask { width: 320px; padding: 8px; background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-card); }
+.doc-ask .row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; }
+.doc-ask .row .ico { color: var(--accent); display: grid; place-items: center; }
+.doc-ask input { flex: 1; border: 0; outline: 0; background: none; font: inherit; font-size: 14px; color: var(--ink); }
+.doc-ask input::placeholder { color: var(--ink-3); }
+.doc-ask .quick { display: flex; flex-wrap: wrap; gap: 5px; padding: 7px 4px 2px; }
+.doc-ask .quick button { height: 26px; padding: 0 10px; border-radius: var(--r-pill); border: 1px solid var(--line); color: var(--ink-2); font-size: var(--t-xs); transition: background var(--d-fast), color var(--d-fast); }
+.doc-ask .quick button:hover { background: var(--cc-hover); color: var(--ink); }
+
+/* 斜杠命令窗：敲 / 弹出，所有「插入」收进一窗 */
+.doc-slash { width: 288px; max-height: 340px; overflow-y: auto; padding: 5px; background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-chip); }
+.doc-slash .grp { padding: 7px 8px 3px; font-size: var(--t-xs); font-weight: 600; color: var(--ink-3); }
+.doc-slash .grp:first-child { padding-top: 3px; }
+.doc-slash .item { display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 8px; border-radius: 7px; cursor: pointer; }
+.doc-slash .item.on { background: var(--cc-active); }
+.doc-slash .item .ic { width: 26px; height: 26px; flex: none; display: grid; place-items: center; border: 1px solid var(--line); border-radius: var(--r-tag); color: var(--ink-2); }
+.doc-slash .item .nm { flex: 1; font-size: var(--t-md); color: var(--ink); }
+.doc-slash .item .hint { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); }
+.doc-slash .empty { padding: 12px 10px; font-size: var(--t-md); color: var(--ink-3); }
+
+/* 块菜单（点 ⋮⋮） */
+.doc-bmenu { min-width: 168px; padding: 5px; background: var(--cc-side); border: 1px solid var(--line); border-radius: var(--r-chip); }
+.doc-bmenu button { display: flex; align-items: center; gap: 10px; width: 100%; height: 32px; padding: 0 8px; border-radius: 7px; color: var(--ink); font-size: var(--t-md); transition: background var(--d-fast); }
+.doc-bmenu button:hover { background: var(--cc-hover); }
+.doc-bmenu .ico { color: var(--ink-3); display: grid; place-items: center; }
+.doc-bmenu .danger, .doc-bmenu .danger .ico { color: var(--danger); }
+
+/* ===== 块左侧悬浮手柄：+ 在此后插入 · ⋮⋮ 拖拽重排 / 点开菜单（随块走、非浮层，绝对定位在 #doc 内） ===== */
+.doc-gut { position: absolute; z-index: 15; display: flex; align-items: center; gap: 0; opacity: 0; transition: opacity var(--d-fast); }
+.doc-gut.show { opacity: 1; }
+.doc-gut button { width: 20px; height: 24px; border-radius: var(--r-tag); display: grid; place-items: center; color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast); }
+.doc-gut button:hover { background: var(--cc-hover); color: var(--ink-2); }
+.doc-gut .grip { cursor: grab; }
+.doc-dragging { opacity: .45; }
+.doc-drop { position: absolute; z-index: 14; height: 2px; border-radius: 2px; background: var(--accent); pointer-events: none; }
+
+/* ===== 右岛【内容】皮：框由组件 RightIsland 兜，本块只画 body 内 大纲/反链/信息——轻、通透、产品味（无药丸 / 无黑粗字 / 无灰块；color 一律不入过渡，无头渲染器会冻初值） ===== */
+.da-sec { margin-bottom: 22px; }
+.da-sec:last-child { margin-bottom: 2px; }
+.da-h { display: flex; align-items: center; gap: 6px; padding: 0 10px 7px; font-size: var(--t-xs); font-weight: 600; letter-spacing: .02em; color: var(--ink-3); }
+.da-h-n { font-weight: 500; color: var(--ink-3); opacity: .6; }
+.da-empty { padding: 3px 10px; font-size: var(--t-sm); color: var(--ink-3); }
+
+/* 大纲：缩进列表；当前节仅以黑字标示（去蓝线/灰块——黑色足够） */
+.da-toc { display: flex; flex-direction: column; }
+.da-toc-a { display: block; padding: 5px 10px; border-radius: var(--r-btn);
+  font-size: var(--t-md); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; transition: background var(--d-fast); }
+.da-toc-a:hover { background: var(--cc-hover); color: var(--ink); }
+.da-toc-a.h3 { padding-left: 24px; font-size: var(--t-sm); color: var(--ink-3); }
+.da-toc-a.on { color: var(--ink); font-weight: 500; }
+
+/* 反向链接：轻行（链接图标 + 名 + 两行摘要），无药丸 / 无描边 / 无黑粗 */
+.da-back { display: flex; flex-direction: column; }
+.da-bl { display: flex; align-items: flex-start; gap: 8px; padding: 7px 10px; border-radius: var(--r-btn); cursor: pointer; transition: background var(--d-fast); }
+.da-bl:hover { background: var(--cc-hover); }
+.da-bl-ic { flex: none; margin-top: 1px; color: var(--ink-3); display: grid; place-items: center; }
+.da-bl-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.da-bl-name { font-size: var(--t-md); color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.da-bl:hover .da-bl-name { color: var(--ink); }
+.da-bl-snip { font-size: var(--t-xs); color: var(--ink-3); line-height: 1.5; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* 信息：紧凑定义行（窄标签 40 + 值灰不撑黑），发丝线分隔 */
+.da-info { padding: 0 10px; }
+.da-irow { display: flex; gap: 12px; align-items: baseline; padding: 7px 0; font-size: var(--t-sm); border-bottom: 1px solid var(--line); }
+.da-irow:last-child { border-bottom: 0; }
+.da-ik { flex: none; width: 40px; color: var(--ink-3); }
+.da-iv { flex: 1; min-width: 0; color: var(--ink-2); word-break: break-word; }
+.da-iv.mono { font-family: var(--mono); font-size: var(--t-xs); color: var(--ink-3); }

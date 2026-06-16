@@ -1,0 +1,32 @@
+/* Foryx demo — thin-table 皮肤（细线表格，documents 对齐）。
+   无填充、无斑马：表头一道粗线、行间一道细线、末行去线；右贴 0 padding、上对齐。
+   .nm 等子类（mono 名 · 灰类型 · 必填星 · 右对齐动作 · 可改值 · 掩码）由调用方在 cell HTML 里用。 */
+.fg-thin-table { width: 100%; border-collapse: collapse; font-size: var(--t-md); }
+.fg-thin-table th {
+  text-align: left; font-weight: 600; color: var(--ink-3); font-size: var(--t-xs);
+  padding: 0 var(--s3) 7px 0; border-bottom: 1.5px solid var(--line-strong); white-space: nowrap;
+}
+.fg-thin-table td {
+  padding: var(--s2) var(--s3) var(--s2) 0; color: var(--ink);
+  border-bottom: 1px solid var(--line); vertical-align: top;
+}
+.fg-thin-table tbody tr:last-child td { border-bottom: 0; }
+
+/* 可改格（{edit:true} 直挂 td；聚焦时令牌色描边） */
+.fg-thin-table td[contenteditable] { outline: none; border-radius: var(--s1); }
+.fg-thin-table td[contenteditable]:focus { box-shadow: 0 0 0 2px var(--accent-soft); }
+
+/* 调用方在 cell HTML 用的子类（mono 名 · 类型灰 · 必填星 · 可改值 · 掩码 · 动作 · 静默） */
+.fg-thin-table .nm { font-family: var(--mono); font-size: 12.5px; }
+.fg-thin-table .ty { font-family: var(--mono); font-size: var(--t-sm); color: var(--ink-3); }
+.fg-thin-table .req { color: var(--warn); font-weight: 700; margin-left: 3px; }
+.fg-thin-table .v { font-family: var(--mono); font-size: 12.5px; color: var(--ink); outline: none; border-radius: var(--s1); }
+.fg-thin-table .v:focus { box-shadow: 0 0 0 2px var(--accent-soft); }
+.fg-thin-table .v.mask { letter-spacing: 1.5px; color: var(--ink-3); }
+.fg-thin-table .muted { color: var(--ink-3); }
+.fg-thin-table .act { color: var(--ink-3); cursor: pointer; text-align: right; white-space: nowrap; transition: color var(--d-fast) var(--ease-spring); }
+.fg-thin-table .act:hover { color: var(--ink); }
+
+/* 可点行（调用方加 _cls:'clk'）：hover 提墨；点处理由调用方挂 Intent.select */
+.fg-thin-table tr.clk { cursor: pointer; }
+.fg-thin-table tr.clk:hover td { color: var(--ink); }
