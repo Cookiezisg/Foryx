@@ -20,6 +20,9 @@
     bell:    '<path d="M6.5 10a5.5 5.5 0 0111 0c0 4 1.5 5 1.5 5H5s1.5-1 1.5-5"/><path d="M10.5 19a1.7 1.7 0 003 0"/>',
     gear:    '<circle cx="12" cy="12" r="3"/><path d="M12 4v2.5M12 17.5V20M4 12h2.5M17.5 12H20M6.3 6.3l1.8 1.8M15.9 15.9l1.8 1.8M17.7 6.3l-1.8 1.8M8.1 15.9l-1.8 1.8"/>',
     chat:    '<path d="M5 5.5h14v9H9l-4 4z"/>',
+    play:    '<path d="M7.5 5.5l10 6.5-10 6.5z"/>',
+    panel:   '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M14 5v14"/>',
+    link:    '<path d="M10 14a3.5 3.5 0 005 0l3-3a3.5 3.5 0 00-5-5l-1 1"/><path d="M14 10a3.5 3.5 0 00-5 0l-3 3a3.5 3.5 0 005 5l1-1"/>',
   };
   window.icon = function (name, size, stroke) {
     size = size || 16; stroke = stroke || 1.7;

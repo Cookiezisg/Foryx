@@ -1,0 +1,8 @@
+/* Foryx 原语 — RightIsland 皮肤。白岛卡:头 + 可滚正文。 */
+.fy-island { display: flex; flex-direction: column; height: 100%; background: var(--island); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow-island); overflow: hidden; }
+.fy-island-head { flex: none; display: flex; align-items: center; gap: var(--gap); height: 44px; padding: 0 var(--sp-2) 0 var(--sp-3); border-bottom: 1px solid var(--line); }
+.fy-island-ico { display: grid; place-items: center; color: var(--ink-3); }
+.fy-island-title { flex: 1; min-width: 0; font-size: var(--t-body); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fy-island-x { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: var(--r-btn); color: var(--ink-3); transition: background var(--d-fast), color var(--d-fast); }
+.fy-island-x:hover { background: var(--island-3); color: var(--ink); }
+.fy-island-body { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-4); }

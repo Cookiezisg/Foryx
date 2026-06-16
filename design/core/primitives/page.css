@@ -1,0 +1,3 @@
+/* Foryx 原语 — Page 皮肤。唯一滚动区 + 居中内容列(--w-content)。 */
+.fy-page { flex: 1; min-height: 0; overflow-y: auto; }
+.fy-page-col { max-width: var(--w-content); margin: 0 auto; padding: var(--sp-6) var(--sp-6) var(--sp-12); }

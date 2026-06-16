@@ -1,0 +1,9 @@
+/* Foryx 原语 — OceanHeader 皮肤。面包屑 + 大标题 + meta 行 + 右动作。坐于海面(无卡),与正文段(白岛)分层。 */
+.fy-oh { padding-bottom: var(--sp-4); }
+.fy-oh-top { display: flex; align-items: center; gap: var(--sp-3); min-height: var(--ctl); }
+.fy-oh-crumb { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: var(--t-meta); color: var(--ink-3); overflow: hidden; white-space: nowrap; }
+.fy-oh-sep { color: var(--line-strong); }
+.fy-oh-actions { flex: none; display: flex; align-items: center; gap: var(--sp-2); }
+.fy-oh-title { font-size: var(--t-h2); font-weight: 600; line-height: var(--lh-tight); letter-spacing: -.01em; margin: 2px 0; }
+.fy-oh-meta { display: flex; align-items: center; gap: var(--sp-3); font-size: var(--t-meta); color: var(--ink-3); flex-wrap: wrap; }
+.fy-oh-meta .fy-badge { height: 20px; }
