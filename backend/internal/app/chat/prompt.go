@@ -28,8 +28,9 @@ const (
 		`Prefer the smallest change that works; say what you actually did, not what you intended. ` +
 		`When a step fails, surface the real error rather than papering over it.`
 
-	toolsSection = `Resident tools are always available. Other tools are listed below by name and one-line purpose only — ` +
+	toolsSection = `Resident tools are always available. Other tools are listed below as "name(required args): purpose" — ` +
 		`call search_tools with a short description of what you need to pull a tool's full definition before using it. ` +
+		`An arg name ending in Id wants that entity's id (an fn_/hd_/wf_/ag_/tr_… id), not its name — use the matching search_* tool to resolve a name → id first. ` +
 		`Each tool call self-reports a one-line summary and a danger level; you choose the right tool for the job.`
 
 	architectureRulesSection = `Capabilities are entities: anything reusable belongs to a function (stateless logic), a handler ` +
@@ -99,7 +100,11 @@ func (s *Service) toolsOverview() string {
 	b.WriteString(toolsSection)
 	b.WriteString("\n\nSearchable tools:")
 	for _, t := range overview {
-		fmt.Fprintf(&b, "\n  - %s: %s", t.Name, t.Description)
+		if len(t.Params) > 0 {
+			fmt.Fprintf(&b, "\n  - %s(%s): %s", t.Name, strings.Join(t.Params, ", "), t.Description)
+		} else {
+			fmt.Fprintf(&b, "\n  - %s: %s", t.Name, t.Description)
+		}
 	}
 	return b.String()
 }

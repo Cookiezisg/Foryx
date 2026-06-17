@@ -179,12 +179,16 @@ func TestToolset_All(t *testing.T) {
 func TestToolset_OverviewAndFindLazy(t *testing.T) {
 	ts := Toolset{
 		Resident: []Tool{fakeTool{name: "r1"}},
-		Lazy:     []Tool{fakeTool{name: "s1"}, fakeTool{name: "m1"}},
+		Lazy:     []Tool{fakeTool{name: "s1", params: `{"type":"object","required":["fooId"]}`}, fakeTool{name: "m1"}},
 	}
 	ov := ts.Overview()
-	// Overview = lazy tools' name + Description only (no Parameters).
+	// Overview = lazy tools' name + Description + required business-arg names (so the overview line
+	// reads name(args): purpose and the LLM uses the right keys without first search_tools-ing the schema).
 	if len(ov) != 2 || ov[0].Name != "s1" || ov[0].Description != "desc of s1" {
 		t.Fatalf("Overview = %+v, want lazy briefs (name+desc)", ov)
+	}
+	if len(ov[0].Params) != 1 || ov[0].Params[0] != "fooId" {
+		t.Errorf("Overview should surface required arg names; ov[0].Params = %+v, want [fooId]", ov[0].Params)
 	}
 	if ts.FindLazy("m1") == nil {
 		t.Errorf("FindLazy(m1) = nil, want the tool")
