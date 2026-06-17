@@ -2424,6 +2424,952 @@ window.REF_CATALOG = [
             }
           }
         ]
+      },
+      {
+        "name": "节点甘特 node-gantt",
+        "tag": "an-node-gantt",
+        "blurb": "单 flowrun 的逐节点甘特：每节点一行，时段条沿 run 内相对时间轴（atPct/wPct ∈[0,100]）铺。nodes 经 JS 属性注入（[{id,kind,label,status,atPct,wPct,iters?,parked?}]）；一眼看出谁慢（条长）·循环几轮（iters 多段 + ×N 徽）·在哪 parked（warn 虚框等待条）·谁未起（future 占位）。点行高亮并派 an-node-pick{id}。status→色：done 绿 / err 红 / parked warn / future 灰。",
+        "specimens": [
+          {
+            "label": "parked run（iters×N + parked 虚框 + future 占位）",
+            "span": true,
+            "tag": "an-node-gantt",
+            "props": {
+              "nodes": [
+                {
+                  "id": "on_pr_merged",
+                  "kind": "trigger",
+                  "label": "on_pr_merged",
+                  "status": "done",
+                  "atPct": 0,
+                  "wPct": 4
+                },
+                {
+                  "id": "run_tests",
+                  "kind": "action",
+                  "label": "run_tests",
+                  "status": "done",
+                  "iters": [
+                    {
+                      "atPct": 5,
+                      "wPct": 26
+                    },
+                    {
+                      "atPct": 40,
+                      "wPct": 28
+                    }
+                  ]
+                },
+                {
+                  "id": "branch_result",
+                  "kind": "control",
+                  "label": "branch_result",
+                  "status": "done",
+                  "iters": [
+                    {
+                      "atPct": 32,
+                      "wPct": 5
+                    },
+                    {
+                      "atPct": 69,
+                      "wPct": 5
+                    }
+                  ]
+                },
+                {
+                  "id": "approve_rollback",
+                  "kind": "approval",
+                  "label": "approve_rollback",
+                  "status": "parked",
+                  "atPct": 75,
+                  "wPct": 23,
+                  "parked": true
+                },
+                {
+                  "id": "do_rollback",
+                  "kind": "action",
+                  "label": "do_rollback",
+                  "status": "future",
+                  "atPct": 0,
+                  "wPct": 0
+                }
+              ]
+            }
+          },
+          {
+            "label": "failed run（err 红条 + retry 2 轮均 fail）",
+            "span": true,
+            "tag": "an-node-gantt",
+            "props": {
+              "nodes": [
+                {
+                  "id": "on_pr_merged",
+                  "kind": "trigger",
+                  "label": "on_pr_merged",
+                  "status": "done",
+                  "atPct": 0,
+                  "wPct": 6
+                },
+                {
+                  "id": "run_tests",
+                  "kind": "action",
+                  "label": "run_tests",
+                  "status": "err",
+                  "iters": [
+                    {
+                      "atPct": 7,
+                      "wPct": 30
+                    },
+                    {
+                      "atPct": 45,
+                      "wPct": 30
+                    }
+                  ]
+                },
+                {
+                  "id": "branch_result",
+                  "kind": "control",
+                  "label": "branch_result",
+                  "status": "future",
+                  "atPct": 0,
+                  "wPct": 0
+                }
+              ]
+            }
+          },
+          {
+            "label": "running run（agent 在途 done 长条 + 后继 future）",
+            "span": true,
+            "tag": "an-node-gantt",
+            "props": {
+              "nodes": [
+                {
+                  "id": "ticket_in",
+                  "kind": "trigger",
+                  "label": "ticket_in",
+                  "status": "done",
+                  "atPct": 0,
+                  "wPct": 8
+                },
+                {
+                  "id": "triage",
+                  "kind": "agent",
+                  "label": "triage",
+                  "status": "done",
+                  "atPct": 9,
+                  "wPct": 70
+                },
+                {
+                  "id": "severity",
+                  "kind": "control",
+                  "label": "severity",
+                  "status": "future",
+                  "atPct": 0,
+                  "wPct": 0
+                },
+                {
+                  "id": "notify",
+                  "kind": "action",
+                  "label": "notify",
+                  "status": "future",
+                  "atPct": 0,
+                  "wPct": 0
+                }
+              ]
+            }
+          },
+          {
+            "label": "completed run（全 done 满轴）",
+            "span": true,
+            "tag": "an-node-gantt",
+            "props": {
+              "nodes": [
+                {
+                  "id": "cron",
+                  "kind": "trigger",
+                  "label": "cron",
+                  "status": "done",
+                  "atPct": 0,
+                  "wPct": 4
+                },
+                {
+                  "id": "extract",
+                  "kind": "action",
+                  "label": "extract",
+                  "status": "done",
+                  "atPct": 5,
+                  "wPct": 55
+                },
+                {
+                  "id": "load",
+                  "kind": "action",
+                  "label": "load",
+                  "status": "done",
+                  "atPct": 61,
+                  "wPct": 38
+                }
+              ]
+            }
+          },
+          {
+            "label": "空（nodes=[] → 无行）",
+            "span": true,
+            "tag": "an-node-gantt",
+            "props": {
+              "nodes": []
+            }
+          }
+        ]
+      },
+      {
+        "name": "运行看板 run-board",
+        "tag": "an-run-board",
+        "blurb": "单 workflow 运行看板：左列每次 run（trigger 多次 → 多条 flowrun，状态点 + id/trigger·when + ↻replay 徽），右栏内嵌 an-node-gantt 随选中 run 同步逐节点甘特；runs 经 JS 属性注入，run.selected 定初选，点行派 an-run-pick{id}。",
+        "specimens": [
+          {
+            "label": "default · parked 选中（左列三态混排）",
+            "span": true,
+            "tag": "an-run-board",
+            "props": {
+              "runs": [
+                {
+                  "id": "fr_b7e0c431",
+                  "status": "parked",
+                  "trigger": "webhook · pr #1287",
+                  "when": "12:09 · 在途",
+                  "replay": 0,
+                  "selected": true,
+                  "gantt": [
+                    {
+                      "id": "on_pr_merged",
+                      "kind": "trigger",
+                      "label": "on_pr_merged",
+                      "status": "done",
+                      "atPct": 0,
+                      "wPct": 4
+                    },
+                    {
+                      "id": "run_tests",
+                      "kind": "action",
+                      "label": "run_tests",
+                      "status": "done",
+                      "iters": [
+                        {
+                          "atPct": 5,
+                          "wPct": 26
+                        },
+                        {
+                          "atPct": 40,
+                          "wPct": 28
+                        }
+                      ]
+                    },
+                    {
+                      "id": "branch_result",
+                      "kind": "control",
+                      "label": "branch_result",
+                      "status": "done",
+                      "iters": [
+                        {
+                          "atPct": 32,
+                          "wPct": 5
+                        },
+                        {
+                          "atPct": 69,
+                          "wPct": 5
+                        }
+                      ]
+                    },
+                    {
+                      "id": "approve_rollback",
+                      "kind": "approval",
+                      "label": "approve_rollback",
+                      "status": "parked",
+                      "atPct": 75,
+                      "wPct": 23,
+                      "parked": true
+                    },
+                    {
+                      "id": "do_rollback",
+                      "kind": "action",
+                      "label": "do_rollback",
+                      "status": "future",
+                      "atPct": 0,
+                      "wPct": 0
+                    }
+                  ]
+                },
+                {
+                  "id": "fr_a1c89f02",
+                  "status": "completed",
+                  "trigger": "webhook · pr #1284",
+                  "when": "10:30",
+                  "replay": 0,
+                  "gantt": [
+                    {
+                      "id": "on_pr_merged",
+                      "kind": "trigger",
+                      "label": "on_pr_merged",
+                      "status": "done",
+                      "atPct": 0,
+                      "wPct": 6
+                    },
+                    {
+                      "id": "run_tests",
+                      "kind": "action",
+                      "label": "run_tests",
+                      "status": "done",
+                      "atPct": 7,
+                      "wPct": 34
+                    },
+                    {
+                      "id": "branch_result",
+                      "kind": "control",
+                      "label": "branch_result",
+                      "status": "done",
+                      "atPct": 42,
+                      "wPct": 6
+                    },
+                    {
+                      "id": "approve_rollback",
+                      "kind": "approval",
+                      "label": "approve_rollback",
+                      "status": "done",
+                      "atPct": 49,
+                      "wPct": 30
+                    },
+                    {
+                      "id": "do_rollback",
+                      "kind": "action",
+                      "label": "do_rollback",
+                      "status": "done",
+                      "atPct": 80,
+                      "wPct": 18
+                    }
+                  ]
+                },
+                {
+                  "id": "fr_c3d471a8",
+                  "status": "failed",
+                  "trigger": "webhook · pr #1279",
+                  "when": "08:15",
+                  "replay": 1,
+                  "gantt": [
+                    {
+                      "id": "on_pr_merged",
+                      "kind": "trigger",
+                      "label": "on_pr_merged",
+                      "status": "done",
+                      "atPct": 0,
+                      "wPct": 6
+                    },
+                    {
+                      "id": "run_tests",
+                      "kind": "action",
+                      "label": "run_tests",
+                      "status": "err",
+                      "iters": [
+                        {
+                          "atPct": 7,
+                          "wPct": 30
+                        },
+                        {
+                          "atPct": 45,
+                          "wPct": 30
+                        }
+                      ]
+                    },
+                    {
+                      "id": "branch_result",
+                      "kind": "control",
+                      "label": "branch_result",
+                      "status": "future",
+                      "atPct": 0,
+                      "wPct": 0
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "label": "running 选中 · agent 长条（support_triage）",
+            "span": true,
+            "tag": "an-run-board",
+            "props": {
+              "runs": [
+                {
+                  "id": "fr_9a40e1d7",
+                  "status": "running",
+                  "trigger": "webhook · ticket #4821",
+                  "when": "12:18 · 在途",
+                  "replay": 0,
+                  "selected": true,
+                  "gantt": [
+                    {
+                      "id": "ticket_in",
+                      "kind": "trigger",
+                      "label": "ticket_in",
+                      "status": "done",
+                      "atPct": 0,
+                      "wPct": 8
+                    },
+                    {
+                      "id": "triage",
+                      "kind": "agent",
+                      "label": "triage",
+                      "status": "done",
+                      "atPct": 9,
+                      "wPct": 70
+                    },
+                    {
+                      "id": "severity",
+                      "kind": "control",
+                      "label": "severity",
+                      "status": "future",
+                      "atPct": 0,
+                      "wPct": 0
+                    },
+                    {
+                      "id": "notify",
+                      "kind": "action",
+                      "label": "notify",
+                      "status": "future",
+                      "atPct": 0,
+                      "wPct": 0
+                    }
+                  ]
+                },
+                {
+                  "id": "fr_2f7a0931",
+                  "status": "completed",
+                  "trigger": "webhook · ticket #4790",
+                  "when": "09:20",
+                  "replay": 0,
+                  "gantt": [
+                    {
+                      "id": "ticket_in",
+                      "kind": "trigger",
+                      "label": "ticket_in",
+                      "status": "done",
+                      "atPct": 0,
+                      "wPct": 6
+                    },
+                    {
+                      "id": "triage",
+                      "kind": "agent",
+                      "label": "triage",
+                      "status": "done",
+                      "atPct": 7,
+                      "wPct": 60
+                    },
+                    {
+                      "id": "severity",
+                      "kind": "control",
+                      "label": "severity",
+                      "status": "done",
+                      "atPct": 68,
+                      "wPct": 6
+                    },
+                    {
+                      "id": "notify",
+                      "kind": "action",
+                      "label": "notify",
+                      "status": "done",
+                      "atPct": 75,
+                      "wPct": 24
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "label": "failed 选中 · ↻replay 徽（无 selected → 首条兜底）",
+            "span": true,
+            "tag": "an-run-board",
+            "props": {
+              "runs": [
+                {
+                  "id": "fr_c3d471a8",
+                  "status": "failed",
+                  "trigger": "webhook · pr #1279",
+                  "when": "08:15",
+                  "replay": 1,
+                  "gantt": [
+                    {
+                      "id": "on_pr_merged",
+                      "kind": "trigger",
+                      "label": "on_pr_merged",
+                      "status": "done",
+                      "atPct": 0,
+                      "wPct": 6
+                    },
+                    {
+                      "id": "run_tests",
+                      "kind": "action",
+                      "label": "run_tests",
+                      "status": "err",
+                      "iters": [
+                        {
+                          "atPct": 7,
+                          "wPct": 30
+                        },
+                        {
+                          "atPct": 45,
+                          "wPct": 30
+                        }
+                      ]
+                    },
+                    {
+                      "id": "branch_result",
+                      "kind": "control",
+                      "label": "branch_result",
+                      "status": "future",
+                      "atPct": 0,
+                      "wPct": 0
+                    }
+                  ]
+                },
+                {
+                  "id": "fr_5e80b21c",
+                  "status": "completed",
+                  "trigger": "cron · 02:00",
+                  "when": "02:00",
+                  "replay": 0,
+                  "gantt": [
+                    {
+                      "id": "cron",
+                      "kind": "trigger",
+                      "label": "cron",
+                      "status": "done",
+                      "atPct": 0,
+                      "wPct": 4
+                    },
+                    {
+                      "id": "extract",
+                      "kind": "action",
+                      "label": "extract",
+                      "status": "done",
+                      "atPct": 5,
+                      "wPct": 55
+                    },
+                    {
+                      "id": "load",
+                      "kind": "action",
+                      "label": "load",
+                      "status": "done",
+                      "atPct": 61,
+                      "wPct": 38
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "label": "单 run · 全 done（最小看板）",
+            "span": true,
+            "tag": "an-run-board",
+            "props": {
+              "runs": [
+                {
+                  "id": "fr_5e80b21c",
+                  "status": "completed",
+                  "trigger": "cron · 02:00",
+                  "when": "02:00",
+                  "replay": 0,
+                  "selected": true,
+                  "gantt": [
+                    {
+                      "id": "cron",
+                      "kind": "trigger",
+                      "label": "cron",
+                      "status": "done",
+                      "atPct": 0,
+                      "wPct": 4
+                    },
+                    {
+                      "id": "extract",
+                      "kind": "action",
+                      "label": "extract",
+                      "status": "done",
+                      "atPct": 5,
+                      "wPct": 55
+                    },
+                    {
+                      "id": "load",
+                      "kind": "action",
+                      "label": "load",
+                      "status": "done",
+                      "atPct": 61,
+                      "wPct": 38
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "cat": "文档 Documents",
+    "icon": "doc",
+    "items": [
+      {
+        "name": "块编辑器 doc-editor",
+        "tag": "an-doc-editor",
+        "blurb": "🪂 Notion 式块编辑器（全 demo 唯一自画 contenteditable 逃生舱）：blocks 经 JS 属性注入一次渲富文本（h1/h2/h3 · p[spans 含 @ref] · bullet · todo · quote · code · callout · divider），之后编辑活在 DOM。三能力：斜杠「/」开块型菜单 · 「@」边打边滤插 an-ref-pill · 悬停 pill 浮信息卡。mentions 走 JS 属性喂 @ picker / 悬卡；左槽 ＋ 手柄插块。",
+        "specimens": [
+          {
+            "label": "全块型 + @ref + mentions 悬卡",
+            "span": true,
+            "tag": "an-doc-editor",
+            "props": {
+              "mentions": [
+                {
+                  "kind": "function",
+                  "id": "fn_5e1a9c4d",
+                  "label": "fetch_article",
+                  "desc": "抓取 URL 正文"
+                },
+                {
+                  "kind": "agent",
+                  "id": "ag_91c3de07",
+                  "label": "triage_agent",
+                  "desc": "诊断失败执行"
+                },
+                {
+                  "kind": "workflow",
+                  "id": "wf_9f2a7c1b",
+                  "label": "pr_merge_flow",
+                  "desc": "PR 合并后跑测试 + 审批回滚"
+                },
+                {
+                  "kind": "approval",
+                  "id": "apf_release",
+                  "label": "approve_rollback",
+                  "desc": "回滚审批门"
+                },
+                {
+                  "kind": "doc",
+                  "id": "doc_durable",
+                  "label": "Durable 执行设计",
+                  "desc": "引擎设计文档"
+                },
+                {
+                  "kind": "trigger",
+                  "id": "trg_3a1f",
+                  "label": "webhook · pr",
+                  "desc": "监听 GitHub PR webhook"
+                }
+              ],
+              "blocks": [
+                {
+                  "type": "h2",
+                  "text": "背景"
+                },
+                {
+                  "type": "p",
+                  "spans": [
+                    {
+                      "t": "团队现在靠人肉串起"
+                    },
+                    {
+                      "ref": {
+                        "kind": "function",
+                        "id": "fn_5e1a9c4d",
+                        "label": "fetch_article"
+                      }
+                    },
+                    {
+                      "t": " 抓取 → "
+                    },
+                    {
+                      "ref": {
+                        "kind": "agent",
+                        "id": "ag_91c3de07",
+                        "label": "triage_agent"
+                      }
+                    },
+                    {
+                      "t": " 诊断 → 人工审批回滚，链路脆且不可重放。本文定义把它编排成一条 durable workflow。"
+                    }
+                  ]
+                },
+                {
+                  "type": "h2",
+                  "text": "目标"
+                },
+                {
+                  "type": "bullet",
+                  "text": "节点结果记忆化：崩溃后从断点续跑，绝不重跑已完成节点。"
+                },
+                {
+                  "type": "bullet",
+                  "text": "失败分支挂人工审批门，决策 first-wins、支持超时自动驳回。"
+                },
+                {
+                  "type": "code",
+                  "lang": "cel",
+                  "text": "branch_result.exitCode != 0 && payload.branch == \"main\""
+                },
+                {
+                  "type": "quote",
+                  "text": "Durable 为魂——节点记忆化 + 解释器幂等重走，非事件溯源。"
+                },
+                {
+                  "type": "divider"
+                },
+                {
+                  "type": "p",
+                  "spans": [
+                    {
+                      "t": "相关："
+                    },
+                    {
+                      "ref": {
+                        "kind": "doc",
+                        "id": "doc_durable",
+                        "label": "Durable 执行设计"
+                      }
+                    },
+                    {
+                      "t": " · "
+                    },
+                    {
+                      "ref": {
+                        "kind": "trigger",
+                        "id": "trg_3a1f",
+                        "label": "webhook · pr"
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "label": "待办 todo（checked 勾/空）",
+            "span": true,
+            "tag": "an-doc-editor",
+            "props": {
+              "blocks": [
+                {
+                  "type": "h2",
+                  "text": "待办"
+                },
+                {
+                  "type": "todo",
+                  "checked": true,
+                  "text": "图校验：全节点从 trigger 可达、回边只出自 control/approval"
+                },
+                {
+                  "type": "todo",
+                  "checked": true,
+                  "text": "pin 闭包：跑前冻结引用实体的 active 版本"
+                },
+                {
+                  "type": "todo",
+                  "checked": false,
+                  "text": "审批超时 timer（5s tick 扫 parked 行）"
+                },
+                {
+                  "type": "todo",
+                  "checked": false,
+                  "text": "前端 scheduler 面：执行时间线 + 运行图 + 节点调试"
+                }
+              ]
+            }
+          },
+          {
+            "label": "提示条 callout（info / warn · 含 <b>）",
+            "span": true,
+            "tag": "an-doc-editor",
+            "props": {
+              "blocks": [
+                {
+                  "type": "callout",
+                  "tone": "info",
+                  "html": "设计原则 #2 的落点：<b>节点结果记忆化 + 解释器幂等重走</b>（非事件溯源）。"
+                },
+                {
+                  "type": "h3",
+                  "text": "两张表讲完所有状态"
+                },
+                {
+                  "type": "bullet",
+                  "text": "flowruns（run 头）= 冻结拓扑 + 冻结引用版本（pinned_refs）+ 状态。"
+                },
+                {
+                  "type": "bullet",
+                  "text": "flowrun_nodes（★真相表）= 每行一个 (节点, 轮次) 的记忆化 result；UNIQUE(flowrun_id,node_id,iteration) = record-once。"
+                },
+                {
+                  "type": "callout",
+                  "tone": "warn",
+                  "html": "结论：现有 agent 平台多是 <b>SaaS + 云编排</b>，本地优先 + durable 是差异点。"
+                }
+              ]
+            }
+          },
+          {
+            "label": "代码块 code（lang 标签）",
+            "span": true,
+            "tag": "an-doc-editor",
+            "props": {
+              "blocks": [
+                {
+                  "type": "h3",
+                  "text": "引擎是一个幂等函数 Advance(runID)"
+                },
+                {
+                  "type": "p",
+                  "spans": [
+                    {
+                      "t": "读 frn 行 + 冻结图 → 算 ready (节点,轮次) → 跑/求值 → 写行 → 重复。崩溃 = 再调一遍：completed 行被「抄」（record-once 拒绝重写），绝不重跑。"
+                    }
+                  ]
+                },
+                {
+                  "type": "code",
+                  "lang": "text",
+                  "text": "节点行只写终态（completed/failed/parked）\nparked 是唯一非终态：审批挂起、派生审批收件箱"
+                }
+              ]
+            }
+          },
+          {
+            "label": "空编辑器（聚焦空块显占位提示，可 / @ 起手）",
+            "span": true,
+            "tag": "an-doc-editor",
+            "props": {
+              "mentions": [
+                {
+                  "kind": "function",
+                  "id": "fn_5e1a9c4d",
+                  "label": "fetch_article",
+                  "desc": "抓取 URL 正文"
+                },
+                {
+                  "kind": "workflow",
+                  "id": "wf_9f2a7c1b",
+                  "label": "pr_merge_flow",
+                  "desc": "PR 合并后跑测试 + 审批回滚"
+                }
+              ],
+              "blocks": [
+                {
+                  "type": "p",
+                  "text": ""
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "文档大纲 outline",
+        "tag": "an-outline",
+        "blurb": "文档大纲 / 目录（ToC）：左导引线 + 按 level 缩进的可点标题，active 节叠 accent 短条高亮；items（[{text,level}]，level∈2/3）/ active（当前节索引）走 JS 属性，点条目派 an-outline-pick{index}（消费方滚到对应标题）。",
+        "specimens": [
+          {
+            "label": "items + active=0（PRD 大纲）",
+            "tag": "an-outline",
+            "props": {
+              "active": 0,
+              "items": [
+                {
+                  "level": 2,
+                  "text": "背景"
+                },
+                {
+                  "level": 2,
+                  "text": "目标"
+                },
+                {
+                  "level": 2,
+                  "text": "核心编排"
+                },
+                {
+                  "level": 2,
+                  "text": "待办"
+                }
+              ]
+            }
+          },
+          {
+            "label": "active=1（高亮中段）",
+            "tag": "an-outline",
+            "props": {
+              "active": 1,
+              "items": [
+                {
+                  "level": 2,
+                  "text": "两张表讲完所有状态"
+                },
+                {
+                  "level": 2,
+                  "text": "引擎是一个幂等函数 Advance(runID)"
+                }
+              ]
+            }
+          },
+          {
+            "label": "level=3 嵌套缩进",
+            "tag": "an-outline",
+            "props": {
+              "active": 2,
+              "items": [
+                {
+                  "level": 2,
+                  "text": "H1 · 本地优先 v0.3"
+                },
+                {
+                  "level": 3,
+                  "text": "后端全实体 + durable 引擎"
+                },
+                {
+                  "level": 3,
+                  "text": "前端设计系统 + 能力画廊"
+                },
+                {
+                  "level": 2,
+                  "text": "H2 · 协作与可观测"
+                }
+              ]
+            }
+          },
+          {
+            "label": "无 active（无高亮）",
+            "tag": "an-outline",
+            "props": {
+              "items": [
+                {
+                  "level": 2,
+                  "text": "对比维度"
+                },
+                {
+                  "level": 3,
+                  "text": "执行模型"
+                },
+                {
+                  "level": 3,
+                  "text": "部署形态"
+                }
+              ]
+            }
+          },
+          {
+            "label": "empty（暂无标题）",
+            "tag": "an-outline",
+            "props": {
+              "items": []
+            }
+          }
+        ]
       }
     ]
   },
