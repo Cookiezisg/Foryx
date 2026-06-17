@@ -11,16 +11,6 @@ window.FEATURE.documents = Object.assign(window.FEATURE.documents || {}, {
       kids.flat().forEach((c) => { if (c == null) return; n.append(c.nodeType ? c : document.createTextNode(String(c))); });
       return n;
     };
-    // 页属性条皮肤（Notion 式：标题下一行 状态徽 + name/value；light-DOM 一次性注入，token-only）
-    if (!document.getElementById("an-doc-prop-style")) {
-      const s = document.createElement("style"); s.id = "an-doc-prop-style";
-      s.textContent = `
-        .doc-prop { display: inline-flex; align-items: baseline; gap: var(--gap-tight); }
-        .doc-prop .pk { color: var(--ink-3); }
-        .doc-prop .pv { color: var(--ink-2); }
-      `;
-      document.head.appendChild(s);
-    }
     const DOCS = window.DOCS || {};
     const treeLabel = (id) => { let f = null; (function walk(ns) { (ns || []).forEach((n) => { if (n.id === id) f = n.label; if (n.children) walk(n.children); }); })(window.DOC_TREE || []); return f; };
     const stub = (id) => { const t = treeLabel(id) || id; return { id, title: t, path: "/" + t, blocks: [{ type: "callout", tone: "info", text: "这篇文档还没有正文（demo 仅核心文档有内容）。按 / 选块、@ 提及开始写。" }], backlinks: [], outlinks: [], outline: [], meta: [["path", "/" + t], ["状态", "空文档"]], history: [] }; };
@@ -49,10 +39,10 @@ window.FEATURE.documents = Object.assign(window.FEATURE.documents || {}, {
       const segs = (D.path || "").split("/").filter(Boolean);
       page.innerHTML = "";
       const oh = el("an-ocean-header", { crumb: "Documents | " + segs.slice(0, -1).join(" | "), title: D.title || "未命名", editable: true });
-      // 页属性条 → 标题下的 meta 槽（状态走 an-badge，其余走 name/value）——非正文、不再混进 markdown 块
+      // 页属性条 → 标题下的 meta 槽，全 an-badge（状态=tone+dot，其余=neutral「name value」）——非正文、不混进 markdown 块、零自画
       (D.props || []).forEach((p) => {
         if (p.badge != null) oh.append(el("an-badge", { slot: "meta", tone: p.tone || "neutral", dot: p.dot }, p.badge));
-        else oh.append(el("span", { slot: "meta", class: "doc-prop" }, el("span", { class: "pk" }, p.name), el("span", { class: "pv" }, p.value)));
+        else oh.append(el("an-badge", { slot: "meta" }, p.name + " " + p.value));
       });
       page.append(oh);
       const editor = el("an-doc-editor");
