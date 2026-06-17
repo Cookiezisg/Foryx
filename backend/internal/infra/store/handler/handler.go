@@ -376,18 +376,21 @@ func (s *Store) CreateWithVersion(ctx context.Context, e *handlerdomain.Handler,
 //
 // SaveVersionAndActivate 在单事务内插入新版本并移动 active 指针：edit 要么完整生效、
 // 要么完全不生效——不留孤儿版本 + 旧指针。
-func (s *Store) SaveVersionAndActivate(ctx context.Context, v *handlerdomain.Version, entityID string) error {
+func (s *Store) SaveVersionAndActivate(ctx context.Context, v *handlerdomain.Version, h *handlerdomain.Handler) error {
 	return s.db.Transaction(ctx, func(tx *ormpkg.DB) error {
 		if err := ormpkg.For[handlerdomain.Version](tx, "handler_versions").Save(ctx, v); err != nil {
 			return fmt.Errorf("handlerstore.SaveVersionAndActivate: version: %w", err)
 		}
-		n, err := ormpkg.For[handlerdomain.Handler](tx, "handlers").
-			WhereEq("id", entityID).Update(ctx, "active_version_id", v.ID)
-		if err != nil {
-			return fmt.Errorf("handlerstore.SaveVersionAndActivate: pointer: %w", err)
-		}
-		if n == 0 {
-			return handlerdomain.ErrNotFound
+		// Persist the row (active pointer AND meta) in the same tx: a set_meta op carried by the
+		// edit must land too, else the handler keeps its old name/description while a new version
+		// is active — the edit silently loses the rename. h was just read by the caller, so Save
+		// upserts the existing row.
+		//
+		// 同事务持久化整行（active 指针 + meta）：edit 带的 set_meta 也必须落，否则 handler 保留旧名/旧述
+		// 而新版本已 active——edit 静默丢了改名。h 是调用方刚读出的，Save 对已存在行做 upsert。
+		h.ActiveVersionID = v.ID
+		if err := ormpkg.For[handlerdomain.Handler](tx, "handlers").Save(ctx, h); err != nil {
+			return fmt.Errorf("handlerstore.SaveVersionAndActivate: handler: %w", err)
 		}
 		return nil
 	})

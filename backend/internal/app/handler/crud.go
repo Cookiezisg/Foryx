@@ -203,7 +203,12 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*handlerdomain.Versio
 	if convID, ok := reqctxpkg.GetConversationID(ctx); ok {
 		v.BuiltInConversationID = &convID
 	}
-	if err := s.repo.SaveVersionAndActivate(ctx, v, in.ID); err != nil {
+	// Carry the draft's meta (a set_meta op in the edit) onto the handler row, persisted with the
+	// version+pointer in one tx — otherwise an edit-time rename/redescribe is silently dropped.
+	//
+	// 把 draft 的 meta（edit 里的 set_meta）带回 handler 行，与版本+指针同事务落——否则 edit 改名/改述被静默丢。
+	h.Name, h.Description, h.Tags = draft.Name, draft.Description, draft.Tags
+	if err := s.repo.SaveVersionAndActivate(ctx, v, h); err != nil {
 		return nil, fmt.Errorf("handlerapp.Edit: %w", err)
 	}
 	if err := s.repo.TrimOldestVersions(ctx, in.ID, handlerdomain.VersionCap); err != nil {

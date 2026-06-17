@@ -64,11 +64,13 @@ testend/loop/turn.sh cv_xxx "<你的下一句>"
 
 **③ 判 · 整段 + 后端 ground-truth**（回复说的不算，查后端真相）
 ```bash
-B=$(jq -r .baseURL /tmp/anselm_selfiter/serve.json); W=$(jq -r .workspaceId /tmp/anselm_selfiter/serve.json)
-curl -s "$B/api/v1/functions"     -H "X-Anselm-Workspace-ID: $W" | jq   # 实体真建了没 / 版本对没
-curl -s "$B/api/v1/flowruns/<id>" -H "X-Anselm-Workspace-ID: $W" | jq   # flowrun 真 advance 没 / 恢复没
+B=$(jq -r .baseURL /tmp/anselm_selfiter/serve.json); W=$(jq -r .workspaceId /tmp/anselm_selfiter/serve.json); H="X-Anselm-Workspace-ID: $W"
+curl -s "$B/api/v1/functions"      -H "$H" | jq '.data'                                              # 实体真建了没
+curl -s "$B/api/v1/functions/<id>" -H "$H" | jq '.data | {name,description,tags,activeVersion:.activeVersion.version}'  # 名/meta/版本真对没
+curl -s "$B/api/v1/flowruns/<id>"  -H "$H" | jq '.data'                                              # flowrun 真 advance / 恢复没
 ```
-你对整段轨迹按 RUBRIC 出判词 + finding。
+> **⚠️ N1 envelope：真相在 `.data`，先 unwrap**（忘了就全 null，会错判）。
+你对整段轨迹按 RUBRIC 出判词 + finding。**F6 就是这步逮到的**：agent 说改了名，`.data.name` 没变。
 
 **④ 回归**：多轮里你的用户各轮消息**脚本化**进一个 Go test（用户侧固定、agent 侧真模型），`testend/golden/selfiter_*_test.go`，`EVALS=1 … go test … ./golden/...` 后台跑；结构性 finding 优先转**零 token 断言**。
 

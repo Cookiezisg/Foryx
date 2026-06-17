@@ -38,8 +38,8 @@ type Repository interface {
 	ListAllHandlers(ctx context.Context) ([]*Handler, error)
 	DeleteHandler(ctx context.Context, id string) error // soft-delete
 	SetActiveVersion(ctx context.Context, handlerID, versionID string) error
-	CreateWithVersion(ctx context.Context, e *Handler, v *Version) error           // create + v1, one tx
-	SaveVersionAndActivate(ctx context.Context, v *Version, entityID string) error // new version + pointer move, one tx
+	CreateWithVersion(ctx context.Context, e *Handler, v *Version) error      // create + v1, one tx
+	SaveVersionAndActivate(ctx context.Context, v *Version, h *Handler) error // new version + pointer move + row meta, one tx
 
 	// --- encrypted config (init-args values) ---
 

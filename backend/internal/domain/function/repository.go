@@ -45,8 +45,8 @@ type Repository interface {
 	ListAllFunctions(ctx context.Context) ([]*Function, error)
 	DeleteFunction(ctx context.Context, id string) error // soft-delete (tombstone)
 	SetActiveVersion(ctx context.Context, functionID, versionID string) error
-	CreateWithVersion(ctx context.Context, e *Function, v *Version) error          // create + v1, one tx
-	SaveVersionAndActivate(ctx context.Context, v *Version, entityID string) error // new version + pointer move, one tx
+	CreateWithVersion(ctx context.Context, e *Function, v *Version) error      // create + v1, one tx
+	SaveVersionAndActivate(ctx context.Context, v *Version, f *Function) error // new version + pointer move + row meta, one tx
 
 	// --- versions ---
 
