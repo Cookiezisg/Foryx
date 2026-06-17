@@ -63,7 +63,7 @@ type GetFunction struct{ svc *functionapp.Service }
 func (t *GetFunction) Name() string { return "get_function" }
 
 func (t *GetFunction) Description() string {
-	return "Get one function with its active version (code, parameters, return schema, dependencies, env status)."
+	return "Get one function by its functionId (an fn_ id — use search_function first to resolve a name → id). Returns its active version: code, parameters, return schema, dependencies, env status."
 }
 
 func (t *GetFunction) Parameters() json.RawMessage {

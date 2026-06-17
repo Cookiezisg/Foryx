@@ -164,9 +164,9 @@
         font-variant-numeric: tabular-nums; text-align: right;
       }
       :host([mono]) .v { font-family: var(--mono); }
-      /* 过长值：转多行左对齐换行（自检命中 .row.w 或全件 [wrap]）——在 1fr 列内消化，绝不溢出/重叠 key */
+      /* 过长值：转多行换行（自检命中 .row.w 或全件 [wrap]）——在 1fr 列内消化，绝不溢出/重叠 key；保持右贴边（两端对齐：key 左、value 右） */
       :host([wrap]) .row, .row.w { align-items: start; }
-      :host([wrap]) .v, .row.w .v { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; text-align: left; }
+      :host([wrap]) .v, .row.w .v { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; text-align: right; }
       /* kv 行编辑槽走 ACTS 同款；编辑触发与显示对齐 Field/标题（hover 现铅笔） */
       .row.editable:hover .a-edit, .row.editable:focus-within .a-edit { display: grid; }
       ${ACTS_CSS}
