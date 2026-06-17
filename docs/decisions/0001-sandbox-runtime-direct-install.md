@@ -15,7 +15,7 @@ audience: [human, ai]
 
 sandbox 给 Function / Handler / MCP 提供隔离运行时。原实现内嵌 [`jdx/mise`](https://mise.jdx.dev/) 二进制（按平台 `go:embed`），启动时抽出，运行时调 `mise install <kind>@<ver>` 按需装运行时。
 
-问题：**mise 在本项目里只干一件事——下载四个运行时**（python / node / uv / dotnet）。其余（venv / `npm install` / `uv pip` 的依赖管理、uvx/npx 解析）全是 Foryx 自己的 `EnvManager`，不经 mise。为这点活内嵌一个 **76MB** 的 mise，把 server 二进制从 ~30MB 撑到 **103MB**；且 `go:embed` 要求"目标平台二进制在场"，逼着跨平台 release 前必须 `cmd/setup --all` 预拉全 5 平台 mise——一整套 embed 装配舞蹈。
+问题：**mise 在本项目里只干一件事——下载四个运行时**（python / node / uv / dotnet）。其余（venv / `npm install` / `uv pip` 的依赖管理、uvx/npx 解析）全是 Anselm 自己的 `EnvManager`，不经 mise。为这点活内嵌一个 **76MB** 的 mise，把 server 二进制从 ~30MB 撑到 **103MB**；且 `go:embed` 要求"目标平台二进制在场"，逼着跨平台 release 前必须 `cmd/setup --all` 预拉全 5 平台 mise——一整套 embed 装配舞蹈。
 
 ## 决策
 

@@ -23,7 +23,7 @@ audience: [human, ai]
 
 **Flutter 桌面端,作为既有 Go HTTP+SSE 后端的纯客户端,架构十轴定型如下。**
 
-1. **进程模型 = sidecar**:Flutter app 把 `cmd/server` 二进制作为子进程托管(启动拉起 / 健康门控 / 崩溃有界重启 / 随 app 退出关停);后端监听 Dart 端预抢的临时端口,经既有环境变量注入 —— **零后端改动**。已核实物理事实:`FORYX_ADDR`(空→`:8080`)、`FORYX_DATA_DIR`、`FORYX_DEV` 三个 env 已存在([cmd/server/main.go](../../backend/cmd/server/main.go));`GET /api/v1/health` liveness 探针已存在且豁免 workspace 鉴权([bootstrap/build.go](../../backend/internal/bootstrap/build.go))。流程:Dart `ServerSocket.bind(loopback,0)` 抢端口→关→`FORYX_ADDR=127.0.0.1:<port>` 传子进程→启动屏轮询 `/api/v1/health` 至 200。`FORYX_BACKEND_URL` 为 dev 逃生口(优先于自管 sidecar)。后端未就绪/崩溃由单一 `BackendStatus` provider 驱动全局横幅 + 暂停 SSE 重连。
+1. **进程模型 = sidecar**:Flutter app 把 `cmd/server` 二进制作为子进程托管(启动拉起 / 健康门控 / 崩溃有界重启 / 随 app 退出关停);后端监听 Dart 端预抢的临时端口,经既有环境变量注入 —— **零后端改动**。已核实物理事实:`ANSELM_ADDR`(空→`:8080`)、`ANSELM_DATA_DIR`、`ANSELM_DEV` 三个 env 已存在([cmd/server/main.go](../../backend/cmd/server/main.go));`GET /api/v1/health` liveness 探针已存在且豁免 workspace 鉴权([bootstrap/build.go](../../backend/internal/bootstrap/build.go))。流程:Dart `ServerSocket.bind(loopback,0)` 抢端口→关→`ANSELM_ADDR=127.0.0.1:<port>` 传子进程→启动屏轮询 `/api/v1/health` 至 200。`ANSELM_BACKEND_URL` 为 dev 逃生口(优先于自管 sidecar)。后端未就绪/崩溃由单一 `BackendStatus` provider 驱动全局横幅 + 暂停 SSE 重连。
 
 2. **分层 = 3-tier feature-first(对齐 Clean 精神,不照搬 4 层)**:`shared/core`(跨切:contract/net、SSE gateway、design system、i18n、router、process)→ `features/<域>`(每片自管 data+state+ui)→ `app`(装配根 + shell)。**砍掉 use-case 层**——客户端零业务规则,Go 二进制即 use-case 层,repo 方法 + Riverpod Notifier 即"用例";per-call Interactor 是纯仪式。唯一保留的框架无关纯模型层:`features/chat/model/BlockTreeReducer` 与 `features/workflow/model/GraphModel`+校验器(承载性正确,须脱离 widget/socket 单测)。
 

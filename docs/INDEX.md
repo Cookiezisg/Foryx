@@ -1,4 +1,4 @@
-# Foryx 文档索引
+# Anselm 文档索引
 
 > AI 会话入口。先读本文，再循链接。**文档规范见 [`GOVERNANCE.md`](GOVERNANCE.md)（强制）。**
 

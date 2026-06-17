@@ -61,7 +61,7 @@ audience: [human, ai]
 
 ### W4 引擎（scheduler ×9 + workflow/flowrun domain ×9 + trigger app×10 + infra/trigger ×6，全读含测试）
 
-- **CR-18 🔴 已修** webhook trigger 产品级完全不可用：webhook 路由挂在共享 mux 的 `/api/v1/webhooks/...`、被 Chain 整体包裹，而 `requireWorkspaceExempt` 豁免表不含它 → 外部调用方（GitHub push、一切第三方回调——**不可能**带 X-Foryx-Workspace-ID）一律 401 UNAUTH_NO_WORKSPACE，请求根本到不了 webhook 监听器。修：豁免 `/api/v1/webhooks/` 前缀（安全性不降——webhook 自带 secret/HMAC 鉴权，workspace 由 trigger app 在 report 时从注册表解析，不依赖 header）；chain_test 加回归 case。**验证过程**：webhook 监听器→trigger Service 共享 mux→bootstrap build.go L82-91（mux 整体过 Chain）→chain.go 豁免表四项无 webhooks，链路逐环确认。
+- **CR-18 🔴 已修** webhook trigger 产品级完全不可用：webhook 路由挂在共享 mux 的 `/api/v1/webhooks/...`、被 Chain 整体包裹，而 `requireWorkspaceExempt` 豁免表不含它 → 外部调用方（GitHub push、一切第三方回调——**不可能**带 X-Anselm-Workspace-ID）一律 401 UNAUTH_NO_WORKSPACE，请求根本到不了 webhook 监听器。修：豁免 `/api/v1/webhooks/` 前缀（安全性不降——webhook 自带 secret/HMAC 鉴权，workspace 由 trigger app 在 report 时从注册表解析，不依赖 header）；chain_test 加回归 case。**验证过程**：webhook 监听器→trigger Service 共享 mux→bootstrap build.go L82-91（mux 整体过 Chain）→chain.go 豁免表四项无 webhooks，链路逐环确认。
 - **零其他缺陷，引擎质量卓越**：
   - advance() 幂等核心精确（completed 行抄、绝不重跑；批后重 walk；全 parked 即 yield；ctx.Err() 退出不误标终态——kill 先写 cancelled 再 cancel ctx 的次序保证记录终态正确）。
   - walk 的活跃子图推导（tentative 前向传播 + 回边仅真实决策走一轮 + 统一 AND-join/simple-merge 规则 + MaxIterations 安全帽 + 声明序确定性排序）逐条兑现 doc 21 §4.3。

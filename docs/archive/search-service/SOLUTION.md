@@ -37,7 +37,7 @@ audience: [human, ai]
   - ✅ FTS5 可用、`bm25()` 排序可用、`tokenize='trigram'` 可用（中文「工作流」命中「持久化工作流执行引擎」）、external-content 表可用——**BM25 零新依赖**。
   - ⚠️ trigram 对 **<3 字符查询零命中**（实测 2 字「引擎」0 hit）——必须有短词回退。
   - ❌ 纯 Go 驱动**不能加载 C 扩展**（sqlite-vec/sqlite-vss 排除）——向量必须自有表。
-- **全部目标实体均 workspace 隔离**：DB 表带 `workspace_id`；skill/memory 文件态也按 `~/.foryx/workspaces/<wsID>/{skills,memories}/` 分桶。索引无需全局行特例。
+- **全部目标实体均 workspace 隔离**：DB 表带 `workspace_id`；skill/memory 文件态也按 `~/.anselm/workspaces/<wsID>/{skills,memories}/` 分桶。索引无需全局行特例。
 - 相关表形态（节选）：trigger（`kind IN (cron,webhook,fsnotify,sensor)` + `config` JSON + `outputs` JSON，无版本表）；control（`control_logics` + `control_logic_versions.branches`(CEL) + `inputs`）；approval（`approval_forms` + `approval_form_versions.template/inputs/timeout`）；message_blocks（`type IN (text,reasoning,tool_call,tool_result,compaction,progress)`）。
 
 ### 1.3 缺口一句话
@@ -350,7 +350,7 @@ utility 不可用/失败    → 索引检索 top-N（不经精选，永远可用
 AnythingLLM 桌面版的「核心秘密」= 安装包内封 ONNX Runtime + all-MiniLM-L6-v2（几十 MB、CPU 毫秒级），拖入文档自动向量化、全程透明，设置里可换 Ollama/HF/云端。**产品语义全盘借鉴，技术栈三处不照搬**：
 
 1. **进程内 ONNX Runtime 进不来**：它是 Node/Electron 生态；Go 侧 ONNX Runtime 绑定要 CGO（地基铁律禁）。纯 Go 推理（hugot/gomlx simplego）2025 年才出、官方自称 experimental、~5x 慢、把整个 ML 框架拖进 go.mod——列为未来替换路径、暂不选。
-2. **Foryx 的等价物是子进程**：directInstaller（decisions/0001：无内嵌、首用按需下）下发 **llama.cpp `llama-server` 官方预编译二进制**（macOS arm64/x64、Windows x64/arm64、Linux x64 全覆盖，MIT），以 `--embeddings` 常驻子进程暴露本机 OpenAI 兼容 `/v1/embeddings`——与 handler 常驻进程、MCP 子进程**同一套已有范式**，两块地基直接复用。
+2. **Anselm 的等价物是子进程**：directInstaller（decisions/0001：无内嵌、首用按需下）下发 **llama.cpp `llama-server` 官方预编译二进制**（macOS arm64/x64、Windows x64/arm64、Linux x64 全覆盖，MIT），以 `--embeddings` 常驻子进程暴露本机 OpenAI 兼容 `/v1/embeddings`——与 handler 常驻进程、MCP 子进程**同一套已有范式**，两块地基直接复用。
 3. **默认模型不抄**：all-MiniLM-L6-v2 主要以英文训练（AnythingLLM 自己有 multilingual 的 FEAT issue 挂着），中文场景不合格。选 **EmbeddingGemma-300m QAT Q8 GGUF**（Google 2025-09，official ggml-org 仓库）：100+ 语言含中文、MTEB 500M 以下开源第一、量化后 **<200MB RAM**、768 维（Matryoshka 可截 512/256）、CPU 毫秒级。
 
 ### 8.2 设计

@@ -9,7 +9,7 @@ review-due: 2026-09-14
 audience: [human, ai]
 ---
 
-# Foryx 文档规范（Documentation Governance）
+# Anselm 文档规范（Documentation Governance）
 
 > 本文件定义本仓库**全部**文档如何被创建、组织、同步、淘汰。**它是强制规范，与代码纪律（`CLAUDE.md`）同级。**
 > 本文件自身遵守它定义的一切规则（frontmatter / 类型 / 生命周期），作为标准的活样板。

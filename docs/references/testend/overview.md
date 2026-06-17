@@ -22,7 +22,7 @@ audience: [human, ai]
 
 | 目录 | 职责 |
 |---|---|
-| `harness/` | 座架：`server.go`（编译+拉起真二进制、临时 dataDir、空闲端口、等 health、退出清理；sandbox 运行时经 `~/.foryx-testend-cache` 预置——首跑下载、后跑搭车）· `client.go`（N1 envelope 解包、workspace 头、`OK`/`Fail(状态,码)` 断言、`Eventually` 异步涟漪轮询）· `llmmock.go`（OpenAI 兼容假模型：剧本化回应驱动 chat/agent/utility 全链零 token；**请求抓包即 promptdump**——线缆上的请求体就是模型真实看到的全部）· `sse.go`（三流订阅与事件断言） |
+| `harness/` | 座架：`server.go`（编译+拉起真二进制、临时 dataDir、空闲端口、等 health、退出清理；sandbox 运行时经 `~/.anselm-testend-cache` 预置——首跑下载、后跑搭车）· `client.go`（N1 envelope 解包、workspace 头、`OK`/`Fail(状态,码)` 断言、`Eventually` 异步涟漪轮询）· `llmmock.go`（OpenAI 兼容假模型：剧本化回应驱动 chat/agent/utility 全链零 token；**请求抓包即 promptdump**——线缆上的请求体就是模型真实看到的全部）· `sse.go`（三流订阅与事件断言） |
 | `scenarios/` | 验收场景 = 普通 go test：每个测试函数是 PLAN 的一个「feature × 情况」单元，函数名即台账行；`-run` 过滤单域 |
 | `golden/` | 真模型金标旅程（12 条端到端，机器可验收终态） |
 

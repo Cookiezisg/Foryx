@@ -34,11 +34,11 @@ audience: [human, ai]
 - **PR-4 🟡 Ollama embedder 参数无配置面**（fixed——裁决 A：search_meta 补 `ollama_base_url`/`ollama_model` 两键、PATCH/GET 全接、工厂注入 + 参数变化重建适配器、域默认权威 `searchdomain.DefaultOllama*`；app/integration 双层测试）
   验证：`SetEmbeddingProviders(…, NewOllama("", ""))`（build_services.go:134）——baseURL 钉死 `127.0.0.1:11434`、model 钉死 `embeddinggemma`（engine.go NewOllama 默认分支）；`PATCH /search/settings` 只收 `embedder` 一个字段。用户切到 ollama 后无法指定地址/模型，GET 也看不到生效的 baseURL。
 
-- **PR-5 🟡 桌面 app 日志故事缺失**（fixed——裁决 A 最小版：`<dataDir>/logs/foryx.log` 轮转 JSON（lumberjack 10MB×3×28d gzip）tee 在 stderr 控制台旁；文件 sink 测试）
-  验证：zap 只出 stdout/stderr、级别仅由 `FORYX_DEV` 环境变量二档切换（infra/logger/zap.go:16-32、cmd/server/main.go:25）；无文件落盘/轮转/级别配置。Wails 桌面 app 用户报障无日志可交。
+- **PR-5 🟡 桌面 app 日志故事缺失**（fixed——裁决 A 最小版：`<dataDir>/logs/anselm.log` 轮转 JSON（lumberjack 10MB×3×28d gzip）tee 在 stderr 控制台旁；文件 sink 测试）
+  验证：zap 只出 stdout/stderr、级别仅由 `ANSELM_DEV` 环境变量二档切换（infra/logger/zap.go:16-32、cmd/server/main.go:25）；无文件落盘/轮转/级别配置。Wails 桌面 app 用户报障无日志可交。
 
 - **PR-6 🟡 备份/跨机迁移故事缺失**（doc-fix——裁决 B：`how-to/data-migration.md` 声明数据布局/备份/三类密文重填边界；export/import 进 roadmap）
-  验证：落盘加密密钥从 `MachineFingerprint` 派生（build_data.go:155-168，CR-20 接通）——拷 `~/.foryx` 换机后 api key/handler config/mcp config 密文**全部不可解**；无任何 export/import 面；文档零说明。
+  验证：落盘加密密钥从 `MachineFingerprint` 派生（build_data.go:155-168，CR-20 接通）——拷 `~/.anselm` 换机后 api key/handler config/mcp config 密文**全部不可解**；无任何 export/import 面；文档零说明。
 
 ### 轻症·已处置
 

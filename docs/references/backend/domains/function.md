@@ -36,7 +36,7 @@ audience: [human, ai]
 
 **构建（create/edit）**：唯一的变更词汇是 **ops**（JSON 判别式：`set_meta/set_code/set_inputs/set_outputs/set_dependencies/set_python_version`，闭集）。三条入口殊途同归——LLM 工具传 ops、HTTP `:edit` 传 ops、HTTP create 的扁平 payload 由 `buildOpsFromDirect` **反推成 ops**——全走 `ApplyOps`：逐 op 应用到 `VersionDraft` + **每步后** `validateIncremental`（name 正则 + 字段 schema）+ 末尾 `validateFinal`。LLM 的脏 JSON 先过 `jsonrepair` 容错。错误码：op 畸形/中途非法 = `FUNCTION_OP_INVALID`；终校验失败 = `FUNCTION_INVALID_CODE`。
 
-**代码校验是刻意的词法检查、非 AST**：要求至少一个顶层 `def `（首个 def 名即执行入口）；黑名单 `import foryx_handler`（**无状态/有状态边界**：function 无状态、handler 持久——function 不许碰 handler SDK）。
+**代码校验是刻意的词法检查、非 AST**：要求至少一个顶层 `def `（首个 def 名即执行入口）；黑名单 `import anselm_handler`（**无状态/有状态边界**：function 无状态、handler 持久——function 不许碰 handler SDK）。
 
 **env 物化（`ensureEnv`）**：写 syncing → 委托 `envfix.Provisioner`（带 LLM 改依赖的修复循环，≤3 次——装不上时让 LLM 改依赖列表重试）→ 终态（ready/failed + **修正后的依赖**）写回 Version 行。create/edit **容忍**失败（env failed 也创建成功，状态可见）；run 时未 ready 才报 `FUNCTION_ENV_NOT_READY`。`Edit` 空 ops = "重建 active env"路径（重试失败的安装），发 `function.env_rebuilt`。
 

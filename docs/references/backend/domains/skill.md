@@ -15,9 +15,9 @@ audience: [human, ai]
 
 skill 是**指令载体、非构建实体**——memory 的近亲（文件式注入物），不是 function 的近亲（执行实体）。**name(slug) 即身份**：无生成 id、无版本（编辑即覆盖文件）、零 DB 表、零 LLM 依赖；无 execution log、无 LLM 搜索（与文件式指令载体的抽象错配，故不提供）。
 
-**持久化 = 文件**（`infra/fs/skill`，复用 memory 的文件式范式）：每 skill 一个目录 `~/.foryx/workspaces/<ws>/skills/<name>/SKILL.md`（目录而非扁平文件——未来 references/assets 可同住）。**纯按需**：每次 List 现扫目录，无缓存/无 watcher；坏文件跳过不连坐。slug 正则（`^[a-z][a-z0-9_-]{0,63}$`）**既是身份校验也是路径穿越守卫**（合法 name 1:1 映射目录）。
+**持久化 = 文件**（`infra/fs/skill`，复用 memory 的文件式范式）：每 skill 一个目录 `~/.anselm/workspaces/<ws>/skills/<name>/SKILL.md`（目录而非扁平文件——未来 references/assets 可同住）。**纯按需**：每次 List 现扫目录，无缓存/无 watcher；坏文件跳过不连坐。slug 正则（`^[a-z][a-z0-9_-]{0,63}$`）**既是身份校验也是路径穿越守卫**（合法 name 1:1 映射目录）。
 
-**Frontmatter 逐字镜像 Anthropic SKILL.md spec**（跨厂字段全留以便无缝导入）+ Foryx 自有扩展 `source: user|ai`（谁创作）。护栏：body ≤32KB、description ≤1024 字符。
+**Frontmatter 逐字镜像 Anthropic SKILL.md spec**（跨厂字段全留以便无缝导入）+ Anselm 自有扩展 `source: user|ai`（谁创作）。护栏：body ≤32KB、description ≤1024 字符。
 
 ## 2. 行为
 

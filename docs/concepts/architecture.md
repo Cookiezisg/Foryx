@@ -9,7 +9,7 @@ review-due: 2026-09-11
 audience: [human, ai]
 ---
 
-# Foryx 架构（愿景 · 分层 · 实体 · 引擎）
+# Anselm 架构（愿景 · 分层 · 实体 · 引擎）
 
 > 本文件是项目的**愿景 + 架构 + 路线**。代码规范、工程纪律、设计原则、N/D/E/S/T 系列见项目根 [`CLAUDE.md`](../../CLAUDE.md)（单一事实源）；文档规范见 [`GOVERNANCE.md`](../GOVERNANCE.md)。
 
@@ -17,7 +17,7 @@ audience: [human, ai]
 
 ## 1. 产品愿景
 
-Foryx 是一个 **本地优先（local-first）的 Agentic Workflow Platform**，交付形态为 **Flutter 桌面 app**（macOS/Linux/Windows，Go 后端作 sidecar）、**单进程单用户**、SQLite 落盘——**不做 SaaS、不做多租户**。
+Anselm 是一个 **本地优先（local-first）的 Agentic Workflow Platform**，交付形态为 **Flutter 桌面 app**（macOS/Linux/Windows，Go 后端作 sidecar）、**单进程单用户**、SQLite 落盘——**不做 SaaS、不做多租户**。
 
 用户用自然语言**构建**可复用的执行体、并把它们**编排**成工作流；工作流由一个**持久化执行引擎**驱动，崩溃可恢复、确定可重放。本地大模型窗口被充分利用（文档/记忆**直接注入、无 RAG**）。
 
