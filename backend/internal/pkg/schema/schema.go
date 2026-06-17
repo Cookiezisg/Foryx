@@ -59,7 +59,8 @@ func IsValidType(t string) bool {
 // 所有实体 create/edit 共用的唯一字段列表校验器（调用方把错误包成自己的 domain 错误）。
 func ValidateFields(fields []Field) error {
 	seen := make(map[string]bool, len(fields))
-	for _, f := range fields {
+	for i := range fields {
+		f := &fields[i]
 		if f.Name == "" {
 			return fmt.Errorf("field has empty name")
 		}
@@ -67,11 +68,34 @@ func ValidateFields(fields []Field) error {
 			return fmt.Errorf("duplicate field name: %q", f.Name)
 		}
 		seen[f.Name] = true
+		f.Type = canonicalType(f.Type) // normalize authoring aliases (integer→number, str→string, …) in place
 		if !IsValidType(f.Type) {
-			return fmt.Errorf("field %q has invalid type %q", f.Name, f.Type)
+			return fmt.Errorf("field %q has invalid type %q (use one of: string, number, boolean, object, array)", f.Name, f.Type)
 		}
 	}
 	return nil
+}
+
+// canonicalType maps common authoring aliases to the coarse canonical types, so an agent's natural
+// type vocabulary (integer/int/float, str, bool, dict, list) is accepted and normalized instead of
+// bouncing with "invalid type integer" — runtime values are CEL-dynamic anyway. Unknown → unchanged.
+//
+// canonicalType 把常见编写别名归一到粗类型，使 agent 的自然类型词汇（integer/int/float、str、bool、dict、
+// list）被接受并归一，而非以 "invalid type integer" 弹回——运行时值本就 CEL 动态。未知 → 原样返回。
+func canonicalType(t string) string {
+	switch t {
+	case "integer", "int", "float", "double", "long":
+		return TypeNumber
+	case "str", "text":
+		return TypeString
+	case "bool":
+		return TypeBoolean
+	case "dict", "map":
+		return TypeObject
+	case "list":
+		return TypeArray
+	}
+	return t
 }
 
 // FromJSONSchema converts a JSON Schema object's top-level properties into a flat []Field —
@@ -96,7 +120,7 @@ func FromJSONSchema(raw json.RawMessage) []Field {
 	}
 	fields := make([]Field, 0, len(doc.Properties))
 	for name, p := range doc.Properties {
-		typ := p.Type
+		typ := canonicalType(p.Type)
 		if !IsValidType(typ) {
 			typ = TypeObject
 		}

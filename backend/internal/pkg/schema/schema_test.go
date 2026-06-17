@@ -32,7 +32,8 @@ func TestFromJSONSchema(t *testing.T) {
 	})
 
 	t.Run("unrecognized type coarsens to object", func(t *testing.T) {
-		raw := json.RawMessage(`{"properties": {"blob": {"type": "integer"}}}`)
+		// "integer" is now a recognized alias (→ number, F5); use a genuinely-unknown type here.
+		raw := json.RawMessage(`{"properties": {"blob": {"type": "frobnicate"}}}`)
 		got := FromJSONSchema(raw)
 		want := []Field{{Name: "blob", Type: TypeObject}}
 		if !reflect.DeepEqual(got, want) {
