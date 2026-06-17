@@ -7,8 +7,7 @@ window.FEATURE.entities = Object.assign(window.FEATURE.entities || {}, {
     const K = window.ENTITY_KINDS || {};
     const reg = window.ENTITY_REGISTRY || [];
     const byId = (id) => reg.find((e) => e.id === id);
-    const wrap = document.createElement("div");
-    wrap.style.cssText = "flex:1; min-height:0; display:flex; flex-direction:column;";
+    const page = document.createElement("an-page");   // 海面填充由 an-page :host 自带（flex:1/min-height:0），不再裹多余 wrap div
     let cur = null;   // 当前实体（图框「进入编辑器」据此切编辑器海洋；就地编辑回写它）
 
     // 实体页头：面包屑 + 可改名标题（editable）+ 状态徽（tone 走 anTone 单源）+ 执行动作组
@@ -91,8 +90,7 @@ window.FEATURE.entities = Object.assign(window.FEATURE.entities || {}, {
     function show(id) {
       const e = byId(id) || reg[0]; if (!e) return;
       cur = e;
-      const page = document.createElement("an-page");   // 填满海面由 an-page :host 自带（flex:1/min-height:0），此处不再手记
-      page.appendChild(header(e));
+      const kids = [header(e)];
       const versions = e.versions || [];
       if (versions.length) {   // 有版本 → 概览 / 版本 双 tab（版本是并列视图、非概览附属段）
         const tabs = document.createElement("an-tabs");
@@ -100,28 +98,28 @@ window.FEATURE.entities = Object.assign(window.FEATURE.entities || {}, {
           { key: "overview", label: "概览", render: (p) => p.appendChild(window.renderEntitySections(e.kind, e.data)) },
           { key: "versions", label: "版本", count: versions.length, render: (p) => p.appendChild(versionView(e)) },
         ];
-        page.appendChild(tabs);
+        kids.push(tabs);
       } else {
-        page.appendChild(window.renderEntitySections(e.kind, e.data));
+        kids.push(window.renderEntitySections(e.kind, e.data));
       }
-      wrap.replaceChildren(page);
+      page.replaceChildren(...kids);   // 复用同一 an-page，仅换光 DOM 内容（滚动壳/RO 持久）
       if (ctx.shell) ctx.shell.setRight(runIsland(e));   // 注入即开 / null 即收
     }
 
-    // 反应式选中：旧 sea（wrap 已 detached）不再抢渲染——多次进入叠加 Intent.on，靠此守卫只让当前 sea 响应
-    ctx.Intent.on("entity", (sel) => { if (wrap.isConnected) show(sel.id); });
+    // 反应式选中：旧 sea（page 已 detached）不再抢渲染——多次进入叠加 Intent.on，靠此守卫只让当前 sea 响应
+    ctx.Intent.on("entity", (sel) => { if (page.isConnected) show(sel.id); });
     // 图框「进入编辑器」→ 切编辑器海洋（带当前实体 id）
-    wrap.addEventListener("an-graph-editor", () => { if (cur && ctx.Intent.act) ctx.Intent.act({ verb: "editGraph", kind: cur.kind, id: cur.id }); });
+    page.addEventListener("an-graph-editor", () => { if (cur && ctx.Intent.act) ctx.Intent.act({ verb: "editGraph", kind: cur.kind, id: cur.id }); });
     // 就地改名 / 改说明 → 回写注册表（rail 行同源、下次渲染即新值）；真后端走 PATCH，失败回滚
-    wrap.addEventListener("an-title-change", (ev) => {
+    page.addEventListener("an-title-change", (ev) => {
       if (!cur) return;
       cur.label = ev.detail.value;
       window.AnToast && window.AnToast.show({ text: "已重命名为「" + ev.detail.value + "」（mock）" });
     });
-    wrap.addEventListener("an-field-change", (ev) => {
+    page.addEventListener("an-field-change", (ev) => {
       if (cur && (ev.detail.label === "说明" || ev.detail.label === "角色") && cur.data) { cur.data.description = ev.detail.value; window.AnToast && window.AnToast.show({ text: "已更新说明（mock）" }); }
     });
-    if (reg[0]) show(reg[0].id);   // 初始展示首个实体（此刻 wrap 尚未挂载，是本 sea 自身首渲）
-    return wrap;
+    if (reg[0]) show(reg[0].id);   // 初始展示首个实体（此刻 page 尚未挂载，是本 sea 自身首渲）
+    return page;
   },
 });

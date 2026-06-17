@@ -37,7 +37,7 @@ window.FEATURE.scheduler = Object.assign(window.FEATURE.scheduler || {}, {
       const acts = el("an-action-group");
       if (r.status === "failed") { const b = el("an-button", { size: "sm", icon: "history" }, ":replay"); b.addEventListener("click", () => window.AnToast.show({ text: ":replay 清 failed 行、自断点续跑 · replay_count++" })); acts.append(b); }
       if (r.status === "running" || r.status === "parked") { const b = el("an-button", { size: "sm", variant: "danger", icon: "stop" }, ":kill"); b.addEventListener("click", () => window.AnToast.show({ text: ":kill 标 cancelled + 取消在途 ctx" })); acts.append(b); }
-      headCard.append(el("div", { slot: "actions" }, acts));
+      acts.setAttribute("slot", "actions"); headCard.append(acts);   // 直挂 info-card actions 槽，恢复其空动作自动塌陷
       island.append(headCard);
 
       const d = (r.nodeDetail || {})[nodeId];
