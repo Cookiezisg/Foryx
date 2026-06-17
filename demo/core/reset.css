@@ -1,0 +1,21 @@
+/* Anselm demo — light-DOM reset（最小）。
+   只负责 html/body/桌面背景 + 标准流元素默认外边距；组件内部样式全在各自 Shadow DOM（见 base.js BASE_CSS）。
+   ⚠ 铁律：禁用 universal `* { margin:0; padding:0 }`——它会命中 <an-*> host、压制其 :host padding/margin。故只对标准流元素清零。
+   只读 token；无裸值（本文件与 tokens.css 是 Level-1 门禁的唯二豁免/值源层）。 */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body { height: 100%; margin: 0; }
+body {
+  font-family: var(--font);
+  font-size: var(--t-body);
+  line-height: var(--lh-ui);
+  color: var(--ink);
+  background: var(--desk);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+h1, h2, h3, h4, h5, h6, p, figure, blockquote, dl, dd, pre { margin: 0; }
+ul, ol { margin: 0; padding: 0; list-style: none; }
+
+::selection { background: var(--accent-soft); }

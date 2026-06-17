@@ -1,0 +1,136 @@
+/* Anselm demo — 设计令牌（唯一值源 single source of truth）。
+   契约（Level-1 门禁强制）：自定义属性【只能】在本文件定义；
+   primitives / patterns / features 一律 var(--…)，禁裸 px/hex/ms。
+   每个值旁标其【数学出处】。三层数学自洽：密度=2 的幂 · 布局=谐波 2:3:6 · 字阶=模数。
+   字体栈优先 MiSans；静态 demo 不运行时拉外网。line-height 永远显式。 */
+
+:root {
+  /* ═══════════ 基准 BASE ═══════════ */
+  --u: 4px;                  /* 2² · 一切的最小网格单元 */
+
+  /* ═══════════ 密度阶梯 DENSITY · 纯 2 的幂 ═══════════ */
+  --grid:     4px;           /* 2² · 基础网格 */
+  --gap:      8px;           /* 2³ · 行内间距（图标↔文字 / 点↔文字） */
+  --gap-hair: 2px;           /* grid/2 · 密集段缝（segmented 段间） */
+  --icon:    16px;           /* 2⁴ · 标准图标 = 行首槽尺寸 */
+  --icon-sm: 12px;           /* 3u · 密集处内联图标 */
+  --lead:    16px;           /* = --icon · 行首槽零死白 */
+  --row:     32px;           /* 2⁵ · 标准行高（唯一） */
+  --ctl:     28px;           /* 7u · 控件高 = row − grid */
+  --indent:  20px;           /* 5u · 树每级缩进 */
+  --pad-row:  8px;           /* 2³ · 行左右内边距 = 尾槽内嵌 */
+  --pad-hair: 3px;           /* 轨道内嵌薄边（segmented） */
+  --trail:   20px;           /* 5u = ctl − sp-2 · 行尾 dense accessory slot */
+  --trail-inset: 4px;        /* = --grid · meta 右侧光学内缩 */
+  --gap-tight: 6px;          /* 1.5u · 低权重内联间距 */
+  --dot: 7px;                /* 7/16 icon · 状态点光学尺寸 */
+  --dot-pulse: 5px;          /* dot − grid/2 · run 呼吸外扩半径 */
+  --hairline: 1px;           /* 1 物理线 */
+  --line-bold: 1.5px;        /* 表头粗线（thin-table 列分组式头线） */
+  --line-2: 2px;             /* 2 × hairline · tab 下划线 / focus 环 */
+  --focus-ring: 3px;         /* 3 × hairline · focus 外环 */
+  --zero: 0px;               /* 语义零 */
+
+  /* ═══════════ 间距 SPACING · 4 网格谐音 ═══════════ */
+  --sp-1:  4px;  --sp-2:  8px;  --sp-3: 12px;  --sp-4: 16px;
+  --sp-6: 24px;  --sp-8: 32px;  --sp-12: 48px; --sp-16: 64px;
+
+  /* ═══════════ 布局宽 LAYOUT · 谐波 2:3:6（u=120）═══════════ */
+  --side-w:        240px;    /* 2u · 侧栏 */
+  --island-w:      360px;    /* 3u · 右岛 */
+  --island-w-wide: 480px;    /* 4u · 右岛·深读 */
+  --w-content:     720px;    /* 6u · 中央内容 */
+  --w-full:        100%;     /*      逃生：宽块铺满 */
+  --side-min:      240px;
+  --side-max:      420px;
+  --input-min:     180px;
+  --w-block:       280px;    /* 检查器 2 列网格最小块轨道（720 内容=2 列、约 <560 塌 1 列） */
+  --spec-col:      220px;    /* reference 画廊状态格栅格最小列轨道（an-spec 自适应多列） */
+  --w-ref:        1100px;    /* reference 独立页（reference.html）画廊内容列宽 */
+  --h-graph-preview: 380px;  /* 实体页内嵌 run 图框定高（an-graph-canvas[framed]） */
+
+  /* ═══════════ 原语尺寸 PRIMITIVE METRICS ═══════════ */
+  --ctl-sm:        24px;     /* 6u · 小按钮 */
+  --badge-h:       22px;     /* 状态 badge 视觉高度 */
+  --btn-pad-x:     14px;     /* 3.5u · 文本按钮水平光学内边距 */
+  --btn-pad-x-sm:  10px;
+  --badge-pad-x:    9px;
+  --field-row:     48px;     /* 12u · Field 最小阅读行 */
+  --island-head:   44px;     /* 11u · 右岛头部高度 */
+  --tab-h:         34px;
+
+  /* ═══════════ 字阶 TYPE · 模数 ═══════════ */
+  --t-meta:   12px;  --t-body:   13px;  --t-strong: 16px;
+  --t-h3:     20px;  --t-h2:     24px;  --t-h1:     32px;
+  --lh-tight: 1.25;  --lh-ui:    1.4;   --lh-prose: 1.6;
+  --font: "MiSans", -apple-system, "SF Pro Text", "Inter", system-ui, "PingFang SC", sans-serif;
+  --mono: "SF Mono", "JetBrains Mono", "Roboto Mono", ui-monospace, monospace;
+
+  /* ═══════════ 圆角 RADII · 4 网格 ═══════════ */
+  --r-tag: 4px;  --r-btn: 8px;  --r-chip: 12px;  --r-card: 16px;  --r-island: 20px;  --r-pill: 999px;
+
+  /* ═══════════ 动效 MOTION ═══════════ */
+  --d-fast: 120ms;  --d-mid: 240ms;  --d-slow: 340ms;
+  --d-breath: 1.8s;          /* 状态点 run 呼吸 */
+  --d-shimmer: 1.5s;         /* 骨架/流光扫光 */
+  --ease-out:    cubic-bezier(.16, 1, .3, 1);
+  --ease-spring: cubic-bezier(.2, .9, .25, 1);
+
+  /* ═══════════ 层级 Z（浮层阶梯）═══════════ */
+  --z-float: 1000;  --z-toast: 1200;  --z-dialog: 1400;
+
+  /* ═══════════ 墨 INK · 3 级 ═══════════ */
+  --ink: #1d1d1f;  --ink-2: #6e6e73;  --ink-3: #8e8e93;  --ink-on-accent: #ffffff;
+
+  /* ═══════════ 面 ISLAND · 深度阶梯 ═══════════ */
+  --desk:     #d4d5d9;       /* 窗外下沉桌面 */
+  --tl-close: #ff5f57;  --tl-min: #febc2e;  --tl-max: #28c840;   /* 红绿灯（平台 chrome 唯一具名色例外） */
+  --sea:      #f5f5f7;  --island: #ffffff;  --island-2: #fbfbfd;  --island-3: #f0f0f3;  --island-4: #e9e9ec;
+
+  /* ═══════════ 线 / 遮罩 LINE ═══════════ */
+  --line: rgba(0,0,0,.08);  --line-strong: rgba(0,0,0,.13);
+  --scrim: rgba(0,0,0,.28);  /* modal 遮罩 */
+
+  /* ═══════════ 强调 + 语义 ═══════════ */
+  --accent: #0071e3;  --accent-hover: #0077ed;
+  --accent-soft: rgba(0,113,227,.10);  --accent-line: rgba(0,113,227,.30);
+  --ok: #2da44e;  --ok-soft: rgba(45,164,78,.12);
+  --warn: #bf6a02;  --warn-soft: rgba(191,106,2,.12);
+  --danger: #d70015;  --danger-soft: rgba(215,0,21,.10);
+  --live: #0071e3;
+
+  /* ═══════════ 图节点类型色（trigger=violet · action=accent · agent=teal · control=warn · approval=danger）+ 连线墨 ═══════════ */
+  --violet: #7c5cff;  --violet-soft: rgba(124,92,255,.12);
+  --teal:   #0b9aab;  --teal-soft:   rgba(11,154,171,.12);
+  --edge:   rgba(0,0,0,.22);  --edge-future: rgba(0,0,0,.10);  --grid-dot: rgba(0,0,0,.05);
+
+  /* ═══════════ 代码 CODE · 语义高亮 ═══════════ */
+  --cd-com: #a0a1a7;  --cd-kw: #a626a4;  --cd-str: #50a14f;  --cd-num: #986801;  --cd-fn: #4078f2;
+
+  /* ═══════════ 阴影 SHADOW ═══════════ */
+  --shadow-island: 0 1px 2px rgba(0,0,0,.03), 0 3px 10px rgba(0,0,0,.035);
+  --shadow-float:  0 1px 3px rgba(0,0,0,.05), 0 8px 22px rgba(0,0,0,.045);
+  --shadow-pop:    0 2px 8px rgba(0,0,0,.06), 0 12px 32px rgba(0,0,0,.10);
+  --shadow-win:    0 16px 50px rgba(0,0,0,.20);
+}
+
+/* ═══════════ 暗色 DARK（值阶梯一致，仅换色）═══════════ */
+[data-theme="dark"] {
+  --ink: #f5f5f7;  --ink-2: #a1a1a6;  --ink-3: #6e6e73;  --ink-on-accent: #ffffff;
+  --desk: #000000;
+  --sea: #0a0a0a;  --island: #1c1c1e;  --island-2: #232326;  --island-3: #2a2a2d;  --island-4: #323236;
+  --line: rgba(255,255,255,.10);  --line-strong: rgba(255,255,255,.16);  --scrim: rgba(0,0,0,.5);
+  --accent: #0a84ff;  --accent-hover: #409cff;  --accent-soft: rgba(10,132,255,.16);  --accent-line: rgba(10,132,255,.40);
+  --ok: #30d158;  --ok-soft: rgba(48,209,88,.16);
+  --warn: #ff9f0a;  --warn-soft: rgba(255,159,10,.16);
+  --danger: #ff453a;  --danger-soft: rgba(255,69,58,.16);
+  --live: #0a84ff;
+  --violet: #a78bfa;  --violet-soft: rgba(167,139,250,.18);
+  --teal:   #2dd4bf;  --teal-soft:   rgba(45,212,191,.18);
+  --edge:   rgba(255,255,255,.28);  --edge-future: rgba(255,255,255,.12);  --grid-dot: rgba(255,255,255,.05);
+  --cd-com: #7f848e;  --cd-kw: #c678dd;  --cd-str: #98c379;  --cd-num: #d19a66;  --cd-fn: #61afef;
+  --shadow-island: 0 1px 2px rgba(0,0,0,.4), 0 8px 28px rgba(0,0,0,.5);
+  --shadow-float:  0 1px 3px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.5);
+  --shadow-pop:    0 8px 24px rgba(0,0,0,.55), 0 20px 50px rgba(0,0,0,.6);
+  --shadow-win:    0 16px 50px rgba(0,0,0,.5);
+}

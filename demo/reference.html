@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anselm · 能力参考 Reference</title>
+  <link rel="stylesheet" href="core/tokens.css" />
+  <link rel="stylesheet" href="core/reset.css" />
+  <style>
+    /* 独立页 host scaffold（门禁不扫 .html；仍以 token 立例）：左分类导航 + 右画廊。 */
+    html, body { height: 100%; margin: 0; }
+    body { background: var(--sea); color: var(--ink); font-family: var(--font); font-size: var(--t-body); }
+    .ref { display: flex; height: 100%; }
+    .ref-side { flex: none; width: var(--side-min); background: var(--island); border-right: var(--hairline) solid var(--line); display: flex; flex-direction: column; }
+    .ref-brand { padding: var(--sp-6) var(--sp-4) var(--sp-3); display: flex; flex-direction: column; gap: var(--grid); }
+    .ref-brand .t { font-size: var(--t-strong); font-weight: 600; color: var(--ink); }
+    .ref-brand .s { font-size: var(--t-meta); color: var(--ink-3); }
+    .ref-nav { flex: 1; min-height: 0; overflow-y: auto; padding: var(--sp-2) var(--sp-3) var(--sp-4); display: flex; flex-direction: column; gap: var(--grid); }
+    .ref-main { flex: 1; min-width: 0; overflow-y: auto; }
+    .ref-content { max-width: var(--w-ref); margin: 0 auto; padding: var(--sp-6) var(--sp-8) var(--sp-12); display: flex; flex-direction: column; }
+    .ref-content > an-ocean-header { margin-bottom: var(--sp-6); }
+    .ref-content > an-spec { padding-top: var(--sp-6); border-top: var(--hairline) solid var(--line); }
+    .ref-content > an-spec:first-of-type { padding-top: 0; border-top: 0; }
+  </style>
+</head>
+<body>
+  <div class="ref">
+    <aside class="ref-side">
+      <div class="ref-brand">
+        <span class="t">能力参考</span>
+        <span class="s">Reference · 原语各态一览（与 app 同源加载，单独管理）</span>
+      </div>
+      <nav class="ref-nav"></nav>
+    </aside>
+    <main class="ref-main"></main>
+  </div>
+
+  <!-- 地基 -->
+  <script src="core/base.js"></script>
+  <script src="core/vendor/lucide.js"></script>
+  <script src="core/icons.js"></script>
+  <!-- 单源配置 -->
+  <script src="core/config/entity-kinds.js"></script>
+  <script src="core/config/state-model.js"></script>
+  <!-- 全部原语（依赖序同 app.html） -->
+  <script src="core/primitives/status-dot.js"></script>
+  <script src="core/primitives/button.js"></script>
+  <script src="core/primitives/input.js"></script>
+  <script src="core/primitives/field.js"></script>
+  <script src="core/primitives/badge.js"></script>
+  <script src="core/primitives/section.js"></script>
+  <script src="core/primitives/group-label.js"></script>
+  <script src="core/primitives/row.js"></script>
+  <script src="core/primitives/row-detail.js"></script>
+  <script src="core/primitives/tabs.js"></script>
+  <script src="core/primitives/segmented.js"></script>
+  <script src="core/primitives/floating.js"></script>
+  <script src="core/primitives/menu.js"></script>
+  <script src="core/primitives/action-group.js"></script>
+  <script src="core/primitives/toolbar.js"></script>
+  <script src="core/primitives/ocean-header.js"></script>
+  <script src="core/primitives/page.js"></script>
+  <script src="core/primitives/info-card.js"></script>
+  <script src="core/primitives/right-island.js"></script>
+  <script src="core/primitives/code-editor.js"></script>
+  <script src="core/primitives/json-tree.js"></script>
+  <script src="core/primitives/sidebar-list.js"></script>
+  <script src="core/primitives/ref-pill.js"></script>
+  <script src="core/primitives/tags.js"></script>
+  <script src="core/primitives/thin-table.js"></script>
+  <script src="core/primitives/callout.js"></script>
+  <script src="core/primitives/state.js"></script>
+  <script src="core/primitives/skeleton.js"></script>
+  <script src="core/primitives/dropdown.js"></script>
+  <script src="core/primitives/toast.js"></script>
+  <script src="core/primitives/dialog.js"></script>
+  <script src="core/primitives/approval-gate.js"></script>
+  <script src="core/primitives/run-terminal.js"></script>
+  <script src="core/primitives/block-tree.js"></script>
+  <script src="core/primitives/graph-canvas.js"></script>
+  <script src="core/primitives/kind-legend.js"></script>
+  <script src="core/primitives/version-diff.js"></script>
+  <script src="core/primitives/wire-list.js"></script>
+  <!-- 画廊：本地组件 + 声明式 catalog + 渲染器 -->
+  <script src="features/reference/components.js"></script>
+  <script src="features/reference/catalog.js"></script>
+  <script src="features/reference/gallery.js"></script>
+</body>
+</html>

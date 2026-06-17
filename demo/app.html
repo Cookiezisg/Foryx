@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Anselm</title>
+  <link rel="stylesheet" href="core/tokens.css" />
+  <link rel="stylesheet" href="core/reset.css" />
+  <style>
+    /* 整窗坐落于桌面（host scaffold，门禁不扫 .html；仍以 token 立例）。 */
+    html, body { height: 100%; }
+    body { padding: var(--sp-4); }
+  </style>
+</head>
+<body>
+  <an-shell>
+    <an-sidebar slot="left"></an-sidebar>
+  </an-shell>
+
+  <!-- 地基 -->
+  <script src="core/base.js"></script>
+  <script src="core/vendor/lucide.js"></script>
+  <script src="core/icons.js"></script>
+  <!-- 单源配置 -->
+  <script src="core/config/entity-kinds.js"></script>
+  <script src="core/config/state-model.js"></script>
+  <!-- 原语（依赖序：status-dot→badge / floating→menu / row+menu→sidebar-list） -->
+  <script src="core/primitives/status-dot.js"></script>
+  <script src="core/primitives/button.js"></script>
+  <script src="core/primitives/input.js"></script>
+  <script src="core/primitives/field.js"></script>
+  <script src="core/primitives/badge.js"></script>
+  <script src="core/primitives/section.js"></script>
+  <script src="core/primitives/group-label.js"></script>
+  <script src="core/primitives/row.js"></script>
+  <script src="core/primitives/row-detail.js"></script>
+  <script src="core/primitives/tabs.js"></script>
+  <script src="core/primitives/segmented.js"></script>
+  <script src="core/primitives/floating.js"></script>
+  <script src="core/primitives/menu.js"></script>
+  <script src="core/primitives/action-group.js"></script>
+  <script src="core/primitives/toolbar.js"></script>
+  <script src="core/primitives/ocean-header.js"></script>
+  <script src="core/primitives/page.js"></script>
+  <script src="core/primitives/info-card.js"></script>
+  <script src="core/primitives/right-island.js"></script>
+  <script src="core/primitives/code-editor.js"></script>
+  <script src="core/primitives/json-tree.js"></script>
+  <script src="core/primitives/sidebar-list.js"></script>
+  <!-- Phase 2.5 横切件 + 共享 pattern（依赖序：ref-pill/tags→status-dot+config · dropdown→floating/menu · approval-gate→code/json/badge · block-tree 最后） -->
+  <script src="core/primitives/ref-pill.js"></script>
+  <script src="core/primitives/tags.js"></script>
+  <script src="core/primitives/thin-table.js"></script>
+  <script src="core/primitives/callout.js"></script>
+  <script src="core/primitives/state.js"></script>
+  <script src="core/primitives/skeleton.js"></script>
+  <script src="core/primitives/dropdown.js"></script>
+  <script src="core/primitives/toast.js"></script>
+  <script src="core/primitives/dialog.js"></script>
+  <script src="core/primitives/approval-gate.js"></script>
+  <script src="core/primitives/run-terminal.js"></script>
+  <script src="core/primitives/block-tree.js"></script>
+  <script src="core/primitives/graph-canvas.js"></script>
+  <script src="core/primitives/kind-legend.js"></script>
+  <script src="core/primitives/version-diff.js"></script>
+  <script src="core/primitives/wire-list.js"></script>
+  <!-- schema -->
+  <script src="core/schema/kind-schema.js"></script>
+  <script src="core/schema/render.js"></script>
+  <!-- 装配契约 -->
+  <script src="core/manifest.js"></script>
+  <script src="core/intent.js"></script>
+  <script src="core/live.js"></script>
+  <!-- 外壳组件 -->
+  <script src="core/shell.js"></script>
+  <script src="core/sidebar.js"></script>
+  <!-- 控制器 -->
+  <script src="core/app.js"></script>
+</body>
+</html>
