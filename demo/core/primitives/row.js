@@ -21,6 +21,10 @@
       :host([hint]) .row { height: auto; min-height: var(--field-row); padding-top: var(--sp-1); padding-bottom: var(--sp-1); }
       :host(:hover) .row { background: var(--island-3); color: var(--ink); }
       :host([selected]) .row { background: var(--island-4); color: var(--ink); }
+      /* emphatic：选中态走 accent 强调（软底 + 左 inset accent 条）——列表型选中（如 run 看板）复用，不再各处另起炉灶 */
+      :host([emphatic][selected]) .row { background: var(--accent-soft); color: var(--ink); box-shadow: inset var(--line-2) 0 0 var(--accent); }
+      /* mono：标签等宽（run id / hash / 引用名等 tabular 文本） */
+      :host([mono]) .label { font-family: var(--mono); }
       :host([passive]) .row { cursor: default; }
       :host([passive]:hover) .row { background: transparent; color: var(--ink-2); }
 
