@@ -14,10 +14,11 @@
 |---|---|
 | `status-dot` · `badge` | 5 态状态点（状态翻译单源）· 分类/状态药丸 |
 | `button` · `input` · `field` · `kv` | 按钮 4 变体 · 输入/多行 · 键值大行（`editable`/`wrap` 就地编辑+多行）· 紧凑键值列（`wrap` 长 value 多行自适应） |
-| `section` · `row` · `row-detail` · `page` · `info-card` · `group-label` | 段（`grid` → 响应式 2 列，内化原 render.js 手搓网格）· 核心行（三列网格；`hint` 多行 wrap）· 可展开详情行（点行展开下方详情面板，内化原 render.js 手搓 panel+toggle）· 记录页骨架 · 无边信息卡 · uppercase-meta 小标题单源 |
+| `section` · `row` · `row-detail` · `page` · `info-card` · `group-label` | 段（`grid` → 响应式 2 列，内化原 render.js 手搓网格）· 核心行（三列网格；`hint` 多行 wrap；`emphatic` accent 选中皮肤[软底+左 accent 条] · `mono` 等宽标签 · `collapsible` 非 passive 行点 chevron 派 an-toggle/点标题派 an-select——树节点分流）· 可展开详情行（点行展开下方详情面板，内化原 render.js 手搓 panel+toggle）· 记录页骨架（`:host` flex:1/min-height:0 自填海面，sea 直返即可滚）· 无边信息卡 · uppercase-meta 小标题单源 |
+| 地基 `base.js` | AnElement 基类 + 共享糖：`anEsc`(转义) · `anLabel`(标识符人性化) · **`el(tag,attrs,…kids)`**（元素工厂，attrs 支持 on*/html/prop；全 feature/画廊经 `window.el` 复用，不再各抄——原散在 scheduler/documents/reference 三处） |
 | `tabs` · `segmented` | 页级视图切换（隐藏不销毁；实体页概览/版本）· 就地紧凑选项 |
 | `floating`(模块) · `menu`(模块) | 锚定浮层引擎 · 菜单 |
-| `action-group` · `toolbar` · `ocean-header` | 动作组 · 三段工具条（`bordered` 顶栏 variant）· 海洋页头（`editable` 标题就地改名，派 an-title-change） |
+| `action-group` · `toolbar` · `ocean-header` | 动作组（`end`/`block`/`stack`/`compact` + `footer` 底部独立动作区变体[尾部带间距，替代各处手搓 margin 裸 div]）· 三段工具条（`bordered` 顶栏 variant）· 海洋页头（`editable` 标题就地改名，派 an-title-change） |
 | `right-island` · `sidebar-list` | 右岛内容壳（皮肤与左岛同源 `--shadow-float`/`--r-chip`）· 左岛列表（New[`no-new` 可隐]+域内垂搜[实时过滤·命中祖先链自动展开]+排序+**可折叠大组** chat 式头 + **headless 类型**[无标题省头·scheduler]+**嵌套行树**[row.children 递归·点 chevron 折叠/点标题选中·`add`/`more` 行尾动作·documents 文档树复用此件而非另造]） |
 | `code-editor` · `json-tree` | 编辑器块（高亮单源 `AnCodeEditor.highlight`；编辑→保存/取消）· 结构化树 |
 | 配置 `config/entity-kinds`(9 kind + `kindIconOf`) · `config/state-model`(`anState`/`anTone`) | 实体类型/图标/动词单源 + 引用→kind 图标派生 · 状态翻译单源 + 状态→徽 tone 单源 |
@@ -44,14 +45,14 @@
 
 | 范式 | 状态 | 归宿 / 来源 | 哪需要 |
 |---|---|---|---|
-| `an-graph-canvas` | ✅ 🪂 | 已落 `core/primitives/graph-canvas.js`（移植 `graph-lab/`，一骨多态：edit/run × LR/TB；Sugiyama-lite 布局 + 浮动正交布线 + 回边弧；图标走 NODE_ICON、色走 tokens；后端对齐：5 节点 kind、回边只控制/审批发、(node,iteration) 记忆化、:edit ops）。**外设内化**：`framed`(定高 card 框 `--h-graph-preview`)/`toolbar`(悬浮缩放组)/`enterable`(进入编辑器)——render.js graph leaf 退化成一行、编辑器不再重拼缩放。**伴生 `an-kind-legend`**（5 类节点色图例，自 `window.AnGraph` 取数、零属性；图编辑器 rail + reference 画廊同用，内化原 rail 手搓 flex+拼色） | workflow 图（实体页**定义图**框 edit + 图编辑器海洋 edit·纯编辑无运行态）· scheduler 活运行图（run 态）· relation 邻域图 |
+| `an-graph-canvas` | ✅ 🪂 | 已落 `core/primitives/graph-canvas.js`（移植 `graph-lab/`，一骨多态：edit/run × LR/TB；Sugiyama-lite 布局 + 浮动正交布线 + 回边弧；图标走 NODE_ICON、色走 tokens；后端对齐：5 节点 kind、回边只控制/审批发、(node,iteration) 记忆化、:edit ops）。**外设内化**：`framed`(定高 card 框 `--h-graph-preview`)/`toolbar`(悬浮缩放组)/`enterable`(进入编辑器)——render.js graph leaf 退化成一行、编辑器不再重拼缩放。**伴生 `an-kind-legend`**（5 类节点色图例，自 `window.AnGraph` 取数、零属性；`divided` 脚位变体自带 border-top+padding，rail 不再手描；图编辑器 rail + reference 画廊同用，内化原 rail 手搓 flex+拼色） | workflow 图（实体页**定义图**框 edit + 图编辑器海洋 edit·纯编辑无运行态）· scheduler 活运行图（run 态）· relation 邻域图 |
 | `an-outline` | ✅ 🧩 | 已落 `core/primitives/outline.js`（文档大纲/ToC：左导引线 + 层级缩进 + 当前节高亮；items/active 属性注入；点条目 emit an-outline-pick → 消费方滚到标题） | documents 右岛大纲 |
 | `an-doc-editor` | ✅ 🪂 | 已落 `core/primitives/doc-editor.js`（contenteditable 块编辑，全 demo 唯一自画像素区，**对齐产品密度**：13px 正文/标题阶 t-h3·t-strong·t-body/16px 待办框，非 Notion 放大）：blocks 属性注入（h1/h2/h3·p[spans 含 @ref]·bullet·todo·quote·code·callout[tone]·divider）；四能力——斜杠「/」→ 块类型菜单(AnMenu) · 「@」→ 实体/文档 picker 边打边滤 → 内联插 an-ref-pill · 悬停 ref-pill → 浮信息卡(AnFloating) · 悬停块 → 左槽 ＋ 手柄插块；`scrollToHeading(i)` 供大纲跳转 | documents 所见即所得 |
 | `an-heatmap` | 🪂 ⬚ | 新建（日历网格，mock 驱动；后端无聚合端点） | 个人/主页活动 |
 | `an-chart` / `an-sparkline` | 🪂 ⬚ | 新建（同件两 mode：有轴/无轴） | 用量/指标趋势 · 实体行内联 |
 | `an-version-diff` | ✅ 🧩 | 已落 `core/primitives/version-diff.js`（移植 design `version-diff.js` 的 LCS 纯函数；单框 unified 红绿 diff，行内着色复用 `AnCodeEditor.highlight`；before/after + lang/range/note/bare） | 实体版本 tab（左 an-row 版本轨 + 右本件）· chat 代码 diff |
 | `an-wire-list` | ✅ 🧩 | 已落 `core/primitives/wire-list.js`（key→expr 可增删接线行组，复用 an-input；focusout 收集 field→CEL map 派 an-wire-change） | 图编辑器节点 input 映射 · control when→port（an-branch-editor 复用其底座）|
-| `an-run-board` · `an-node-gantt` | ✅ 🪂 | 已落（scheduler 专属 viz，self-drawn）：运行看板（左 = 单 workflow 被 trigger 多次的每次 run 列表[status dot + id + trigger·when + replay 徽]，右 = 选中 run 的节点甘特；点行同步切甘特 + emit an-run-pick）· 节点甘特（单 run 逐节点时段条 + 循环 iters 多条 + ×N 徽 + parked 等待框 + future 占位、点行 emit an-node-pick） | scheduler 执行驾驶舱（选 workflow → run 看板 → 运行图 + 节点调试）|
+| `an-run-board` · `an-node-gantt` | ✅ 🪂 | 已落（scheduler 专属）：运行看板**只自画 2 列外壳 + 左右同步**，左列每条 run **复用 an-row**（dot 状态 + mono id + trigger·when hint + ↻replay meta + emphatic 选中），右 = 选中 run 的节点甘特；点行 emit an-run-pick · 节点甘特（self-drawn：单 run 逐节点时段条 + 循环 iters 多条 + ×N 徽 + parked 等待框 + future 占位、点行 emit an-node-pick） | scheduler 执行驾驶舱（选 workflow → run 看板 → 运行图 + 节点调试）|
 | `an-flowrun` | 🧩 ⬚ | 移植 `flowrun.js`（记忆化条 + park 挂审批） | scheduler durable 节点 |
 | `an-branch-editor` | 🧩 ⬚ | 新 pattern（复用 `an-wire-list` + code-editor[cel] + segmented） | control 的 CEL when→port 分支组 |
 | `an-search-results` | 🧩 ⬚ | 新 pattern（hit 行 + `<mark>` 高亮安全注入 + 折叠） | search 综搜/垂搜结果 |
