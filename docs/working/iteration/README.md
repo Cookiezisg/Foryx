@@ -13,7 +13,7 @@ landed-into:
 # Iteration Loop —— AI 操作手册（START HERE）
 
 > AI：读完这个文件夹你就能跑这个 loop。本文件 = 怎么跑 + 怎么判 + 铁律。
-> [`TASKS.md`](TASKS.md) = 跑什么（索引表）。[`LOG.md`](LOG.md) = 已发现什么（索引表，别重复挖）。
+> [`ARCHIVE.md`](ARCHIVE.md) = **探过什么 + 还有什么**（覆盖归档 + frontier，EXPLORE 起手读它）。[`TASKS.md`](TASKS.md) = 跑什么（索引表）。[`LOG.md`](LOG.md) = 已发现什么（finding 索引）。
 > 仓库根 `/Users/SP14921/Documents/Personal/PersonalCodeBase/Foryx`；真模型 key 在根 `.env`（`DEEPSEEK_API_KEY`，deepseek-v4-flash）；运行器 `testend/golden/selfiter_*_test.go`。
 
 ## 一句话
@@ -34,7 +34,7 @@ landed-into:
 | 拍 | 名 | 干什么 |
 |---|---|---|
 | 1 | **REVIEW** | 起手先读本 README，刷新操作模型（防漂移、加深印象）。 |
-| 2 | **EXPLORE** | 多 agent 并发各探一新方向（先读 LOG 避重）；跑**多轮对话** probe + 后端查询，报候选。 |
+| 2 | **EXPLORE** | **开放式发现引擎**（下节）：看 [`ARCHIVE.md`](ARCHIVE.md) → 想（脑暴新探针）→ 挑（novelty × value）→ 多 agent 并发跑**多轮对话** probe + 后端查询 → 报候选。 |
 | 3 | **CONFIRM** | 多变体各跑 1-2 次，**跨变体一致复现才算真**，出现一次不算。 |
 | 4 | **GENERALIZE** ★ | **修任何东西前的第一反射**：独有还是**范问题**（不止这里）？读共享层 / 同类工具确认范围。 |
 | 5 | **FIX** | 直接修，**有就都修**（不设"值不值得"闸）。范 → 批量 + 修地基一处；独有 → 只修这处。定位到层。 |
@@ -42,7 +42,31 @@ landed-into:
 | 7 | **LOG** | 在 [`LOG.md`](LOG.md) 表里追一行（索引，不写 essay）。 |
 | 8 | **COMMIT** | **一个 fix = 一个 commit**：fix + 回归 test + LOG 行同提交，专用分支。 |
 
-回拍 1，开拓新方向，**永不停，直到 API 报告没额度**（见「停止信号」）。
+回拍 1，开拓新方向。**永不"做完"**——见下节的 NEVER-DONE 不变式；唯一外部上限是 API 没额度（见「停止信号」）。
+
+## EXPLORE 引擎 —— 开放式发现（看 → 想 → 挑 → 探 → 归档）
+
+> 拍 2 的展开。**心智：这题无限发散，loop 不是填一张 checklist，是一台"永远看测了什么 → 想还有什么 → 挑最值得的 → 探 → 归档"的发现引擎。** 
+
+**三层记忆（都不是 checklist）：**
+1. **回归套件 = 硬记忆**：锁死的格、零 token 免费复查、**探针永不回碰**。
+2. [`ARCHIVE.md`](ARCHIVE.md) **= 软记忆**：探过的格（含**绿格**：探了没缺陷）+ 结局签名 + frontier。命中和未命中都记——失败也是覆盖记忆，免重问死问题。
+3. **开放描述符网格**（ARCHIVE §1）：轴随时可加；空格/薄格 = backlog。
+
+**每轮 select 仪式：**
+1. **看** —— 读 ARCHIVE（哪里覆盖、哪格薄、frontier 在哪）+ 回归套件。
+2. **想（生成）** —— 脑暴一批候选探针，**双偏置**：(a) **价值** = 朝「一个真 agent 在哪儿最可能卡/被误导/白烧/找不到/恢复不了/等，不要局限」——`promise≠reality` 是最锋利的镜头，但**不止它**；(b) **多样** = 朝 ARCHIVE 的空格/薄格 + 没碰过的 arity/镜头。**并允许发明新轴**（元新颖）。
+3. **挑（过滤三段）** —— ① 砍掉"需要不存在的功能"和"必绿无信息"的（Minimal Criterion）；② 砍掉与归档**结局签名**太近的（换皮不算新）；③ Claude 当兴趣模型按 **novelty × value** 排序，取本轮 fanout 几条。无聊的降权不删（rare re-probe 仍可能）。
+4. **探** —— 多 agent 并发，各演用户跑多轮 + 查后端（拍 2 原样）。
+5. **归档** —— 写结局签名 + 一句教训进 ARCHIVE；缺陷 → EXPLOIT（拍 3-8）修 + shrink 最小复现 + 锁零 token 回归（填格，可能长新轴）。
+
+**主裁判是 Claude，不是机械 diff（这是 agent 产品）：** 价值是**判断**——从 agent 视角 holistic 看「这算不算真的痛」，镜头开放可加（ARCHIVE §1）。两条护栏：
+- **事实永远锚 DB ground-truth**：value 的*证据*必须引后端真相（到底成没成、真实状态），不是浮空的 LLM 软分（《AI Scientist》教训：软兴趣分任意、没人用）。**Claude 提议/排序，DB 裁决事实。**
+- **绝不优化单标量**："最多 bug"是欺骗性目标、必坍缩到反复找同一个（Lehman-Stanley）。novelty 与 ground-truth value 联合；新轴/空格自动优先（AFLFast 反频）。
+
+**跨domain迁移：** 任一实体确诊一个缺陷类，**立刻把同类探针迁移到其余实体**（F20 meta-in-row 跨 5 实体即此），改思路不止是实体，其他东西也类似。
+
+**NEVER-DONE 不变式：** loop 只在**没有任何候选探针同时"对 ARCHIVE 新颖"且"可锁成回归"**时才停——对一个还在长的产品，这永不发生（DeepMind 形式化 open-endedness）。"做完了"在构造上不存在。
 
 ## DOC-ALIGN —— 里程碑全量文档对齐（per-fix sync 的安全网）
 
@@ -97,11 +121,11 @@ curl -s "$B/api/v1/flowruns/<id>"  -H "$H" | jq '.data'                         
 7. **commit 在专用分支**（不动 `main`）；消息 `fix(loop): F<n> <一句话> [范围]`。
 
 ## 停止信号
-**唯一停止信号 = deepseek API 报额度/余额耗尽**（model 调用持续因无额度失败）。此时**不撂挑子**：把当前卡在一半的修做到**干净态**（`make verify` 绿 + 该 commit 的 commit 掉），再收工等下一步。**绝不留半坏状态。**
+loop **结构上永不"做完"**（NEVER-DONE 不变式，见 EXPLORE 引擎节）——**唯一外部停止信号 = deepseek API 报额度/余额耗尽**（model 调用持续因无额度失败）。此时**不撂挑子**：把当前卡在一半的修做到**干净态**（`make verify` 绿 + 该 commit 的 commit 掉），再收工等下一步。**绝不留半坏状态。**
 
 ## 文档规范（强制 —— 这些表会无限增长）
 LOG / TASKS 是**索引表非 essay**：一条 = 一行，每格一短语；详情进 commit/test，不进表。违反（写成段落、重复别处已有事实）= 文档腐烂，立刻压回一行。
 
 ## 文件 / 已知 gap
-文件：`README.md` · [`TASKS.md`](TASKS.md) · [`LOG.md`](LOG.md) · 操作脚本 `testend/loop/{setup,turn}.sh`（起后端后用）· 回归 `testend/golden/selfiter_*_test.go`。
-已知 gap：判官是裸的你 + 单模型（自评偏差，靠后端 ground-truth + 前后对比兜）；EXPLORE 无"已探方向"地图（可能反复挖浅）；回归套真模型成本（尽量转零 token 结构断言）。
+文件：`README.md`（手册 + EXPLORE 引擎）· [`ARCHIVE.md`](ARCHIVE.md)（覆盖归档 + frontier）· [`TASKS.md`](TASKS.md) · [`LOG.md`](LOG.md) · 操作脚本 `testend/loop/{setup,turn}.sh`（起后端后用）· 回归 `testend/golden/selfiter_*_test.go`。
+已知 gap：判官是裸的你 + 单模型（自评偏差，靠后端 ground-truth + 前后对比兜）；回归套真模型成本（尽量转零 token 结构断言）；ARCHIVE 描述符/结局签名目前**手工维护**（靠纪律，无自动 embedding 去重——单人规模够用，量大再自动化）。
