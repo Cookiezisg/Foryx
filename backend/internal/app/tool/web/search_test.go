@@ -173,3 +173,19 @@ func TestWebSearch_LimitTruncates(t *testing.T) {
 		t.Fatalf("want 2 results + truncated, got len=%d truncated=%v", len(resp.Results), resp.Truncated)
 	}
 }
+
+// TestNoBackendMessage_NoPhantomKeylessMCP — F54: the no-search-backend guidance must not advertise a
+// keyless search MCP the marketplace can't deliver (it named "duckduckgo-search ... no API key needed",
+// absent from the registry — only Tavily, which needs a key), which made the agent chase a dead end.
+func TestNoBackendMessage_NoPhantomKeylessMCP(t *testing.T) {
+	msg := noBackendMessage("anything")
+	if strings.Contains(strings.ToLower(msg), "duckduckgo") {
+		t.Error("guidance must not name duckduckgo-search (not installable from the registry)")
+	}
+	if strings.Contains(msg, "no API key needed") {
+		t.Error("guidance must not claim a keyless search MCP — search MCPs need their own key")
+	}
+	if !strings.Contains(msg, "WebFetch") {
+		t.Error("guidance should point at the genuinely-keyless WebFetch fallback")
+	}
+}

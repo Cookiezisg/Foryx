@@ -199,7 +199,8 @@ func noBackendMessage(query string) string {
 	return fmt.Sprintf("No search backend configured for %q.\n\n"+
 		"To enable web search, do ONE of the following:\n"+
 		"  • Configure a search-category API key (Brave / Serper / Tavily — international; Bocha — China; all have free tiers) and set it as the workspace's default search key.\n"+
-		"  • Install a search MCP server (e.g. duckduckgo-search) — it exposes its own search tool you can call directly (no API key needed).",
+		"  • Install a search MCP server from the marketplace via install_mcp_server (e.g. Tavily) and call its search tool — note most search MCPs still need their own API key.\n"+
+		"If you only need a SPECIFIC known URL (not an open-web search), WebFetch works with no key.",
 		query)
 }
 
