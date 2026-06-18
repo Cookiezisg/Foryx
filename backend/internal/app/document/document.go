@@ -351,15 +351,33 @@ func (s *Service) Move(ctx context.Context, id string, in MoveInput) (*documentd
 	parentChanged := !samePtrString(d.ParentID, in.ParentID)
 	d.ParentID = in.ParentID
 
-	maxPos, err := s.repo.MaxSiblingPosition(ctx, in.ParentID)
+	// Stable insert-at-index: pull the target parent's current children (ListByParent is ordered
+	// position ASC), drop the moved doc if already among them, splice it in at the requested index,
+	// then renumber 0..N-1 so sibling positions stay unique + contiguous. A raw `d.Position = index`
+	// assign collided with the occupant of that slot, and ListByParent's created_at tiebreak then
+	// silently ignored the requested order (the observed pos=1/pos=1 collision). nil position = append.
+	//
+	// 稳定按索引插入：取目标父现有子（ListByParent 按 position ASC 排），若被移动文档已在其中先剔除，在
+	// 请求索引处插入，再 0..N-1 重排使同级 position 唯一且连续。裸 `d.Position=index` 赋值会与该槽占位者
+	// 相撞，ListByParent 的 created_at tiebreak 便静默忽略请求顺序（观测到的 pos=1/pos=1 碰撞）。nil = 追加末位。
+	siblings, err := s.repo.ListByParent(ctx, in.ParentID)
 	if err != nil {
-		return nil, fmt.Errorf("documentapp.Move: MaxSiblingPosition: %w", err)
+		return nil, fmt.Errorf("documentapp.Move: ListByParent: %w", err)
 	}
-	if in.Position == nil {
-		d.Position = maxPos + 1
-	} else {
-		d.Position = *in.Position
+	others := make([]*documentdomain.Document, 0, len(siblings))
+	for _, sib := range siblings {
+		if sib.ID != d.ID {
+			others = append(others, sib)
+		}
 	}
+	idx := len(others)
+	if in.Position != nil && *in.Position >= 0 && *in.Position < idx {
+		idx = *in.Position
+	}
+	ordered := make([]*documentdomain.Document, 0, len(others)+1)
+	ordered = append(ordered, others[:idx]...)
+	ordered = append(ordered, d)
+	ordered = append(ordered, others[idx:]...)
 
 	if parentChanged {
 		parentPath, err := s.parentPath(ctx, d.ParentID)
@@ -369,7 +387,14 @@ func (s *Service) Move(ctx context.Context, id string, in MoveInput) (*documentd
 		d.Path = parentPath + "/" + d.Name
 	}
 
-	if err := s.repo.Update(ctx, d); err != nil {
+	changed := make([]*documentdomain.Document, 0, len(ordered))
+	for i, doc := range ordered {
+		if doc.Position != i || doc.ID == d.ID {
+			doc.Position = i
+			changed = append(changed, doc)
+		}
+	}
+	if err := s.repo.UpdateBatch(ctx, changed); err != nil {
 		return nil, fmt.Errorf("documentapp.Move: %w", err)
 	}
 	if parentChanged {

@@ -9,7 +9,7 @@ import (
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
 )
 
-const listDocumentsDescription = `List direct children one level under parentId (null/omit = root): name, description, path each. Walk the tree progressively; use search_documents for keyword search.`
+const listDocumentsDescription = `List direct children one level under parentId (null/omit = root): id, name, description, path, position each (returned in sibling order). position is the 0-based sibling index (0 = first) — use it to see current ordering and to pick the target index for move_document. Walk the tree progressively; use search_documents for keyword search.`
 
 var listDocumentsSchema = json.RawMessage(`{
 	"type": "object",
@@ -63,11 +63,12 @@ func (t *ListDocuments) Execute(ctx context.Context, argsJSON string) (string, e
 		ID          string `json:"id"`
 		Name        string `json:"name"`
 		Path        string `json:"path"`
+		Position    int    `json:"position"`
 		Description string `json:"description,omitempty"`
 	}
 	out := make([]slim, 0, len(rows))
 	for _, d := range rows {
-		out = append(out, slim{ID: d.ID, Name: d.Name, Path: d.Path, Description: d.Description})
+		out = append(out, slim{ID: d.ID, Name: d.Name, Path: d.Path, Position: d.Position, Description: d.Description})
 	}
 	return toolapp.ToJSON(map[string]any{"count": len(out), "documents": out}), nil
 }

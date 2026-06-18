@@ -114,6 +114,42 @@ func TestMove_CycleGuard(t *testing.T) {
 	}
 }
 
+// TestMove_StableReorder — regression for F21 (iteration loop): move_document's position is a
+// stable insert-at-index, not a raw absolute assign. Moving the last sibling to position 0 must
+// make it first AND keep every sibling position unique + contiguous (the old code raw-assigned the
+// index, colliding with the occupant; the visible order then fell to created_at, leaving duplicate
+// positions). Verified against the service's own ListByParent ordering.
+func TestMove_StableReorder(t *testing.T) {
+	svc, ctx := newSvc(t)
+	a, _ := svc.Create(ctx, CreateInput{Name: "A"})
+	b, _ := svc.Create(ctx, CreateInput{Name: "B"})
+	c, _ := svc.Create(ctx, CreateInput{Name: "C"})
+	_, _ = a, b
+	zero := 0
+	if _, err := svc.Move(ctx, c.ID, MoveInput{Position: &zero}); err != nil {
+		t.Fatalf("move C to position 0: %v", err)
+	}
+	kids, err := svc.ListByParent(ctx, nil)
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	var order []string
+	seenPos := map[int]bool{}
+	for i, d := range kids {
+		order = append(order, d.Name)
+		if seenPos[d.Position] {
+			t.Errorf("duplicate sibling position %d on %q (collision)", d.Position, d.Name)
+		}
+		seenPos[d.Position] = true
+		if d.Position != i {
+			t.Errorf("%q position = %d, want %d (contiguous 0..N)", d.Name, d.Position, i)
+		}
+	}
+	if strings.Join(order, ",") != "C,A,B" {
+		t.Errorf("order after moving C to 0 = %v, want [C A B]", order)
+	}
+}
+
 func TestResolveAttached_NoSubtree(t *testing.T) {
 	svc, ctx := newSvc(t)
 	root, _ := svc.Create(ctx, CreateInput{Name: "Root"})
