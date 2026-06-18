@@ -130,6 +130,9 @@ landed-into:
 | trigger 失败路径可追（webhook 坏 body、cron/fsnotify 坏配、sensor 探错 各有可追因） | trigger | 报错 |
 | 深 durable 循环（25 迭代累加器 + 双体节点循环 per-iteration 全对、按真条件退、远低于 MaxIterations、scopeFor 多体验对） | durable-engine | 多轮 loop |
 | **D2 workspace 隔离边界**（跨 ws 读/写/run 全 404/401、无泄露、缺头 401；ORM workspace 过滤兜底） | 安全·全实体 | 边界/恶意 |
+| 删被引用实体级联（删 fn→消费 workflow/agent run 干净报 ref-not-found、链可恢复、capability_check 报 dangling、pin 闭包 run 不受影响） | 跨实体·durable | 报错→恢复 |
+| 大规模（15-25 节点图 build+run、多 input/output、长内容、版本 cap-50 trim 不丢 active）无截断·腐败 | workflow·全实体 | 大输入/scale |
+| create_function 名竞态（DB 唯一索引兜底、并发同名 1×201+N×409 DUPLICATE）· serial-trigger firing 路径串行（单 ticker drain） | function·workflow | 并发 |
 
 ## §3 Frontier（空格 / 薄格——"想还有什么"的起点）
 
@@ -145,6 +148,7 @@ landed-into:
 > round-8（0619）填：approval approve/fail timeout、handler config 工具（全绿）；仅 modelOverride 面有料：F66（HIGH 修，执行记录真因）+ F67/F68（队）。**8 轮收敛**：HIGH 多为透明度族（流错 F33/F34/F66、handler F63/F64）。
 > round-9（0619）透明度轴 sweep：function 运行错、trigger 失败路径全绿；ctlerr 逮 F69（author-time CEL 丢因，已修）。透明度轴大体硬化（F7/F8/F33/F34/F35/F49/F63/F66/F69），剩 F64/F67 同族。
 > round-10（0619）：深 durable 循环引擎全绿、D2 隔离边界全程守住（无泄露）；逮 F70（add_node 静默丢 input，已修）+ F71（capability dataflow，=F35 深层）+ F72（跨ws messages 200-空 vs 404 一致性，low）。
+> round-11（0619）≈收敛完成：删级联 + 大规模 全绿；concur2 仅重确认 F61（仅外部并行客户端触发）+ F73(low)。**本轮零新 clean fix——产品高度硬化**。
 
 **确诊待修 backlog（"想还有什么"已变"该修什么"，= LOG）：**
 - **HIGH（wind-down careful 修）：** F40 declared-outputs 静默 no-op（标量返回忽略声明名、落 .text）· F41 concurrency=skip 对阻塞工作流退化成 serial（同步 Advance 蒸发 overlap 信号）。
