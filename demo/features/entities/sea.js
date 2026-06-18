@@ -87,32 +87,35 @@ window.FEATURE.entities = Object.assign(window.FEATURE.entities || {}, {
       return isle;
     }
 
-    // ── 空态（能力主页）：按 kind 计数 + 4 核心 Quadrinity kind 新建 launcher + 全部实体列表；右岛收起。复用原语不手搓。──
+    // ── 空态（能力主页）：页头 能力 + 计数 + 新建（4 核心 kind 菜单）；按 kind 分组的清单（无边、靠留白层级）。复用原语不手搓。──
     function showEmpty() {
       const el = window.el;
       cur = null;
       if (ctx.shell) { ctx.shell.setRight(null); ctx.shell.setHeadMenu && ctx.shell.setHeadMenu(null); ctx.shell.setHeadTitle && ctx.shell.setHeadTitle(null); }
       const head = el("an-ocean-header", { crumb: "Entities", title: "能力" });
       head.append(el("an-badge", { slot: "meta" }, reg.length + " 个实体"));
-      const launch = el("an-section", { label: "新建" });
-      const grid = el("div"); grid.style.cssText = "display:grid; grid-template-columns:repeat(auto-fill, minmax(var(--w-block), 1fr)); gap:var(--sp-3);";
-      ["function", "handler", "agent", "workflow"].forEach((k) => {
-        const kd = K[k] || {}, n = reg.filter((x) => x.kind === k).length;
-        const card = el("an-info-card", { title: kd.label || k, icon: kd.icon || k, meta: n + " 个 · " + (kd.verb || "") });
-        card.append(el("an-button", { variant: "ghost", size: "sm", icon: "plus",
-          onclick: () => window.AnToast && window.AnToast.show({ text: "新建 " + (kd.label || k) + " — 描述需求让 AI 来建，或填表单" }) }, "新建"));
-        grid.append(card);
+      const newBtn = el("an-button", { slot: "actions", variant: "primary", size: "sm", icon: "plus" }, "新建");
+      newBtn.addEventListener("click", () => window.AnMenu && window.AnMenu.open(newBtn, {
+        align: "end", placement: "bottom", namespace: "ent-new",
+        items: ["function", "handler", "agent", "workflow"].map((k) => ({ value: k, label: (K[k] || {}).label || k, icon: (K[k] || {}).icon })),
+        onPick: (v) => window.AnToast && window.AnToast.show({ text: "新建 " + ((K[v] || {}).label || v) + " — 描述需求让 AI 来建，或填表单" }),
+      }));
+      head.append(newBtn);
+      // 按 4 大组（逻辑节点/控制节点/工作流/外部组件）分组，每组一个 section + 清单——与左岛同源分组，无边靠留白
+      const GROUPS = [["逻辑节点", ["function", "handler", "agent", "trigger"]], ["控制节点", ["control", "approval"]], ["工作流", ["workflow"]], ["外部组件", ["mcp", "skill"]]];
+      const kids = [head];
+      GROUPS.forEach(([label, kinds]) => {
+        const ents = reg.filter((e) => kinds.indexOf(e.kind) >= 0);
+        if (!ents.length) return;
+        const sec = el("an-section", { label: label });
+        ents.forEach((e) => {
+          const r = el("an-row", { icon: (K[e.kind] || {}).icon || e.kind, label: e.label, hint: (K[e.kind] || {}).label, meta: e.meta });
+          r.addEventListener("an-select", () => ctx.Intent.select({ kind: "entity", id: e.id }));
+          sec.append(r);
+        });
+        kids.push(sec);
       });
-      launch.append(grid);
-      const listSec = el("an-section", { label: "全部实体" });
-      const list = el("div"); list.style.cssText = "display:flex; flex-direction:column;";
-      reg.forEach((e) => {
-        const r = el("an-row", { icon: (K[e.kind] || {}).icon || e.kind, label: e.label, meta: e.meta });
-        r.addEventListener("an-select", () => ctx.Intent.select({ kind: "entity", id: e.id }));
-        list.append(r);
-      });
-      listSec.append(list);
-      page.replaceChildren(head, launch, listSec);
+      page.replaceChildren.apply(page, kids);
     }
 
     function show(id) {

@@ -70,14 +70,17 @@ window.FEATURE.scheduler = Object.assign(window.FEATURE.scheduler || {}, {
       const sec = el("div");
       const counts = RUNS.reduce((a, r) => { a.total++; a[r.status] = (a[r.status] || 0) + 1; return a; }, { total: 0 });
       const kpiSec = el("an-section", { label: "今日运行" });
-      const grid = el("div"); grid.style.cssText = "display:grid; grid-template-columns:repeat(auto-fill, minmax(var(--w-block), 1fr)); gap:var(--sp-3);";
+      const strip = el("div"); strip.style.cssText = "display:flex; flex-wrap:wrap; gap:var(--sp-8); padding:0 var(--sp-2);";   // 紧凑 stat 条（无边、靠留白），非大数字卡
       [["运行", counts.total, "idle"], ["已完成", counts.completed || 0, "done"], ["失败", counts.failed || 0, "err"], ["在途", counts.running || 0, "run"], ["待审批", counts.parked || 0, "wait"]].forEach(([label, n, dot]) => {
-        const card = el("an-info-card", { title: label });
-        const big = el("div"); big.style.cssText = "display:flex; align-items:center; gap:var(--sp-2); font-size:var(--t-h1); font-weight:600; color:var(--ink);";
-        big.append(el("an-status-dot", { state: dot }), document.createTextNode(String(n)));
-        card.append(big); grid.append(card);
+        const stat = el("div"); stat.style.cssText = "display:flex; flex-direction:column; gap:var(--grid);";
+        const num = el("div"); num.style.cssText = "display:flex; align-items:center; gap:var(--gap-tight); font-size:var(--t-h2); font-weight:600; color:var(--ink); font-variant-numeric:tabular-nums;";
+        num.append(el("an-status-dot", { state: dot }), document.createTextNode(String(n)));
+        const lbl = el("div"); lbl.style.cssText = "font-size:var(--t-meta); color:var(--ink-3);";
+        lbl.textContent = label;
+        stat.append(num, lbl);
+        strip.append(stat);
       });
-      kpiSec.append(grid);
+      kpiSec.append(strip);
       const inboxSec = el("an-section", { label: "需要你" });
       const inbox = el("an-thin-table", { selectable: "" });
       inbox.columns = [{ key: "id", label: "flowrun" }, { key: "reason", label: "原因" }, { key: "wf", label: "workflow" }, { key: "age", label: "时间", align: "right" }];
