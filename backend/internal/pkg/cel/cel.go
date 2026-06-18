@@ -16,6 +16,7 @@ package cel
 
 import (
 	"fmt"
+	"strings"
 
 	celgo "github.com/google/cel-go/cel"
 	"github.com/google/cel-go/common/types/ref"
@@ -159,9 +160,25 @@ func (p *Program) Eval(vars map[string]any) (any, error) {
 	}
 	out, _, err := p.prg.Eval(vars)
 	if err != nil {
-		return nil, fmt.Errorf("cel.Eval %q: %w", p.src, err)
+		return nil, fmt.Errorf("cel.Eval %q: %w%s", p.src, err, overloadHint(err))
 	}
 	return refToGo(out), nil
+}
+
+// overloadHint appends an actionable note for the most common CEL eval failure: arithmetic that
+// mixes numeric types. A JSON payload/result number binds as a CEL double, an integer literal is a
+// CEL int, and cel-go has no cross-type +/-/* overload — so the natural "start.n + 5" fails every
+// run with a bare "no such overload" the agent can't decode (it burns turns guessing). Why here:
+// this is the one chokepoint every node-input / condition eval passes through.
+//
+// overloadHint 为最常见的 CEL 求值失败补一句可操作提示：混合数值类型的算术。JSON payload/结果里的数
+// 绑成 CEL double、整数字面量是 CEL int，cel-go 无跨类型 +/-/* 重载——故自然的 "start.n + 5" 每次
+// run 都崩在裸 "no such overload"、agent 无从解码（白烧若干轮）。放这：每条节点 input/条件求值的唯一收口。
+func overloadHint(err error) string {
+	if err != nil && strings.Contains(err.Error(), "no such overload") {
+		return " (operands have mismatched types — if mixing a payload/result number with an integer literal, cast one: int(start.n) + 5, or write the literal as 5.0)"
+	}
+	return ""
 }
 
 // EvalBool evaluates to bool (a condition guard). A non-bool result is an authoring error.
@@ -173,7 +190,7 @@ func (p *Program) EvalBool(vars map[string]any) (bool, error) {
 	}
 	out, _, err := p.prg.Eval(vars)
 	if err != nil {
-		return false, fmt.Errorf("cel.EvalBool %q: %w", p.src, err)
+		return false, fmt.Errorf("cel.EvalBool %q: %w%s", p.src, err, overloadHint(err))
 	}
 	if b, ok := out.Value().(bool); ok {
 		return b, nil
