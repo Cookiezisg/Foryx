@@ -1,9 +1,10 @@
 /* Anselm feature — chat 海洋（sea）：AI 对话运行时主战场。
-   布局：中央 = an-page（居中列：an-block-tree transcript）+ 底部固定 an-composer；会话名走 shell 左上角紧凑标题（恒显，无文章式大标题）；
-     右岛 = <an-entity-workspace>（本会话碰过的实体各一 tab + 可选 Todo tab；每实体卡按其 tool call 开子视图：create 流式新建 / edit 流式 Diff / run 终端 / flowrun 节点点亮 / trace 嵌套 ReAct）。无实体且无 todo → 右岛收起、对话全宽。
+   布局：中央 = an-page（居中列：an-block-tree transcript）+ 底部固定 an-composer；会话名走 shell 左上角紧凑标题（恒显）；
+     右岛 = <an-entity-workspace>（v2，= entities 流的实体面板镜像）：「跟着对话长出来」——对话起步无右岛，主对话首个 tool call 触发某 item 才挂出右岛显该 item；后续触发的 item 进右上角下拉选择器，active 随最新触发而变。
+     每 item（5 实体 kind + Todo + Subagent）一套 canonical 完整岛屿（an-tabs 切全量 facet，未触及 facet 显空态）。无 item → 右岛收起、对话全宽。
    契约落地（mock 演示）：Send=202+SSE → 这里以脚本回放模拟流式回合（每对话同时只一个在途回合 → generating 时 composer 切「停止」）；
-     DB 行是真相 → 对话流 blocks（messages 流）+ 右岛实体面板（entities 流）双写：同一回合步既 push tool_call 块到 transcript，又驱动右岛对应实体 tab 流式填充【新 active 版本】（edit 立即生效、可 revert，无草稿/采用门）。
-   脚本解释器消费 data.js 的 turn 步：push/patch/stream（文本逐 token）/progressStream（终端逐行）/island（驱动右岛：focus 切实体+视图 + op 流式）/islandTodo（喂右岛 Todo 看板）/gate（人在环门，只在对话流渲）。
+     DB 行是真相 → 对话流 blocks（messages 流）+ 右岛实体面板（entities 流）双写：同一回合步既 push tool_call 块到 transcript，又驱动右岛对应 item 出现/置 active/切 facet/流式填充（edit 立即生效、可 revert，无草稿/采用门）。
+   脚本解释器消费 data.js 的 turn 步：push/patch/stream（文本逐 token）/progressStream（终端逐行）/island{item,facet,op}（驱动右岛：ensure+setActive+focus+op 流式，流式数据取自 facet 种子单源）/islandTodo{item,items}（Todo item 看板）/islandStatus{item,status}（item 态机→picker 点）/gate（人在环门，只在对话流渲）。
    串接：composer an-send→追加 user 块 + 跑回复回合 · an-stop→停 · block-tree an-continue→续跑 · an-ref→Intent.select；rail 选会话→Intent.on('conversation')→loadConvo。 */
 window.FEATURE = window.FEATURE || {};
 window.FEATURE.chat = Object.assign(window.FEATURE.chat || {}, {
@@ -29,7 +30,9 @@ window.FEATURE.chat = Object.assign(window.FEATURE.chat || {}, {
     let blocks = [];         // live transcript（耐久态）
     let timers = [];         // 脚本步定时器（切会话全清）
     let gateListener = null; // 等待中的 an-decide 监听
-    let ws = null;           // 右岛实体工作台（an-entity-workspace），无实体/todo 则 null
+    let ws = null;           // 右岛实体工作台（an-entity-workspace），无 item 则 null
+    let islShell = null;     // 承载 ws 的 headless an-right-island（皮肤壳）
+    let wsMounted = false;   // 右岛是否已挂（autoplay 下首个触发才挂=「跟着对话长出来」）
 
     const setBlocks = (b) => { blocks = b; tree.blocks = blocks; requestAnimationFrame(() => page.scrollToBottom()); };
     const pushBlock = (b) => setBlocks(blocks.concat([b]));
@@ -131,13 +134,18 @@ window.FEATURE.chat = Object.assign(window.FEATURE.chat || {}, {
       };
       step();
     }
+    // 首次触发才挂右岛（autoplay「跟着对话长出来」）；幂等
+    function mountIsland() { if (!wsMounted) { if (ctx.shell) ctx.shell.setRight(islShell); wsMounted = true; } }
     function driveIsland(drive, done) {
-      if (!ws || !drive || !drive.focus) { if (done) done(); return; }
-      const target = ws.focus(drive.focus.id, drive.focus.view);
+      if (!ws || !drive || !drive.item) { if (done) done(); return; }
+      mountIsland();
+      ws.ensure(drive.item);          // item 入岛 + 进 picker（首个 ensure 即出现点）
+      const target = ws.focus(drive.item, drive.facet);   // active 跟随 + 切 facet + 拿 live 元素
       const op = drive.op;
       if (!op) { if (done) done(); return; }   // 仅切视图（静态切换）
-      if (op === "create") return streamCode(target, drive.code || "", drive.cps || 150, done);
-      if (op === "edit") return streamDiff(target, drive.before, drive.after || "", drive.cps || 150, done);
+      const fs = (ws.facetSpec && ws.facetSpec(drive.item, drive.facet)) || {};   // 流式数据单源 = facet 种子
+      if (op === "create") return streamCode(target, drive.code != null ? drive.code : (fs.code || ""), drive.cps || 150, done);
+      if (op === "edit") return streamDiff(target, drive.before != null ? drive.before : fs.before, drive.after != null ? drive.after : (fs.after || ""), drive.cps || 150, done);
       if (op === "run") {
         if (target) {
           if (drive.args != null) target.setAttribute("args", drive.args);
@@ -147,8 +155,15 @@ window.FEATURE.chat = Object.assign(window.FEATURE.chat || {}, {
         const ln = (drive.trace && drive.trace.lines ? drive.trace.lines.length : 3);
         after((ln + 2) * 260, done); return;
       }
-      if (op === "flowrun") return streamGantt(target, drive.nodes || [], drive.lps || 3, done);
-      if (op === "trace") return streamTrace(target, drive.blocks || [], done);
+      if (op === "flowrun") return streamGantt(target, drive.nodes || fs.nodes || [], drive.lps || 3, done);
+      if (op === "trace") return streamTrace(target, drive.blocks || fs.blocks || [], done);
+      if (done) done();
+    }
+    // todo_write 步：Todo 成独立 item，ensure + 置 active（跟随）+ 整表喂看板
+    function driveTodo(d, done) {
+      if (!ws || !d || !d.item) { if (done) done(); return; }
+      mountIsland();
+      ws.ensure(d.item); ws.setActive(d.item); ws.setTodo(d.item, d.items || []);
       if (done) done();
     }
 
@@ -157,8 +172,10 @@ window.FEATURE.chat = Object.assign(window.FEATURE.chat || {}, {
       if (s.stream) { after(s.ms || 250, () => streamBlock(s.stream, done)); return; }
       if (s.progressStream) { after(s.ms || 250, () => streamLog(s.progressStream, done)); return; }
       // island 步：与对话流块同步推进——先落 push/patch（messages 真相），再驱动右岛（entities 镜像）
-      if (s.island) { after(s.ms || 250, () => { applyStep(s); if (s.islandTodo) ws && ws.setTodo(s.islandTodo); driveIsland(s.island, done); }); return; }
-      after(s.ms || 300, () => { applyStep(s); if (s.islandTodo && ws) ws.setTodo(s.islandTodo); if (done) done(); });
+      if (s.island) { after(s.ms || 250, () => { applyStep(s); driveIsland(s.island, done); }); return; }
+      if (s.islandTodo) { after(s.ms || 250, () => { applyStep(s); driveTodo(s.islandTodo, done); }); return; }
+      if (s.islandStatus) { after(s.ms || 250, () => { applyStep(s); if (ws) ws.setItemStatus(s.islandStatus.item, s.islandStatus.status); if (done) done(); }); return; }
+      after(s.ms || 300, () => { applyStep(s); if (done) done(); });
     }
     function runTurn(steps, i) {
       if (!cur || !steps || i >= steps.length) { composer.removeAttribute("generating"); return; }
@@ -179,21 +196,22 @@ window.FEATURE.chat = Object.assign(window.FEATURE.chat || {}, {
       { ms: 450, stream: { type: "text", text: "收到 👍 我会按这个调整。\n\n（演示：真实回合经 messages SSE 逐 token 流式产出，此处为脚本流式回放。）", tps: 24 } },
     ];
 
-    // ── 右岛实体工作台：据 c.islands（碰过的实体清单）+ c.todo 建；静态对话直接显 view 种子值，autoplay 对话靠 turn 步流式 ──
+    // ── 右岛实体工作台（v2）：据 c.items（本对话所有可能 item）建 headless 岛；
+    //   已完成对话（无 autoplay）载入即全 ensure + 停最后 active；autoplay 先不挂、首个 island 步触发才「长出来」。──
     function buildWorkspace(c) {
-      ws = null;
-      const ents = c.islands || [];
-      if (!ents.length && !c.todo) { if (ctx.shell) ctx.shell.setRight(null); return; }
-      const title = ents.length ? (ents.length > 1 ? "工作台 · " + ents.length + " 个实体" : (ents[0].name || "实体")) : "Todo";
-      const icon = ents.length ? ((KIND[ents[0].kind] || {}).icon || "workflow") : "list";
-      const shellIsl = el("an-right-island", { title, icon });
+      ws = null; islShell = null; wsMounted = false;
+      const items = c.items || [];
+      if (!items.length) { if (ctx.shell) ctx.shell.setRight(null); return; }
+      islShell = el("an-right-island", { headless: true });
       ws = el("an-entity-workspace");
-      ws.model = { entities: ents, todo: !!c.todo };
+      ws.model = { items };
       ws.addEventListener("an-revert", (e) => toast("已 revert · " + (e.detail.name || "") + " 回退到上一版本（revert_* 移 active 指针）"));
-      shellIsl.append(ws);
-      if (ctx.shell) ctx.shell.setRight(shellIsl);
-      // 静态对话（无 autoplay）：终态 todo 直接落定（view 种子值已在 model build 时设入）
-      if (!c.autoplay && c.todo && c.todoFinal) ws.setTodo(c.todoFinal);
+      islShell.append(ws);
+      if (!c.autoplay) {
+        if (ctx.shell) ctx.shell.setRight(islShell); wsMounted = true;   // 载入即显（先连上 ws 再 ensure/setActive）
+        items.forEach((it) => ws.ensure(it.id));
+        ws.setActive(c.activeItem || items[items.length - 1].id);
+      } else if (ctx.shell) ctx.shell.setRight(null);   // 跟着对话长出来：首个 island 步才挂
     }
 
     // ── 切会话 ──

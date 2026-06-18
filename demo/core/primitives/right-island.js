@@ -1,10 +1,11 @@
-/* Anselm 原语 D4 — <an-right-island title icon>。右岛内容壳：head（icon + title）+ InfoCard body 堆叠。
+/* Anselm 原语 D4 — <an-right-island title icon headless>。右岛内容壳：head（icon + title）+ InfoCard body 堆叠。
    why：宽度由外层 <an-shell> 的 right slot 控制——本组件只画岛皮肤 + 头 + 正文，不自管开合、不每海洋手编宽。
-   body 走默认 slot（堆叠若干 <an-info-card>）；正文区可滚但不显滚轮。 */
+   body 走默认 slot（堆叠若干 <an-info-card>）；正文区可滚但不显滚轮。
+   headless：不画 .head——交由 slot 内容自绘头（如 an-entity-workspace 的「真名 + 下拉选择器」头）；岛皮肤/滚动 body 照旧。 */
 (function () {
   class AnRightIsland extends window.AnElement {
     static tag = "an-right-island";
-    static observed = ["title", "icon"];
+    static observed = ["title", "icon", "headless"];
     static css = `
       :host { display: block; height: 100%; }
       /* 岛皮肤与左岛（<an-sidebar>）同源：仅宽度不同，圆角/描边/投影一律复用，杜绝两岛观感漂移 */
@@ -25,9 +26,12 @@
       }
       .body::-webkit-scrollbar { width: 0; height: 0; }
       ::slotted(* + *) { margin-top: var(--sp-3); }
+      /* headless：slot 自绘头（含其自己的头高），本壳不画 .head，body 顶留一档气口、且让 slot 占满（工作台自管滚动分区） */
+      :host([headless]) .body { padding: 0; }
     `;
     render() {
       const e = window.anEsc;
+      if (this.has("headless")) return `<aside class="island"><div class="body"><slot></slot></div></aside>`;
       const ic = this.attr("icon") ? `<span class="ico">${window.icon(this.attr("icon"))}</span>` : "";
       const title = `<span class="title">${e(this.attr("title") || "")}</span>`;
       return `<aside class="island"><div class="head">${ic}${title}</div><div class="body"><slot></slot></div></aside>`;

@@ -19,7 +19,7 @@
 | `tabs` · `segmented` | 页级视图切换（隐藏不销毁；实体页概览/版本）· 就地紧凑选项 |
 | `floating`(模块) · `menu`(模块) · `mention`(模块) | 锚定浮层引擎 · 菜单 · @ 提及 picker（contenteditable 上 `@`→边打边滤→内联插 `an-ref-pill`；doc-editor / composer 同源，复用 AnMenu/AnFloating/ref-pill） |
 | `action-group` · `toolbar` · `ocean-header` | 动作组（`end`/`block`/`stack`/`compact` + `footer` 底部独立动作区变体[尾部带间距，替代各处手搓 margin 裸 div]）· 三段工具条（`bordered` 顶栏 variant）· 海洋页头（`editable` 标题就地改名，派 an-title-change） |
-| `right-island` · `sidebar-list` | 右岛内容壳（皮肤与左岛同源 `--shadow-float`/`--r-chip`）· 左岛列表（New[`no-new` 可隐]+域内垂搜[实时过滤·命中祖先链自动展开]+排序+**可折叠大组** chat 式头 + **headless 类型**[无标题省头·scheduler]+**嵌套行树**[row.children 递归·点 chevron 折叠/点标题选中·`add`/`more` 行尾动作·documents 文档树复用此件而非另造]） |
+| `right-island` · `sidebar-list` | 右岛内容壳（皮肤与左岛同源 `--shadow-float`/`--r-chip`；`headless` 不画头、交 slot 自绘——entity-workspace 用）· 左岛列表（New[`no-new` 可隐]+域内垂搜[实时过滤·命中祖先链自动展开]+排序+**可折叠大组** chat 式头 + **headless 类型**[无标题省头·scheduler]+**嵌套行树**[row.children 递归·点 chevron 折叠/点标题选中·`add`/`more` 行尾动作·documents 文档树复用此件而非另造]） |
 | `code-editor` · `json-tree` | 编辑器块（高亮单源 `AnCodeEditor.highlight`；编辑→保存/取消）· 结构化树 |
 | 配置 `config/entity-kinds`(9 kind + `kindIconOf`) · `config/state-model`(`anState`/`anTone`) | 实体类型/图标/动词单源 + 引用→kind 图标派生 · 状态翻译单源 + 状态→徽 tone 单源 |
 | schema `schema/{kind-schema,render}` | 声明式实体页（字段型 text/kv/code/json/rows/card + 段 layout:grid + 块 span） |
@@ -40,7 +40,7 @@
 | `an-approval-gate` | ✅ | `approval-gate.js` 三 flavor：chat(danger 批准/拒绝) · ask(ask_user 提交/跳过 + options) · durable(flowrun :decide，仅 scheduler) | chat 危险确认 / ask 提问 · flowrun 审批门 |
 | `an-run-terminal` | ✅ | 移植 `run-debug.js`（args→流式 stdout→结果） | fn/hd/agent/mcp 试运行 |
 | `an-block-tree` | ✅ | `block-kit.js` → 9 块型 transcript（text/reasoning/tool_call/tool_result/progress/compaction/turnEnd/todo/subtree E3）；结果按形态分派(终端/列表/JSON/error 标红) · turnEnd 按 stopReason 分态 · pokeText/pokeLog 逐帧 Delta 流式 | **chat 核心** · agent transcript |
-| `an-entity-workspace` | ✅ 🧩 | `entity-workspace.js`（chat 右岛实体工作台 = **entities SSE 流的实体面板镜像**，与对话流 block-tree[messages] 并行双写）：顶层 an-tabs[本对话每碰过实体一 tab + 可选 Todo] + 按 kind 卡工厂[an-info-card>an-segmented 子视图]；子视图按 tool call 分派——create→code-editor 流式新建 · edit→version-diff 流式红绿 · run→run-terminal 终端 · flowrun→node-gantt 节点点亮 · trace→嵌套 block-tree[ReAct] · detail/config/mounts→kv；命令式 focus(id,view)/viewEl/setTodo 供 sea 持 timer 流式驱动（本件只承载结构 + live 子元素入口） | chat 右岛（:iterate/:triage/create/run 各实体面板 + 多实体切换 + Todo） |
+| `an-entity-workspace` | ✅ 🧩 | `entity-workspace.js`（v2，chat 右岛实体工作台 = **entities SSE 流的实体面板镜像**，与对话流 block-tree[messages] 并行双写，**跟着对话长出来**）：自绘头[an-status-dot+真名+下拉钮]（宿主 `an-right-island[headless]` 只给皮肤）+ body 双态[item 态=该 item canonical 全量 facet 的 an-tabs / picker 态=an-segmented 状态筛 + **复用 an-sidebar-list** 分类列表，仅非空分类+搜索]；每种 item（5 实体 kind + Todo + Subagent）一套固定 facet，未触及 facet 显 **an-state 空态**；facet 按 key 分派——code/prompt/graph→code-editor · versions→version-diff(+thin-table) · run→run-terminal · flowrun→node-gantt · trace→block-tree · history/firings→thin-table · overview/config/mounts→info-card+kv(+callout)；命令式 ensure(id)/setActive(id)/focus(id,facet)/setItemStatus/setTodo（auto attr=静态全 ensure）供 sea 持 timer 流式驱动（首个 ensure→sea setRight=出现点，active 跟随最新触发） | chat 右岛（动态多 item 面板 + 下拉分类切换 + 状态机/搜索/筛选 + Todo/Subagent） |
 
 ## 三、逃生舱 + 海洋专属 pattern（Phase 3 随海洋建）
 

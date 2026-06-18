@@ -3968,39 +3968,63 @@ window.REF_CATALOG = [
       {
         "name": "实体工作台 entity-workspace",
         "tag": "an-entity-workspace",
-        "blurb": "chat 右岛实体工作台 = entities 流的实体面板镜像：顶层 tab[每碰过实体 + 可选 Todo] + 按 kind 卡工厂（an-info-card>an-segmented 子视图）；create→流式新建源码 · edit→流式红绿 Diff · run→终端 · flowrun→节点点亮 · trace→嵌套 ReAct · detail→kv。命令式 focus/viewEl/setTodo 供 chat sea 持 timer 流式驱动。",
+        "blurb": "chat 右岛实体工作台（v2）= entities 流的实体面板镜像，跟着对话长出来：自绘头（真名 + 右上下拉选择器）+ body 双态（item 态=该 item canonical 全量 facet an-tabs / picker 态=分类列表，仅非空分类 + 搜索 + 状态筛）。每种 item（5 实体 kind + Todo + Subagent）一套固定 facet，未触及显空态。命令式 ensure/setActive/focus/setTodo 供 chat sea 流式驱动；auto attr = 静态展示（画廊）全 ensure + 停首项。",
         "specimens": [
           {
-            "label": "多实体 tab + 子视图 + Todo（model 注入）",
+            "label": "多 item（Function/Workflow/Subagent/Todo）+ 下拉选择器（auto 静态）",
             "span": true,
             "tag": "an-entity-workspace",
+            "attrs": { "auto": "", "active": "fn_demo" },
             "props": {
               "model": {
-                "entities": [
+                "items": [
                   {
-                    "id": "fn_demo", "kind": "function", "name": "sync_inventory", "lang": "python", "meta": "v2 · 已生效", "revert": "revert 回 v1",
-                    "views": [
-                      { "key": "edit", "label": "Diff", "range": "v1 → v2", "note": "加指数退避重试",
+                    "id": "fn_demo", "category": "entity", "kind": "function", "name": "sync_inventory", "lang": "python", "status": "done", "meta": "v2 · env ready", "revert": "revert 回 v1",
+                    "facets": [
+                      { "key": "overview", "label": "概览", "rows": [["version", "v2"], ["env_status", "ready"], ["inputs", "warehouse: str"]] },
+                      { "key": "versions", "label": "版本", "range": "v1 → v2", "note": "加指数退避重试",
                         "before": "import requests\n\ndef sync_inventory(wh):\n    return upsert(fetch_skus(wh))\n",
                         "after": "import time, requests\n\ndef sync_inventory(wh):\n    for i in range(3):\n        try:\n            return upsert(fetch_skus(wh))\n        except requests.RequestException:\n            if i == 2: raise\n            time.sleep(2 ** i)\n" },
-                      { "key": "detail", "label": "详情", "rows": [["version", "2"], ["envStatus", "ready"], ["opsApplied", "1"]] }
+                      { "key": "code", "label": "源码", "empty": { "icon": "function", "title": "未触及", "hint": "本对话未 create/edit" } },
+                      { "key": "run", "label": "终端", "empty": { "icon": "run", "title": "尚无本对话运行" } },
+                      { "key": "history", "label": "历史", "empty": { "icon": "history", "title": "尚无执行记录" } }
                     ]
                   },
                   {
-                    "id": "wf_demo", "kind": "workflow", "name": "pr_merge_flow", "lang": "json", "meta": "failed",
-                    "views": [
+                    "id": "wf_demo", "category": "entity", "kind": "workflow", "name": "pr_merge_flow", "lang": "json", "status": "err", "meta": "v5 · failed",
+                    "facets": [
+                      { "key": "overview", "label": "概览", "rows": [["lifecycle", "live"], ["concurrency", "serial"]] },
                       { "key": "flowrun", "label": "运行图", "nodes": [
                         { "id": "trigger", "kind": "trigger", "label": "pr.webhook", "status": "completed", "atPct": 0, "wPct": 12 },
                         { "id": "fetch", "kind": "action", "label": "fetch", "status": "failed", "atPct": 14, "wPct": 38 },
                         { "id": "transform", "kind": "action", "label": "transform", "status": "completed", "atPct": 14, "wPct": 26 }
+                      ] },
+                      { "key": "graph", "label": "图", "empty": { "icon": "workflow", "title": "未触及" } },
+                      { "key": "versions", "label": "版本", "empty": { "icon": "diff", "title": "本对话未升版" } },
+                      { "key": "history", "label": "历史", "empty": { "icon": "history", "title": "尚无运行记录" } }
+                    ]
+                  },
+                  {
+                    "id": "sub_demo", "category": "subagent", "name": "Explore · 核对接线", "status": "done", "meta": "Explore · 2 步",
+                    "facets": [
+                      { "key": "trace", "label": "轨迹", "blocks": [
+                        { "type": "text", "text": "核对 cron trigger 是否真接到 sync_inventory。" },
+                        { "type": "tool_call", "items": [{ "verb": "get_trigger", "name": "trg_3a1f8c2d", "result": { "json": { "listening": true } } }] },
+                        { "type": "text", "text": "接线正确，trigger 监听中。" }
+                      ] },
+                      { "key": "overview", "label": "概览", "rows": [["type", "Explore"], ["steps", "2"], ["landsIn", "message_blocks"]] }
+                    ]
+                  },
+                  {
+                    "id": "todo", "category": "todo", "name": "Todo", "status": "run", "meta": "1/3",
+                    "facets": [
+                      { "key": "board", "label": "看板", "items": [
+                        { "content": "建图并三层校验", "status": "completed" },
+                        { "content": "trigger 冒烟", "status": "in_progress", "activeForm": "正在冒烟" },
+                        { "content": "接真实 webhook", "status": "pending" }
                       ] }
                     ]
                   }
-                ],
-                "todos": [
-                  { "content": "建图并三层校验", "status": "completed" },
-                  { "content": "trigger 冒烟", "status": "in_progress", "activeForm": "正在冒烟" },
-                  { "content": "接真实 webhook", "status": "pending" }
                 ]
               }
             }
