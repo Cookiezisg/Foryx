@@ -135,6 +135,9 @@ landed-into:
 | create_function 名竞态（DB 唯一索引兜底、并发同名 1×201+N×409 DUPLICATE）· serial-trigger firing 路径串行（单 ticker drain） | function·workflow | 并发 |
 | **tool-pick 准确性**（5 相似 fn + 4 相邻 agent：每次选对、无则建新、有完美匹配则复用不重建——零误选/零静默近似/零冗余重建） | 全实体·选错工具镜 | happy（多相似实体） |
 | skill 深用（danger gate 恰为 dangerous 调用触发·精确 scoped、body 32KB cap 干净、sequential activate=替换非并、entity-by-name 不建边） | skill | 报错/边界 |
+| document 块编辑（markdown-tree 模型、各块型 round-trip 字节精确、单块编辑 siblings 不动、reorder 位置连续、1MB guard 精确 413/201 无截断、200 项大文档不腐） | document | happy/边界 |
+| :triage AI 诊断（正确诊断真失败因 + 提可操作修、eagerly 校验 execution 存在无幻影会话、pin-replay 须 fresh trigger 才拾修=有意 pin 语义） | ai-ops(:triage)·durable | 报错→恢复 |
+| notification / needsAttention 生命周期（run_failed→点亮、replay completed→熄灭、approval park→pending、completed/cancelled 不误报、workspace 正确 scoped） | notification·SSE | happy/报错 |
 
 ## §3 Frontier（空格 / 薄格——"想还有什么"的起点）
 
