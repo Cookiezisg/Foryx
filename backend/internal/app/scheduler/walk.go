@@ -271,7 +271,7 @@ func (w *walk) predecessorsSatisfied(id string, iter int, reached map[nodeKey]bo
 // node id 寻址，取「iteration ≤ iter 中最大且存在」那个——故循环内祖先解析到当前轮、循环外到其固定
 // result。ctx 携带 run id（唯一真·环境值）。
 func (w *walk) scopeFor(runID string, iter int) map[string]any {
-	scope := make(map[string]any, len(w.rows)+1)
+	scope := make(map[string]any, len(w.byID)+1)
 	for nodeID, byIter := range w.rows {
 		best := -1
 		var bestRow *flowrundomain.FlowRunNode
@@ -283,6 +283,25 @@ func (w *walk) scopeFor(runID string, iter int) map[string]any {
 		}
 		if bestRow != nil {
 			scope[nodeID] = map[string]any(bestRow.Result)
+		}
+	}
+	// Bind every other declared graph node id (no completed result at iteration ≤ iter — e.g. a
+	// loop's back-edge predecessor on the first turn) to an EMPTY map, not absent. celScopedEnv
+	// declares every node id as a CEL root, and cel-go hard-errors ("no such attribute(s)") on an
+	// unbound declared root that an expression references — even inside has() — so an absent binding
+	// makes the natural loop-state init `has(pred.x) ? pred.x : seed.x` un-evaluable on the first
+	// turn. An empty map makes has(pred.x) cleanly false (the field is missing, the root is present),
+	// so the seed branch is taken. Existing wiring is unaffected: it references completed ancestors
+	// (bound to their result) and never an absent root, which cel-go only complains about when used.
+	//
+	// 把每个其它已声明图 node id（iteration ≤ iter 无 completed result——如循环回边前驱在首轮）绑成
+	// 空 map、而非缺省。celScopedEnv 把每个 node id 声明为 CEL 根，cel-go 对表达式引用到的未绑已声明根
+	// 硬报错（"no such attribute(s)"）、即便在 has() 内——故缺省绑定使自然的循环态初始化
+	// `has(pred.x) ? pred.x : seed.x` 在首轮无法求值。空 map 使 has(pred.x) 干净地为 false（字段缺、根在），
+	// 走 seed 分支。既有接线不受影响：它引用 completed 祖先（绑其 result）、从不引用缺省根（cel-go 只在被用到时抱怨）。
+	for nodeID := range w.byID {
+		if _, ok := scope[nodeID]; !ok {
+			scope[nodeID] = map[string]any{}
 		}
 	}
 	scope["ctx"] = map[string]any{"runId": runID}

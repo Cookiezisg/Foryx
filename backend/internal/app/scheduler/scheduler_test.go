@@ -348,6 +348,42 @@ func TestWalk_LoopWithBackEdge(t *testing.T) {
 	}
 }
 
+// TestScopeFor_BindsAbsentNodesToEmptyMap — regression for F28 (iteration loop): a declared graph
+// node with no completed result (e.g. a loop's back-edge predecessor on the first turn) must be
+// bound to an EMPTY map in the CEL activation, not omitted. celScopedEnv declares every node id as a
+// root and cel-go hard-errors on an unbound declared root an expression references — even inside
+// has() — so an absent binding makes the loop-state init `has(pred.x) ? pred.x : seed.x` un-evaluable
+// on the first turn. Completed nodes keep their result.
+func TestScopeFor_BindsAbsentNodesToEmptyMap(t *testing.T) {
+	g := workflowdomain.Graph{
+		Nodes: []workflowdomain.Node{
+			node("start", "trigger", "trg_1", nil),
+			node("check", "control", "ctl_1", nil),
+			node("accum", "action", "fn_1", nil),
+		},
+	}
+	rows := []*flowrundomain.FlowRunNode{
+		{NodeID: "start", Kind: "trigger", Iteration: 0, Status: flowrundomain.NodeCompleted, Result: map[string]any{"base": 5}},
+	}
+	scope := newWalk(&g, rows).scopeFor("fr_1", 0)
+
+	if got, _ := scope["start"].(map[string]any); got["base"] != 5 {
+		t.Fatalf("completed node must keep its result, got %#v", scope["start"])
+	}
+	for _, absent := range []string{"check", "accum"} {
+		v, ok := scope[absent]
+		if !ok {
+			t.Fatalf("absent node %q must be bound (not omitted) so cel-go has() works", absent)
+		}
+		if m, isMap := v.(map[string]any); !isMap || len(m) != 0 {
+			t.Fatalf("absent node %q must bind to an empty map, got %#v", absent, v)
+		}
+	}
+	if c, _ := scope["ctx"].(map[string]any); c["runId"] != "fr_1" {
+		t.Fatalf("ctx.runId missing: %#v", scope["ctx"])
+	}
+}
+
 // ---- park / resume + approval first-wins ----------------------------------
 
 func approvalGraph() workflowdomain.Graph {
