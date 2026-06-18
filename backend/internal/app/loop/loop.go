@@ -178,6 +178,15 @@ func Run(
 				status = messagesdomain.StatusError
 				errCode = "LLM_STREAM_ERROR"
 				errMsg = streamErr
+				// A provider can end the stream with stopReason=error yet an empty message (e.g. a
+				// silent disconnect). Surface a non-empty, actionable reason so the turn doesn't
+				// finalize as a contentless "error" with no cause and no recovery hint for the user.
+				//
+				// provider 可能以 stopReason=error 但空消息收尾（如静默断连）。补一句非空、可操作的因，
+				// 免回合 finalize 成无因无恢复提示的空 "error"。
+				if errMsg == "" {
+					errMsg = "the model stream ended unexpectedly before finishing — your work so far is saved; retry to continue"
+				}
 			}
 			finalStatus = status
 			host.WriteFinalize(ctx, allBlocks, status, stopReason, errCode, errMsg, totalIn, totalOut)

@@ -16,7 +16,7 @@ type CapabilityCheckWorkflow struct{ svc *workflowapp.Service }
 func (t *CapabilityCheckWorkflow) Name() string { return "capability_check_workflow" }
 
 func (t *CapabilityCheckWorkflow) Description() string {
-	return "Validate a workflow's active graph: structural soundness plus, when the capability catalog is wired, whether every referenced entity (trigger / function / handler / mcp / agent / control / approval) exists, has an active version, and exposes the ports/methods the graph uses. Returns a report listing any problems — use it before activating a workflow."
+	return "Validate a workflow's active graph: structural soundness plus, when the capability catalog is wired, whether every referenced entity (trigger / function / handler / mcp / agent / control / approval) exists, has an active version, and exposes the ports/methods the graph uses. Returns a report listing any problems — use it before activating a workflow. It does NOT validate node-input DATAFLOW: a node's input CEL may read an upstream field that isn't emitted on every branch reaching it (or a schema-less node's runtime-only `.text` key), and a missing key fails the WHOLE run fail-fast — so a green report still needs one trigger_workflow to confirm the data wiring."
 }
 
 func (t *CapabilityCheckWorkflow) Parameters() json.RawMessage {

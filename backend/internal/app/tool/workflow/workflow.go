@@ -61,7 +61,7 @@ const opsDoc = `OP SHAPES (each has an "op" discriminator):
   {"op":"delete_edge", "id":"<edgeId>"}
 
 NODE KINDS & REF PREFIXES: trigger→trg_, action→fn_ | hd_<id>.method | mcp:server/tool, agent→ag_, control→ctl_, approval→apf_.
-A node's "input" wires each field to a bare CEL expression that reads UPSTREAM NODES' RESULTS BY NODE ID — "<upstreamNodeId>.<field>", e.g. "start.amount" or "check_amount.score". There is NO payload/ctx/input root in a node's input CEL; address the producing node directly. A trigger node has no input.
+A node's "input" wires each field to a bare CEL expression that reads UPSTREAM NODES' RESULTS BY NODE ID — "<upstreamNodeId>.<field>", e.g. "start.amount" or "check_amount.score". There is NO payload/ctx/input root in a node's input CEL; address the producing node directly. A trigger node has no input. A referenced field must be present on EVERY branch path that can reach this node — a key absent on a taken branch (e.g. an upstream that emits it only on success) fails the WHOLE run fail-fast, and capability_check does NOT catch it.
 NODE RESULT SHAPES — what "<nodeId>.<field>" can read from each kind:
   • trigger  → the fire payload's fields (e.g. start.amount).
   • action   → a function's declared outputs / a handler method's return / an mcp tool's result.
