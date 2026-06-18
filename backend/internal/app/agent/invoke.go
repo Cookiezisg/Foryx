@@ -111,7 +111,15 @@ func (s *Service) InvokeAgent(ctx context.Context, in InvokeInput) (*InvokeResul
 		res.OK = result.Status != messagesdomain.StatusError
 		if !res.OK {
 			res.Status = agentdomain.ExecutionStatusFailed
-			res.ErrorMsg = "agent loop error"
+			// Surface the loop's REAL terminal cause (the provider error / max-steps / tool-storm),
+			// not a generic placeholder — else an agent invoke that failed (e.g. a bad modelOverride)
+			// records an opaque "agent loop error" and the real reason is lost from the execution record.
+			// 透出 loop 的真实终因（provider 错 / max-steps / tool-storm），非泛占位——否则失败的 invoke
+			// （如坏 modelOverride）只记不透明 "agent loop error"、真因从执行记录里丢失。
+			res.ErrorMsg = result.ErrMsg
+			if res.ErrorMsg == "" {
+				res.ErrorMsg = "agent loop error"
+			}
 		}
 		res.Output = result.LastMessage
 		res.StopReason = result.StopReason

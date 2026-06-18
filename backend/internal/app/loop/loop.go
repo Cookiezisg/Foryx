@@ -90,6 +90,8 @@ type Result struct {
 	Blocks      []messagesdomain.Block
 	Status      string
 	StopReason  string
+	ErrCode     string // on a Status=error turn: the wire code (LLM_STREAM_ERROR / MAX_STEPS_REACHED / TOOL_ERROR_STORM)
+	ErrMsg      string // on a Status=error turn: the real, human-facing cause (e.g. the provider error) — not a generic placeholder
 	TokensIn    int
 	TokensOut   int
 	Steps       int
@@ -280,6 +282,8 @@ func Run(
 		Blocks:      allBlocks,
 		Status:      finalStatus,
 		StopReason:  stopReason,
+		ErrCode:     errCode,
+		ErrMsg:      errMsg,
 		TokensIn:    totalIn,
 		TokensOut:   totalOut,
 		Steps:       stepsRun,

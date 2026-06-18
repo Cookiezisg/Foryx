@@ -209,6 +209,11 @@ func TestRun_MaxStepsReached(t *testing.T) {
 	if host.fin.status != messagesdomain.StatusError || res.Steps != 2 {
 		t.Fatalf("status=%q steps=%d, want error/2", host.fin.status, res.Steps)
 	}
+	// F66: the returned Result must carry the real terminal cause (not just WriteFinalize) so the
+	// agent execution record surfaces it instead of a generic "agent loop error".
+	if res.ErrCode != "MAX_STEPS_REACHED" || res.ErrMsg == "" {
+		t.Fatalf("Result should carry ErrCode/ErrMsg; got code=%q msg=%q", res.ErrCode, res.ErrMsg)
+	}
 }
 
 func TestRun_ToolErrorStorm(t *testing.T) {
