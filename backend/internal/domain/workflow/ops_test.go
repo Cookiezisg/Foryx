@@ -3,7 +3,10 @@ package workflow
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
+
+	errorspkg "github.com/sunweilin/anselm/backend/internal/pkg/errors"
 )
 
 // applyJSON parses an ops JSON array and applies it to base, returning the new graph.
@@ -178,5 +181,28 @@ func TestExtractMeta(t *testing.T) {
 	}
 	if len(g.Nodes) != 1 {
 		t.Fatalf("set_meta leaked into graph: %d nodes", len(g.Nodes))
+	}
+}
+
+// TestApplyOps_StrayTopLevelInputRejected — round-10: a node-content field (input/ref/kind/...) placed
+// at the OP level instead of inside "node" is silently dropped by JSON, so the node runs with no
+// wiring and fails opaquely at runtime ("missing required argument"). Reject it at authoring time.
+func TestApplyOps_StrayTopLevelInputRejected(t *testing.T) {
+	base := &Graph{}
+	_, err := applyJSON(t, base, `[{"op":"add_node","input":{"x":"t.y"},"node":{"id":"a","kind":"action","ref":"fn_b"}}]`)
+	if !errors.Is(err, ErrInvalidOps) {
+		t.Fatalf("a misplaced top-level input should be rejected as ErrInvalidOps, got %v", err)
+	}
+	// The rejection must name the misplaced 'input' (carried in Details.reason → surfaced to the LLM),
+	// not just say "invalid ops" — so the agent fixes the placement instead of guessing.
+	var ee *errorspkg.Error
+	if !errors.As(err, &ee) {
+		t.Fatalf("expected ErrInvalidOps as an errorspkg.Error, got %v", err)
+	}
+	if reason, _ := ee.Details["reason"].(string); !strings.Contains(reason, "input") {
+		t.Fatalf("rejection must name 'input' in Details.reason; got %q", reason)
+	}
+	if _, err := applyJSON(t, base, `[{"op":"add_node","node":{"id":"a","kind":"action","ref":"fn_b","input":{"x":"t.y"}}}]`); err != nil {
+		t.Fatalf("input INSIDE node must be accepted, got %v", err)
 	}
 }

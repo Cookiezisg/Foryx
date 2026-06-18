@@ -149,6 +149,13 @@ func applyOne(g *Graph, op Op) error {
 		if err := json.Unmarshal(op.Raw, &p); err != nil {
 			return fmt.Errorf("add_node unmarshal: %w", err)
 		}
+		// Catch node-content fields misplaced at the OP level (siblings of "node" instead of inside
+		// it, e.g. {"op":"add_node","input":{...},"node":{...}}). JSON silently drops them, so the
+		// node runs with no wiring and fails only at runtime with an opaque "missing required argument".
+		// 抓放在 OP 层的节点字段（当 "node" 的兄弟而非放其内）。JSON 静默丢弃→节点无接线跑→只在运行时崩。
+		if stray := strayNodeKeys(op.Raw); stray != "" {
+			return fmt.Errorf("add_node: %s must be inside the \"node\" object, not at the op level", stray)
+		}
 		if strings.TrimSpace(p.Node.ID) == "" {
 			return fmt.Errorf("add_node: node.id is required")
 		}
@@ -332,6 +339,23 @@ func findNode(g *Graph, id string) int {
 		}
 	}
 	return -1
+}
+
+// strayNodeKeys returns the node-content keys found at the TOP level of an add_node op (siblings of
+// "node") instead of inside it — a common authoring mistake JSON tolerates silently. Empty when none.
+// strayNodeKeys 返 add_node op 顶层（"node" 的兄弟）误放的节点内容键——JSON 静默容忍的常见编写错。无则空。
+func strayNodeKeys(raw json.RawMessage) string {
+	var top map[string]json.RawMessage
+	if json.Unmarshal(raw, &top) != nil {
+		return ""
+	}
+	var stray []string
+	for _, k := range []string{"input", "ref", "kind", "retry", "fromPort"} {
+		if _, ok := top[k]; ok {
+			stray = append(stray, "\""+k+"\"")
+		}
+	}
+	return strings.Join(stray, ", ")
 }
 
 func findEdge(g *Graph, id string) int {
