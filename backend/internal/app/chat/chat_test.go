@@ -70,6 +70,16 @@ func textTurn() []llminfra.StreamEvent {
 }
 
 // fakeResolver hands back a fixed bundle wrapping the fake client.
+// panicClient's Stream panics when iterated — simulating a panic anywhere in the generation loop
+// (a provider adapter, a tool, the loop). Used to prove processTask recovers instead of crashing.
+type panicClient struct{}
+
+func (panicClient) Stream(_ context.Context, _ llminfra.Request) iter.Seq[llminfra.StreamEvent] {
+	return func(_ func(llminfra.StreamEvent) bool) {
+		panic("simulated generation panic")
+	}
+}
+
 type fakeResolver struct{ client llminfra.Client }
 
 func (r fakeResolver) ResolveChat(_ context.Context, _ *modeldomain.ModelRef) (Bundle, error) {
@@ -202,6 +212,29 @@ func waitClose(t *testing.T, b *recordBridge, msgID string) {
 }
 
 // --- tests -----------------------------------------------------------------
+
+// TestProcessTask_PanicRecovered — regression for W3 (iteration loop): a panic during generation
+// must fail just that turn, not crash the process. runQueue is a long-lived goroutine, so an
+// unrecovered panic would take the whole single-process backend down. The turn must finalize to
+// error (not hang in `streaming`) and still emit message_stop.
+func TestProcessTask_PanicRecovered(t *testing.T) {
+	bridge := newRecordBridge()
+	svc, store := newSvc(t, panicClient{}, bridge)
+	ctx := ctxWS("ws_1")
+
+	asstID, err := svc.Send(ctx, "cv_1", SendInput{Content: "trigger a panic"})
+	if err != nil {
+		t.Fatalf("Send: %v", err)
+	}
+	waitClose(t, bridge, asstID) // recover must still emit message_stop
+	got, err := store.GetMessage(ctx, asstID)
+	if err != nil {
+		t.Fatalf("GetMessage: %v", err)
+	}
+	if got.Status != messagesdomain.StatusError {
+		t.Fatalf("panicked turn should finalize to error, got status=%q", got.Status)
+	}
+}
 
 func TestSend_EndToEnd(t *testing.T) {
 	bridge := newRecordBridge()

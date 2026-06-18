@@ -47,7 +47,7 @@ landed-into:
 | F23 | watch | chat agent 无工具注册**自定义** MCP server（stdio 命令 / 私有 SSE url）——只能装市场 server；HTTP API（PutServer→AddServer）支持自定义 | 真缺口、但**值班定为产品/安全决策**：让 LLM 注册任意 stdio 命令 = 沙箱外常驻任意进程、触面显著；且「自定义 server 由用户在 UI 配」是合理设计（类比 approval 人闸）——不擅自加任意命令执行工具 | 仅澄清 `install_mcp_server` 描述=市场-only + 自定义走用户 UI；是否加 `add_mcp_server`(dangerous) **留用户定** | — |
 | W1 | watch | cron trigger 无预测性 `nextFireAt` 字段——agent 只能推理下次触发时刻（仅有 `lastFiredAt` 审计字段） | 可发现性（cron lane，skeptic isReal=false） | — | — |
 | W2 | watch | `FinalizeMessage` DB 写失败仅 `Warn` 日志、留 message 行 `status=streaming` 到下次启动 `SweepNonTerminal` | 罕见健壮性（F12 理论残隙；skeptic isReal=false/sys=false） | — | — |
-| W3 | watch | `runQueue` 无 `defer/recover` 包 `processTask` → 一次 turn panic 崩**整进程**（与库内其它长生 goroutine 的 recover 不一致） | 健壮性（单进程本地 app 不应一 turn 崩全部；skeptic isReal=false/sys=true——**便宜安全、值得小修**） | — | — |
+| W3 | fixed | `runQueue`(长生 goroutine)无 `defer/recover` 包 `processTask` → 一次 turn panic 崩**整进程**（与库内 trigger 监听/HTTP 中间件等其它长生 goroutine 的 recover 不一致）；panic 还留 message 卡 `streaming` | 健壮性（单进程本地 app 不应一 turn 崩全部） | `chat/runner.go` processTask 顶部加 defer/recover：带栈 Error 日志 + `failTurn` 把 message finalize 到 error（顺带覆 W2 的 panic-卡-streaming 子情形） | 零 token 单测 `TestProcessTask_PanicRecovered`（panicClient → 回合 finalize 到 error、message_stop 出、进程存活）绿；EndToEnd 不受影响；make verify 绿 | _pending_ |
 
 ## 元注（一次性，非 finding）
 - **为什么这 loop 值得**：F1 那条轨迹 `golden J5` 只断言"版本>1"是绿的；轨迹判官却抓到模型把 `get_function` 调错绕一圈——终态测试瞎、判官看见。

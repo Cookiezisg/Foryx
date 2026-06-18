@@ -2,6 +2,7 @@ package chat
 
 import (
 	"context"
+	"runtime/debug"
 	"time"
 
 	"go.uber.org/zap"
@@ -94,6 +95,24 @@ func (s *Service) runQueue(conversationID string, q *convQueue) {
 // AgentState + live 流桥 + cancel 端点可触发的 cancel，解析对话模型、拼 system prompt、跑
 // ReAct 循环。host 的 WriteFinalize 落盘 + 推流终态，故 processTask 丢弃 loop Result。
 func (s *Service) processTask(conversationID string, q *convQueue, t task) {
+	// A panic in one assistant turn must fail just that turn — not crash the whole single-process
+	// backend. runQueue is a long-lived goroutine; an unrecovered panic here takes the process down,
+	// unlike every other long-lived goroutine (trigger listeners, HTTP middleware) which recover.
+	// Recover, log with a stack, and finalize the message to error so it cannot hang in `streaming`.
+	//
+	// 一次 assistant 回合的 panic 只该让该回合失败、而非崩掉单进程后端。runQueue 是长生 goroutine，此处
+	// 未捕获的 panic 会拖垮进程——与库内其它长生 goroutine（trigger 监听、HTTP 中间件）都 recover 不一致。
+	// recover、带栈日志、并把 message finalize 到 error 使其不卡 `streaming`。
+	defer func() {
+		if r := recover(); r != nil {
+			s.log.Error("chatapp.processTask: panic recovered",
+				zap.String("conversationId", conversationID),
+				zap.String("messageId", t.assistantMsgID),
+				zap.Any("recover", r),
+				zap.ByteString("stack", debug.Stack()))
+			s.failTurn(reqctxpkg.Detached(t.workspaceID), conversationID, t.assistantMsgID, "INTERNAL_ERROR", "internal error during generation")
+		}
+	}()
 	base := reqctxpkg.Detached(t.workspaceID)
 	base = reqctxpkg.SetLocale(base, t.locale)
 	base = reqctxpkg.SetConversationID(base, conversationID)
