@@ -141,6 +141,7 @@ landed-into:
 | **e2e 系统编排**（一句话目标→agent 搭 webhook→classify(fn)→urgency(control)→approval gate→reply(fn)→log 全系统：选型/dataflow/capability_check/真 webhook POST 三路径全对——除工具描述漏 merge 规则 F76 致首建漏分支汇聚） | 全实体·组合 | happy（真实世界目标） |
 | webhook auth（auth 强制 / body-size cap / method gate / dedup idx_trf_dedup 防重放双触发 全按广告——仅 HMAC 验证 header 不可发现 F79） | trigger(webhook)·安全 | 边界/恶意 |
 | memory 深用（12 写全召回无 cap、按名 slug upsert 替换不重、长内容完整、矛盾按名去重、forget 真删·无幻影召回、workspace 隔离 401） | memory | happy/边界 |
+| conversation 管理（rename 持久不被 auto-title 覆盖、archive/unarchive 正确、soft-delete→404、分页 cursor 0重0漏 recent/pinned-first、usage 与逐条 token 和精确） | conversation | happy/边界 |
 | 语义搜索召回+排序（"send mail"→email_dispatcher 真语义命中、best-match-first、per-type scoping 对——**仅无匹配 query 无下限灌全 workspace** F80） | search | happy |
 
 ## §3 Frontier（空格 / 薄格——"想还有什么"的起点）
