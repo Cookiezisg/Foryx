@@ -231,6 +231,25 @@ func TestDelete_Removes(t *testing.T) {
 	}
 }
 
+// TestEntryFuncName_TopLevelOnly — regression for F23 (iteration loop): the spawn driver calls
+// entryFuncName's result by name, so it must pick the first COLUMN-0 def. An indented def (a class
+// method / nested def) physically preceding the real entry must be skipped — otherwise the driver
+// calls an indented name and the run dies with NameError. First-top-level-def-wins is preserved.
+func TestEntryFuncName_TopLevelOnly(t *testing.T) {
+	cases := []struct{ name, code, want string }{
+		{"plain entry", "def main(x):\n    return x", "main"},
+		{"class method before entry skipped", "class Calc:\n    def multiply(self, a, b):\n        return a * b\n\ndef process_order(items):\n    return {}", "process_order"},
+		{"nested def before later body still picks outer", "def outer():\n    def inner():\n        pass\n    return inner", "outer"},
+		{"first top-level helper still wins (entry must be first)", "def _avg(xs):\n    return sum(xs) / len(xs)\n\ndef summarize(scores):\n    return {}", "_avg"},
+		{"no top-level def", "    def indented_only(self):\n        pass", ""},
+	}
+	for _, c := range cases {
+		if got := entryFuncName(c.code); got != c.want {
+			t.Errorf("%s: entryFuncName = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
 func editCodeOps(t *testing.T, code string) []Op {
 	t.Helper()
 	ops, err := ParseOps([]byte(fmt.Sprintf(`[{"op":"set_code","code":%q}]`, code)))

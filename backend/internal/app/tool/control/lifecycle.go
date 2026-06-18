@@ -163,7 +163,7 @@ type RevertControl struct{ svc *controlapp.Service }
 func (t *RevertControl) Name() string { return "revert_control" }
 
 func (t *RevertControl) Description() string {
-	return "Switch a control logic's active version to an existing version by its number. This only moves the active pointer — newer versions are kept in history and can be switched back to."
+	return "Switch a control logic's active version to an existing version by its number. This only moves the active pointer — newer versions are kept in history and can be switched back to. Note: name, description and tags are NOT versioned (they live on the control), so a revert restores only the versioned branches and leaves name/description/tags unchanged — use edit_control set_meta to also change those."
 }
 
 func (t *RevertControl) Parameters() json.RawMessage {

@@ -153,7 +153,7 @@ type RevertApproval struct{ svc *approvalapp.Service }
 func (t *RevertApproval) Name() string { return "revert_approval" }
 
 func (t *RevertApproval) Description() string {
-	return "Switch an approval form's active version to an existing version by its number. Only moves the active pointer — newer versions are kept in history and can be switched back to."
+	return "Switch an approval form's active version to an existing version by its number. Only moves the active pointer — newer versions are kept in history and can be switched back to. Note: name, description and tags are NOT versioned (they live on the approval), so a revert restores only the versioned snapshot (template + decision rules) and leaves name/description/tags unchanged — use edit_approval set_meta to also change those."
 }
 
 func (t *RevertApproval) Parameters() json.RawMessage {

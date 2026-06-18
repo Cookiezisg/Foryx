@@ -18,7 +18,7 @@ type RevertAgent struct{ svc *agentapp.Service }
 func (t *RevertAgent) Name() string { return "revert_agent" }
 
 func (t *RevertAgent) Description() string {
-	return "Revert an agent's active version to an existing older version number (does not renumber). Use when a recent edit made it worse — the version history is the undo."
+	return "Revert an agent's active version to an existing older version number (does not renumber). Use when a recent edit made it worse — the version history is the undo. Note: name, description and tags are NOT versioned (they live on the agent), so a revert restores only the versioned config (prompt/tools/knowledge/skill/inputs/outputs/model) and leaves name/description/tags unchanged — use edit_agent set_meta to also change those."
 }
 
 func (t *RevertAgent) Parameters() json.RawMessage {

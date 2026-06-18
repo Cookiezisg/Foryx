@@ -16,7 +16,7 @@ type RevertFunction struct{ svc *functionapp.Service }
 func (t *RevertFunction) Name() string { return "revert_function" }
 
 func (t *RevertFunction) Description() string {
-	return "Switch a function's active version to an existing version by its number. This only moves the active pointer — newer versions are kept in history and can be switched back to."
+	return "Switch a function's active version to an existing version by its number. This only moves the active pointer — newer versions are kept in history and can be switched back to. Note: name, description and tags are NOT versioned (they live on the function), so a revert restores only the versioned snapshot (code/inputs/outputs/dependencies) and leaves name/description/tags unchanged — use edit_function set_meta to also change those."
 }
 
 func (t *RevertFunction) Parameters() json.RawMessage {

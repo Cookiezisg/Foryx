@@ -37,6 +37,10 @@ landed-into:
 
 | F17 | not-bug | 多轮改 fn 后 agent 自称「active 仍 v1」——查实：turn-2 `get_function` 在 edit **之前**调（正确返 v1 快照），agent 回看该**前置快照**误判 active=v1；后端实际 edit→v2、run 返 v2 输出、当前 active=v2 全对（F6 激活正常运作）。同 F9 模型时序误读、**非 bug** | — | — | — | 同轮 `LLM_STREAM_ERROR`：THINK 截于半句 = deepseek 流瞬断，后端**正确 finalize 到 error**（status=error/code=`LLM_STREAM_ERROR`）→ 证流错 finalize 路径可用（**区别于 F12 卡 streaming**）；turn-4 对话优雅恢复、agent 正确报 v2 + "Smith, Jane"（无 middle 边界对） |
 
+| F18 | fixed | `entryFuncName` 先 `TrimSpace` 再判 `def ` → 选中**缩进的** def（类方法/嵌套）作入口、与 `validateFinal` 列-0 规则矛盾 → driver 按名调缩进函数 → 运行时 NameError；validateFinal 放行（列-0 def 存在）故 create 期不挡 | 系统性（类/嵌套 def 在入口前；多 agent fanout 之 skeptic 变体复现，driver 写成 `multiply(**_input)`） | `function/validate.go` `entryFuncName` 改判 `HasPrefix(line,"def ")`（不 trim、要求列 0） | 零 token 单测 `TestEntryFuncName_TopLevelOnly`（类方法在前→返列-0 入口）绿；make verify 绿 | _pending_ |
+| F19 | fixed | `create_function`/`edit_function` 描述只示 `def main(...)`/`def(**kwargs)`、从不说**第一个顶层 def 即入口**（按 **kwargs 调、名无意义、helper 须置后）→ helper-first 的常规 Python 风格 → run 调错 def、opaque TypeError | 系统性（任何 helper-first 写法；skeptic 变体复现 `_avg() got unexpected kwarg`） | `tool/function/build.go` CreateFunction 描述加 ENTRY POINT 段（首列-0 def 是入口、**kwargs、helper 置后/内嵌） | make verify 绿；同 F18 簇重建再行为验 | _pending_ |
+| F20 | fixed | `revert_*` 只移版本指针，但 name/desc/tags **不在版本快照**（在实体行、F6 确立）→ revert 不还原改名 → agent 误报「已改回原名」（result 也不含 name 无从自查）。**F6 同类、在 revert 路径** | **系统性 5 实体**（function/handler/control/approval/agent 的 meta 都在行；workflow meta 在 graph 版本内、不受影响——已核 6 个 Version 结构） | 5 个 revert 工具描述加 honest-contract 句（name/desc/tags 非版本化、revert 不动、用 set_meta 改）。值班判 Option B：meta 是身份非行为快照、不应被 revert 改名——只澄清契约+不改行为 | skeptic 变体确诊（revert 到 v1 后 code 还原但 name 仍 `temp_converter`）；make verify 绿 | _pending_ |
+
 ## 元注（一次性，非 finding）
 - **为什么这 loop 值得**：F1 那条轨迹 `golden J5` 只断言"版本>1"是绿的；轨迹判官却抓到模型把 `get_function` 调错绕一圈——终态测试瞎、判官看见。
 - **workflow + durable 子系统验证通过**（2026-06-18）：F7+F8 修后，agent 建成 workflow（trigger→convert→classify）、`trigger_workflow` 跑通；durable 引擎逐节点记忆化、结果正确（celsius=100 → convert `{fahrenheit:212}` → classify `{label:"hot"}`，三节点 completed）。"整套工程"在此方向确认能转。

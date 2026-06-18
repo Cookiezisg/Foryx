@@ -16,7 +16,7 @@ type RevertHandler struct{ svc *handlerapp.Service }
 func (t *RevertHandler) Name() string { return "revert_handler" }
 
 func (t *RevertHandler) Description() string {
-	return "Switch a handler's active version to an existing version by number, then restart the resident instance to run it. Only moves the active pointer — newer versions stay in history."
+	return "Switch a handler's active version to an existing version by number, then restart the resident instance to run it. Only moves the active pointer — newer versions stay in history. Note: name, description and tags are NOT versioned (they live on the handler), so a revert restores only the versioned snapshot (methods/code) and leaves name/description/tags unchanged — use edit_handler set_meta to also change those."
 }
 
 func (t *RevertHandler) Parameters() json.RawMessage {

@@ -60,14 +60,19 @@ var handlerImportBlacklist = []string{
 // entryFuncName extracts the first top-level def's name (the spawn driver calls it).
 // Returns "" if none — callers treat that as a validation failure upstream.
 //
+// Match must be at column 0: an indented def (a class/nested method) physically preceding
+// the real entry would otherwise be picked and called by name, yielding a runtime NameError
+// — this keeps "top-level" consistent with validateFinal's column-0 requirement.
+//
 // entryFuncName 抽第一个顶层 def 的名字（spawn driver 调它）。无则返 ""，上游当校验失败处理。
+// 必须列 0 匹配：缩进的 def（类/嵌套方法）若物理上先于真入口，否则会被选中并按名调用 → 运行时
+// NameError——使「顶层」与 validateFinal 的列 0 要求一致。
 func entryFuncName(code string) string {
 	for _, line := range strings.Split(code, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if !strings.HasPrefix(trimmed, "def ") {
+		if !strings.HasPrefix(line, "def ") {
 			continue
 		}
-		rest := strings.TrimPrefix(trimmed, "def ")
+		rest := strings.TrimPrefix(line, "def ")
 		if idx := strings.IndexAny(rest, "(: "); idx > 0 {
 			return rest[:idx]
 		}

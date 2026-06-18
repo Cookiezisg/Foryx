@@ -30,7 +30,7 @@ OP SHAPES (exact field names):
 
 Field type is one of: string, number, boolean, object, array (a coarse hint; nested shapes are read with CEL at runtime, not declared here).
 
-The function is a stateless def(**kwargs) -> JSON-serialisable value, run in a fresh isolated process per call. If the dependency install fails, the platform auto-revises the deps with an LLM and retries (≤3); the result reports envStatus + any envFixAttempts. Pass credentials via arguments, never hard-code them.`
+The function is stateless, run in a fresh isolated process per call. ENTRY POINT: the FIRST top-level (column-0) def in your code is the entry — its name is not significant (main is just a convention) and it is called with the inputs as keyword arguments (entry(**input)), returning a JSON-serialisable value. Define any helper defs AFTER the entry def or nest them inside it; a top-level helper placed BEFORE the entry would be called instead and fail. If the dependency install fails, the platform auto-revises the deps with an LLM and retries (≤3); the result reports envStatus + any envFixAttempts. Pass credentials via arguments, never hard-code them.`
 }
 
 func (t *CreateFunction) Parameters() json.RawMessage {
