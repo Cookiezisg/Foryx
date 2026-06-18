@@ -34,6 +34,9 @@ func (f *fakeCallables) Call(_ context.Context, in handlerapp.CallInput) (any, e
 	f.hdIn = in
 	return f.hdOut, nil
 }
+func (f *fakeCallables) ResolveServerID(_ context.Context, token string) (string, error) {
+	return token, nil // identity: the dispatch test feeds an id-form ref; name->id resolution is covered in mcp pkg
+}
 func (f *fakeCallables) CallTool(_ context.Context, serverID, tool string, args json.RawMessage, _ string) (string, error) {
 	f.mcpSrv, f.mcpTl, f.mcpRaw = serverID, tool, args
 	return f.mcpOut, nil

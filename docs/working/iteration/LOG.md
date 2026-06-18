@@ -43,6 +43,12 @@ landed-into:
 
 | F21 | fixed | `move_document` 的 position 是**非移位绝对索引**：`Service.Move` 裸赋 `d.Position=*in.Position` 只更一行、不挪同级 → 插入已占用槽（如 0）→ 位置撞 + `ListByParent` 的 `created_at` tiebreak 静默按创建序排 → reorder 静默失败 + 同级 position 重复（实测两兄弟都 pos=1）；且 position **只写**：list/read 工具从不返回、agent 看不到顺序只能盲猜 | 系统性（任何 reorder N 个子文档；skeptic 变体复现 pos=1/pos=1 碰撞） | `app/document/document.go` Move 改稳定按索引插入（取同级 ListByParent、剔自身、splice 到请求 idx、0..N-1 重排、UpdateBatch 原子写）；`tool/document/list.go` slim 加 `position` + 描述 | 零 token 单测 `TestMove_StableReorder`（移末位→0 得 C,A,B、position 0/1/2 无撞）绿；make verify 绿 | _pending_ |
 
+| F22 | fixed | MCP ref split-contract：`search_blocks`/RefHint 投出 **name 形** `mcp:<name>/<tool>`（agent 挂载也按名解析），但 workflow `refresolver`+`dispatch`+`capability` 只认 **id 形** `mcp:<mcp_id>/<tool>` → name 形在能力检查 `ErrRefNotFound`、运行时 `MCP_SERVER_NOT_FOUND` **静默失败**，agent 只能暴力猜 mcp_ id（两独立 fanout lane + skeptic 变体复现：name 形 capability 失败、改 id 形即过） | **系统性**（任何把 MCP 工具接入 workflow 的人） | 加 `mcp.Service.ResolveServerID`（先 id 后 name → 规范 mcp_ id）；`refresolver` mcp 分支 + `dispatch` RunAction mcp 分支都改用它（镜像 `mount.go` 按名解析）→ 三处消费方统一接受 name 或 id | 零 token 单测：refresolver `mcp:markitdown/...` name 形现 resolve OK；全后端 build + bootstrap 测绿；doc 同步 `domains/mcp.md`（ref-token 统一） | _pending_ |
+| F23 | watch | chat agent 无工具注册**自定义** MCP server（stdio 命令 / 私有 SSE url）——只能装市场 server；HTTP API（PutServer→AddServer）支持自定义 | 真缺口、但**值班定为产品/安全决策**：让 LLM 注册任意 stdio 命令 = 沙箱外常驻任意进程、触面显著；且「自定义 server 由用户在 UI 配」是合理设计（类比 approval 人闸）——不擅自加任意命令执行工具 | 仅澄清 `install_mcp_server` 描述=市场-only + 自定义走用户 UI；是否加 `add_mcp_server`(dangerous) **留用户定** | — |
+| W1 | watch | cron trigger 无预测性 `nextFireAt` 字段——agent 只能推理下次触发时刻（仅有 `lastFiredAt` 审计字段） | 可发现性（cron lane，skeptic isReal=false） | — | — |
+| W2 | watch | `FinalizeMessage` DB 写失败仅 `Warn` 日志、留 message 行 `status=streaming` 到下次启动 `SweepNonTerminal` | 罕见健壮性（F12 理论残隙；skeptic isReal=false/sys=false） | — | — |
+| W3 | watch | `runQueue` 无 `defer/recover` 包 `processTask` → 一次 turn panic 崩**整进程**（与库内其它长生 goroutine 的 recover 不一致） | 健壮性（单进程本地 app 不应一 turn 崩全部；skeptic isReal=false/sys=true——**便宜安全、值得小修**） | — | — |
+
 ## 元注（一次性，非 finding）
 - **为什么这 loop 值得**：F1 那条轨迹 `golden J5` 只断言"版本>1"是绿的；轨迹判官却抓到模型把 `get_function` 调错绕一圈——终态测试瞎、判官看见。
 - **workflow + durable 子系统验证通过**（2026-06-18）：F7+F8 修后，agent 建成 workflow（trigger→convert→classify）、`trigger_workflow` 跑通；durable 引擎逐节点记忆化、结果正确（celsius=100 → convert `{fahrenheit:212}` → classify `{label:"hot"}`，三节点 completed）。"整套工程"在此方向确认能转。

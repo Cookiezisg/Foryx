@@ -46,10 +46,12 @@ type TriggerExistence interface {
 	Get(ctx context.Context, id string) (*triggerdomain.Trigger, error)
 }
 type MCPExistence interface {
-	// NamesByIDs reports which of the given mcp_ ids exist (the relation Namer surface, reused
-	// here as a by-id existence probe).
-	// NamesByIDs 报告给定 mcp_ id 哪些存在（relation Namer 面，这里复用作按-id 存在性探针）。
-	NamesByIDs(ctx context.Context, ids []string) (map[string]string, error)
+	// ResolveServerID maps an MCP ref's server token (server NAME — the form search_blocks emits
+	// and mounts use — OR the mcp_ id) to the canonical mcp_ id, erroring if no such server. Used
+	// here only as an existence probe so the name-form ref resolves in workflows like it does in mounts.
+	// ResolveServerID 把 MCP ref 的 server 段（名——search_blocks 给的、mount 用的——或 mcp_ id）解析成
+	// 规范 mcp_ id，无则报错。这里仅作存在性探针，使 name 形 ref 在 workflow 里像 mount 一样解析得通。
+	ResolveServerID(ctx context.Context, token string) (string, error)
 }
 
 // refResolver implements workflow.RefResolver by fanning a node ref out to the owning entity
@@ -186,15 +188,17 @@ func (r refResolver) Resolve(ctx context.Context, ref string) (workflowapp.RefIn
 		return workflowapp.RefInfo{Kind: relationdomain.EntityKindTrigger, HasActiveVersion: true}, nil
 
 	case strings.HasPrefix(ref, workflowdomain.RefPrefixMCP):
-		id := strings.TrimPrefix(ref, workflowdomain.RefPrefixMCP)
-		if i := strings.IndexByte(id, '/'); i > 0 {
-			id = id[:i] // drop /tool — the mcp entity id is the bare server id
+		token := strings.TrimPrefix(ref, workflowdomain.RefPrefixMCP)
+		if i := strings.IndexByte(token, '/'); i > 0 {
+			token = token[:i] // drop /tool — left with the server token (name or mcp_ id)
 		}
-		names, err := r.mcp.NamesByIDs(ctx, []string{id})
-		if err != nil {
-			return workflowapp.RefInfo{}, err
-		}
-		if _, ok := names[id]; !ok {
+		// Accept the server NAME (what search_blocks/RefHint advertises and mounts use) as well as
+		// the mcp_ id — ResolveServerID tries both. A bare-name ref used to miss the id-only probe
+		// and fail with ErrRefNotFound even though the server was connected (the split-contract bug).
+		//
+		// 接受 server 名（search_blocks/RefHint 给的、mount 用的）与 mcp_ id——ResolveServerID 两者都试。
+		// 此前裸名 ref 漏掉按-id 探针、即便 server 已连也报 ErrRefNotFound（split-contract bug）。
+		if _, err := r.mcp.ResolveServerID(ctx, token); err != nil {
 			return workflowapp.RefInfo{}, workflowdomain.ErrRefNotFound
 		}
 		// Version-less like trigger: existence = usable, nothing to pin.

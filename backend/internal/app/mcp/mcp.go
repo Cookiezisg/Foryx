@@ -308,6 +308,25 @@ func (s *Service) ListServers(ctx context.Context) ([]mcpdomain.ServerStatus, er
 	return out, nil
 }
 
+// ResolveServerID maps a workflow MCP ref's server token — which may be the server NAME (the form
+// search_blocks/RefHint advertises and agent mounts already accept) or the mcp_ id — to the
+// canonical mcp_ id that CallTool and the connection state key on. Tries id, then name. This is
+// what makes the single mcp:<server>/<tool> ref shape mean the same thing for workflow nodes as it
+// does for agent mounts, instead of silently failing capability_check + dispatch on the name form.
+//
+// ResolveServerID 把 workflow MCP ref 的 server 段（可能是 server 名——search_blocks/RefHint 给的、
+// agent mount 已接受的——或 mcp_ id）解析成 CallTool 与连接状态键用的规范 mcp_ id。先按 id、再按名。
+// 使同一个 mcp:<server>/<tool> ref 形状对 workflow 节点与 agent mount 含义一致，而非在 name 形上静默失败。
+func (s *Service) ResolveServerID(ctx context.Context, token string) (string, error) {
+	if srv, err := s.repo.GetByID(ctx, token); err == nil {
+		return srv.ID, nil
+	}
+	if srv, err := s.repo.GetByName(ctx, token); err == nil {
+		return srv.ID, nil
+	}
+	return "", mcpdomain.ErrServerNotFound
+}
+
 // GetServer returns one server's live status by name (workspace-checked via repo).
 //
 // GetServer 按 name 返回单个 server 的实时状态（经 repo 校验 workspace）。

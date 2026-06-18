@@ -73,7 +73,7 @@ type InstallServer struct{ svc *mcpapp.Service }
 
 func (t *InstallServer) Name() string { return "install_mcp_server" }
 func (t *InstallServer) Description() string {
-	return "Install an MCP server from the marketplace by its full name (from list_mcp_marketplace), supplying any required environment variables (API keys). On success the server's tools become available — find them with search_tools."
+	return "Install an MCP server from the marketplace by its full name (from list_mcp_marketplace), supplying any required environment variables (API keys). On success the server's tools become available — find them with search_tools. This installs marketplace (registry) servers ONLY; a custom self-hosted server (a local stdio command, or a private SSE/HTTP url) is not installable here — tell the user to add it in the app's MCP settings, then it will appear in list_mcp_marketplace's installed set / search_tools."
 }
 func (t *InstallServer) Parameters() json.RawMessage {
 	return json.RawMessage(`{

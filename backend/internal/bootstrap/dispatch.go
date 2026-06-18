@@ -31,6 +31,10 @@ type HandlerCaller interface {
 	Call(ctx context.Context, in handlerapp.CallInput) (any, error)
 }
 type MCPCaller interface {
+	// ResolveServerID maps the ref's server token (name or mcp_ id) to the canonical mcp_ id that
+	// CallTool keys on — so a workflow node carrying the name-form ref (what search_blocks emits) dispatches.
+	// ResolveServerID 把 ref 的 server 段（名或 mcp_ id）解析成 CallTool 键用的规范 mcp_ id——使带 name 形 ref 的节点可派发。
+	ResolveServerID(ctx context.Context, token string) (string, error)
 	CallTool(ctx context.Context, serverID, tool string, args json.RawMessage, triggeredBy string) (string, error)
 }
 type AgentInvoker interface {
@@ -106,17 +110,25 @@ func (d dispatcher) RunAction(ctx context.Context, ref, pinnedVersionID string, 
 		return toResultMap(out), nil
 
 	case strings.HasPrefix(ref, workflowdomain.RefPrefixMCP):
-		// ref = mcp:<serverId>/<tool> — the server token IS the mcp_ id (entityIDOf treats it as
-		// the pin-closure entity id; CallTool takes the mcp_ id), so it passes straight through.
+		// ref = mcp:<server>/<tool> where <server> is the server NAME (what search_blocks emits +
+		// the agent wires) or the mcp_ id — resolve it to the canonical mcp_ id CallTool keys on.
+		// (Previously this passed the token straight through and a name-form ref hit ErrServerNotFound.)
+		//
+		// ref = mcp:<server>/<tool>，<server> 是 server 名（search_blocks 给的、agent 接的）或 mcp_ id——
+		// 解析成 CallTool 键用的规范 mcp_ id。（此前直传 token、name 形会撞 ErrServerNotFound。）
 		server, tool, ok := strings.Cut(strings.TrimPrefix(ref, workflowdomain.RefPrefixMCP), "/")
 		if !ok || tool == "" {
-			return nil, fmt.Errorf("mcp ref %q: want mcp:<serverId>/<tool>", ref)
+			return nil, fmt.Errorf("mcp ref %q: want mcp:<server>/<tool>", ref)
+		}
+		serverID, err := d.mcp.ResolveServerID(ctx, server)
+		if err != nil {
+			return nil, fmt.Errorf("mcp ref %q: %w", ref, err)
 		}
 		args, err := json.Marshal(input)
 		if err != nil {
 			return nil, fmt.Errorf("mcp ref %q: marshal args: %w", ref, err)
 		}
-		out, err := d.mcp.CallTool(ctx, server, tool, args, mcpdomain.CallTriggeredByWorkflow)
+		out, err := d.mcp.CallTool(ctx, serverID, tool, args, mcpdomain.CallTriggeredByWorkflow)
 		if err != nil {
 			return nil, err
 		}

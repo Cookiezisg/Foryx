@@ -67,15 +67,11 @@ func (fakeTrigger) Get(_ context.Context, _ string) (*triggerdomain.Trigger, err
 
 type fakeMCP struct{ present bool }
 
-func (f fakeMCP) NamesByIDs(_ context.Context, ids []string) (map[string]string, error) {
+func (f fakeMCP) ResolveServerID(_ context.Context, token string) (string, error) {
 	if !f.present {
-		return map[string]string{}, nil
+		return "", stderrors.New("mcp server not found")
 	}
-	out := map[string]string{}
-	for _, id := range ids {
-		out[id] = "some-server"
-	}
-	return out, nil
+	return "mcp_resolved", nil // resolves any token — name OR id — when the server is present
 }
 
 func TestRefResolver_ResolvesEachKind(t *testing.T) {
@@ -127,6 +123,11 @@ func TestRefResolver_ResolvesEachKind(t *testing.T) {
 	// mcp:<id>/<tool> → mcp: version-less, existence = usable; entity id drops /tool.
 	if info, err := r.Resolve(ctx, "mcp:mcp_srv/search"); err != nil || info.Kind != relationdomain.EntityKindMCP || !info.HasActiveVersion {
 		t.Fatalf("mcp resolve: %+v err=%v", info, err)
+	}
+	// F23 regression: the NAME-form ref (what search_blocks/RefHint advertises) must resolve too —
+	// ResolveServerID accepts name or id, so the form mounts use no longer fails in workflows.
+	if info, err := r.Resolve(ctx, "mcp:markitdown/convert_to_markdown"); err != nil || info.Kind != relationdomain.EntityKindMCP || !info.HasActiveVersion {
+		t.Fatalf("mcp name-form resolve: %+v err=%v", info, err)
 	}
 }
 
