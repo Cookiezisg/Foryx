@@ -79,6 +79,7 @@ landed-into:
 | F60 approval `0s`/零时长 timeout 校验过但永不触发→run 永 park | approval | 单工具 / 报错 | promise≠reality/静默降级 | fixed·locked |
 | F47 agent 无工具决策 parked approval（人在环半边不可达）→ 加 `decide_approval` | approval·durable-engine | 跨实体 / happy（人在环） | 能力缺口/组合摩擦 | fixed·locked |
 | F63 handler 多行 body 非 flush-left→双重缩进 IndentationError→不透明 crash | handler(assemble) | 单工具 / 报错 | promise≠reality/脆弱 | fixed·locked |
+| F66 agent invoke 失败记不透明 "agent loop error"、丢真因（Result 不带 ErrMsg） | agent·loop | 跨实体 / 报错 | 恢复无门/静默降级 | fixed·locked |
 
 ### 已探·无缺陷（绿格——探过、当前行为正确；记下免重挖。details→LOG 元注 0618 + round-1）
 | 绿格 | target | regime |
@@ -121,6 +122,8 @@ landed-into:
 | mcp 运行时错路径（分层可操作错、双落 flowrun_nodes+mcp_calls 交叉链、offline→MCP_SERVER_NOT_FOUND、agent 轻松诊断） | mcp→workflow | 报错 |
 | 最大实体组合（一 agent 挂 fn+hd+doc+skill 全生效、handler 跨 invoke 保态、doc 实时注入） | agent·多实体 | happy |
 | 多分支 control 路由（4+ 分支 first-true-wins 全对、各 input 路由正确） | control | happy |
+| approval timeout approve/fail 行为（approve→yes 支 honest{decision:yes,reason:timeout}；fail→整 run failed；补全三件套） | approval·durable-engine | 报错→超时 |
+| handler config 工具（update 重启带新 init-args、merge-patch 保键、clear 停实例、重启清内存态=有意 durable） | handler | happy |
 
 ## §3 Frontier（空格 / 薄格——"想还有什么"的起点）
 
@@ -133,6 +136,7 @@ landed-into:
 > round-5（0618）填：handler crash/restart 韧性、WebSearch 诚实降级（绿）；确诊 F54（已修）+ F55–F59。
 > round-6（0619）填：approval durable timer、document 树深操作、大复杂图、多会话隔离（全转绿）；确诊 F60（已修）+ F61/F62 + **F47 双 lane 重confirm**（无 decide_approval 工具）。**收敛信号**：真 clean bug 产出率降、not-bug/设计议题升、产品在硬化。
 > round-7（0619）填：mcp 运行时错路径、最大实体组合、多分支 control（3/4 lane 全绿）；仅 handler-build 面有料：F63（已修）+ F64（HIGH 队，import 错不透明）+ F65（sensor level-trigger，设计）。**产品高度硬化**。
+> round-8（0619）填：approval approve/fail timeout、handler config 工具（全绿）；仅 modelOverride 面有料：F66（HIGH 修，执行记录真因）+ F67/F68（队）。**8 轮收敛**：HIGH 多为透明度族（流错 F33/F34/F66、handler F63/F64）。
 
 **确诊待修 backlog（"想还有什么"已变"该修什么"，= LOG）：**
 - **HIGH（wind-down careful 修）：** F40 declared-outputs 静默 no-op（标量返回忽略声明名、落 .text）· F41 concurrency=skip 对阻塞工作流退化成 serial（同步 Advance 蒸发 overlap 信号）。
