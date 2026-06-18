@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 )
 
@@ -51,5 +52,13 @@ func TestInvokeAgent_RequiresAgentID(t *testing.T) {
 	}
 	if err := tl.ValidateInput(json.RawMessage(`{"agentId":"ag_1","input":{}}`)); err != nil {
 		t.Fatalf("valid args (agentId + input) rejected: %v", err)
+	}
+}
+
+// TestConfigProps_AgentChainRedirect — F31: forbidding ag_ refs must point the agent at the real
+// composition path (a workflow agent node), so it doesn't burn a turn hand-rolling an HTTP wrapper.
+func TestConfigProps_AgentChainRedirect(t *testing.T) {
+	if !strings.Contains(configProps, "workflow with an agent node") {
+		t.Fatalf("the tools-field desc must redirect agent-chaining to the workflow path")
 	}
 }

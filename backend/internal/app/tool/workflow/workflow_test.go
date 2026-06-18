@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	_ "github.com/glebarez/go-sqlite"
@@ -201,5 +202,17 @@ func TestCapabilityCheck_Execute_StructuralOnly(t *testing.T) {
 	// No resolver wired → structural-only, valid, OK.
 	if !rep.OK || !rep.StructurallyValid || rep.Resolved {
 		t.Fatalf("structural-only capcheck wrong: %+v", rep)
+	}
+}
+
+// TestOpsDoc_SchemaLessTextConvention — F32: the node-result-shapes guidance must tell the agent a
+// schema-less callable (a free-form agent, an mcp/function/handler returning a non-object) exposes
+// its result under ".text", so it wires <nodeId>.text FROM THE DOC instead of discovering it via a
+// guaranteed failed flowrun (capability_check can't see the runtime-only key).
+func TestOpsDoc_SchemaLessTextConvention(t *testing.T) {
+	for _, want := range []string{"SCHEMA-LESS", "<nodeId>.text", "summarize.text"} {
+		if !strings.Contains(opsDoc, want) {
+			t.Fatalf("opsDoc must document the schema-less .text convention; missing %q", want)
+		}
 	}
 }

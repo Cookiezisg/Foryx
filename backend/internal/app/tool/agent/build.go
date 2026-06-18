@@ -39,7 +39,7 @@ const configProps = `
 		"prompt": {"type": "string", "description": "System prompt defining the agent's role and behaviour."},
 		"skill": {"type": "string", "description": "Optional skill name to pre-activate (its instructions are injected)."},
 		"knowledge": {"type": "array", "items": {"type": "string"}, "description": "Document IDs attached as background knowledge."},
-		"tools": {"type": "array", "description": "Callables the agent may use: each {ref, name}. ref is fn_… / hd_…method / mcp:server/tool — NEVER ag_ (an agent cannot call another agent).", "items": {"type": "object", "required": ["ref"], "properties": {"ref": {"type": "string"}, "name": {"type": "string"}}}},
+		"tools": {"type": "array", "description": "Callables the agent may use: each {ref, name}. ref is fn_… / hd_…method / mcp:server/tool — NEVER ag_ (an agent cannot call another agent; to chain agents, build a workflow with an agent node for each instead).", "items": {"type": "object", "required": ["ref"], "properties": {"ref": {"type": "string"}, "name": {"type": "string"}}}},
 		"inputs": {"type": "array", "description": "Declared task inputs the workflow feeds: each {name, type, description}. type ∈ string|number|boolean|object|array.", "items": {"type": "object"}},
 		"outputs": {"type": "array", "description": "Declared result fields downstream reads: each {name, type, description}. Empty = free-form text answer; otherwise the final answer is a JSON object with these fields.", "items": {"type": "object"}},
 		"modelOverride": {"type": "object", "description": "Optional {apiKeyId, modelId} to override the default agent model.", "properties": {"apiKeyId": {"type": "string"}, "modelId": {"type": "string"}}},
