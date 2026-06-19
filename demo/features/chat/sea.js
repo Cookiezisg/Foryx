@@ -228,7 +228,7 @@ window.FEATURE.chat = Object.assign(window.FEATURE.chat || {}, {
       page.replaceChildren();   // 清空 transcript（landing 浮层覆盖之）
       if (landing) landing.remove();
       landing = el("div", { class: "chat-landing" });
-      landing.style.cssText = "position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--sp-7); padding:var(--sp-6);";
+      landing.style.cssText = "position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:var(--sp-16); padding:var(--sp-6);";
       const greet = el("div");   // 排版尺度容器（typewriter 自带 ink/ink-2 色，故不内联皮肤色）；字体不加粗
       greet.style.cssText = "font-size:var(--t-h2); font-weight:400; line-height:var(--lh-tight); text-align:center; max-width:var(--w-content);";
       const tw = el("an-typewriter", { prefix: window.greetOf() + ", ", pause: "5000" });
