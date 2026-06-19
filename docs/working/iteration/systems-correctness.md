@@ -51,7 +51,7 @@ landed-into:
 
 1. Context flow: drainLoop(tickCtx) (build.go:281,309) calls a.forEachWorkspace(ctx, fn). forEachWorkspace at build.go:298-300 DISCARDS its ctx argument and invokes fn(reqctxpkg.Detached(ws.ID)). Detached (reqctx/workspace.go:61-63) returns SetWorkspaceID(context.Background(), id) — context.Background()-rooted, never cancellable, with the comment literally stating it starts from Background 'precisely so the parent's cancellation can't abort it'. So tickCtx (the only thing tickStop cancels) never reaches DrainFirings …
 
-## R4 [HIGH] (context-lifecycle) — _pending_
+## R4 [HIGH] (context-lifecycle) — ✅ FIXED
 
 **Handler subprocess Init (Python __init__ over RPC) has NO deadline; on the Boot path it runs on a never-cancelled Detached ctx and can hang the workspace boot forever**
 
@@ -227,7 +227,7 @@ STRUCTURE (agentstate.go): `seenFiles sync.Map` (line 30); `MarkRead` does only 
 
 LIFECYCLE — the key claim, confirmed: the "per-run" doc (agentstate.go:2,23) is wrong for the chat path. `AgentState` is created ONCE per conversation in `getOrCreateQueue` (chat.go:474: `agentState: agentstatepkg.New()`) and stored on the long-lived `convQueue`. Every turn re-seeds the SAME instance…
 
-## R18 [LOW] (unbounded-memory) — _pending_
+## R18 [LOW] (unbounded-memory) — ✅ FIXED
 
 **stderrFan sink leaks into the resident handler instance if a panic occurs between attach and the non-deferred detach()**
 

@@ -121,6 +121,9 @@ func (s *Service) Call(ctx context.Context, in CallInput) (any, error) {
 	prog := loopapp.ToolProgress(ctx)
 	defer prog.Close()
 	detach := inst.Stderr.attach(io.MultiWriter(prog, runTerm, logs))
+	defer detach() // panic-safety net: a panic between here and the explicit detach() below would
+	//             otherwise leak this call's sink into the resident instance's fan forever (R18).
+	//             detach is idempotent, so the explicit post-grace detach() below still controls timing.
 
 	startedAt := time.Now().UTC()
 	result, err := inst.Client.StreamCall(ctx, in.Method, in.Args, onProgress)

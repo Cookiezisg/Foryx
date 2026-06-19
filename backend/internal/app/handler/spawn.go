@@ -6,12 +6,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
 	"go.uber.org/zap"
 
 	handlerdomain "github.com/sunweilin/anselm/backend/internal/domain/handler"
 	sandboxdomain "github.com/sunweilin/anselm/backend/internal/domain/sandbox"
 )
+
+// handlerInitTimeout bounds a handler's __init__ over RPC so a hung constructor can't wedge a spawn
+// forever (R4). Generous: a constructor is instantiation, not a method call.
+//
+// handlerInitTimeout 给 handler 的 __init__ 套墙钟，使卡死的构造器不能永久卡住 spawn（R4）。宽限——构造器是实例化。
+const handlerInitTimeout = 300 * time.Second
 
 // spawnInstance builds one fresh resident Instance for handlerID: load active version +
 // decrypted config, verify required init-args present, ensure env, assemble the class,
@@ -92,7 +99,16 @@ func (s *Service) spawnInstance(ctx context.Context, handlerID string) (*Instanc
 	go captureStderr(handle.Stderr(), s.log.With(zap.String("handlerId", handlerID), zap.Int("pid", handle.PID())), fan)
 
 	client := s.clientFact(handle.Stdin(), handle.Stdout(), s.log)
-	if err := client.Init(ctx, config); err != nil {
+	// Bound __init__ over RPC: on the Boot path this ctx has no deadline, so a handler whose constructor
+	// hangs (a blocking network call, an infinite loop) would otherwise wedge the spawn — and boot's
+	// per-workspace preheat — forever (R4). Generous, since __init__ is instantiation; this only catches
+	// a truly-stuck constructor. readMessage honors the ctx; the handle.Kill() below closes stdout so
+	// readMessage's read goroutine exits too (no leak).
+	// 给 RPC 上的 __init__ 套墙钟：Boot 路径上此 ctx 无 deadline，构造器卡住的 handler 否则会永久卡死 spawn 及 boot
+	// 预热（R4）。宽限（__init__ 是实例化），只抓真卡死。handle.Kill() 关 stdout 使读 goroutine 退出、不泄漏。
+	initCtx, cancel := context.WithTimeout(ctx, handlerInitTimeout)
+	defer cancel()
+	if err := client.Init(initCtx, config); err != nil {
 		_ = handle.Kill()
 		return nil, fmt.Errorf("%w: init: %v", handlerdomain.ErrInstanceSpawnFailed, err)
 	}
