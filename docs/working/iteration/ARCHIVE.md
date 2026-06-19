@@ -92,6 +92,11 @@ landed-into:
 | F80 语义搜索无相关性下限→无匹配 query 灌全 workspace→cosineFloor=0.7（:8743 实测校准） | search | happy/边界 | 静默降级/假成功 | fixed·locked |
 | F82 handler 注入 secret 经 call-log 泄露→Instance.SecretValues + recordCall scrubSecrets（防御纵深） | handler | 安全 | 静默降级/安全 | fixed·locked |
 | F40 declared outputs advisory→agent invoke 终答回解析(coerce/loud-fail)，fn/hd 保 advisory+文档 | agent·workflow | 跨实体/数据传递 | promise≠reality | fixed(agent半)·locked |
+| F57 skill allowed-tools preauth 挂 agent 不生效=对的(无人值守安全)→只改误导措辞(build.go:40+agent.go:79) | agent·skill | 单工具/授权 | promise≠reality | fixed(措辞)·locked |
+| F65 sensor level-trigger 风暴被并发策略中和→工具描述+trigger.md 写清节奏(+targetKind 补 mcp) | trigger | 脆弱/白烧 | promise≠reality | fixed(措辞)·locked |
+| F41 concurrency=skip 退化疑→对抗复核前提证伪(overlap 信号 DB-durable)、唯同步 Advance niche 吞吐 | workflow·引擎 | 并发 | 系统性→降级 | 评估关闭(非问题) |
+| F55 compaction trigger/gate 两尺非对称→刻意+自愈(懒加载压 schema)→不动 | chat·loop | 边界 | 设计议题 | 评估关闭(非问题) |
+| F62 search_conversations 跨会话泄露疑→误读(有界片段+工作区隔离、单用户召回即价值)→不动 | search | happy | promise≠reality | 评估关闭(误读) |
 
 ### 已探·无缺陷（绿格——探过、当前行为正确；记下免重挖。details→LOG 元注 0618 + round-1）
 | 绿格 | target | regime |

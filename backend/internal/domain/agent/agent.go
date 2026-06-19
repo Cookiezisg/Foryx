@@ -76,7 +76,7 @@ type Version struct {
 	AgentID       string                `db:"agent_id"                    json:"agentId"`
 	Version       int                   `db:"version"                     json:"version"`
 	Prompt        string                `db:"prompt"                      json:"prompt"`
-	Skill         string                `db:"skill"                       json:"skill,omitempty"`         // 0-1 skill name to pre-activate
+	Skill         string                `db:"skill"                       json:"skill,omitempty"`         // 0-1 skill name to mount (Guide injected; allowed-tools preauth does NOT carry to an agent)
 	Knowledge     []string              `db:"knowledge,json"              json:"knowledge"`               // document IDs attached as context
 	Tools         []ToolRef             `db:"tools,json"                  json:"tools"`                   // fn_/hd_/mcp refs (no ag_)
 	Inputs        []schemapkg.Field     `db:"inputs,json"                 json:"inputs"`                  // declared task inputs (workflow feeds these)

@@ -43,6 +43,8 @@ durable 收件箱 trigger_firings（pending）……scheduler 每 5s 逐 workspa
 | fsnotify | path + op + **秒桶** | 编辑器一次保存的事件突发 | `{firedAt, path, eventKind}`；**eventKind 用配置词汇**（create/modify/delete/rename/chmod 小写、组合事件 `\|` 连，非 fsnotify 原始大写 Op）——`configEventKind` 在交付端归一 |
 | sensor | trigger + probe 时刻（秒） | 一次探测至多一条/工作流 | = `config.output` CEL 产出的形状（作者自定义） |
 
+> **sensor = 电平触发（level-triggered，F65）**：dedup key 含 probe 秒戳，故每个轮询周期条件为真都 fire 一条新 firing——**持续坏态会每 poll 反复触发**（非 false→true 边沿一次）。alert-storm 由 listener workflow 的并发策略兜住（默认 `serial` 排队；要单跑设 `skip`/`buffer_one`）。**无内建 edge-trigger/跨 poll 状态**——只想"翻转时触发一次"须在 handler 条件里自存上次状态。create_trigger 工具描述同款记此节奏。
+
 **`outputs` 字段（声明下游可读的 payload 字段）**：cron/webhook/fsnotify 在 create/edit 时由 `triggerdomain.CanonicalOutputs(kind)` **盖上**（= 上表 Fire Payload、**覆盖作者所填、永不与 listener emit 漂移**）；sensor 由作者按 `config.output` 自定义、app 不覆盖。`CanonicalOutputs` 须与 listeners 的 fire payload 同步。
 
 ## 4. 生命周期 / 行为
