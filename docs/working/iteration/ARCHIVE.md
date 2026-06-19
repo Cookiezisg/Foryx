@@ -97,7 +97,9 @@ landed-into:
 | F41 concurrency=skip 退化疑→对抗复核前提证伪(overlap 信号 DB-durable)、唯同步 Advance niche 吞吐 | workflow·引擎 | 并发 | 系统性→降级 | 评估关闭(非问题) |
 | F55 compaction trigger/gate 两尺非对称→刻意+自愈(懒加载压 schema)→不动 | chat·loop | 边界 | 设计议题 | 评估关闭(非问题) |
 | F62 search_conversations 跨会话泄露疑→误读(有界片段+工作区隔离、单用户召回即价值)→不动 | search | happy | promise≠reality | 评估关闭(误读) |
-
+| F51 capability_check 校 mcp server 不校 tool→ServerToolNames 灌 RefInfo.MCPToolNames + mcpTool 校验(镜像 handler .method) | workflow·mcp | 不可发现 | promise≠reality | fixed·locked |
+| F45 无工作区级坏链接体检工具→运行时 fail-fast 已兜、relation 边硬删无法 cheap 扫→产品设计不做 | workflow·relation | 能力缺口 | 用户判定非问题 | 评估关闭(产品设计) |
+| F65b
 ### 已探·无缺陷（绿格——探过、当前行为正确；记下免重挖。details→LOG 元注 0618 + round-1）
 | 绿格 | target | regime |
 |---|---|---|

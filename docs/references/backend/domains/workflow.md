@@ -28,7 +28,7 @@ audience: [human, ai]
 
 1. **`ValidateGraph`（domain 纯函数）**：形状（kind/ref 前缀匹配/action 接线非空）、良构（id 唯一、无悬挂/自环边、≥1 trigger、**全节点从 trigger 可达**）、**环纪律**（每条回边必须出自 control/approval——循环只能由分支决策闭合）、端口结构调和。失败 = `WORKFLOW_INVALID_GRAPH` + details.reason。
 2. **CEL 编译 + 可见性 lint**（app `compileGraphCEL`，create/edit 时逐 Input 编译——domain 不准 import cel-go）：每节点先用**全图根** env 编译（区分语法错/引用不存在的名字），再用**恰为其祖先**（`Ancestors`）的 env 编译——后者强制「节点只能读保证已先于它完成的祖先 result」，越界标识符直接编译失败 →「references a non-ancestor node」，当场拒、非运行时。
-3. **`CapabilityCheck`（app，对 resolver）**：ref 解析得到吗、kind 对吗、control 的 FromPort 在解析后分支集吗、hd 的 `.method` 存在吗。**绝不为缺失 ref 返 transport 错误**——把全部问题收进 `report.Problems`（编辑器一次看齐），仅在 resolver 自身故障时冒泡。`WORKFLOW_REF_NOT_FOUND` 是 resolver 的 miss 信号、被此处 `errors.Is` 捕获转成 problem 串，非由本检查抛出。无 resolver 时退化为仅结构报告（`Resolved=false`）。
+3. **`CapabilityCheck`（app，对 resolver）**：ref 解析得到吗、kind 对吗、control 的 FromPort 在解析后分支集吗、hd 的 `.method` 存在吗、**mcp 的 `/tool` 在已连 server 的工具集吗**（F51——镜像 `.method` 校验、补上不对称；server 未连无名可校则跳过）。**绝不为缺失 ref 返 transport 错误**——把全部问题收进 `report.Problems`（编辑器一次看齐），仅在 resolver 自身故障时冒泡。`WORKFLOW_REF_NOT_FOUND` 是 resolver 的 miss 信号、被此处 `errors.Is` 捕获转成 problem 串，非由本检查抛出。无 resolver 时退化为仅结构报告（`Resolved=false`）。
 
 ## 4. 生命周期 / 行为
 

@@ -65,7 +65,10 @@ func (fakeTrigger) Get(_ context.Context, _ string) (*triggerdomain.Trigger, err
 	return &triggerdomain.Trigger{ID: "trg_1"}, nil
 }
 
-type fakeMCP struct{ present bool }
+type fakeMCP struct {
+	present bool
+	tools   []string // tool names the resolved server exposes (F51)
+}
 
 func (f fakeMCP) ResolveServerID(_ context.Context, token string) (string, error) {
 	if !f.present {
@@ -73,6 +76,8 @@ func (f fakeMCP) ResolveServerID(_ context.Context, token string) (string, error
 	}
 	return "mcp_resolved", nil // resolves any token — name OR id — when the server is present
 }
+
+func (f fakeMCP) ServerToolNames(_ context.Context, _ string) ([]string, error) { return f.tools, nil }
 
 func TestRefResolver_ResolvesEachKind(t *testing.T) {
 	ctx := context.Background()

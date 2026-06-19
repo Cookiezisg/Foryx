@@ -425,6 +425,37 @@ func TestCapabilityCheck_HandlerMethod(t *testing.T) {
 	}
 }
 
+// TestCapabilityCheck_MCPToolName — F51: a bad MCP tool name (the /tool suffix) is faulted like a bad
+// handler method, not slipped to a runtime MCP_RPC_ERROR; a disconnected server (no tool names) skips.
+func TestCapabilityCheck_MCPToolName(t *testing.T) {
+	ops := opsJSON(t, `[
+		{"op":"add_node","node":{"id":"t","kind":"trigger","ref":"trg_a"}},
+		{"op":"add_node","node":{"id":"m","kind":"action","ref":"mcp:srv/badtool"}},
+		{"op":"add_edge","edge":{"id":"e1","from":"t","to":"m"}}
+	]`)
+	g, _ := workflowdomain.ApplyOps(nil, ops)
+
+	// connected server exposing only "goodtool" → "badtool" is faulted
+	resolver := &fakeResolver{m: map[string]RefInfo{
+		"trg_a":           {Kind: relationdomain.EntityKindTrigger, HasActiveVersion: true},
+		"mcp:srv/badtool": {Kind: relationdomain.EntityKindMCP, HasActiveVersion: true, MCPToolNames: []string{"goodtool"}},
+	}}
+	svc, ctx := newSvc(t, resolver)
+	if rep, _ := svc.CapabilityCheck(ctx, g); rep.OK() {
+		t.Fatalf("a bad mcp tool name should surface a problem: %+v", rep)
+	}
+
+	// disconnected server (no tool names) → can't validate → skip, no false problem
+	resolver2 := &fakeResolver{m: map[string]RefInfo{
+		"trg_a":           {Kind: relationdomain.EntityKindTrigger, HasActiveVersion: true},
+		"mcp:srv/badtool": {Kind: relationdomain.EntityKindMCP, HasActiveVersion: true},
+	}}
+	svc2, ctx2 := newSvc(t, resolver2)
+	if rep, _ := svc2.CapabilityCheck(ctx2, g); !rep.OK() {
+		t.Fatalf("a disconnected mcp server should skip the tool check, not fault it: %+v", rep)
+	}
+}
+
 // --- BuildPinClosure ---
 
 func TestBuildPinClosure_AgentDepth2(t *testing.T) {

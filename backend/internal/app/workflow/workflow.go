@@ -49,6 +49,7 @@ type RefInfo struct {
 	ActiveVersionID  string   // the pin target (entity_id → this)
 	BranchPorts      []string // control only: the ctl_ active version's branch port names
 	MethodNames      []string // handler only: the hd_ active version's method names
+	MCPToolNames     []string // mcp only: the connected server's tool names (empty if disconnected — check skips)
 	AgentCallables   []string // agent only: the fn_/hd_ refs this agent mounts (for pin recursion)
 }
 

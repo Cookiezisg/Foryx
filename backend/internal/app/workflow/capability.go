@@ -90,6 +90,17 @@ func (s *Service) CapabilityCheck(ctx context.Context, g *workflowdomain.Graph) 
 				report.Problems = append(report.Problems, fmt.Sprintf("node %q: handler method %q not found on %q", n.ID, method, n.Ref))
 			}
 		}
+		// MCP tool must exist on the connected server (the /tool suffix) — mirrors the handler-method
+		// check, closing the asymmetry where a bad MCP tool name passed green to a runtime MCP_RPC_ERROR.
+		// Skipped when the server is disconnected (MCPToolNames empty → nothing to validate against).
+		//
+		// MCP 工具须存在于已连 server（/tool 后缀）——镜像 handler 方法校验，补上「坏 MCP 工具名过绿、运行时才 MCP_RPC_ERROR」
+		// 的不对称。server 未连（MCPToolNames 空）则跳过。
+		if n.Kind == workflowdomain.NodeKindAction && strings.HasPrefix(n.Ref, workflowdomain.RefPrefixMCP) {
+			if tool := mcpTool(n.Ref); tool != "" && len(info.MCPToolNames) > 0 && !contains(info.MCPToolNames, tool) {
+				report.Problems = append(report.Problems, fmt.Sprintf("node %q: mcp tool %q not found on %q", n.ID, tool, n.Ref))
+			}
+		}
 	}
 
 	s.reconcileControlPorts(g, infoByNode, &report)
@@ -258,6 +269,17 @@ func entityIDOf(ref string) string {
 func handlerMethod(ref string) string {
 	if i := strings.IndexByte(ref, '.'); i > 0 {
 		return ref[i+1:]
+	}
+	return ""
+}
+
+// mcpTool extracts the /tool suffix from an mcp ref (mcp:server/tool → tool; empty if none).
+//
+// mcpTool 抽 mcp ref 的 /tool 后缀（mcp:server/tool → tool；无则空）。
+func mcpTool(ref string) string {
+	token := strings.TrimPrefix(ref, workflowdomain.RefPrefixMCP)
+	if i := strings.IndexByte(token, '/'); i >= 0 {
+		return token[i+1:]
 	}
 	return ""
 }

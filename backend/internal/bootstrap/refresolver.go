@@ -52,6 +52,10 @@ type MCPExistence interface {
 	// ResolveServerID 把 MCP ref 的 server 段（名——search_blocks 给的、mount 用的——或 mcp_ id）解析成
 	// 规范 mcp_ id，无则报错。这里仅作存在性探针，使 name 形 ref 在 workflow 里像 mount 一样解析得通。
 	ResolveServerID(ctx context.Context, token string) (string, error)
+	// ServerToolNames returns the resolved server's tool names so CapabilityCheck can validate the
+	// MCP ref's /tool suffix (mirroring the handler .method check). Empty if disconnected → skip.
+	// ServerToolNames 返回解析出 server 的工具名，供 CapabilityCheck 校 MCP ref 的 /tool 后缀（镜像 handler .method 校验）。
+	ServerToolNames(ctx context.Context, serverID string) ([]string, error)
 }
 
 // refResolver implements workflow.RefResolver by fanning a node ref out to the owning entity
@@ -198,11 +202,16 @@ func (r refResolver) Resolve(ctx context.Context, ref string) (workflowapp.RefIn
 		//
 		// 接受 server 名（search_blocks/RefHint 给的、mount 用的）与 mcp_ id——ResolveServerID 两者都试。
 		// 此前裸名 ref 漏掉按-id 探针、即便 server 已连也报 ErrRefNotFound（split-contract bug）。
-		if _, err := r.mcp.ResolveServerID(ctx, token); err != nil {
+		serverID, err := r.mcp.ResolveServerID(ctx, token)
+		if err != nil {
 			return workflowapp.RefInfo{}, workflowdomain.ErrRefNotFound
 		}
+		// Carry the server's tool names so CapabilityCheck can fault a bad /tool suffix (best-effort:
+		// a disconnected server yields no names → the tool check skips, not fails).
+		// 带上 server 的工具名，使 CapabilityCheck 能判坏 /tool 后缀（best-effort：未连 server 无名 → 工具校验跳过、非失败）。
+		toolNames, _ := r.mcp.ServerToolNames(ctx, serverID)
 		// Version-less like trigger: existence = usable, nothing to pin.
-		return workflowapp.RefInfo{Kind: relationdomain.EntityKindMCP, HasActiveVersion: true}, nil
+		return workflowapp.RefInfo{Kind: relationdomain.EntityKindMCP, HasActiveVersion: true, MCPToolNames: toolNames}, nil
 
 	default:
 		return workflowapp.RefInfo{}, workflowdomain.ErrRefNotFound

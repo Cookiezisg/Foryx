@@ -327,6 +327,26 @@ func (s *Service) ResolveServerID(ctx context.Context, token string) (string, er
 	return "", mcpdomain.ErrServerNotFound
 }
 
+// ServerToolNames returns the tool names a server currently exposes, given its canonical mcp_ id
+// (from ResolveServerID). Empty when the server isn't connected/callable — a capability check then
+// has nothing to validate against and skips (can't fault a tool name we can't enumerate).
+//
+// ServerToolNames 按规范 mcp_ id（ResolveServerID 给）返回 server 当前暴露的工具名。server 未连接/不可调用
+// 时为空——能力检查无从校验、跳过（枚举不到就不能判工具名错）。
+func (s *Service) ServerToolNames(_ context.Context, serverID string) ([]string, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	st := s.states[serverID]
+	if st == nil || !mcpdomain.IsCallable(st.Status) {
+		return nil, nil
+	}
+	names := make([]string, 0, len(st.Tools))
+	for i := range st.Tools {
+		names = append(names, st.Tools[i].Name)
+	}
+	return names, nil
+}
+
 // GetServer returns one server's live status by name (workspace-checked via repo).
 //
 // GetServer 按 name 返回单个 server 的实时状态（经 repo 校验 workspace）。
