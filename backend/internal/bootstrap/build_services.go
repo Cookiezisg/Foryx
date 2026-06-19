@@ -233,8 +233,13 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 		),
 	}
 	// Append the Subagent tool (depth-1 guard: the subagent registry always filters it out, so a
-	// subagent can never spawn another). Then publish the final set to the lazy holder.
-	toolset.Lazy = append(toolset.Lazy, subagenttool.New(subagentSvc, subagentapp.NewRegistry().Names()))
+	// subagent can never spawn another) + get_subagent_trace (reads a subagent run's hidden trace
+	// back from the parent's sub-messages — a subagent's tool set never includes it, no point
+	// reading its own siblings). Then publish the final set to the lazy holder.
+	toolset.Lazy = append(toolset.Lazy,
+		subagenttool.New(subagentSvc, subagentapp.NewRegistry().Names()),
+		subagenttool.NewTraceTool(st.messages),
+	)
 	holder.tools = toolset.All()
 
 	// --- context compaction + chat (the dialogue surface) ---

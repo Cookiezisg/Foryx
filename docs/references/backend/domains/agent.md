@@ -73,7 +73,7 @@ InvokeAgent(in)
 - **skill 作指南而非激活**：`Guide` 渲染正文（展开 `${CLAUDE_SESSION_ID}`，不接 `$ARGUMENTS`/位置参数）注入 system prompt；不写 AgentState 的 active-skill（那会把 allowed-tools 预授权泄漏给父对话）、不触发 fork（指南就是给本次运行的文本）。
 - **无 sandbox 依赖**：agent 不写代码——是唯一没有 env/物化链路的执行实体。
 - **TriggeredBy 无 "agent"**：员工不调员工（与 ToolRef 禁 ag_ 同一条公理的两面）。
-- **subagent 与 agent 实体无关**：subagent 是 chat 内 spawn 的隔离 loop 运行（固定动词工具白名单、落 sub-message）；agent 是持久化实体。两者只共享 loop 引擎。
+- **subagent 与 agent 实体无关**：subagent 是 chat 内 spawn 的隔离 loop 运行（固定动词工具白名单、落 sub-message）；agent 是持久化实体。两者只共享 loop 引擎。故 trace 查回也分两路：`get_agent_execution` 读 `agent_executions` 表（实体 run），`get_subagent_trace` 读父对话的 sub-message（inline subagent 无表行，见 [messages.md](messages.md)）——别混。
 
 ## 6. 契约（引用）
 
