@@ -47,6 +47,7 @@ import (
 	handlertool "github.com/sunweilin/anselm/backend/internal/app/tool/handler"
 	mcptool "github.com/sunweilin/anselm/backend/internal/app/tool/mcp"
 	memorytool "github.com/sunweilin/anselm/backend/internal/app/tool/memory"
+	modeltool "github.com/sunweilin/anselm/backend/internal/app/tool/model"
 	mounttool "github.com/sunweilin/anselm/backend/internal/app/tool/mount"
 	relationtool "github.com/sunweilin/anselm/backend/internal/app/tool/relation"
 	searchtool "github.com/sunweilin/anselm/backend/internal/app/tool/search"
@@ -222,6 +223,7 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 			triggertool.TriggerTools(trg, searchSvc),
 			documenttool.DocumentTools(doc, searchSvc),
 			memorytool.MemoryTools(mem),
+			modeltool.ModelConfigTools(ws, keys, modelCaps),
 			mcptool.MCPTools(mcp),
 			skilltool.SkillTools(skill),
 			blockstool.BlocksTools(searchSvc),
