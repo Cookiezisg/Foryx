@@ -45,6 +45,8 @@
       .row { display: grid; grid-template-columns: auto minmax(var(--zero), 1fr) auto; grid-template-areas: "lead edit tail";
         align-items: center; column-gap: var(--grid); row-gap: var(--sp-2); padding: var(--sp-2); }
       :host([multiline]) .row { grid-template-areas: "edit edit edit" "lead . tail"; }
+      /* 多行：文字左缘对齐下方 @ 图标左缘（图标在 icon 钮内居中、内缩 (ctl-icon)/2，故文字也内缩同值，非裸值） */
+      :host([multiline]) .edit { padding-left: calc((var(--ctl) - var(--icon)) / 2); padding-right: calc((var(--ctl) - var(--icon)) / 2); }
       .row .lead { grid-area: lead; } .row .tail { grid-area: tail; justify-self: end; }
       .row .lead, .row .tail { display: inline-flex; align-items: center; gap: var(--grid); }
       /* contenteditable 编辑区：flex 独吞中段、多行自增、超 6 行内滚（无 native gutter）；空态占位 */
