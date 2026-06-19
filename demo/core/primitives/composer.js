@@ -49,6 +49,10 @@
       :host([multiline]) .edit { padding-left: calc((var(--ctl) - var(--icon)) / 2); padding-right: calc((var(--ctl) - var(--icon)) / 2); }
       .row .lead { grid-area: lead; } .row .tail { grid-area: tail; justify-self: end; }
       .row .lead, .row .tail { display: inline-flex; align-items: center; gap: var(--grid); }
+      /* 模型切换钮：模型名 + 尾 chevron（ghost 文字钮，与 @/附件 同 lead 行） */
+      .t-model .m-name { vertical-align: middle; }
+      .t-model .m-chev { display: inline-flex; vertical-align: middle; margin-left: var(--gap-tight); color: var(--ink-3); }
+      .t-model .m-chev svg { display: block; }
       /* contenteditable 编辑区：flex 独吞中段、多行自增、超 6 行内滚（无 native gutter）；空态占位 */
       .edit {
         grid-area: edit; min-width: var(--zero); outline: none; padding: var(--zero);
@@ -94,6 +98,28 @@
       box.style.borderRadius = ((minH / 2) + (rCard - minH / 2) * t) + "px";
     }
 
+    // 模型/API 切换：数据属性注入优先（feature 设 composer.models），兜底 window.CHAT_MODELS——composer 对数据无硬依赖、可复用。
+    set models(v) { this._models = v; if (this.isConnected) this._syncModelBtn(); }
+    get models() { return this._models || window.CHAT_MODELS || { providers: [], current: {} }; }
+    _syncModelBtn() {
+      const span = this.$(".t-model .m-name"); if (!span) return;
+      const data = this.models, cur = data.current || {};
+      let label = "选择模型";
+      (data.providers || []).forEach((p) => (p.models || []).forEach((m) => { if (m.id === cur.model) label = m.label; }));
+      span.textContent = label;
+    }
+    _openModelMenu(anchor) {
+      window.AnModelPicker.open(anchor, {
+        models: this.models, namespace: "composer-model", placement: "top",
+        onPick: (modelId, keyId, info) => this._pickModel(modelId, keyId, info),
+      });
+    }
+    _pickModel(modelId, keyId, info) {
+      this.models.current = { model: modelId, key: keyId };   // 单源选中态就地更新（钮文案 + 派事件供 feature 落地副作用）
+      this._syncModelBtn();
+      this.emit("an-model-change", { model: modelId, key: keyId, modelLabel: info && info.modelLabel, keyLabel: info && info.keyLabel });
+    }
+
     render() {
       // 单行：左 @/附件 + edit + 右 发送/停止（发送极简 icon 钮、空输入时藏）。无占位文字（Enter 发送 / Shift+Enter 换行靠键位约定）。
       const ph = e(this.attr("placeholder", ""));
@@ -103,6 +129,7 @@
           <span class="lead">
             <an-button class="t-at" variant="icon" icon="at-sign">提及</an-button>
             <an-button class="t-att" variant="icon" icon="paperclip">附件</an-button>
+            <an-button class="t-model" variant="ghost" size="sm" aria-haspopup="menu"><span class="m-name"></span><span class="m-chev">${window.icon("chevd", 12)}</span></an-button>
           </span>
           <div class="edit" contenteditable="true" spellcheck="false" data-ph="${ph}"></div>
           <span class="tail">
@@ -121,6 +148,11 @@
       // 点 box 空白处（非钮/chip/药丸/edit 本体）→ 聚焦编辑区（edit 居中后比 box 矮，留白处也要能聚焦）
       const box = this.$(".box");
       if (box) box.addEventListener("mousedown", (ev) => { if (ev.target.closest("an-button, an-ref-pill, .chip, .edit")) return; ev.preventDefault(); ed.focus(); });
+
+      // 模型/API 切换钮：填当前模型名 + 点开两栏选择器（AnModelPicker）
+      this._syncModelBtn();
+      const mb = this.$(".t-model");
+      if (mb) mb.addEventListener("click", () => this._openModelMenu(mb));
 
       // @ 提及（复用地基 AnMention：「@」起会话 + 工具栏钮 pick；shadow 内取 shadowRoot 选区）
       this._mention = window.AnMention.attach(ed, {

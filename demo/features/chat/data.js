@@ -114,6 +114,42 @@
     "research durable execution?",
   ];
 
+  // 模型/API 切换器数据（composer .t-model 钮 → AnModelPicker 两栏）：按 provider 分组；每模型自带 available + 可选 keys[]；current 单源选中态。
+  window.CHAT_MODELS = {
+    current: { model: "claude-opus", key: "key_personal" },
+    providers: [
+      { provider: "Anthropic", models: [
+        { id: "claude-opus", label: "Claude Opus 4.8", available: true, badge: "1M", keys: [
+          { id: "key_personal", label: "个人 key", masked: "sk-ant-•••• a91f" },
+          { id: "key_team", label: "团队 key", masked: "sk-ant-•••• 7c20" },
+        ] },
+        { id: "claude-sonnet", label: "Claude Sonnet 4.6", available: true, keys: [
+          { id: "key_personal", label: "个人 key", masked: "sk-ant-•••• a91f" },
+          { id: "key_team", label: "团队 key", masked: "sk-ant-•••• 7c20" },
+        ] },
+        { id: "claude-haiku", label: "Claude Haiku 4.5", available: true, badge: "快", keys: [
+          { id: "key_personal", label: "个人 key", masked: "sk-ant-•••• a91f" },
+        ] },
+      ] },
+      { provider: "OpenAI", models: [
+        { id: "gpt-5.1", label: "GPT-5.1", available: true, keys: [
+          { id: "key_oai_personal", label: "个人 key", masked: "sk-•••• 4d2e" },
+          { id: "key_oai_org", label: "组织 key", masked: "sk-proj-•••• 9f01" },
+        ] },
+        { id: "gpt-5-mini", label: "GPT-5 mini", available: true, badge: "省", keys: [
+          { id: "key_oai_personal", label: "个人 key", masked: "sk-•••• 4d2e" },
+        ] },
+        { id: "o4", label: "o4 (reasoning)", available: false, badge: "无配额", keys: [] },
+      ] },
+      { provider: "本地 (Ollama)", models: [
+        { id: "llama-3.3-70b", label: "Llama 3.3 70B", available: true, badge: "本地", keys: [
+          { id: "key_local", label: "本地·无需 key", masked: "localhost:11434" },
+        ] },
+        { id: "qwen-2.5-coder", label: "Qwen2.5 Coder", available: false, badge: "未拉取", keys: [] },
+      ] },
+    ],
+  };
+
   window.CHAT_CONVOS = {
     // ── 旗舰：多类 item 右岛（Trigger 配置 + Function 终端 + Subagent 轨迹）+ 危险确认门 ──
     cv_daily: {

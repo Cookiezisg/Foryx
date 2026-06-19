@@ -41,7 +41,7 @@ demo/
 │   ├── base.js          # AnElement 基类（Shadow DOM + token + 生命周期）
 │   ├── icons.js         # 图标语法：领域 key → Lucide 名（单一映射）
 │   ├── vendor/          # 🔒 第三方 vendored（lucide.js 1715 图标 + LICENSE，门禁豁免）
-│   ├── primitives/      # 强制层原语（47 个 <an-*> custom element，CSS 内联在 static css；floating/menu/mention/toast/dialog 5 个命令式浮层/交互模块）
+│   ├── primitives/      # 强制层原语（47 个 <an-*> custom element，CSS 内联在 static css；floating/menu/model-picker/mention/toast/dialog 6 个命令式浮层/交互模块）
 │   ├── config/          # 单源枚举：entity-kinds（9 kind）· state-model（状态翻译）
 │   ├── schema/          # 声明式：kind-schema（KIND_SCHEMA）· render（renderEntity 渲染器，L3 闭环）
 │   ├── patterns/        # 复合件（EntityCard/RunGraph 等，只由 primitives 拼，Phase 3）

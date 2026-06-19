@@ -17,7 +17,7 @@
 | `section` · `row` · `row-detail` · `page` · `info-card` · `group-label` | 段（`grid` → 响应式 2 列，内化原 render.js 手搓网格）· 核心行（三列网格；`hint` 多行 wrap；`emphatic` accent 选中皮肤[软底+左 accent 条] · `mono` 等宽标签 · `collapsible` 非 passive 行点 chevron 派 an-toggle/点标题派 an-select——树节点分流）· 可展开详情行（点行展开下方详情面板，内化原 render.js 手搓 panel+toggle）· 记录页骨架（`:host` flex:1/min-height:0 自填海面，sea 直返即可滚）· 无边信息卡 · uppercase-meta 小标题单源 |
 | 地基 `base.js` | AnElement 基类 + 共享糖：`anEsc`(转义) · `anLabel`(标识符人性化) · **`el(tag,attrs,…kids)`**（元素工厂，attrs 支持 on*/html/prop；全 feature/画廊经 `window.el` 复用，不再各抄——原散在 scheduler/documents/reference 三处） |
 | `tabs` · `segmented` | 页级视图切换（隐藏不销毁；实体页概览/版本）· 就地紧凑选项 |
-| `floating`(模块) · `menu`(模块) · `mention`(模块) | 锚定浮层引擎 · 菜单 · @ 提及 picker（contenteditable 上 `@`→边打边滤→内联插 `an-ref-pill`；doc-editor / composer 同源，复用 AnMenu/AnFloating/ref-pill） |
+| `floating`(模块) · `menu`(模块) · `model-picker`(模块) · `mention`(模块) | 锚定浮层引擎 · 菜单 · 模型/API 切换器（`AnModelPicker.open`：单浮层·两栏=左模型[按 provider 分组]右 keys，hover 可用模型→右栏列其 API key、点 key 选定「模型+key」；**避 AnMenu 嵌套子菜单**——嵌套浮层 hover 桥接/点外/Escape 栈风险大、且要改 AnFloating+AnMenu 殃及全局，单浮层两栏零嵌套同效；composer `.t-model` 钮用） · @ 提及 picker（contenteditable 上 `@`→边打边滤→内联插 `an-ref-pill`；doc-editor / composer 同源，复用 AnMenu/AnFloating/ref-pill） |
 | `action-group` · `toolbar` · `ocean-header` | 动作组（`end`/`block`/`stack`/`compact` + `footer` 底部独立动作区变体[尾部带间距，替代各处手搓 margin 裸 div]）· 三段工具条（`bordered` 顶栏 variant）· 海洋页头（`editable` 标题就地改名，派 an-title-change） |
 | `right-island` · `sidebar-list` | 右岛内容壳（皮肤与左岛同源 `--shadow-float`/`--r-chip`；`headless` 不画头、交 slot 自绘——entity-workspace 用）· 左岛列表（New[`no-new` 可隐]+域内垂搜[实时过滤·命中祖先链自动展开]+排序+**可折叠大组** chat 式头 + **headless 类型**[无标题省头·scheduler]+**嵌套行树**[row.children 递归·点 chevron 折叠/点标题选中·`add`/`more` 行尾动作·documents 文档树复用此件而非另造]） |
 | `code-editor` · `json-tree` | 编辑器块（高亮单源 `AnCodeEditor.highlight`；编辑→保存/取消）· 结构化树 |
@@ -61,7 +61,7 @@
 | `an-notification-inbox` | 🧩 ⬚ | 新 pattern + **通知类型→{图标,可操作} 单源表** | 需要你 / FYI 两段收件箱 |
 | `an-typewriter` | ✅ 🧩 | 已落 `core/primitives/typewriter.js`（纯视觉打字机：循环 type→停→delete→换句轮播；`.phrases` 数组属性 + attr `prefix` 恒定前缀 + attr `pause`[一句打满停留毫秒，chat 空态 5s]；光标闪烁复用 `--d-breath`、字号继承宿主；单 setTimeout 链 + disconnectedCallback 清 timer；打字节拍 SPEED/PAUSE_MS 为 JS 常量[CSS token 触达不到 JS]）。chat New-chat 居中落地问候用 | chat 空态时间问候轮播 |
 | `an-edit-affordance` | ✅ 🧩 | 已落 `core/primitives/edit-affordance.js`（就地编辑三连钮 铅笔→✓/✕ 单源，复用 an-button；`editing` 切铅笔↔✓✕[✓ 经 ::part 着 accent]；铅笔 click→`an-edit-start`、✓/✕ mousedown(preventDefault)→`an-edit-commit`/`an-edit-abort`[抢 contenteditable blur=提交 前定调、取消优先回滚]；可见性由父 hover/editing 揭示）。**收敛**：field/kv/ocean-header 原各手搓 .a-btn/.t-btn raw 钮，今统一用此件 | 任何 in-place 编辑（字段值 / kv 行 / 海洋标题改名） |
-| `an-composer` | ✅ 🧩 | 已落 `core/primitives/composer.js`（**演变型输入框**：单行 contenteditable + @ 提及内联药丸[复用地基 `AnMention`] + 附件 chip + 极简 icon 发送[空输入藏、有输入现] + Enter 发送 / Shift+Enter 换行 / generating 切停止；border-radius 据高度 JS 演变[1 行=药丸→换行渐变到 --r-card→阈值后恒]；attr `pill`=浮起阴影修饰[landing 居中态]；派 an-send/an-stop/an-attach） | chat 输入条 · New-chat 居中落地（FLIP 滑到底） |
+| `an-composer` | ✅ 🧩 | 已落 `core/primitives/composer.js`（**演变型输入框**：单行 contenteditable + @ 提及内联药丸[复用地基 `AnMention`] + 附件 chip + 模型/API 切换钮[`.t-model`→`AnModelPicker`、`set models`注入、派 an-model-change] + 极简 icon 发送[空输入藏、有输入现] + Enter 发送 / Shift+Enter 换行 / generating 切停止；border-radius 据高度 JS 演变[1 行=药丸→换行渐变到 --r-card→阈值后恒]；attr `pill`=浮起阴影修饰[landing 居中态]；派 an-send/an-stop/an-attach/an-model-change） | chat 输入条 · New-chat 居中落地（FLIP 滑到底） |
 | `an-stepper` | 🧩 ⬚ | 新建（线性多步外壳） | onboarding 向导 |
 
 ## 四、Compose（无需新件，拼现有原语——约 60 范式，节选拼装规则）

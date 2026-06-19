@@ -21,6 +21,8 @@ window.FEATURE.chat = Object.assign(window.FEATURE.chat || {}, {
     page.append(tree);
     const composer = el("an-composer");
     composer.mentions = window.CHAT_MENTIONS || [];
+    composer.models = window.CHAT_MODELS;
+    composer.addEventListener("an-model-change", (ev) => toast("已切换 " + ev.detail.modelLabel + " · " + ev.detail.keyLabel));
     const root = el("div", { class: "chat-sea" });
     root.style.cssText = "flex:1; min-height:0; display:flex; flex-direction:column; position:relative;";   // relative：承载空态居中浮层
     root.append(page, composer);
