@@ -73,3 +73,31 @@ func TestSentinels(t *testing.T) {
 		t.Errorf("ErrUnauthorizedNoWorkspace: %+v", ErrUnauthorizedNoWorkspace)
 	}
 }
+
+// TestSurface — the shared LLM/flowrun/agent error surface (F89/F104 extracted): a wrapped sentinel
+// yields its clean Message (+ Details), NOT the fmt.Errorf("pkg.Method: %w") chain that leaks Go
+// package paths; a raw error passes through; nil → "".
+func TestSurface(t *testing.T) {
+	if got := Surface(nil); got != "" {
+		t.Errorf("Surface(nil) = %q, want empty", got)
+	}
+
+	// A wrapped sentinel: the Go call-path breadcrumb must be stripped, only the clean Message kept.
+	sentinel := New(KindNotFound, "FUNCTION_NOT_FOUND", "function not found")
+	wrapped := fmt.Errorf("functionapp.Get: %w", sentinel)
+	if got := Surface(wrapped); got != "function not found" {
+		t.Errorf("Surface(wrapped sentinel) = %q, want clean message without the Go path", got)
+	}
+
+	// Details ride along, sorted.
+	withDetails := New(KindUnprocessable, "X_BAD", "bad thing").WithDetails(map[string]any{"reason": "too big", "field": "name"})
+	got := Surface(fmt.Errorf("pkg.M: %w", withDetails))
+	if got != "bad thing (field=name; reason=too big)" {
+		t.Errorf("Surface with details = %q", got)
+	}
+
+	// A raw (non-structured) error passes through unchanged.
+	if got := Surface(stderrors.New("raw python traceback")); got != "raw python traceback" {
+		t.Errorf("Surface(raw) = %q, want passthrough", got)
+	}
+}

@@ -3,10 +3,8 @@ package loop
 import (
 	"context"
 	"encoding/json"
-	stderrors "errors"
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
 
 	"go.uber.org/zap"
@@ -259,32 +257,14 @@ func executeTool(ctx context.Context, t toolapp.Tool, name string, argsJSON []by
 // llmErrText 把 error 渲给 LLM：message + 工具/domain 附的结构化 Details（如 workflow 校验的 "reason"
 // 点名违例节点 + 真实 CEL 错）。Error() 本身丢 Details——它为 N1 envelope 算出、却正是 agent 自纠所需。
 // 在此浮出，一处给**所有**工具去不透明化（不透明的 "workflow graph is invalid" 曾让 agent 盲猜 CEL ~8 次）。
+// llmErrText surfaces the LLM-facing error text (clean Message + Details, no Go call-path) for a
+// tool result — see errorspkg.Surface, the single source this and the scheduler's nodeErrText share
+// (F89 established the behavior; extracted to the foundation when a third site needed it).
+//
+// llmErrText 给工具结果浮出 LLM 可见错误文本（干净 Message + Details、无 Go 调用路径）——见
+// errorspkg.Surface（本函数与 scheduler 的 nodeErrText 共用的单一来源；F89 立此行为、第三处需用时下沉地基）。
 func llmErrText(err error) string {
-	var de *errorspkg.Error
-	if !stderrors.As(err, &de) {
-		// Non-structured error (a raw stdlib error): the text is all we have.
-		//
-		// 非结构化错误（裸 stdlib error）：只有这串文本可用。
-		return err.Error()
-	}
-	// S20: the LLM reads the sentinel's clean Message, NOT err.Error()'s wrapped chain. App layers wrap
-	// with fmt.Errorf("pkg.Method: %w", …) for log/debug breadcrumbs — surfacing that chain leaks internal
-	// Go package/method identifiers (e.g. "functionapp.RunFunction:") into the LLM's view. The actionable
-	// part for self-correction is Message + Details, never the call path.
-	//
-	// S20：LLM 读 sentinel 的干净 Message，**非** err.Error() 的包裹链。app 层用 fmt.Errorf("pkg.Method: %w", …)
-	// 加 log/debug 面包屑——浮出那条链会把内部 Go 包/方法标识（如 "functionapp.RunFunction:"）泄露给 LLM。
-	// 自纠所需是 Message + Details，绝非调用路径。
-	msg := de.Message
-	if len(de.Details) > 0 {
-		parts := make([]string, 0, len(de.Details))
-		for k, v := range de.Details {
-			parts = append(parts, fmt.Sprintf("%s=%v", k, v))
-		}
-		sort.Strings(parts)
-		msg += " (" + strings.Join(parts, "; ") + ")"
-	}
-	return msg
+	return errorspkg.Surface(err)
 }
 
 type indexedCall struct {

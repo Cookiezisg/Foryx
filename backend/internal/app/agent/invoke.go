@@ -17,6 +17,7 @@ import (
 	messagesdomain "github.com/sunweilin/anselm/backend/internal/domain/messages"
 	streamdomain "github.com/sunweilin/anselm/backend/internal/domain/stream"
 	llminfra "github.com/sunweilin/anselm/backend/internal/infra/llm"
+	errorspkg "github.com/sunweilin/anselm/backend/internal/pkg/errors"
 	idgenpkg "github.com/sunweilin/anselm/backend/internal/pkg/idgen"
 	jsonrepairpkg "github.com/sunweilin/anselm/backend/internal/pkg/jsonrepair"
 	limitspkg "github.com/sunweilin/anselm/backend/internal/pkg/limits"
@@ -120,7 +121,12 @@ func (s *Service) InvokeAgent(ctx context.Context, in InvokeInput) (*InvokeResul
 	switch {
 	case runErr != nil:
 		res.Status = agentdomain.ExecutionStatusFailed
-		res.ErrorMsg = runErr.Error()
+		// Surface the clean Message + Details, not err.Error()'s wrapped chain — a mount-resolution
+		// failure otherwise leaks internal Go package paths (e.g. "functionapp.Get") into the agent
+		// execution record that :triage / get_agent_execution read (F89/F104 sibling, agent surface).
+		// 浮出干净 Message + Details，非 err.Error() 的包裹链——挂载解析失败否则把内部 Go 包路径
+		// （如 "functionapp.Get"）泄进 :triage / get_agent_execution 读的 agent 执行记录（F89/F104 兄弟，agent 面）。
+		res.ErrorMsg = errorspkg.Surface(runErr)
 	case timedOut || cancelled:
 		res.OK = false
 		res.Status = agentdomain.ExecutionStatusCancelled
@@ -162,7 +168,7 @@ func (s *Service) InvokeAgent(ctx context.Context, in InvokeInput) (*InvokeResul
 			if perr != nil {
 				res.OK = false
 				res.Status = agentdomain.ExecutionStatusFailed
-				res.ErrorMsg = perr.Error()
+				res.ErrorMsg = errorspkg.Surface(perr)
 			} else {
 				res.Output = obj
 			}

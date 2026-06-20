@@ -2,10 +2,7 @@ package scheduler
 
 import (
 	"context"
-	stderrors "errors"
 	"fmt"
-	"sort"
-	"strings"
 	"time"
 
 	flowrundomain "github.com/sunweilin/anselm/backend/internal/domain/flowrun"
@@ -149,20 +146,7 @@ func (s *Service) failNode(ctx context.Context, run *flowrundomain.FlowRun, node
 // 的 flowrun-记录兄弟）。结构化 sentinel 产出干净 Message + Details；裸错误（如崩溃 function 的 Python
 // traceback）原样透传。
 func nodeErrText(err error) string {
-	var de *errorspkg.Error
-	if !stderrors.As(err, &de) {
-		return err.Error()
-	}
-	msg := de.Message
-	if len(de.Details) > 0 {
-		parts := make([]string, 0, len(de.Details))
-		for k, v := range de.Details {
-			parts = append(parts, fmt.Sprintf("%s=%v", k, v))
-		}
-		sort.Strings(parts)
-		msg += " (" + strings.Join(parts, "; ") + ")"
-	}
-	return msg
+	return errorspkg.Surface(err)
 }
 
 // evalInput evaluates each node.Input field's CEL against the model-B scope (ancestor results by
