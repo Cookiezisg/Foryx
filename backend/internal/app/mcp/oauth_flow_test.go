@@ -120,7 +120,7 @@ func TestAuthorizeOAuth_FullFlow(t *testing.T) {
 	svc := NewService(newFakeRepo(), nil, &fakeSandbox{}, zap.NewNop())
 	svc.SetBrowserOpener(&fakeOpener{code: "testcode", hits: hits})
 
-	creds, err := svc.authorizeOAuth(context.Background(), as.URL+"/mcp", "", "")
+	creds, err := svc.authorizeOAuth(context.Background(), as.URL+"/mcp", "", "", nil)
 	if err != nil {
 		t.Fatalf("authorizeOAuth: %v", err)
 	}
@@ -157,7 +157,7 @@ func TestAuthorizeOAuth_BYOClient(t *testing.T) {
 	svc := NewService(newFakeRepo(), nil, &fakeSandbox{}, zap.NewNop())
 	svc.SetBrowserOpener(&fakeOpener{code: "testcode"})
 
-	creds, err := svc.authorizeOAuth(context.Background(), as.URL+"/mcp", "my-own-client-id", "my-own-secret")
+	creds, err := svc.authorizeOAuth(context.Background(), as.URL+"/mcp", "my-own-client-id", "my-own-secret", nil)
 	if err != nil {
 		t.Fatalf("BYO authorizeOAuth: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestAuthorizeOAuth_NoDCRNoClient(t *testing.T) {
 	as := fakeAuthServerDCR(t, false)
 	svc := NewService(newFakeRepo(), nil, &fakeSandbox{}, zap.NewNop())
 	svc.SetBrowserOpener(&fakeOpener{code: "testcode"})
-	if _, err := svc.authorizeOAuth(context.Background(), as.URL+"/mcp", "", ""); !errors.Is(err, mcpdomain.ErrOAuthNotSupported) {
+	if _, err := svc.authorizeOAuth(context.Background(), as.URL+"/mcp", "", "", nil); !errors.Is(err, mcpdomain.ErrOAuthNotSupported) {
 		t.Errorf("err = %v, want ErrOAuthNotSupported", err)
 	}
 }

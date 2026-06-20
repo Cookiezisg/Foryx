@@ -173,10 +173,30 @@ func TestInstall_ConnectsAndReportsTools(t *testing.T) {
 	}
 }
 
+// TestInstall_OptionalEnvNotBlocked verifies a server with a required credential + optional knobs
+// installs when only the required one is given — optional envs (the registry's many tuning vars)
+// must never block install.
+//
+// TestInstall_OptionalEnvNotBlocked 验证「必填凭据 + 一堆可选旋钮」的 server 只给必填的就能装——可选 env
+// （registry 的一堆调优变量）绝不该拦安装。
+func TestInstall_OptionalEnvNotBlocked(t *testing.T) {
+	reg := &fakeRegistry{entries: []mcpdomain.RegistryEntry{{
+		Name: "x/y",
+		Packages: []mcpdomain.Package{{Name: "y-mcp", RuntimeHint: "npx", EnvVars: []mcpdomain.EnvVar{
+			{Name: "API_KEY", Required: true},
+			{Name: "OPTIONAL_ZONE"}, {Name: "OPTIONAL_TIMEOUT"},
+		}}},
+	}}}
+	svc := svcWith(newFakeRepo(), reg, &fakeClient{})
+	if _, err := svc.InstallFromRegistry(ctxWS("ws_1"), "x/y", map[string]string{"API_KEY": "k"}); err != nil {
+		t.Fatalf("install with only the required env should succeed, got %v", err)
+	}
+}
+
 func TestInstall_MissingEnv(t *testing.T) {
 	reg := &fakeRegistry{entries: []mcpdomain.RegistryEntry{{
 		Name:     "x/y",
-		Packages: []mcpdomain.Package{{Name: "y-mcp", RuntimeHint: "npx", EnvVars: []mcpdomain.EnvVar{{Name: "API_KEY"}}}},
+		Packages: []mcpdomain.Package{{Name: "y-mcp", RuntimeHint: "npx", EnvVars: []mcpdomain.EnvVar{{Name: "API_KEY", Required: true}}}},
 	}}}
 	svc := svcWith(newFakeRepo(), reg, &fakeClient{})
 	_, err := svc.InstallFromRegistry(ctxWS("ws_1"), "x/y", nil)

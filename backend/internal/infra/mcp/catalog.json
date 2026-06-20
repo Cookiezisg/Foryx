@@ -19,7 +19,15 @@
       "slug": "coplaydev/unity-mcp"
     },
     {
-      "slug": "firecrawl/firecrawl-mcp-server"
+      "slug": "firecrawl/firecrawl-mcp-server",
+      "auth": {
+        "transport": "stdio",
+        "env": {
+          "name": "FIRECRAWL_API_KEY",
+          "description": "Firecrawl API key (fc-…) — create at firecrawl.dev/app/api-keys",
+          "secret": true
+        }
+      }
     },
     {
       "slug": "io.github.wonderwhy-er/desktop-commander"
@@ -94,7 +102,17 @@
       "slug": "pydantic/logfire-mcp"
     },
     {
-      "slug": "io.github.SAP/fiori-mcp-server"
+      "slug": "io.github.SAP/fiori-mcp-server",
+      "auth": {
+        "transport": "stdio",
+        "package": {
+          "runtimeHint": "npx",
+          "name": "@sap-ux/fiori-mcp-server",
+          "args": [
+            "fiori-mcp"
+          ]
+        }
+      }
     },
     {
       "slug": "azure/aks-mcp"
@@ -115,7 +133,19 @@
       "slug": "microsoft/clarity-mcp-server"
     },
     {
-      "slug": "io.github.ScrapeGraphAI/scrapegraph-mcp"
+      "slug": "io.github.ScrapeGraphAI/scrapegraph-mcp",
+      "auth": {
+        "transport": "stdio",
+        "package": {
+          "runtimeHint": "uvx",
+          "name": "scrapegraph-mcp"
+        },
+        "env": {
+          "name": "SGAI_API_KEY",
+          "description": "ScrapeGraph AI API key — create at scrapegraphai.com dashboard",
+          "secret": true
+        }
+      }
     },
     {
       "slug": "cognitionai/deepwiki"
@@ -124,10 +154,26 @@
       "slug": "io.github.arm/arm-mcp"
     },
     {
-      "slug": "io.github.PagerDuty/pagerduty-mcp"
+      "slug": "io.github.PagerDuty/pagerduty-mcp",
+      "auth": {
+        "transport": "stdio",
+        "env": {
+          "name": "PAGERDUTY_USER_API_KEY",
+          "description": "PagerDuty user API token — create in PagerDuty → User Settings → Create API User Token",
+          "secret": true
+        }
+      }
     },
     {
-      "slug": "codacy/codacy-mcp-server"
+      "slug": "codacy/codacy-mcp-server",
+      "auth": {
+        "transport": "stdio",
+        "env": {
+          "name": "CODACY_ACCOUNT_TOKEN",
+          "description": "Codacy account token — create in Codacy → Account → Access Management → API tokens",
+          "secret": true
+        }
+      }
     },
     {
       "slug": "io.snyk/mcp",
@@ -153,7 +199,15 @@
       "slug": "io.github.zscaler/zscaler-mcp-server"
     },
     {
-      "slug": "io.github.contextstreamio/mcp-server"
+      "slug": "io.github.contextstreamio/mcp-server",
+      "auth": {
+        "transport": "stdio",
+        "env": {
+          "name": "CONTEXTSTREAM_API_KEY",
+          "description": "ContextStream API key — from your ContextStream account settings",
+          "secret": true
+        }
+      }
     },
     {
       "slug": "io.github.pubnub/mcp-server"
@@ -183,7 +237,19 @@
       "slug": "microsoft/devbox-mcp-server"
     },
     {
-      "slug": "com.stackhawk/stackhawk"
+      "slug": "com.stackhawk/stackhawk",
+      "auth": {
+        "transport": "stdio",
+        "package": {
+          "runtimeHint": "uvx",
+          "name": "stackhawk-mcp"
+        },
+        "env": {
+          "name": "STACKHAWK_API_KEY",
+          "description": "StackHawk API key (hawk.…) — create in StackHawk → Settings → API Keys",
+          "secret": true
+        }
+      }
     },
     {
       "slug": "io.github.holomodular/servicebricks"
@@ -438,13 +504,9 @@
       "slug": "io.github.dynatrace-oss/Dynatrace-mcp",
       "auth": {
         "transport": "stdio",
-        "package": {
-          "runtimeHint": "node",
-          "name": "@dynatrace-oss/dynatrace-mcp-server"
-        },
         "env": {
           "name": "DT_PLATFORM_TOKEN",
-          "description": "Dynatrace Platform Token (dt0s16.*) — create in your Dynatrace environment under Settings → Platform Tokens (Account Management / apps.dynatrace.com); also requires the non-secret DT_ENVIRONMENT env set to https://<tenant>.apps.dynatrace.com.",
+          "description": "Dynatrace Platform Token (dt0s16.*) — create under Settings → Platform Tokens; also set DT_ENVIRONMENT to https://<tenant>.apps.dynatrace.com",
           "secret": true
         }
       }
@@ -495,7 +557,7 @@
         },
         "env": {
           "name": "JUSTCALL_API_KEY_SECRET",
-          "description": "JustCall API key secret — create in JustCall → Settings → Developers (API keys).",
+          "description": "JustCall API key + secret joined as <API_KEY>:<API_SECRET> — create both in JustCall → Settings → Developers (API keys), then paste them colon-joined",
           "secret": true
         }
       }
@@ -680,14 +742,6 @@
       }
     },
     {
-      "slug": "com.getguru/mcp-server",
-      "auth": {
-        "transport": "oauth",
-        "url": "https://mcp.api.getguru.com/mcp",
-        "transportType": "streamable-http"
-      }
-    },
-    {
       "slug": "io.github.oakallow/oakallow",
       "auth": {
         "transport": "oauth",
@@ -731,6 +785,52 @@
           "description": "Box app Client Secret (same Custom App in the Box Developer Console)",
           "secret": true
         }
+      }
+    },
+    {
+      "slug": "io.github.microsoft/EnterpriseMCP",
+      "auth": {
+        "transport": "oauth",
+        "url": "https://mcp.svc.cloud.microsoft/enterprise",
+        "transportType": "streamable-http",
+        "scopes": [
+          "api://e8c77dc2-69b3-43f4-bc51-3213c9d915b4/.default",
+          "offline_access"
+        ],
+        "clientIdEnv": {
+          "name": "ENTRA_CLIENT_ID",
+          "description": "Application (client) ID of an Entra app YOU register at entra.microsoft.com → App registrations → New registration; add a 'Mobile and desktop applications' redirect http://127.0.0.1:47100/callback, set 'Allow public client flows'=Yes. A tenant admin must also run Grant-EntraBetaMcpServerPermission for the MCP scopes."
+        }
+      }
+    },
+    {
+      "slug": "com.microsoft/sentinel-data-exploration",
+      "auth": {
+        "transport": "oauth",
+        "url": "https://sentinel.microsoft.com/mcp/data-exploration",
+        "transportType": "streamable-http",
+        "scopes": [
+          "4500ebfb-89b6-4b14-a480-7f749797bfcd/.default",
+          "offline_access"
+        ],
+        "clientIdEnv": {
+          "name": "ENTRA_CLIENT_ID",
+          "description": "Application (client) ID of an Entra app you register at entra.microsoft.com → App registrations; add the SentinelPlatform.DelegatedAccess permission + a redirect http://127.0.0.1:47100/callback (Web platform for the confidential flow)."
+        },
+        "clientSecretEnv": {
+          "name": "ENTRA_CLIENT_SECRET",
+          "description": "Client secret of that Entra app (Certificates & secrets) — Microsoft's documented Sentinel MCP flow uses a confidential Web client.",
+          "secret": true
+        }
+      }
+    },
+    {
+      "slug": "figma-dev-mode",
+      "local": {
+        "name": "figma-dev-mode",
+        "description": "Figma Dev Mode MCP (local) — runs inside the Figma desktop app; enable it in Figma → Dev Mode → 'Enable desktop MCP server' (or Preferences → Enable Dev Mode MCP server). No account, token, or login; the Figma desktop app must be running.",
+        "url": "http://127.0.0.1:3845/mcp",
+        "transport": "streamable-http"
       }
     }
   ]

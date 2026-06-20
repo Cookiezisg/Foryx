@@ -44,9 +44,13 @@ type Remote struct {
 	// the flow then skips runtime registration. nil → DCR self-registration.
 	// 授权服务器无 DCR 的 OAuth 提供方（Box、Microsoft Entra）：用户注册自己的 OAuth app 并给出 client_id
 	// （机密客户端再加 secret）；流程随即跳过运行时注册。nil → DCR 自注册。
-	ClientIDEnv     *EnvVar  `json:"clientIdEnv,omitempty"`
-	ClientSecretEnv *EnvVar  `json:"clientSecretEnv,omitempty"`
-	Headers         []Header `json:"headers,omitempty"`
+	ClientIDEnv     *EnvVar `json:"clientIdEnv,omitempty"`
+	ClientSecretEnv *EnvVar `json:"clientSecretEnv,omitempty"`
+	// Scopes overrides the OAuth scopes when the authorization-server metadata doesn't advertise the
+	// resource-specific scope (Microsoft Entra: the audience is encoded in a "<app-id>/.default" scope).
+	// Scopes 在 AS 元数据不通告资源专属 scope 时覆盖 OAuth scope（Microsoft Entra：受众编进 "<app-id>/.default"）。
+	Scopes  []string `json:"scopes,omitempty"`
+	Headers []Header `json:"headers,omitempty"`
 }
 
 // AuthOAuth marks a remote endpoint as OAuth-authenticated (vs a static header).
@@ -54,13 +58,17 @@ type Remote struct {
 // AuthOAuth 标记 remote 端点走 OAuth 认证（相对静态 header）。
 const AuthOAuth = "oauth"
 
-// EnvVar is one env var the user must supply before install; IsSecret drives UI masking.
+// EnvVar is one env var an install may collect. Required = install fails without it (missingEnv
+// enforces only these); optional ones are passed through if the user supplies them. IsSecret drives
+// UI masking.
 //
-// EnvVar 是用户安装前必填的一个 env 变量；IsSecret 驱动 UI 打码。
+// EnvVar 是安装可收集的一个 env 变量。Required = 缺它则安装失败（missingEnv 只强制这些）；可选的用户给了
+// 就传、不给也行。IsSecret 驱动 UI 打码。
 type EnvVar struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	IsSecret    bool   `json:"isSecret"`
+	Required    bool   `json:"required,omitempty"`
 }
 
 // Header is one remote header; Value may contain a "{TOKEN}" placeholder.
@@ -92,6 +100,7 @@ type InstallPlan struct {
 	OAuth                bool     // remote: authenticate via the OAuth 2.1 flow instead of collecting a static token
 	OAuthClientIDEnv     string   // oauth: env var carrying a user-supplied client_id (non-DCR providers); "" → DCR self-register
 	OAuthClientSecretEnv string   // oauth: env var carrying a user-supplied client_secret (confidential clients); "" → public/PKCE
+	OAuthScopes          []string // oauth: scope override when the AS metadata doesn't advertise the resource scope (Entra)
 	Runtime              string   // stdio: node|python|docker|dotnet
 	Command              string   // stdio: npx|uvx|dnx | image
 	Args                 []string // stdio
@@ -118,7 +127,20 @@ func (e *RegistryEntry) Plan() (InstallPlan, bool) {
 		}
 		if pr := runtimePriority(rt); best == -1 || pr < best {
 			cmd, args := launchCommand(rt, p)
-			best, plan = pr, InstallPlan{Runtime: rt, Command: cmd, Args: args, EnvVars: p.EnvVars}
+			// Credentials passed as args carry a {X} placeholder (e.g. launchdarkly `--api-key {api_key}`,
+			// logfire `{logfire_token}`) — surface each as a required env the install fills before spawn.
+			// 以参数传的凭据带 {X} 占位（如 launchdarkly `--api-key {api_key}`、logfire `{logfire_token}`）——
+			// 各暴露成必填 env，安装时填好再起进程。
+			envs := append([]EnvVar(nil), p.EnvVars...)
+			for _, a := range args {
+				if name := placeholderName(a); name != "" {
+					// Only credential-shaped placeholders are required; a bare {server_url} stays optional.
+					// 只有像凭据的占位才必填；裸 {server_url} 留可选。
+					secret := looksSecret(name)
+					envs = append(envs, EnvVar{Name: name, Description: name, Required: secret, IsSecret: secret})
+				}
+			}
+			best, plan = pr, InstallPlan{Runtime: rt, Command: cmd, Args: args, EnvVars: envs}
 		}
 	}
 	if best != -1 {
@@ -140,7 +162,7 @@ func (e *RegistryEntry) Plan() (InstallPlan, bool) {
 					envs = append(envs, *ev)
 				}
 			}
-			plan := InstallPlan{Remote: true, OAuth: true, Transport: t, URL: r.URL, EnvVars: envs}
+			plan := InstallPlan{Remote: true, OAuth: true, Transport: t, URL: r.URL, EnvVars: envs, OAuthScopes: r.Scopes}
 			if r.ClientIDEnv != nil {
 				plan.OAuthClientIDEnv = r.ClientIDEnv.Name
 			}
@@ -149,11 +171,11 @@ func (e *RegistryEntry) Plan() (InstallPlan, bool) {
 			}
 			return plan, true
 		}
-		// remote env requirements live in headers' {TOKEN} placeholders → surfaced as EnvVars
+		// remote env requirements live in headers' {TOKEN} placeholders → surfaced as required EnvVars
 		envs := make([]EnvVar, 0, len(r.Headers))
 		for _, h := range r.Headers {
 			if name := placeholderName(h.Value); name != "" {
-				envs = append(envs, EnvVar{Name: name, Description: h.Name, IsSecret: h.IsSecret})
+				envs = append(envs, EnvVar{Name: name, Description: h.Name, IsSecret: h.IsSecret, Required: true})
 			}
 		}
 		return InstallPlan{Remote: true, Transport: t, URL: r.URL, Headers: r.Headers, EnvVars: envs}, true
@@ -216,6 +238,15 @@ func launchCommand(runtime string, p Package) (string, []string) {
 		return p.Name, append([]string(nil), p.Args...) // image; sandbox docker wraps it
 	}
 	return "", nil
+}
+
+// looksSecret heuristically masks a credential-shaped placeholder name in the UI.
+//
+// looksSecret 启发式判断占位名是否像凭据，用于 UI 打码。
+func looksSecret(name string) bool {
+	n := strings.ToLower(name)
+	return strings.Contains(n, "token") || strings.Contains(n, "key") ||
+		strings.Contains(n, "secret") || strings.Contains(n, "password")
 }
 
 // placeholderName extracts "X" from a header value "...{X}..." (the env var a remote needs).

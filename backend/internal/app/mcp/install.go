@@ -64,7 +64,7 @@ func (s *Service) InstallFromRegistry(ctx context.Context, fullName string, user
 		url := expandPlaceholders(plan.URL, userEnv)
 		clientID := userEnv[plan.OAuthClientIDEnv]         // "" for DCR servers (OAuthClientIDEnv == "")
 		clientSecret := userEnv[plan.OAuthClientSecretEnv] // "" for public/PKCE clients
-		creds, err := s.authorizeOAuth(ctx, url, clientID, clientSecret)
+		creds, err := s.authorizeOAuth(ctx, url, clientID, clientSecret, plan.OAuthScopes)
 		if err != nil {
 			return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s: %w", name, err)
 		}
@@ -79,7 +79,7 @@ func (s *Service) InstallFromRegistry(ctx context.Context, fullName string, user
 		srv.Transport = mcpdomain.TransportStdio
 		srv.Runtime = plan.Runtime
 		srv.Command = plan.Command
-		srv.Args = plan.Args
+		srv.Args = expandArgs(plan.Args, userEnv) // fill {placeholder} credential args (launchdarkly/logfire)
 		if err := s.ensureEnv(ctx, srv); err != nil {
 			return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s: %w: %w", name, mcpdomain.ErrInstallFailed, err)
 		}
@@ -249,9 +249,18 @@ func shortName(full string) string {
 	return full
 }
 
-func missingEnv(required []mcpdomain.EnvVar, supplied map[string]string) []string {
+// missingEnv reports which REQUIRED env vars the caller didn't supply (optional ones are passed
+// through when given, never blocked) — so a server with many optional knobs installs with just its
+// required credential.
+//
+// missingEnv 报告调用方没给的**必填** env（可选的给了就传、从不拦）——使有一堆可选旋钮的 server 只填必填
+// 凭据即可装。
+func missingEnv(envs []mcpdomain.EnvVar, supplied map[string]string) []string {
 	var missing []string
-	for _, ev := range required {
+	for _, ev := range envs {
+		if !ev.Required {
+			continue
+		}
 		if v, ok := supplied[ev.Name]; !ok || strings.TrimSpace(v) == "" {
 			missing = append(missing, ev.Name)
 		}
@@ -271,6 +280,20 @@ func resolveHeaders(headers []mcpdomain.Header, env map[string]string) map[strin
 			name = "Authorization"
 		}
 		out[name] = expandPlaceholders(h.Value, env)
+	}
+	return out
+}
+
+// expandArgs fills "{X}" placeholders in each launch arg from the user env (credential args).
+//
+// expandArgs 用用户 env 填每个启动参数里的 "{X}" 占位（凭据参数）。
+func expandArgs(args []string, env map[string]string) []string {
+	if len(args) == 0 {
+		return args
+	}
+	out := make([]string, len(args))
+	for i, a := range args {
+		out[i] = expandPlaceholders(a, env)
 	}
 	return out
 }

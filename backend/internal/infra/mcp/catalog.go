@@ -28,8 +28,21 @@ var curatedCatalog []byte
 // catalogEntry 是一条白名单 server。仅 Slug = 可用、按上游 registry 行原样装（works-now）。Auth != nil
 // 钉死原始行缺失/写错的已核验认证（无 header 的静态 token remote，或 stdio token env）。
 type catalogEntry struct {
-	Slug string       `json:"slug"`
-	Auth *authOverlay `json:"auth,omitempty"`
+	Slug  string       `json:"slug"`
+	Auth  *authOverlay `json:"auth,omitempty"`
+	Local *localEntry  `json:"local,omitempty"` // a self-contained server NOT in the registry (e.g. a local loopback MCP)
+}
+
+// localEntry fully defines a whitelisted server that isn't in the upstream registry — a local
+// loopback endpoint the user enables in another app (e.g. Figma Dev Mode), no auth, no overlay.
+//
+// localEntry 完整定义一个不在上游 registry 的白名单 server——用户在别的 app 里开启的本地 loopback 端点
+// （如 Figma Dev Mode），无认证、无覆盖。
+type localEntry struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	URL         string `json:"url"`
+	Transport   string `json:"transport"`
 }
 
 // authOverlay is the pinned install+auth for one server. Transport "remote" rewrites the
@@ -50,6 +63,7 @@ type authOverlay struct {
 	// oauth、无 DCR 提供方：用户自行注册并给出的 OAuth 客户端。
 	ClientIDEnv     *overlayEnv `json:"clientIdEnv,omitempty"`
 	ClientSecretEnv *overlayEnv `json:"clientSecretEnv,omitempty"`
+	Scopes          []string    `json:"scopes,omitempty"` // oauth scope override (Entra resource scope)
 }
 
 type overlayHeader struct {
@@ -140,13 +154,18 @@ func (c *CuratedCatalog) List(ctx context.Context) ([]mcpdomain.RegistryEntry, e
 	}
 	out := make([]mcpdomain.RegistryEntry, 0, len(c.order))
 	for _, slug := range c.order {
+		ce := c.bySlug[slug]
+		if ce.Local != nil {
+			out = append(out, buildLocal(ce.Local))
+			continue
+		}
 		raw, ok := idx[slug]
 		if !ok {
 			if raw, ok = c.fallback[slug]; !ok {
 				continue
 			}
 		}
-		applyOverlay(&raw, c.bySlug[slug])
+		applyOverlay(&raw, ce)
 		out = append(out, raw)
 	}
 	return out, nil
@@ -160,6 +179,10 @@ func (c *CuratedCatalog) Get(ctx context.Context, name string) (*mcpdomain.Regis
 	ce, ok := c.bySlug[name]
 	if !ok {
 		return nil, fmt.Errorf("mcpcatalog.Get %s: %w", name, mcpdomain.ErrRegistryEntryNotFound)
+	}
+	if ce.Local != nil {
+		e := buildLocal(ce.Local)
+		return &e, nil
 	}
 	raw, err := c.under.Get(ctx, name)
 	if err != nil || raw == nil {
@@ -209,20 +232,21 @@ func applyOverlay(e *mcpdomain.RegistryEntry, ce catalogEntry) {
 		}
 		rem := mcpdomain.Remote{Transport: tt, URL: a.URL, Auth: mcpdomain.AuthOAuth}
 		if a.Env != nil {
-			rem.URLEnv = &mcpdomain.EnvVar{Name: a.Env.Name, Description: a.Env.Description, IsSecret: a.Env.Secret}
+			rem.URLEnv = &mcpdomain.EnvVar{Name: a.Env.Name, Description: a.Env.Description, IsSecret: a.Env.Secret, Required: true}
 		}
 		if a.ClientIDEnv != nil {
-			rem.ClientIDEnv = &mcpdomain.EnvVar{Name: a.ClientIDEnv.Name, Description: a.ClientIDEnv.Description, IsSecret: a.ClientIDEnv.Secret}
+			rem.ClientIDEnv = &mcpdomain.EnvVar{Name: a.ClientIDEnv.Name, Description: a.ClientIDEnv.Description, IsSecret: a.ClientIDEnv.Secret, Required: true}
 		}
 		if a.ClientSecretEnv != nil {
-			rem.ClientSecretEnv = &mcpdomain.EnvVar{Name: a.ClientSecretEnv.Name, Description: a.ClientSecretEnv.Description, IsSecret: a.ClientSecretEnv.Secret}
+			rem.ClientSecretEnv = &mcpdomain.EnvVar{Name: a.ClientSecretEnv.Name, Description: a.ClientSecretEnv.Description, IsSecret: a.ClientSecretEnv.Secret, Required: true}
 		}
+		rem.Scopes = a.Scopes
 		e.Remotes = []mcpdomain.Remote{rem}
 		e.Packages = nil
 	case "stdio":
 		var ev *mcpdomain.EnvVar
 		if a.Env != nil {
-			ev = &mcpdomain.EnvVar{Name: a.Env.Name, Description: a.Env.Description, IsSecret: a.Env.Secret}
+			ev = &mcpdomain.EnvVar{Name: a.Env.Name, Description: a.Env.Description, IsSecret: a.Env.Secret, Required: true}
 		}
 		// A pinned package replaces the raw row's package(s) — used when the upstream bare name
 		// doesn't resolve to a runtime (e.g. the Snyk CLI's `snyk mcp -t stdio`).
@@ -240,18 +264,38 @@ func applyOverlay(e *mcpdomain.RegistryEntry, ce catalogEntry) {
 			return
 		}
 		for i := range e.Packages {
-			if !hasEnv(e.Packages[i].EnvVars, ev.Name) {
-				e.Packages[i].EnvVars = append(e.Packages[i].EnvVars, *ev)
-			}
+			upsertEnv(&e.Packages[i].EnvVars, *ev)
 		}
 	}
 }
 
-func hasEnv(evs []mcpdomain.EnvVar, name string) bool {
-	for _, ev := range evs {
-		if ev.Name == name {
-			return true
+// buildLocal materializes a self-contained local server (no registry, no auth).
+//
+// buildLocal 物化一个自包含的本地 server（无 registry、无认证）。
+func buildLocal(l *localEntry) mcpdomain.RegistryEntry {
+	return mcpdomain.RegistryEntry{
+		Name:        l.Name,
+		Description: l.Description,
+		Remotes:     []mcpdomain.Remote{{Transport: l.Transport, URL: l.URL}},
+	}
+}
+
+// upsertEnv force-requires an overlay env onto a package: if the package already declares it (the
+// registry often marks a genuinely-needed key as optional), upgrade it to required + refresh the
+// label; else append it.
+//
+// upsertEnv 把覆盖的 env 强制为 package 必填：若 package 已声明它（registry 常把真需要的 key 标成可选），
+// 升为必填 + 刷新说明；否则追加。
+func upsertEnv(evs *[]mcpdomain.EnvVar, ev mcpdomain.EnvVar) {
+	for i := range *evs {
+		if (*evs)[i].Name == ev.Name {
+			(*evs)[i].Required = true
+			if ev.Description != "" {
+				(*evs)[i].Description = ev.Description
+			}
+			(*evs)[i].IsSecret = (*evs)[i].IsSecret || ev.IsSecret
+			return
 		}
 	}
-	return false
+	*evs = append(*evs, ev)
 }

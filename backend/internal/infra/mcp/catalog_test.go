@@ -57,6 +57,9 @@ func TestCuratedCatalog_EmbeddedParses(t *testing.T) {
 		known[e.Name] = true
 	}
 	for _, e := range parsedCatalog {
+		if e.Local != nil {
+			continue // local servers are self-contained, not registry-backed
+		}
 		if !known[e.Slug] {
 			t.Errorf("catalog slug %q is not in the registry snapshot (would be dropped from the marketplace)", e.Slug)
 		}
@@ -118,7 +121,7 @@ func TestCuratedCatalog_DeterministicViaFallback(t *testing.T) {
 // TestCuratedCatalog_GetRejectsNonWhitelisted 确保未核验 server 无法被解析安装——市场绝不放行。
 func TestCuratedCatalog_GetRejectsNonWhitelisted(t *testing.T) {
 	cat := NewCuratedCatalog(newFakeRegistry(t))
-	for _, slug := range []string{"com.figma.mcp/mcp", "com.microsoft/sentinel-data-exploration", "io.github.microsoft/EnterpriseMCP"} {
+	for _, slug := range []string{"com.figma.mcp/mcp", "com.getguru/mcp-server"} {
 		if _, err := cat.Get(context.Background(), slug); !errors.Is(err, mcpdomain.ErrRegistryEntryNotFound) {
 			t.Errorf("Get(%q) = %v, want ErrRegistryEntryNotFound", slug, err)
 		}
@@ -152,8 +155,8 @@ func TestCuratedCatalog_AllEntriesPlannable(t *testing.T) {
 func TestCuratedCatalog_OverlayServersRequireTheirToken(t *testing.T) {
 	cat := NewCuratedCatalog(newFakeRegistry(t))
 	for _, ce := range parsedCatalog {
-		if ce.Auth == nil || ce.Auth.Transport == "oauth" {
-			continue // oauth servers mint the token via the interactive flow, not a static env
+		if ce.Auth == nil || ce.Auth.Transport == "oauth" || ce.Auth.Env == nil {
+			continue // skip oauth (token via flow) + package-only pins with no token (e.g. fiori subcommand)
 		}
 		entry, err := cat.Get(context.Background(), ce.Slug)
 		if err != nil {
@@ -180,17 +183,17 @@ func TestCuratedCatalog_OverlayServersRequireTheirToken(t *testing.T) {
 	}
 }
 
-// TestCuratedCatalog_CurrentlyExcluded pins what stays OFF the whitelist: figma-remote needs Figma
-// to allowlist ANSELM (a vendor step — never), and the two Microsoft Entra servers are user-self-
-// serve (bring-your-own Entra app) but their Entra-specific scope/redirect isn't wired yet (pending).
+// TestCuratedCatalog_VendorStepExcluded pins the only servers that stay OFF the whitelist — the ones
+// needing a VENDOR step (Anselm allowlisted/approved by the provider), which a user can't self-serve:
+// figma-remote (Figma MCP-client allowlist) and getguru (Guru must whitelist the client; no open DCR).
 //
-// TestCuratedCatalog_CurrentlyExcluded 钉死仍不在白名单的：figma-remote 需 Figma 把 Anselm 加 allowlist
-// （厂商步骤，永不）；两个微软 Entra server 是用户自助（自带 Entra app），但 Entra 专属 scope/redirect 未接（待办）。
-func TestCuratedCatalog_CurrentlyExcluded(t *testing.T) {
+// TestCuratedCatalog_VendorStepExcluded 钉死唯二不在白名单的——需厂商步骤（Anselm 被厂商 allowlist/批准）、
+// 用户无法自助的：figma-remote（Figma MCP 客户端 allowlist）+ getguru（Guru 须白名单客户端、无开放 DCR）。
+func TestCuratedCatalog_VendorStepExcluded(t *testing.T) {
 	cat := NewCuratedCatalog(newFakeRegistry(t))
 	excluded := []string{
 		"com.figma.mcp/mcp",
-		"io.github.microsoft/EnterpriseMCP", "com.microsoft/sentinel-data-exploration",
+		"com.getguru/mcp-server",
 	}
 	for _, slug := range excluded {
 		if _, err := cat.Get(context.Background(), slug); !errors.Is(err, mcpdomain.ErrRegistryEntryNotFound) {
@@ -262,8 +265,8 @@ func TestCuratedCatalog_OAuthServersPlanAsOAuth(t *testing.T) {
 	oauthServers := []string{
 		"com.atlassian/atlassian-mcp-server", "com.webflow/mcp", "io.github.miroapp/mcp-server",
 		"amplitude/mcp-server-guide", "com.stackoverflow.mcp/mcp", "com.wix/mcp",
-		"intercom/intercom-mcp-server", "com.getguru/mcp-server", "io.github.oakallow/oakallow",
-		"com.vercel/vercel-mcp", // re-verified: open DCR (POST register → 201), not allowlist-gated
+		"intercom/intercom-mcp-server", "io.github.oakallow/oakallow",
+		"com.vercel/vercel-mcp", // re-verified: open DCR (register→201 AND authorize→200), not gated
 	}
 	for _, slug := range oauthServers {
 		entry, err := cat.Get(context.Background(), slug)

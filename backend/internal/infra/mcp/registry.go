@@ -190,6 +190,7 @@ type ghEnv struct {
 	Name        string `json:"name"`
 	Description string `json:"description"`
 	IsSecret    bool   `json:"is_secret"`
+	IsRequired  bool   `json:"is_required"`
 }
 type ghRemote struct {
 	TransportType string     `json:"transport_type"`
@@ -224,7 +225,7 @@ func parseGitHub(raw []byte) ([]mcpdomain.RegistryEntry, error) {
 				}
 			}
 			for _, ev := range p.EnvironmentVariables {
-				pkg.EnvVars = append(pkg.EnvVars, mcpdomain.EnvVar{Name: ev.Name, Description: ev.Description, IsSecret: ev.IsSecret})
+				pkg.EnvVars = append(pkg.EnvVars, mcpdomain.EnvVar{Name: ev.Name, Description: ev.Description, IsSecret: ev.IsSecret, Required: ev.IsRequired})
 			}
 			e.Packages = append(e.Packages, pkg)
 		}

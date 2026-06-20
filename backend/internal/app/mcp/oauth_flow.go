@@ -70,12 +70,22 @@ func (osBrowserOpener) Open(target string) error {
 //
 // authorizeOAuth 为 remote MCP server 跑完整交互 OAuth 2.1 流程：探测 → 发现 → 动态注册 → PKCE 授权
 // （开浏览器 + loopback 回调）→ 换 token，返回待持久化的授权。阻塞到用户同意或超时。
-func (s *Service) authorizeOAuth(ctx context.Context, serverURL, providedClientID, providedClientSecret string) (*mcpdomain.OAuthCredentials, error) {
+func (s *Service) authorizeOAuth(ctx context.Context, serverURL, providedClientID, providedClientSecret string, scopes []string) (*mcpdomain.OAuthCredentials, error) {
 	hc := http.DefaultClient
 	resourceMeta := probeResourceMetadata(ctx, hc, serverURL)
 	meta, err := oauth.Discover(ctx, hc, serverURL, resourceMeta)
 	if err != nil {
 		return nil, err
+	}
+	// A catalog scope override wins over the AS-advertised scopes (Entra doesn't advertise the
+	// resource scope). 目录 scope 覆盖优先于 AS 通告的 scope（Entra 不通告资源 scope）。
+	scopesToUse := meta.ScopesSupported
+	if len(scopes) > 0 {
+		scopesToUse = scopes
+		// Entra-style servers (the ones needing a scope override) encode the token audience IN the
+		// scope ("<app-id>/.default") and reject a stray RFC 8707 `resource` param — drop it for them.
+		// 用 scope 覆盖的 Entra 类把受众编进 scope（"<app-id>/.default"）、且拒绝多余的 RFC 8707 resource 参数——去掉它。
+		meta.Resource = ""
 	}
 
 	cb, err := startCallbackServer()
@@ -94,7 +104,7 @@ func (s *Service) authorizeOAuth(ctx context.Context, serverURL, providedClientI
 		if !meta.SupportsDCR() {
 			return nil, fmt.Errorf("mcpapp.authorizeOAuth %s: %w", serverURL, mcpdomain.ErrOAuthNotSupported)
 		}
-		reg, rerr := oauth.Register(ctx, hc, meta.RegistrationEndpoint, oauthClientName, cb.redirectURI, meta.ScopesSupported)
+		reg, rerr := oauth.Register(ctx, hc, meta.RegistrationEndpoint, oauthClientName, cb.redirectURI, scopesToUse)
 		if rerr != nil {
 			return nil, rerr
 		}
@@ -109,7 +119,7 @@ func (s *Service) authorizeOAuth(ctx context.Context, serverURL, providedClientI
 		return nil, fmt.Errorf("mcpapp.authorizeOAuth: %w: %v", mcpdomain.ErrOAuthAuthorize, err)
 	}
 
-	authURL := oauth.AuthorizeURL(meta, clientID, cb.redirectURI, state, pkce, meta.ScopesSupported)
+	authURL := oauth.AuthorizeURL(meta, clientID, cb.redirectURI, state, pkce, scopesToUse)
 	if err := s.opener.Open(authURL); err != nil {
 		return nil, fmt.Errorf("mcpapp.authorizeOAuth: %w: open browser: %v", mcpdomain.ErrOAuthAuthorize, err)
 	}
@@ -137,7 +147,7 @@ func (s *Service) authorizeOAuth(ctx context.Context, serverURL, providedClientI
 			TokenEndpoint:       meta.TokenEndpoint,
 			ClientID:            clientID,
 			ClientSecret:        clientSecret,
-			Scopes:              meta.ScopesSupported,
+			Scopes:              scopesToUse,
 			AccessToken:         tok.AccessToken,
 			RefreshToken:        tok.RefreshToken,
 			Expiry:              tok.Expiry,
