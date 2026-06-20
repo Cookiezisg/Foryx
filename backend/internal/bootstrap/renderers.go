@@ -7,6 +7,7 @@ import (
 	attachmentapp "github.com/sunweilin/anselm/backend/internal/app/attachment"
 	chatapp "github.com/sunweilin/anselm/backend/internal/app/chat"
 	documentapp "github.com/sunweilin/anselm/backend/internal/app/document"
+	agentdomain "github.com/sunweilin/anselm/backend/internal/domain/agent"
 	documentdomain "github.com/sunweilin/anselm/backend/internal/domain/document"
 	llminfra "github.com/sunweilin/anselm/backend/internal/infra/llm"
 )
@@ -95,6 +96,25 @@ func (k knowledgeProvider) BuildKnowledgePrefix(ctx context.Context, docIDs []st
 	docs, err := k.svc.GetBatch(ctx, docIDs)
 	if err != nil {
 		return "", err
+	}
+	// GetBatch's WhereIn silently drops missing ids — surface them so a dangling/deleted knowledge doc
+	// fails LOUD (at create-validation and at invoke) instead of the agent running with a silently-empty
+	// grounding while reporting ok (F98: strictly worse than skill's loud dead-on-arrival, F96).
+	//
+	// GetBatch 的 WhereIn 静默丢缺失 id——浮出它们，使 dangling/已删 knowledge doc **大声**失败（create 校验
+	// 期 + invoke 期），而非 agent 静默丢失 grounding 却报 ok（F98：比 skill 的 loud DOA(F96) 更糟）。
+	got := make(map[string]bool, len(docs))
+	for _, d := range docs {
+		got[d.ID] = true
+	}
+	var missing []string
+	for _, id := range docIDs {
+		if !got[id] {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) > 0 {
+		return "", agentdomain.ErrKnowledgeNotFound.WithDetails(map[string]any{"missing": missing})
 	}
 	return documentapp.RenderAttachedAsXML(docs), nil
 }

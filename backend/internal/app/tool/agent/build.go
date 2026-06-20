@@ -38,7 +38,7 @@ func (c configArgs) toConfig() agentapp.Config {
 const configProps = `
 		"prompt": {"type": "string", "description": "System prompt defining the agent's role and behaviour."},
 		"skill": {"type": "string", "description": "Optional skill name to mount — it MUST already exist (create_skill first; a non-existent name is rejected at build time). Its instructions (the skill Guide) are injected into the prompt. Only the guidance is mounted — a skill's allowed-tools pre-authorization does NOT carry to an agent (its runs may be unattended, so dangerous tools still require confirmation)."},
-		"knowledge": {"type": "array", "items": {"type": "string"}, "description": "Document IDs attached as background knowledge."},
+		"knowledge": {"type": "array", "items": {"type": "string"}, "description": "Document IDs attached as background knowledge — each MUST already exist (a non-existent doc id is rejected at build time)."},
 		"tools": {"type": "array", "description": "Callables the agent may use: each {ref, name}. ref is fn_… / hd_…method / mcp:server/tool — NEVER ag_ (an agent cannot call another agent; to chain agents, build a workflow with an agent node for each instead).", "items": {"type": "object", "required": ["ref"], "properties": {"ref": {"type": "string"}, "name": {"type": "string"}}}},
 		"inputs": {"type": "array", "description": "Declared task inputs the workflow feeds: each {name, type, description}. type ∈ string|number|boolean|object|array.", "items": {"type": "object"}},
 		"outputs": {"type": "array", "description": "Declared result fields downstream reads: each {name, type, description}. Empty = free-form text answer; otherwise the final answer is a JSON object with these fields.", "items": {"type": "object"}},

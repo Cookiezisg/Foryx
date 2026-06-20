@@ -11,7 +11,7 @@ audience: [human, ai]
 
 # 错误码 —— 错误系统 + 全量 wire code 登记
 
-> 后端错误的单一事实源：框架 / 规约 + **284 个 sentinel wire code 完整登记**（按域）+ **2 个 transport 合成码**（`FromDomainError` 从 stdlib `context` 错误直发、非 `errorspkg.New` sentinel）。机械守卫保证「全用 `errorspkg.New`」+「码全库唯一」——`pkg/errors/standard_test.go`，进 `make verify`。
+> 后端错误的单一事实源：框架 / 规约 + **285 个 sentinel wire code 完整登记**（按域）+ **2 个 transport 合成码**（`FromDomainError` 从 stdlib `context` 错误直发、非 `errorspkg.New` sentinel）。机械守卫保证「全用 `errorspkg.New`」+「码全库唯一」——`pkg/errors/standard_test.go`，进 `make verify`。
 
 ## 框架（`pkg/errors`）
 
@@ -42,9 +42,9 @@ audience: [human, ai]
 
 ---
 
-## 全量登记（284 码，按域）
+## 全量登记（285 码，按域）
 
-> `errorspkg.New` 机械抽取（279，不含 `*_test.go` 测试 sentinel 如 DUP/THING_NOT_FOUND）+ `pkg/errors` 自身 bare `New` 的跨域 sentinel（5）。每条：code · HTTP（Kind 映射）· message。`(dynamic)` = 消息含运行时格式化。
+> `errorspkg.New` 机械抽取（280，不含 `*_test.go` 测试 sentinel 如 DUP/THING_NOT_FOUND）+ `pkg/errors` 自身 bare `New` 的跨域 sentinel（5）。每条：code · HTTP（Kind 映射）· message。`(dynamic)` = 消息含运行时格式化。
 
 ### `pkg/errors`（跨域 sentinel）
 
@@ -58,7 +58,7 @@ audience: [human, ai]
 
 ### transport 合成码（`FromDomainError`，非 `errorspkg.New` sentinel）
 
-> `transport/httpapi/response/errmap.go::FromDomainError` 把 stdlib `context` 错误直发为 wire 码——不走 `errorspkg.New`，故不在上面 282 的机械抽取内，但前端确会收到。这是 transport 唯一认识的非 `Error` sentinel（见 errmap.go 注释）。
+> `transport/httpapi/response/errmap.go::FromDomainError` 把 stdlib `context` 错误直发为 wire 码——不走 `errorspkg.New`，故不在上面 280 的机械抽取内，但前端确会收到。这是 transport 唯一认识的非 `Error` sentinel（见 errmap.go 注释）。
 
 | code | HTTP | message | 触发 |
 |---|---|---|---|
@@ -273,6 +273,7 @@ audience: [human, ai]
 |---|---|---|
 | `AGENT_EXECUTION_NOT_FOUND` | 404 | agent execution not found |
 | `AGENT_INVALID_MODEL_OVERRIDE` | 422 | invalid modelOverride (apiKeyId and modelId both required) |
+| `AGENT_KNOWLEDGE_NOT_FOUND` | 422 | agent mounts a knowledge document that does not exist（create/edit eager 校验 + invoke 期 BuildKnowledgePrefix 大声失败，details.missing；此前 dangling knowledge ref 静默丢弃、run 仍报 ok，F98） |
 | `AGENT_OUTPUT_NOT_STRUCTURED` | 422 | agent declared multiple structured outputs but its final answer was not a JSON object |
 | `AGENT_MOUNT_INVALID` | 422 | agent mounted tool ref is invalid or unresolvable |
 | `AGENT_NAME_CONFLICT` | 409 | agent name already exists |

@@ -127,6 +127,7 @@ var (
 	ErrToolRefBlank         = errorspkg.New(errorspkg.KindUnprocessable, "AGENT_TOOL_REF_BLANK", "agent tool ref must not be blank")
 	ErrMountInvalid         = errorspkg.New(errorspkg.KindUnprocessable, "AGENT_MOUNT_INVALID", "agent mounted tool ref is invalid or unresolvable")
 	ErrSkillNotFound        = errorspkg.New(errorspkg.KindUnprocessable, "AGENT_SKILL_NOT_FOUND", "agent mounts a skill that does not exist")
+	ErrKnowledgeNotFound    = errorspkg.New(errorspkg.KindUnprocessable, "AGENT_KNOWLEDGE_NOT_FOUND", "agent mounts a knowledge document that does not exist")
 	ErrInvalidModelOverride = errorspkg.New(errorspkg.KindUnprocessable, "AGENT_INVALID_MODEL_OVERRIDE", "invalid modelOverride (apiKeyId and modelId both required)")
 	ErrExecutionNotFound    = errorspkg.New(errorspkg.KindNotFound, "AGENT_EXECUTION_NOT_FOUND", "agent execution not found")
 	// ErrOutputNotStructured: the agent declared 2+ structured outputs but its final answer wasn't a

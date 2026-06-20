@@ -221,6 +221,12 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*agentdomain.Agen
 	if err := s.validateSkillMounted(ctx, v.Skill); err != nil {
 		return nil, nil, err
 	}
+	if err := s.validateKnowledgeMounted(ctx, v.Knowledge); err != nil {
+		return nil, nil, err
+	}
+	if err := s.validateToolsMounted(ctx, v.Tools); err != nil {
+		return nil, nil, err
+	}
 	a := &agentdomain.Agent{
 		ID: agentID, Name: in.Name, Description: in.Description, Tags: orEmptyStrs(in.Tags),
 		ActiveVersionID: versionID, CreatedAt: now, UpdatedAt: now,
@@ -260,6 +266,12 @@ func (s *Service) Edit(ctx context.Context, in EditInput) (*agentdomain.Version,
 		return nil, err
 	}
 	if err := s.validateSkillMounted(ctx, v.Skill); err != nil {
+		return nil, err
+	}
+	if err := s.validateKnowledgeMounted(ctx, v.Knowledge); err != nil {
+		return nil, err
+	}
+	if err := s.validateToolsMounted(ctx, v.Tools); err != nil {
 		return nil, err
 	}
 
@@ -360,6 +372,46 @@ func (s *Service) validateSkillMounted(ctx context.Context, skill string) error 
 	}
 	if _, err := s.invoke.Skill.Guide(ctx, skill); err != nil {
 		return agentdomain.ErrSkillNotFound.WithDetails(map[string]any{"skill": skill})
+	}
+	return nil
+}
+
+// validateKnowledgeMounted rejects an agent whose mounted knowledge doc doesn't exist, eager at
+// create/edit — invoke resolves knowledge through the SAME KnowledgeProvider, which now fails loud on a
+// missing doc (F98). So an agent accepted here won't silently lose its grounding at invoke (the worse-
+// than-F96 silent-degradation: a dangling knowledge ref used to be accepted, dropped by GetBatch's
+// WhereIn, and the run still reported ok). Nil-tolerant: no resolver wired → skip.
+//
+// validateKnowledgeMounted 在 create/edit 期拒绝挂载不存在 knowledge doc 的 agent——invoke 经**同一**
+// KnowledgeProvider 解析、它现在对缺失 doc 大声失败（F98）。故此处接受的 agent 在 invoke 时不会静默丢失
+// grounding（比 F96 更糟的静默降级：dangling knowledge ref 此前被接受、被 GetBatch WhereIn 丢弃、run 仍报 ok）。
+// nil 容忍：无 resolver 接线则跳过。
+func (s *Service) validateKnowledgeMounted(ctx context.Context, docIDs []string) error {
+	if len(docIDs) == 0 || s.invoke.Knowledge == nil {
+		return nil
+	}
+	if _, err := s.invoke.Knowledge.BuildKnowledgePrefix(ctx, docIDs); err != nil {
+		return err // already a clean AGENT_KNOWLEDGE_NOT_FOUND (or an infra error)
+	}
+	return nil
+}
+
+// validateToolsMounted rejects an agent whose mounted fn_/hd_/mcp tool ref doesn't resolve, eager at
+// create/edit — domain ValidateTools only checks the FORMAT (blank ref / ag_ prefix), so a dangling
+// fn_/hd_ ref was deferred to invoke (dead-on-arrival, the exact F96 class generalized to tools).
+// Reuses the SAME resolver invoke uses (CheckHealth, no fail-fast). Nil-tolerant.
+//
+// validateToolsMounted 在 create/edit 期拒绝挂载不可解析 fn_/hd_/mcp 工具 ref 的 agent——domain
+// ValidateTools 只校**格式**（空 ref / ag_ 前缀），故 dangling fn_/hd_ ref 被推迟到 invoke（dead-on-arrival，
+// 即 F96 类泛化到工具）。复用 invoke 的**同一** resolver（CheckHealth、不 fail-fast）。nil 容忍。
+func (s *Service) validateToolsMounted(ctx context.Context, refs []agentdomain.ToolRef) error {
+	if len(refs) == 0 || s.invoke.Mounts == nil {
+		return nil
+	}
+	for _, h := range s.invoke.Mounts.CheckHealth(ctx, refs) {
+		if !h.Healthy {
+			return agentdomain.ErrMountInvalid.WithDetails(map[string]any{"ref": h.Ref, "error": h.Error})
+		}
 	}
 	return nil
 }

@@ -35,11 +35,11 @@ Agent **自己不写代码**：它是一份"LLM 员工配置"——提示词 + *
 | `hd_<id>.<method>` | `<handlerName>__<method>` 绑定工具 | method spec → schema；Execute → `handler.Call`(agent)，yield 流进 progress |
 | `mcp:<server>/<tool>` | `mcp__server__tool` 绑定工具 | 经**在线** server 解析（离线即失败）；Execute → `mcp.CallTool`(agent) |
 | skill 名 | **执行指南**注入 system prompt（`## Execution guide` 段） | `skillapp.Guide`：渲染正文；**不**设 active-skill（防预授权泄漏父对话）、**不** fork；**create/edit 期 eager 校验存在**（同一 `Guide` 解析、不存在 → `AGENT_SKILL_NOT_FOUND`，免 dangling 名建出 dead-on-arrival agent，F96） |
-| knowledge docIDs | 知识前缀拼进 user 消息 | `BuildKnowledgePrefix` |
+| knowledge docIDs | 知识前缀拼进 user 消息 | `BuildKnowledgePrefix`：缺失 doc **大声失败** `AGENT_KNOWLEDGE_NOT_FOUND`（不再 GetBatch WhereIn 静默丢——免 dangling/已删 doc 静默丢 grounding 却报 ok，F98） |
 
 **核心设计**：agent **永不**见通用系统工具表（无 `run_function`/`Read`/`Bash`）——工具宇宙**恰是其挂载**，每个工具预绑定目标（LLM 没有自由 id 参数可乱走）。合成在 `app/tool/mount`：`Resolver` 持三个窄端口（FunctionPort/HandlerPort/MCPPort，DIP、测试可 fake），按 ref 前缀分流出三种绑定工具。
 
-**fail-fast**：目标被删（冒具体码如 `FUNCTION_NOT_FOUND`）/ method 不存在（`HANDLER_METHOD_NOT_FOUND`）/ MCP server 离线 / ref 格式坏 / 两挂载合成同名（撞名检测）→ **invoke 失败**（mount 自身问题 = `AGENT_MOUNT_INVALID`）。worker 缺声明能力**绝不静默降级跑**。
+**fail-fast**：目标被删（冒具体码如 `FUNCTION_NOT_FOUND`）/ method 不存在（`HANDLER_METHOD_NOT_FOUND`）/ MCP server 离线 / ref 格式坏 / 两挂载合成同名（撞名检测）→ **invoke 失败**（mount 自身问题 = `AGENT_MOUNT_INVALID`）。worker 缺声明能力**绝不静默降级跑**。**create/edit 期 eager 校验全挂载 ref**（skill F96 · knowledge/tool F98——经 invoke 的**同一** resolver：skill→`Guide`、knowledge→`BuildKnowledgePrefix`、tool→`CheckHealth`，不存在即在 build 期拒，免 dangling ref 建出 dead-on-arrival/静默降级的 agent；domain `ValidateTools` 只校格式不校存在）。
 
 **挂载健康预检**（`Resolver.CheckHealth` + `GET /agents/{id}/mount-health`）：Resolve 的按需、**非 fail-fast** 对应物——逐挂载独立解析、收集每条状态（`MountHealth{ref,name?,healthy,error?}` + `allHealthy`），用同一批 per-ref 解析器（故此处坏的正是 invoke 会拒的那个）。给 UI 在 invoke 前红点预警；List 不投影（逐 agent 逐挂载 N+1 不划算，按需单 agent 才对）。
 
