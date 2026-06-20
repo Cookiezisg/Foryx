@@ -196,13 +196,18 @@ func applyOverlay(e *mcpdomain.RegistryEntry, ce catalogEntry) {
 		e.Remotes = []mcpdomain.Remote{rem}
 		e.Packages = nil
 	case "oauth":
-		// OAuth 2.1 + DCR endpoint — no static credential; install runs the interactive flow.
-		// OAuth 2.1 + DCR 端点——无静态凭据；安装走交互流程。
+		// OAuth 2.1 + DCR endpoint — no static credential; install runs the interactive flow. An
+		// Env overlay marks a per-tenant templated URL the user must supply (URLEnv).
+		// OAuth 2.1 + DCR 端点——无静态凭据；安装走交互流程。Env 覆盖标记每租户模板 URL（URLEnv，用户填）。
 		tt := a.TransportType
 		if tt == "" {
 			tt = mcpdomain.TransportStreamableHTTP
 		}
-		e.Remotes = []mcpdomain.Remote{{Transport: tt, URL: a.URL, Auth: mcpdomain.AuthOAuth}}
+		rem := mcpdomain.Remote{Transport: tt, URL: a.URL, Auth: mcpdomain.AuthOAuth}
+		if a.Env != nil {
+			rem.URLEnv = &mcpdomain.EnvVar{Name: a.Env.Name, Description: a.Env.Description, IsSecret: a.Env.Secret}
+		}
+		e.Remotes = []mcpdomain.Remote{rem}
 		e.Packages = nil
 	case "stdio":
 		var ev *mcpdomain.EnvVar

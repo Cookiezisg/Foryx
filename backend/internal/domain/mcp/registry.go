@@ -37,7 +37,8 @@ type Package struct {
 type Remote struct {
 	Transport string   `json:"transport"` // sse | streamable-http
 	URL       string   `json:"url"`
-	Auth      string   `json:"auth,omitempty"` // "" static header | "oauth" (OAuth 2.1 + PKCE + DCR flow)
+	Auth      string   `json:"auth,omitempty"`   // "" static header | "oauth" (OAuth 2.1 + PKCE + DCR flow)
+	URLEnv    *EnvVar  `json:"urlEnv,omitempty"` // set when URL is templated ("{X}") and the user supplies it (per-tenant endpoints)
 	Headers   []Header `json:"headers,omitempty"`
 }
 
@@ -120,10 +121,15 @@ func (e *RegistryEntry) Plan() (InstallPlan, bool) {
 		if t == "" {
 			t = TransportStreamableHTTP // registry default when transport_type is blank
 		}
-		// OAuth endpoints collect no static token — the interactive flow mints one at install.
-		// OAuth 端点不收静态 token——安装时由交互流程铸一个。
+		// OAuth endpoints collect no static token — the interactive flow mints one at install. A
+		// per-tenant endpoint (templated URL) still needs the user to supply the URL (URLEnv).
+		// OAuth 端点不收静态 token——安装时由交互流程铸一个。每租户端点（模板 URL）仍需用户给出 URL（URLEnv）。
 		if r.Auth == AuthOAuth {
-			return InstallPlan{Remote: true, OAuth: true, Transport: t, URL: r.URL}, true
+			var envs []EnvVar
+			if r.URLEnv != nil {
+				envs = []EnvVar{*r.URLEnv}
+			}
+			return InstallPlan{Remote: true, OAuth: true, Transport: t, URL: r.URL, EnvVars: envs}, true
 		}
 		// remote env requirements live in headers' {TOKEN} placeholders → surfaced as EnvVars
 		envs := make([]EnvVar, 0, len(r.Headers))

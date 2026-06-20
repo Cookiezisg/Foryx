@@ -694,6 +694,19 @@
         "url": "https://api.oakallow.io/mcp",
         "transportType": "streamable-http"
       }
+    },
+    {
+      "slug": "com.glean/mcp",
+      "auth": {
+        "transport": "oauth",
+        "url": "{GLEAN_MCP_URL}",
+        "transportType": "streamable-http",
+        "env": {
+          "name": "GLEAN_MCP_URL",
+          "description": "Your Glean MCP endpoint URL — e.g. https://<instance>-be.glean.com/mcp/default (find your instance in Glean's admin settings)",
+          "secret": false
+        }
+      }
     }
   ]
 }

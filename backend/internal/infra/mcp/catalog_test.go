@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	mcpdomain "github.com/sunweilin/anselm/backend/internal/domain/mcp"
@@ -179,23 +180,44 @@ func TestCuratedCatalog_OverlayServersRequireTheirToken(t *testing.T) {
 	}
 }
 
-// TestCuratedCatalog_ExcludesBusinessStepAndGlean pins what stays OFF the whitelist: the 5 servers
-// needing a vendor business step (OAuth app registration / allowlist — never), and Glean (oauth-dcr
-// but its endpoint is a per-tenant templated URL that needs a base-URL input we don't collect yet).
+// TestCuratedCatalog_ExcludesBusinessStep pins what stays OFF the whitelist forever: the 5 servers
+// needing a vendor business step (OAuth app registration / allowlist).
 //
-// TestCuratedCatalog_ExcludesBusinessStepAndGlean 钉死仍不在白名单的：5 个需厂商业务步骤（注册 OAuth
-// app/allowlist——永不）+ Glean（oauth-dcr 但端点是每租户模板 URL，需我们尚未收集的 base-URL 输入）。
-func TestCuratedCatalog_ExcludesBusinessStepAndGlean(t *testing.T) {
+// TestCuratedCatalog_ExcludesBusinessStep 钉死永不在白名单的 5 个需厂商业务步骤（注册 OAuth app/allowlist）。
+func TestCuratedCatalog_ExcludesBusinessStep(t *testing.T) {
 	cat := NewCuratedCatalog(newFakeRegistry(t))
 	excluded := []string{
 		"com.figma.mcp/mcp", "io.github.microsoft/EnterpriseMCP", "com.vercel/vercel-mcp",
 		"box/mcp-server-box-remote", "com.microsoft/sentinel-data-exploration",
-		"com.glean/mcp", // oauth-dcr but per-tenant templated URL — deferred
 	}
 	for _, slug := range excluded {
 		if _, err := cat.Get(context.Background(), slug); !errors.Is(err, mcpdomain.ErrRegistryEntryNotFound) {
 			t.Errorf("excluded server %q must not be installable, got err=%v", slug, err)
 		}
+	}
+}
+
+// TestCuratedCatalog_GleanOAuthWithURLEnv verifies Glean is installable as an OAuth server whose
+// per-tenant endpoint is supplied by the user: its plan is OAuth with a templated URL and a single
+// required URL env (so install resolves the instance URL, then runs the OAuth flow).
+//
+// TestCuratedCatalog_GleanOAuthWithURLEnv 验证 Glean 作为 OAuth server 可装、其每租户端点由用户给出：
+// 计划是 OAuth + 模板 URL + 单个必填 URL env（安装先解析实例 URL 再走 OAuth 流程）。
+func TestCuratedCatalog_GleanOAuthWithURLEnv(t *testing.T) {
+	cat := NewCuratedCatalog(newFakeRegistry(t))
+	entry, err := cat.Get(context.Background(), "com.glean/mcp")
+	if err != nil {
+		t.Fatalf("Get(glean): %v", err)
+	}
+	plan, ok := entry.Plan()
+	if !ok || !plan.OAuth {
+		t.Fatalf("glean should plan as OAuth, got ok=%v plan=%+v", ok, plan)
+	}
+	if len(plan.EnvVars) != 1 {
+		t.Fatalf("glean must require exactly its URL env, got %v", plan.EnvVars)
+	}
+	if !strings.Contains(plan.URL, "{"+plan.EnvVars[0].Name+"}") {
+		t.Errorf("glean URL %q must be templated on its URL env %q", plan.URL, plan.EnvVars[0].Name)
 	}
 }
 

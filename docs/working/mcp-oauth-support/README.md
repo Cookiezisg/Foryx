@@ -24,7 +24,7 @@ landed-into:
 结果：works-now 59 + static-token 25 + oauth-dcr 10 = **94 可用**；oauth-app-registration **5 永不做**。决策记入 [ADR 0006](../../decisions/0006-mcp-curated-whitelist.md)。
 
 - **档 1（works-now + static-token，84 个）已实现**：`infra/mcp` 的 `CuratedCatalog` 白名单 + `catalog.json` auth 覆盖，结构性根治本文 §0/§3 的「静默坏连接」+「空 Authorization」两 bug。
-- **档 2（oauth-dcr）= 本文 §1–§5 的 OAuth 客户端，已实现并纳入 9 个**：`infra/mcp/oauth`（纯协议：发现 RFC 9728/8414 → DCR RFC 7591 → PKCE RFC 7636 → 授权码 + 资源指示符 RFC 8707 → token 交换/刷新）+ `app/mcp/oauth_flow.go`（探测 + loopback 回调 RFC 8252 + 系统浏览器拉起 + token 加密存储/刷新/重存）。已纳入 atlassian/webflow/miro/amplitude/stackoverflow/wix/intercom/getguru/oakallow。**Glean 仍缺席**——其端点是每租户模板 URL（`https://{baseUrl}/mcp/{server-name}`），需补一个「用户填实例 base URL」的安装输入，是唯一 follow-up。下面 §1–§5 即已落地的 OAuth 客户端规格（保留作参考）；§4 的 Google 等仍是「永不做」。
+- **档 2（oauth-dcr）= 本文 §1–§5 的 OAuth 客户端，已实现并纳入全部 10 个**：`infra/mcp/oauth`（纯协议：发现 RFC 9728/8414 → DCR RFC 7591 → PKCE RFC 7636 → 授权码 + 资源指示符 RFC 8707 → token 交换/刷新）+ `app/mcp/oauth_flow.go`（探测 + loopback 回调 RFC 8252 + 系统浏览器拉起 + token 加密存储/刷新/重存）。已纳入 atlassian/webflow/miro/amplitude/stackoverflow/wix/intercom/getguru/oakallow + **Glean**（每租户模板 URL 经安装时用户填 `GLEAN_MCP_URL` 解析——`Remote.URLEnv` 机制）。下面 §1–§5 即已落地的 OAuth 客户端规格（保留作参考）；§4 的 Google 等仍是「永不做」。**至此 94/99 可用，5 个永不做。**
 
 ---
 

@@ -57,14 +57,17 @@ func (s *Service) InstallFromRegistry(ctx context.Context, fullName string, user
 	}
 	if plan.OAuth {
 		// Interactive OAuth: discover → register → browser consent → token. Blocks until the user
-		// authorizes (or times out); the grant is stored encrypted and refreshed on use.
+		// authorizes (or times out); the grant is stored encrypted and refreshed on use. A templated
+		// per-tenant URL (e.g. Glean) is resolved from the user-supplied env first.
 		// 交互 OAuth：发现→注册→浏览器同意→token。阻塞到用户授权（或超时）；授权加密落盘、用时刷新。
-		creds, err := s.authorizeOAuth(ctx, plan.URL)
+		// 每租户模板 URL（如 Glean）先用用户给的 env 解析。
+		url := expandPlaceholders(plan.URL, userEnv)
+		creds, err := s.authorizeOAuth(ctx, url)
 		if err != nil {
 			return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s: %w", name, err)
 		}
 		srv.Transport = plan.Transport
-		srv.URL = plan.URL
+		srv.URL = url
 		srv.OAuth = creds
 	} else if plan.Remote {
 		srv.Transport = plan.Transport
