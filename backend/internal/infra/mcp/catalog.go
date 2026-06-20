@@ -40,12 +40,16 @@ type catalogEntry struct {
 // authOverlay 是一条 server 钉死的安装+认证。Transport "remote" 重写端点+header（并强制 Plan 走 remote）；
 // "stdio" 可钉死启动 package（原始 registry 行的裸名解析不出 runtime 时）和/或把 token env 标为必填。
 type authOverlay struct {
-	Transport     string          `json:"transport"` // remote | stdio
+	Transport     string          `json:"transport"` // remote | stdio | oauth
 	URL           string          `json:"url,omitempty"`
 	TransportType string          `json:"transportType,omitempty"` // sse | streamable-http
 	Header        *overlayHeader  `json:"header,omitempty"`
 	Package       *overlayPackage `json:"package,omitempty"` // stdio: pin the launch package
-	Env           *overlayEnv     `json:"env,omitempty"`
+	Env           *overlayEnv     `json:"env,omitempty"`     // static-token env, or oauth per-tenant URL input
+	// oauth, non-DCR providers: the user-supplied OAuth client they registered themselves.
+	// oauth、无 DCR 提供方：用户自行注册并给出的 OAuth 客户端。
+	ClientIDEnv     *overlayEnv `json:"clientIdEnv,omitempty"`
+	ClientSecretEnv *overlayEnv `json:"clientSecretEnv,omitempty"`
 }
 
 type overlayHeader struct {
@@ -206,6 +210,12 @@ func applyOverlay(e *mcpdomain.RegistryEntry, ce catalogEntry) {
 		rem := mcpdomain.Remote{Transport: tt, URL: a.URL, Auth: mcpdomain.AuthOAuth}
 		if a.Env != nil {
 			rem.URLEnv = &mcpdomain.EnvVar{Name: a.Env.Name, Description: a.Env.Description, IsSecret: a.Env.Secret}
+		}
+		if a.ClientIDEnv != nil {
+			rem.ClientIDEnv = &mcpdomain.EnvVar{Name: a.ClientIDEnv.Name, Description: a.ClientIDEnv.Description, IsSecret: a.ClientIDEnv.Secret}
+		}
+		if a.ClientSecretEnv != nil {
+			rem.ClientSecretEnv = &mcpdomain.EnvVar{Name: a.ClientSecretEnv.Name, Description: a.ClientSecretEnv.Description, IsSecret: a.ClientSecretEnv.Secret}
 		}
 		e.Remotes = []mcpdomain.Remote{rem}
 		e.Packages = nil

@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -20,7 +21,13 @@ import (
 // tell the two apart.
 //
 // fakeAuthServer 扮演完整 OAuth 2.1 + DCR 授权服务器兼受保护 MCP 资源。
-func fakeAuthServer(t *testing.T) *httptest.Server {
+func fakeAuthServer(t *testing.T) *httptest.Server { return fakeAuthServerDCR(t, true) }
+
+// fakeAuthServerDCR plays the AS; dcr controls whether it advertises a registration_endpoint and
+// accepts DCR (dcr=false models Box/Entra: no DCR, the user brings their own client).
+//
+// fakeAuthServerDCR 扮演 AS；dcr 控制是否通告注册端点 + 是否接受 DCR（dcr=false 模拟 Box/Entra：无 DCR、用户自带客户端）。
+func fakeAuthServerDCR(t *testing.T, dcr bool) *httptest.Server {
 	t.Helper()
 	mux := http.NewServeMux()
 	srv := httptest.NewServer(mux)
@@ -40,9 +47,17 @@ func fakeAuthServer(t *testing.T) *httptest.Server {
 		writeJSON(w, 200, `{"resource":"`+base+`/mcp","authorization_servers":["`+base+`"]}`)
 	})
 	mux.HandleFunc("/.well-known/oauth-authorization-server", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, 200, `{"issuer":"`+base+`","authorization_endpoint":"`+base+`/authorize","token_endpoint":"`+base+`/token","registration_endpoint":"`+base+`/register","code_challenge_methods_supported":["S256"]}`)
+		reg := ""
+		if dcr {
+			reg = `"registration_endpoint":"` + base + `/register",`
+		}
+		writeJSON(w, 200, `{"issuer":"`+base+`","authorization_endpoint":"`+base+`/authorize","token_endpoint":"`+base+`/token",`+reg+`"code_challenge_methods_supported":["S256"]}`)
 	})
 	mux.HandleFunc("/register", func(w http.ResponseWriter, _ *http.Request) {
+		if !dcr {
+			writeJSON(w, 403, `{"error":"registration not allowed"}`)
+			return
+		}
 		writeJSON(w, 201, `{"client_id":"test-client"}`)
 	})
 	mux.HandleFunc("/token", func(w http.ResponseWriter, r *http.Request) {
@@ -105,7 +120,7 @@ func TestAuthorizeOAuth_FullFlow(t *testing.T) {
 	svc := NewService(newFakeRepo(), nil, &fakeSandbox{}, zap.NewNop())
 	svc.SetBrowserOpener(&fakeOpener{code: "testcode", hits: hits})
 
-	creds, err := svc.authorizeOAuth(context.Background(), as.URL+"/mcp")
+	creds, err := svc.authorizeOAuth(context.Background(), as.URL+"/mcp", "", "")
 	if err != nil {
 		t.Fatalf("authorizeOAuth: %v", err)
 	}
@@ -128,6 +143,42 @@ func TestAuthorizeOAuth_FullFlow(t *testing.T) {
 	authURL := <-hits
 	if u, _ := url.Parse(authURL); u.Query().Get("code_challenge_method") != "S256" || u.Query().Get("resource") == "" {
 		t.Errorf("authorize URL missing PKCE/resource: %s", authURL)
+	}
+}
+
+// TestAuthorizeOAuth_BYOClient drives the bring-your-own-client path against a NO-DCR server (Box /
+// Entra shape): the user supplies their own client_id/secret, the flow must skip DCR (the /register
+// endpoint 403s) and complete using the supplied client.
+//
+// TestAuthorizeOAuth_BYOClient 对无 DCR 服务器（Box/Entra 形态）跑自带客户端路径：用户给出自己的
+// client_id/secret，流程须跳过 DCR（/register 返 403）、用给定客户端跑完。
+func TestAuthorizeOAuth_BYOClient(t *testing.T) {
+	as := fakeAuthServerDCR(t, false) // no DCR: /register 403s, AS advertises no registration_endpoint
+	svc := NewService(newFakeRepo(), nil, &fakeSandbox{}, zap.NewNop())
+	svc.SetBrowserOpener(&fakeOpener{code: "testcode"})
+
+	creds, err := svc.authorizeOAuth(context.Background(), as.URL+"/mcp", "my-own-client-id", "my-own-secret")
+	if err != nil {
+		t.Fatalf("BYO authorizeOAuth: %v", err)
+	}
+	if creds.ClientID != "my-own-client-id" || creds.ClientSecret != "my-own-secret" {
+		t.Errorf("must use the user-supplied client, got id=%q secret=%q", creds.ClientID, creds.ClientSecret)
+	}
+	if creds.AccessToken != "AT-1" {
+		t.Errorf("token exchange failed: %+v", creds)
+	}
+}
+
+// TestAuthorizeOAuth_NoDCRNoClient confirms that without a supplied client AND without DCR, the flow
+// refuses (ErrOAuthNotSupported) rather than silently failing.
+//
+// TestAuthorizeOAuth_NoDCRNoClient 确认既无自带客户端又无 DCR 时，流程拒绝（ErrOAuthNotSupported）而非静默失败。
+func TestAuthorizeOAuth_NoDCRNoClient(t *testing.T) {
+	as := fakeAuthServerDCR(t, false)
+	svc := NewService(newFakeRepo(), nil, &fakeSandbox{}, zap.NewNop())
+	svc.SetBrowserOpener(&fakeOpener{code: "testcode"})
+	if _, err := svc.authorizeOAuth(context.Background(), as.URL+"/mcp", "", ""); !errors.Is(err, mcpdomain.ErrOAuthNotSupported) {
+		t.Errorf("err = %v, want ErrOAuthNotSupported", err)
 	}
 }
 

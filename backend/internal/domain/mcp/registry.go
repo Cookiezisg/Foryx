@@ -35,11 +35,18 @@ type Package struct {
 //
 // Remote 是一个远程端点。Headers 可含 "{TOKEN}" 占位符，安装时填。
 type Remote struct {
-	Transport string   `json:"transport"` // sse | streamable-http
-	URL       string   `json:"url"`
-	Auth      string   `json:"auth,omitempty"`   // "" static header | "oauth" (OAuth 2.1 + PKCE + DCR flow)
-	URLEnv    *EnvVar  `json:"urlEnv,omitempty"` // set when URL is templated ("{X}") and the user supplies it (per-tenant endpoints)
-	Headers   []Header `json:"headers,omitempty"`
+	Transport string  `json:"transport"` // sse | streamable-http
+	URL       string  `json:"url"`
+	Auth      string  `json:"auth,omitempty"`   // "" static header | "oauth" (OAuth 2.1 + PKCE + DCR flow)
+	URLEnv    *EnvVar `json:"urlEnv,omitempty"` // set when URL is templated ("{X}") and the user supplies it (per-tenant endpoints)
+	// OAuth providers whose authorization server has NO DCR (Box, Microsoft Entra): the user
+	// registers their OWN OAuth app and supplies its client_id (+ secret for confidential clients);
+	// the flow then skips runtime registration. nil → DCR self-registration.
+	// 授权服务器无 DCR 的 OAuth 提供方（Box、Microsoft Entra）：用户注册自己的 OAuth app 并给出 client_id
+	// （机密客户端再加 secret）；流程随即跳过运行时注册。nil → DCR 自注册。
+	ClientIDEnv     *EnvVar  `json:"clientIdEnv,omitempty"`
+	ClientSecretEnv *EnvVar  `json:"clientSecretEnv,omitempty"`
+	Headers         []Header `json:"headers,omitempty"`
 }
 
 // AuthOAuth marks a remote endpoint as OAuth-authenticated (vs a static header).
@@ -81,15 +88,17 @@ type RegistrySource interface {
 // InstallPlan 是装一条 entry 的解析结果：stdio（Runtime/Command/Args）或 remote
 // （Transport/URL/Headers）。EnvVars 是调用方要收集的必填值。
 type InstallPlan struct {
-	Remote    bool
-	OAuth     bool     // remote: authenticate via the OAuth 2.1 flow instead of collecting a static token
-	Runtime   string   // stdio: node|python|docker|dotnet
-	Command   string   // stdio: npx|uvx|dnx | image
-	Args      []string // stdio
-	Transport string   // remote: sse|streamable-http
-	URL       string   // remote
-	Headers   []Header // remote
-	EnvVars   []EnvVar // env to fill (from the chosen package, or remote headers)
+	Remote               bool
+	OAuth                bool     // remote: authenticate via the OAuth 2.1 flow instead of collecting a static token
+	OAuthClientIDEnv     string   // oauth: env var carrying a user-supplied client_id (non-DCR providers); "" → DCR self-register
+	OAuthClientSecretEnv string   // oauth: env var carrying a user-supplied client_secret (confidential clients); "" → public/PKCE
+	Runtime              string   // stdio: node|python|docker|dotnet
+	Command              string   // stdio: npx|uvx|dnx | image
+	Args                 []string // stdio
+	Transport            string   // remote: sse|streamable-http
+	URL                  string   // remote
+	Headers              []Header // remote
+	EnvVars              []EnvVar // env to fill (from the chosen package, or remote headers)
 }
 
 // Plan picks the package with the BEST supported runtime (node>python>docker>dotnet —
@@ -126,10 +135,19 @@ func (e *RegistryEntry) Plan() (InstallPlan, bool) {
 		// OAuth 端点不收静态 token——安装时由交互流程铸一个。每租户端点（模板 URL）仍需用户给出 URL（URLEnv）。
 		if r.Auth == AuthOAuth {
 			var envs []EnvVar
-			if r.URLEnv != nil {
-				envs = []EnvVar{*r.URLEnv}
+			for _, ev := range []*EnvVar{r.URLEnv, r.ClientIDEnv, r.ClientSecretEnv} {
+				if ev != nil {
+					envs = append(envs, *ev)
+				}
 			}
-			return InstallPlan{Remote: true, OAuth: true, Transport: t, URL: r.URL, EnvVars: envs}, true
+			plan := InstallPlan{Remote: true, OAuth: true, Transport: t, URL: r.URL, EnvVars: envs}
+			if r.ClientIDEnv != nil {
+				plan.OAuthClientIDEnv = r.ClientIDEnv.Name
+			}
+			if r.ClientSecretEnv != nil {
+				plan.OAuthClientSecretEnv = r.ClientSecretEnv.Name
+			}
+			return plan, true
 		}
 		// remote env requirements live in headers' {TOKEN} placeholders → surfaced as EnvVars
 		envs := make([]EnvVar, 0, len(r.Headers))

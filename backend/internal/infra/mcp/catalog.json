@@ -715,6 +715,23 @@
         "url": "https://mcp.vercel.com",
         "transportType": "streamable-http"
       }
+    },
+    {
+      "slug": "box/mcp-server-box-remote",
+      "auth": {
+        "transport": "oauth",
+        "url": "https://mcp.box.com",
+        "transportType": "streamable-http",
+        "clientIdEnv": {
+          "name": "BOX_CLIENT_ID",
+          "description": "Box app Client ID — in the Box Developer Console (app.box.com/developers/console) create a Custom App with User Authentication (OAuth 2.0), add redirect URI http://127.0.0.1:47100/callback, then copy the Client ID"
+        },
+        "clientSecretEnv": {
+          "name": "BOX_CLIENT_SECRET",
+          "description": "Box app Client Secret (same Custom App in the Box Developer Console)",
+          "secret": true
+        }
+      }
     }
   ]
 }

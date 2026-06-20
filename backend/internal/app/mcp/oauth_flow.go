@@ -70,15 +70,12 @@ func (osBrowserOpener) Open(target string) error {
 //
 // authorizeOAuth 为 remote MCP server 跑完整交互 OAuth 2.1 流程：探测 → 发现 → 动态注册 → PKCE 授权
 // （开浏览器 + loopback 回调）→ 换 token，返回待持久化的授权。阻塞到用户同意或超时。
-func (s *Service) authorizeOAuth(ctx context.Context, serverURL string) (*mcpdomain.OAuthCredentials, error) {
+func (s *Service) authorizeOAuth(ctx context.Context, serverURL, providedClientID, providedClientSecret string) (*mcpdomain.OAuthCredentials, error) {
 	hc := http.DefaultClient
 	resourceMeta := probeResourceMetadata(ctx, hc, serverURL)
 	meta, err := oauth.Discover(ctx, hc, serverURL, resourceMeta)
 	if err != nil {
 		return nil, err
-	}
-	if !meta.SupportsDCR() {
-		return nil, fmt.Errorf("mcpapp.authorizeOAuth %s: %w", serverURL, mcpdomain.ErrOAuthNotSupported)
 	}
 
 	cb, err := startCallbackServer()
@@ -87,9 +84,21 @@ func (s *Service) authorizeOAuth(ctx context.Context, serverURL string) (*mcpdom
 	}
 	defer cb.close()
 
-	reg, err := oauth.Register(ctx, hc, meta.RegistrationEndpoint, oauthClientName, cb.redirectURI, meta.ScopesSupported)
-	if err != nil {
-		return nil, err
+	// Two client sources: the user's OWN pre-registered OAuth app (Box / Entra, whose AS has no DCR),
+	// else runtime self-registration via DCR. Either way no vendor step.
+	// 两种客户端来源：用户自己预注册的 OAuth app（Box/Entra，其 AS 无 DCR），否则经 DCR 运行时自注册。两者都无厂商步骤。
+	var clientID, clientSecret string
+	if providedClientID != "" {
+		clientID, clientSecret = providedClientID, providedClientSecret
+	} else {
+		if !meta.SupportsDCR() {
+			return nil, fmt.Errorf("mcpapp.authorizeOAuth %s: %w", serverURL, mcpdomain.ErrOAuthNotSupported)
+		}
+		reg, rerr := oauth.Register(ctx, hc, meta.RegistrationEndpoint, oauthClientName, cb.redirectURI, meta.ScopesSupported)
+		if rerr != nil {
+			return nil, rerr
+		}
+		clientID, clientSecret = reg.ClientID, reg.ClientSecret
 	}
 	pkce, err := oauth.NewPKCE()
 	if err != nil {
@@ -100,7 +109,7 @@ func (s *Service) authorizeOAuth(ctx context.Context, serverURL string) (*mcpdom
 		return nil, fmt.Errorf("mcpapp.authorizeOAuth: %w: %v", mcpdomain.ErrOAuthAuthorize, err)
 	}
 
-	authURL := oauth.AuthorizeURL(meta, reg.ClientID, cb.redirectURI, state, pkce, meta.ScopesSupported)
+	authURL := oauth.AuthorizeURL(meta, clientID, cb.redirectURI, state, pkce, meta.ScopesSupported)
 	if err := s.opener.Open(authURL); err != nil {
 		return nil, fmt.Errorf("mcpapp.authorizeOAuth: %w: open browser: %v", mcpdomain.ErrOAuthAuthorize, err)
 	}
@@ -118,7 +127,7 @@ func (s *Service) authorizeOAuth(ctx context.Context, serverURL string) (*mcpdom
 		if res.code == "" {
 			return nil, fmt.Errorf("mcpapp.authorizeOAuth: %w: no authorization code returned", mcpdomain.ErrOAuthAuthorize)
 		}
-		tok, err := oauth.Exchange(ctx, hc, meta, reg.ClientID, reg.ClientSecret, res.code, cb.redirectURI, pkce.Verifier, time.Now().UTC())
+		tok, err := oauth.Exchange(ctx, hc, meta, clientID, clientSecret, res.code, cb.redirectURI, pkce.Verifier, time.Now().UTC())
 		if err != nil {
 			return nil, err
 		}
@@ -126,8 +135,8 @@ func (s *Service) authorizeOAuth(ctx context.Context, serverURL string) (*mcpdom
 			Resource:            meta.Resource,
 			AuthorizationServer: meta.Issuer,
 			TokenEndpoint:       meta.TokenEndpoint,
-			ClientID:            reg.ClientID,
-			ClientSecret:        reg.ClientSecret,
+			ClientID:            clientID,
+			ClientSecret:        clientSecret,
 			Scopes:              meta.ScopesSupported,
 			AccessToken:         tok.AccessToken,
 			RefreshToken:        tok.RefreshToken,
@@ -178,10 +187,20 @@ type callbackHit struct {
 	err   error
 }
 
+// oauthCallbackPort is the preferred loopback port so a bring-your-own-client user can register one
+// exact redirect URI (http://127.0.0.1:47100/callback). DCR clients send the redirect dynamically so
+// the port is irrelevant to them; if it's busy we fall back to a random port.
+//
+// oauthCallbackPort 是首选 loopback 端口，使自带客户端的用户能注册一个确定的 redirect URI。DCR 客户端动态
+// 发 redirect、端口无所谓；端口被占则退回随机端口。
+const oauthCallbackPort = 47100
+
 func startCallbackServer() (*callbackServer, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := net.Listen("tcp", fmt.Sprintf("127.0.0.1:%d", oauthCallbackPort))
 	if err != nil {
-		return nil, err
+		if ln, err = net.Listen("tcp", "127.0.0.1:0"); err != nil {
+			return nil, err
+		}
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 	cb := &callbackServer{

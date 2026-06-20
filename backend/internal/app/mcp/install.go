@@ -62,7 +62,9 @@ func (s *Service) InstallFromRegistry(ctx context.Context, fullName string, user
 		// 交互 OAuth：发现→注册→浏览器同意→token。阻塞到用户授权（或超时）；授权加密落盘、用时刷新。
 		// 每租户模板 URL（如 Glean）先用用户给的 env 解析。
 		url := expandPlaceholders(plan.URL, userEnv)
-		creds, err := s.authorizeOAuth(ctx, url)
+		clientID := userEnv[plan.OAuthClientIDEnv]         // "" for DCR servers (OAuthClientIDEnv == "")
+		clientSecret := userEnv[plan.OAuthClientSecretEnv] // "" for public/PKCE clients
+		creds, err := s.authorizeOAuth(ctx, url, clientID, clientSecret)
 		if err != nil {
 			return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s: %w", name, err)
 		}

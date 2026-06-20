@@ -118,7 +118,7 @@ func TestCuratedCatalog_DeterministicViaFallback(t *testing.T) {
 // TestCuratedCatalog_GetRejectsNonWhitelisted 确保未核验 server 无法被解析安装——市场绝不放行。
 func TestCuratedCatalog_GetRejectsNonWhitelisted(t *testing.T) {
 	cat := NewCuratedCatalog(newFakeRegistry(t))
-	for _, slug := range []string{"com.figma.mcp/mcp", "box/mcp-server-box-remote", "io.github.microsoft/EnterpriseMCP"} {
+	for _, slug := range []string{"com.figma.mcp/mcp", "com.microsoft/sentinel-data-exploration", "io.github.microsoft/EnterpriseMCP"} {
 		if _, err := cat.Get(context.Background(), slug); !errors.Is(err, mcpdomain.ErrRegistryEntryNotFound) {
 			t.Errorf("Get(%q) = %v, want ErrRegistryEntryNotFound", slug, err)
 		}
@@ -180,20 +180,50 @@ func TestCuratedCatalog_OverlayServersRequireTheirToken(t *testing.T) {
 	}
 }
 
-// TestCuratedCatalog_ExcludesBusinessStep pins what stays OFF the whitelist forever: the 5 servers
-// needing a vendor business step (OAuth app registration / allowlist).
+// TestCuratedCatalog_CurrentlyExcluded pins what stays OFF the whitelist: figma-remote needs Figma
+// to allowlist ANSELM (a vendor step — never), and the two Microsoft Entra servers are user-self-
+// serve (bring-your-own Entra app) but their Entra-specific scope/redirect isn't wired yet (pending).
 //
-// TestCuratedCatalog_ExcludesBusinessStep 钉死永不在白名单的 5 个需厂商业务步骤（注册 OAuth app/allowlist）。
-func TestCuratedCatalog_ExcludesBusinessStep(t *testing.T) {
+// TestCuratedCatalog_CurrentlyExcluded 钉死仍不在白名单的：figma-remote 需 Figma 把 Anselm 加 allowlist
+// （厂商步骤，永不）；两个微软 Entra server 是用户自助（自带 Entra app），但 Entra 专属 scope/redirect 未接（待办）。
+func TestCuratedCatalog_CurrentlyExcluded(t *testing.T) {
 	cat := NewCuratedCatalog(newFakeRegistry(t))
 	excluded := []string{
-		"com.figma.mcp/mcp", "io.github.microsoft/EnterpriseMCP",
-		"box/mcp-server-box-remote", "com.microsoft/sentinel-data-exploration",
+		"com.figma.mcp/mcp",
+		"io.github.microsoft/EnterpriseMCP", "com.microsoft/sentinel-data-exploration",
 	}
 	for _, slug := range excluded {
 		if _, err := cat.Get(context.Background(), slug); !errors.Is(err, mcpdomain.ErrRegistryEntryNotFound) {
 			t.Errorf("excluded server %q must not be installable, got err=%v", slug, err)
 		}
+	}
+}
+
+// TestCuratedCatalog_BoxBYOClient verifies Box is installable as an OAuth server using the user's OWN
+// registered app: its plan is OAuth carrying the user-supplied client_id + client_secret as required
+// env (the flow then skips DCR and uses them).
+//
+// TestCuratedCatalog_BoxBYOClient 验证 Box 作为「用户自带注册 app」的 OAuth server 可装：计划是 OAuth、
+// 带用户给的 client_id + client_secret 必填 env（流程随即跳过 DCR、用它们）。
+func TestCuratedCatalog_BoxBYOClient(t *testing.T) {
+	cat := NewCuratedCatalog(newFakeRegistry(t))
+	entry, err := cat.Get(context.Background(), "box/mcp-server-box-remote")
+	if err != nil {
+		t.Fatalf("Get(box): %v", err)
+	}
+	plan, ok := entry.Plan()
+	if !ok || !plan.OAuth {
+		t.Fatalf("box should plan as OAuth, got ok=%v plan=%+v", ok, plan)
+	}
+	if plan.OAuthClientIDEnv == "" || plan.OAuthClientSecretEnv == "" {
+		t.Errorf("box must require a user-supplied client_id + client_secret, got idEnv=%q secretEnv=%q", plan.OAuthClientIDEnv, plan.OAuthClientSecretEnv)
+	}
+	names := map[string]bool{}
+	for _, ev := range plan.EnvVars {
+		names[ev.Name] = true
+	}
+	if !names[plan.OAuthClientIDEnv] || !names[plan.OAuthClientSecretEnv] {
+		t.Errorf("client_id/secret envs must be surfaced as required inputs, got %v", plan.EnvVars)
 	}
 }
 
