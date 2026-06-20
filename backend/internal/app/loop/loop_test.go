@@ -140,6 +140,12 @@ func finishEv() llminfra.StreamEvent {
 	return llminfra.StreamEvent{Type: llminfra.EventFinish, InputTokens: 10, OutputTokens: 5}
 }
 
+// errorEv scripts a stream error. A nil err reproduces a silent disconnect (stopReason=error,
+// no error text) — the F44 "0 block + null error" face.
+func errorEv(err error) llminfra.StreamEvent {
+	return llminfra.StreamEvent{Type: llminfra.EventError, Err: err}
+}
+
 // --- Run -------------------------------------------------------------------
 
 func TestRun_SingleTextTurn(t *testing.T) {
@@ -233,6 +239,33 @@ func TestRun_ToolErrorStorm(t *testing.T) {
 	// 3 consecutive all-fail turns is the cap.
 	if !strings.Contains(host.fin.errMsg, "3 consecutive") {
 		t.Fatalf("errMsg=%q, want mention of 3 consecutive", host.fin.errMsg)
+	}
+}
+
+// TestRun_StreamError_EmptyErrFillsActionableMsg pins the F34 fill — the exact F44 "0 block + null
+// error" face: a provider can end the stream with stopReason=error yet no error text (silent
+// disconnect, zero blocks emitted). The turn must finalize as error/LLM_STREAM_ERROR with a
+// NON-EMPTY recovery hint, and the Result must carry the same cause (F66) — never a contentless
+// error with a null cause. F44 is judged not-bug because this is already handled; this guards it.
+//
+// TestRun_StreamError_EmptyErrFillsActionableMsg 锁 F34 填充——正是 F44「0 block + null error」面：
+// provider 可能以 stopReason=error 但无错误文本收尾（静默断连、0 块）。回合须 finalize 成
+// error/LLM_STREAM_ERROR 带**非空**恢复提示，Result 也带同因（F66）——绝非无因空 error。F44 判
+// not-bug 因这已处理；本测守它不回归。
+func TestRun_StreamError_EmptyErrFillsActionableMsg(t *testing.T) {
+	client := &fakeClient{scripts: [][]llminfra.StreamEvent{{errorEv(nil)}}}
+	host := &fakeHost{history: []llminfra.LLMMessage{{Role: llminfra.RoleUser, Content: "hi"}}}
+
+	res := Run(context.Background(), host, client, llminfra.Request{}, 5, nil)
+
+	if host.fin.status != messagesdomain.StatusError || host.fin.errCode != "LLM_STREAM_ERROR" {
+		t.Fatalf("status=%q errCode=%q, want error/LLM_STREAM_ERROR", host.fin.status, host.fin.errCode)
+	}
+	if host.fin.errMsg == "" {
+		t.Fatal("errMsg must be non-empty (F34 fill): a stream error must never finalize with a null cause")
+	}
+	if res.Status != messagesdomain.StatusError || res.ErrCode != "LLM_STREAM_ERROR" || res.ErrMsg == "" {
+		t.Fatalf("Result must carry the terminal cause (F66); got status=%q code=%q msg=%q", res.Status, res.ErrCode, res.ErrMsg)
 	}
 }
 
