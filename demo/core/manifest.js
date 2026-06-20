@@ -13,7 +13,7 @@ window.MANIFEST = [
   { id: "documents", label: "Documents", icon: "doc", nav: 1, owns: ["document"],
     deps: ["features/documents/data.js"], sea: "features/documents/sea.js", rail: "features/documents/rail.js", desc: "零-markdown 心智的 WYSIWYG 文档库（嵌套文档树 + 斜杠/@/悬卡）。" },
   { id: "settings", label: "Settings", icon: "gear", nav: 0, axis: "avatar", owns: ["settingsCat"],
-    sea: "features/settings/sea.js", rail: "features/settings/rail.js", desc: "工作区 / 模型密钥 / 连接器 / 运行时。" },
+    deps: ["features/settings/data.js"], sea: "features/settings/sea.js", rail: "features/settings/rail.js", desc: "六类设置：通用 / 模型与 Key / MCP 与市场 / 技能 / 运行时与索引 / 高级。" },
   { id: "notifications", label: "通知", icon: "bell", nav: 0, axis: "bell", owns: ["notification"],
     rail: "features/notifications/rail.js", desc: "需要你 + FYI 收件箱。" },
   { id: "onboarding", label: "Onboarding", icon: "sparkles", standalone: "features/onboarding/onboarding.html", desc: "首启配置向导。" },
