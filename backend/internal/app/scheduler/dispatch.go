@@ -2,12 +2,16 @@ package scheduler
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
+	"sort"
+	"strings"
 	"time"
 
 	flowrundomain "github.com/sunweilin/anselm/backend/internal/domain/flowrun"
 	workflowdomain "github.com/sunweilin/anselm/backend/internal/domain/workflow"
 	celpkg "github.com/sunweilin/anselm/backend/internal/pkg/cel"
+	errorspkg "github.com/sunweilin/anselm/backend/internal/pkg/errors"
 	reqctxpkg "github.com/sunweilin/anselm/backend/internal/pkg/reqctx"
 )
 
@@ -29,7 +33,7 @@ func (s *Service) runNode(ctx context.Context, run *flowrundomain.FlowRun, senv 
 
 	input, err := evalInput(senv, node, scope)
 	if err != nil {
-		return s.failNode(ctx, run, node, iter, fmt.Sprintf("input eval: %v", err))
+		return s.failNode(ctx, run, node, iter, fmt.Sprintf("input eval: %s", nodeErrText(err)))
 	}
 
 	// Flowrun identity rides ctx into the execution entity (function/handler/mcp/agent), whose
@@ -47,28 +51,28 @@ func (s *Service) runNode(ctx context.Context, run *flowrundomain.FlowRun, senv 
 	case workflowdomain.NodeKindAction:
 		result, err := s.dispatch.RunAction(ctx, node.Ref, run.PinnedRefs[entityIDOf(node.Ref)], input)
 		if err != nil {
-			return s.failNode(ctx, run, node, iter, fmt.Sprintf("action %s: %v", node.Ref, err))
+			return s.failNode(ctx, run, node, iter, fmt.Sprintf("action %s: %s", node.Ref, nodeErrText(err)))
 		}
 		return s.writeNode(ctx, run, node, iter, flowrundomain.NodeCompleted, result, "")
 
 	case workflowdomain.NodeKindAgent:
 		result, err := s.dispatch.RunAgent(ctx, node.Ref, run.PinnedRefs[entityIDOf(node.Ref)], input)
 		if err != nil {
-			return s.failNode(ctx, run, node, iter, fmt.Sprintf("agent %s: %v", node.Ref, err))
+			return s.failNode(ctx, run, node, iter, fmt.Sprintf("agent %s: %s", node.Ref, nodeErrText(err)))
 		}
 		return s.writeNode(ctx, run, node, iter, flowrundomain.NodeCompleted, result, "")
 
 	case workflowdomain.NodeKindControl:
 		port, emit, err := s.evalControl(ctx, run, node, input)
 		if err != nil {
-			return s.failNode(ctx, run, node, iter, err.Error())
+			return s.failNode(ctx, run, node, iter, nodeErrText(err))
 		}
 		return s.writeNode(ctx, run, node, iter, flowrundomain.NodeCompleted, flowrundomain.ControlResult(port, emit), "")
 
 	case workflowdomain.NodeKindApproval:
 		result, err := s.renderApproval(ctx, run, node, input)
 		if err != nil {
-			return s.failNode(ctx, run, node, iter, err.Error())
+			return s.failNode(ctx, run, node, iter, nodeErrText(err))
 		}
 		row, status, werr := s.writeNode(ctx, run, node, iter, flowrundomain.NodeParked, result, "")
 		if werr == nil {
@@ -132,6 +136,33 @@ func (s *Service) failNode(ctx context.Context, run *flowrundomain.FlowRun, node
 		return nil, "", fmt.Errorf("schedulerapp: mark run failed: %w", err)
 	}
 	return nil, flowrundomain.NodeFailed, nil
+}
+
+// nodeErrText renders a node-failure cause for the durable Error column (read by get_flowrun / :triage)
+// WITHOUT the internal Go call-path chain a wrapped error carries — a dangling fn ref otherwise surfaced
+// as the literal "functionapp.RunFunction: function not found" (F104, the flowrun-record sibling of F89's
+// llmErrText). A structured sentinel yields its clean Message + Details; a raw error (e.g. a Python
+// traceback from a crashed function) passes through unchanged.
+//
+// nodeErrText 把节点失败因渲给 durable Error 列（get_flowrun / :triage 读）——不带包裹错误的内部 Go 调用
+// 路径链（dangling fn ref 否则现身为字面 "functionapp.RunFunction: function not found"，F104，F89 llmErrText
+// 的 flowrun-记录兄弟）。结构化 sentinel 产出干净 Message + Details；裸错误（如崩溃 function 的 Python
+// traceback）原样透传。
+func nodeErrText(err error) string {
+	var de *errorspkg.Error
+	if !stderrors.As(err, &de) {
+		return err.Error()
+	}
+	msg := de.Message
+	if len(de.Details) > 0 {
+		parts := make([]string, 0, len(de.Details))
+		for k, v := range de.Details {
+			parts = append(parts, fmt.Sprintf("%s=%v", k, v))
+		}
+		sort.Strings(parts)
+		msg += " (" + strings.Join(parts, "; ") + ")"
+	}
+	return msg
 }
 
 // evalInput evaluates each node.Input field's CEL against the model-B scope (ancestor results by
