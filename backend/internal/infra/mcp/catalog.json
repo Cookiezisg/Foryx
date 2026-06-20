@@ -24,7 +24,7 @@
         "transport": "stdio",
         "env": {
           "name": "FIRECRAWL_API_KEY",
-          "description": "Firecrawl API key (fc-…) — create at firecrawl.dev/app/api-keys",
+          "description": "Firecrawl API key",
           "secret": true
         }
       }
@@ -142,7 +142,7 @@
         },
         "env": {
           "name": "SGAI_API_KEY",
-          "description": "ScrapeGraph AI API key — create at scrapegraphai.com dashboard",
+          "description": "Your ScapeGraph API key (optional - can also be set via MCP config)",
           "secret": true
         }
       }
@@ -159,7 +159,7 @@
         "transport": "stdio",
         "env": {
           "name": "PAGERDUTY_USER_API_KEY",
-          "description": "PagerDuty user API token — create in PagerDuty → User Settings → Create API User Token",
+          "description": "PagerDuty User API Token - obtain from User Settings > API Access in your PagerDuty account",
           "secret": true
         }
       }
@@ -170,7 +170,7 @@
         "transport": "stdio",
         "env": {
           "name": "CODACY_ACCOUNT_TOKEN",
-          "description": "Codacy account token — create in Codacy → Account → Access Management → API tokens",
+          "description": "Codacy account token",
           "secret": true
         }
       }
@@ -190,7 +190,7 @@
         },
         "env": {
           "name": "SNYK_TOKEN",
-          "description": "Snyk API token — create at app.snyk.io (Account Settings → Auth Token)",
+          "description": "Snyk API token",
           "secret": true
         }
       }
@@ -204,7 +204,7 @@
         "transport": "stdio",
         "env": {
           "name": "CONTEXTSTREAM_API_KEY",
-          "description": "ContextStream API key — from your ContextStream account settings",
+          "description": "ContextStream API key",
           "secret": true
         }
       }
@@ -246,7 +246,7 @@
         },
         "env": {
           "name": "STACKHAWK_API_KEY",
-          "description": "StackHawk API key (hawk.…) — create in StackHawk → Settings → API Keys",
+          "description": "StackHawk API key",
           "secret": true
         }
       }
@@ -273,7 +273,7 @@
         },
         "env": {
           "name": "NETDATA_CLOUD_API_TOKEN",
-          "description": "Netdata Cloud API token with scope:mcp — create at Netdata Cloud → User Settings → API Tokens.",
+          "description": "Netdata Cloud API token (scope: mcp)",
           "secret": true
         }
       }
@@ -291,7 +291,7 @@
         },
         "env": {
           "name": "GITHUB_PERSONAL_ACCESS_TOKEN",
-          "description": "GitHub Personal Access Token (classic ghp_ or fine-grained github_pat_) — create at github.com/settings/personal-access-tokens/new, granting only the scopes you want the agent to have (e.g. repo, read:org, read:packages).",
+          "description": "GitHub personal access token (classic or fine-grained)",
           "secret": true
         }
       }
@@ -299,31 +299,17 @@
     {
       "slug": "makenotion/notion-mcp-server",
       "auth": {
-        "transport": "stdio",
-        "package": {
-          "runtimeHint": "node",
-          "name": "@notionhq/notion-mcp-server"
-        },
-        "env": {
-          "name": "NOTION_TOKEN",
-          "description": "Notion Internal Integration Secret (starts with ntn_) — create at notion.so/my-integrations, then connect target pages to the integration",
-          "secret": true
-        }
+        "transport": "oauth",
+        "url": "https://mcp.notion.com/mcp",
+        "transportType": "streamable-http"
       }
     },
     {
       "slug": "com.supabase/mcp",
       "auth": {
-        "transport": "stdio",
-        "package": {
-          "runtimeHint": "node",
-          "name": "@supabase/mcp-server-supabase"
-        },
-        "env": {
-          "name": "SUPABASE_ACCESS_TOKEN",
-          "description": "Supabase Personal Access Token — create at supabase.com/dashboard/account/tokens (Account > Access Tokens).",
-          "secret": true
-        }
+        "transport": "oauth",
+        "url": "https://mcp.supabase.com/mcp",
+        "transportType": "streamable-http"
       }
     },
     {
@@ -339,7 +325,7 @@
         },
         "env": {
           "name": "STRIPE_API_KEY",
-          "description": "Stripe restricted API key (RAK) — create at dashboard.stripe.com/apikeys",
+          "description": "Stripe restricted API key",
           "secret": true
         }
       }
@@ -357,7 +343,7 @@
         },
         "env": {
           "name": "APIFY_TOKEN",
-          "description": "Apify API token — create at Apify Console → Settings → API & Integrations (console.apify.com/settings/integrations)",
+          "description": "Apify API token",
           "secret": true
         }
       }
@@ -365,88 +351,41 @@
     {
       "slug": "io.github.getsentry/sentry-mcp",
       "auth": {
-        "transport": "stdio",
-        "package": {
-          "runtimeHint": "node",
-          "name": "@sentry/mcp-server"
-        },
-        "env": {
-          "name": "SENTRY_ACCESS_TOKEN",
-          "description": "Sentry User Auth Token — create at Sentry → Settings → User Auth Tokens (scopes: org:read, project:read, project:write, team:read, team:write, event:write)",
-          "secret": true
-        }
+        "transport": "oauth",
+        "url": "https://mcp.sentry.dev/mcp",
+        "transportType": "streamable-http"
       }
     },
     {
       "slug": "neondatabase/mcp-server-neon",
       "auth": {
-        "transport": "remote",
+        "transport": "oauth",
         "url": "https://mcp.neon.tech/mcp",
-        "transportType": "streamable-http",
-        "header": {
-          "name": "Authorization",
-          "value": "Bearer {NEON_API_KEY}",
-          "secret": true
-        },
-        "env": {
-          "name": "NEON_API_KEY",
-          "description": "Neon API key — create at the Neon Console under Account settings → API keys",
-          "secret": true
-        }
+        "transportType": "streamable-http"
       }
     },
     {
       "slug": "doist/todoist-ai",
       "auth": {
-        "transport": "remote",
+        "transport": "oauth",
         "url": "https://ai.todoist.net/mcp",
-        "transportType": "streamable-http",
-        "header": {
-          "name": "Authorization",
-          "value": "Bearer {TODOIST_API_TOKEN}",
-          "secret": true
-        },
-        "env": {
-          "name": "TODOIST_API_TOKEN",
-          "description": "Personal Todoist API token — create in Todoist app at Settings > Integrations > Developer (copy the API token).",
-          "secret": true
-        }
+        "transportType": "streamable-http"
       }
     },
     {
       "slug": "com.monday/monday.com",
       "auth": {
-        "transport": "remote",
+        "transport": "oauth",
         "url": "https://mcp.monday.com/mcp",
-        "transportType": "streamable-http",
-        "header": {
-          "name": "Authorization",
-          "value": "Bearer {MONDAY_TOKEN}",
-          "secret": true
-        },
-        "env": {
-          "name": "MONDAY_TOKEN",
-          "description": "monday.com Personal API Token — create at monday.com avatar → Developers → API token (or Admin → Connections → Personal API token).",
-          "secret": true
-        }
+        "transportType": "streamable-http"
       }
     },
     {
       "slug": "zapier/zapier-mcp",
       "auth": {
-        "transport": "remote",
+        "transport": "oauth",
         "url": "https://mcp.zapier.com/api/v1/connect",
-        "transportType": "streamable-http",
-        "header": {
-          "name": "Authorization",
-          "value": "Bearer {ZAPIER_MCP_TOKEN}",
-          "secret": true
-        },
-        "env": {
-          "name": "ZAPIER_MCP_TOKEN",
-          "description": "Zapier MCP connection token — create at mcp.zapier.com (your server's Connect tab → Generate token; shown once)",
-          "secret": true
-        }
+        "transportType": "streamable-http"
       }
     },
     {
@@ -459,7 +398,7 @@
         },
         "env": {
           "name": "POSTMAN_API_KEY",
-          "description": "Postman API key — create in Postman > Settings > Account settings > API keys > Generate API Key",
+          "description": "A valid Postman API key.",
           "secret": true
         }
       }
@@ -477,7 +416,7 @@
         },
         "env": {
           "name": "HF_TOKEN",
-          "description": "HuggingFace access token (READ permission) — create at huggingface.co/settings/tokens",
+          "description": "Hugging Face access token (read)",
           "secret": true
         }
       }
@@ -495,7 +434,7 @@
         },
         "env": {
           "name": "SERPAPI_API_KEY",
-          "description": "SerpApi API key — create/copy at serpapi.com/manage-api-key",
+          "description": "SerpApi API key",
           "secret": true
         }
       }
@@ -506,7 +445,7 @@
         "transport": "stdio",
         "env": {
           "name": "DT_PLATFORM_TOKEN",
-          "description": "Dynatrace Platform Token (dt0s16.*) — create under Settings → Platform Tokens; also set DT_ENVIRONMENT to https://<tenant>.apps.dynatrace.com",
+          "description": "[OPTIONAL] Dynatrace Platform Token for authentication. Alternative to OAuth authentication.",
           "secret": true
         }
       }
@@ -524,7 +463,7 @@
         },
         "env": {
           "name": "SONATYPE_API_TOKEN",
-          "description": "Sonatype Guide personal API token — create at guide.sonatype.com/settings/tokens (requires a Sonatype Guide account).",
+          "description": "Sonatype API token",
           "secret": true
         }
       }
@@ -539,7 +478,7 @@
         },
         "env": {
           "name": "MAPBOX_ACCESS_TOKEN",
-          "description": "Mapbox access token — create a free public token at account.mapbox.com/access-tokens",
+          "description": "Your Mapbox access token. See docs for required scopes.",
           "secret": true
         }
       }
@@ -557,7 +496,7 @@
         },
         "env": {
           "name": "JUSTCALL_API_KEY_SECRET",
-          "description": "JustCall API key + secret joined as <API_KEY>:<API_SECRET> — create both in JustCall → Settings → Developers (API keys), then paste them colon-joined",
+          "description": "JustCall API key and secret joined as API_KEY:API_SECRET",
           "secret": true
         }
       }
@@ -575,7 +514,7 @@
         },
         "env": {
           "name": "PORT_ACCESS_TOKEN",
-          "description": "Port short-lived access token (JWT) — mint it by POSTing your Port clientId+clientSecret to https://api.port.io/v1/auth/access_token (use api.us.port.io for the US region); credentials come from the Port dashboard under Settings → Credentials.",
+          "description": "Port API access token",
           "secret": true
         }
       }
@@ -593,7 +532,7 @@
         },
         "env": {
           "name": "SOURCEGRAPH_TOKEN",
-          "description": "Sourcegraph access token with 'mcp' scope — create in your Sourcegraph instance under Settings > Access tokens.",
+          "description": "Sourcegraph access token",
           "secret": true
         }
       }
@@ -611,7 +550,7 @@
         },
         "env": {
           "name": "AXIOM_TOKEN",
-          "description": "Axiom Personal Access Token (xapt-…) — create at Axiom Console > Settings > Personal access tokens. You also need your Organization ID (substitute into the URL's org-id param).",
+          "description": "Axiom API token",
           "secret": true
         }
       }
@@ -634,37 +573,17 @@
     {
       "slug": "io.github.AnimaApp/anima",
       "auth": {
-        "transport": "remote",
+        "transport": "oauth",
         "url": "https://public-api.animaapp.com/v1/mcp",
-        "transportType": "streamable-http",
-        "header": {
-          "name": "Authorization",
-          "value": "Bearer {ANIMA_API_KEY}",
-          "secret": true
-        },
-        "env": {
-          "name": "ANIMA_API_KEY",
-          "description": "Anima API key — create at dev.animaapp.com → Settings → API Keys (gear icon)",
-          "secret": true
-        }
+        "transportType": "streamable-http"
       }
     },
     {
       "slug": "com.qualityclouds/mcp-server-qualityclouds",
       "auth": {
-        "transport": "remote",
+        "transport": "oauth",
         "url": "https://mcp.qualityclouds.com/mcp",
-        "transportType": "streamable-http",
-        "header": {
-          "name": "Authorization",
-          "value": "{QUALITYCLOUDS_API_KEY}",
-          "secret": true
-        },
-        "env": {
-          "name": "QUALITYCLOUDS_API_KEY",
-          "description": "Quality Clouds API key — generate in the admin portal under Account > API Keys > Add (select cloud/channel/instance/developer/team), then copy the key.",
-          "secret": true
-        }
+        "transportType": "streamable-http"
       }
     },
     {
@@ -680,7 +599,7 @@
         },
         "env": {
           "name": "SHIPBOOK_API_KEY",
-          "description": "Shipbook API key — create in the Shipbook console \"Authentication Keys\" section at console.shipbook.io",
+          "description": "Shipbook API key",
           "secret": true
         }
       }
