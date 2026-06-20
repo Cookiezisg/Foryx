@@ -204,6 +204,8 @@ landed-into:
 > round-11（0619）≈收敛完成：删级联 + 大规模 全绿；concur2 仅重确认 F61（仅外部并行客户端触发）+ F73(low)。**本轮零新 clean fix——产品高度硬化**。
 > round-补薄格（0620）：两薄格补绿——kill-9 真崩溃恢复 from agent 席 GREEN、concurrency replace/buffer_one 真 webhook fire VERIFIED；逮 F87（手动 trigger 绕策略，已修措辞）。
 > round-explore（0620，3 lane 并发真 deepseek）：广告配置选项 use-time 真生效 + code-bug 失败恢复 + 多节点 dataflow 契约 **三格全绿/by-design**；逮 F88（capability_check 不校声明 output——读码判 static 校 unsound、by-design）+ 一模型行为非后端料。**零可修 bug——续高度硬化**。
+> **round-1（0621，5 lane 并发真 deepseek）**：skill **创作席全链**（create→activate→edit→rename·活化同会话真改行为·零假成功）· ergo **白烧**（webhook→approval 一轮建对、F13/F15/F16/F24/F26 复验 hold）· rename **by-id 引用跨改名 sound** · tooload **6 相似 fn 选择满分** · ask 澄清/恢复——**四格绿**；逮 **F89**（llmErrText 泄露 Go 包.方法路径，系统性）+ **F90**（trigger_workflow payload 形状双 lane 试错）+ **F91**（list_mcp_marketplace 倾倒 96 server）。
+> **round-2（0621，5 lane 并发真 deepseek）**：gdelete **粒度删 node/edge/method 原子整图校验+回滚**（探最毒两 corruption case 均精确拒、零残留）· agnest **agent 嵌套深度 3 + trace 可读**（writer→researcher 真嵌套非编造）· longhaul **17 轮 compaction 强绿**（3 callback 全对 DB、零遗忘/重复）· vision **vision 能力诚实 + F37 读文本**——**绿格丰**；逮**两 HIGH**：**F92**（handler 调用无墙钟·延 F83）+ **F93**（LLM 流无总墙钟→病态流钉 CPU+阻塞 shutdown+孤儿，systems-correctness）+ low **F94**（fire_trigger 丢 payload）+ open **F95**（capability_check 不校 trigger canonical outputs，sound 候选）。**watch**：deepseek 在 attachment+tool-history 投影上病态生成的深层因（BlocksToAssistantLLM 嫌疑、model-specific）。
 
 **确诊待修 backlog（"想还有什么"已变"该修什么"，= LOG）：**
 - **HIGH（wind-down careful 修）：** F40 declared-outputs 静默 no-op（标量返回忽略声明名、落 .text）· F41 concurrency=skip 对阻塞工作流退化成 serial（同步 Advance 蒸发 overlap 信号）。
