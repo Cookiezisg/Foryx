@@ -105,6 +105,7 @@ landed-into:
 | F38 agent 无会话管理工具→编造 compact UI 按钮→manage_conversation 工具(archive/pin·复用 Service.Update)+prompt 声明压缩自动 | conversation·chat | happy | promise≠reality/能力缺口 | fixed·locked |
 | F39 todo 全完成后 reminder 抑制+无读回→agent 编造→加常驻 todo_read(含已完成项·复用 ReadRendered)、不动抑制 | todo | happy | 假成功/能力缺口 | fixed·locked |
 | F44 构建 turn 0-block+null-error+孤儿实体→两面皆已覆盖(FACE1=F34 填非空因·FACE2=per-tool durable commit 有意)→补 F34 守测 | loop·build | 报错 | 恢复无门 | 评估关闭(非问题·已覆盖) |
+| F48 delete 结果不报依赖数+边被同 op 删→地基 CountDependents(入向 equip/link)+8 delete 工具删前读注入(避 Delete 签名级联) | relation·8 实体 delete | happy | 静默降级 | fixed·locked |
 ### 已探·无缺陷（绿格——探过、当前行为正确；记下免重挖。details→LOG 元注 0618 + round-1）
 | 绿格 | target | regime |
 |---|---|---|

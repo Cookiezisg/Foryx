@@ -7,6 +7,7 @@ import (
 
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
 	workflowapp "github.com/sunweilin/anselm/backend/internal/app/workflow"
+	relationdomain "github.com/sunweilin/anselm/backend/internal/domain/relation"
 	workflowdomain "github.com/sunweilin/anselm/backend/internal/domain/workflow"
 )
 
@@ -189,12 +190,15 @@ func (t *RevertWorkflow) Execute(ctx context.Context, argsJSON string) (string, 
 
 // --- delete_workflow -------------------------------------------------------
 
-type DeleteWorkflow struct{ svc *workflowapp.Service }
+type DeleteWorkflow struct {
+	svc  *workflowapp.Service
+	deps toolapp.DependentCounter
+}
 
 func (t *DeleteWorkflow) Name() string { return "delete_workflow" }
 
 func (t *DeleteWorkflow) Description() string {
-	return "Delete a workflow and all its graph versions. This is not reversible."
+	return "Delete a workflow and all its graph versions. This is not reversible. The result reports how many other entities referenced it (and may now fail) — to check dependents BEFORE deleting, use get_relations."
 }
 
 func (t *DeleteWorkflow) Parameters() json.RawMessage {
@@ -225,8 +229,9 @@ func (t *DeleteWorkflow) Execute(ctx context.Context, argsJSON string) (string, 
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("delete_workflow: bad args: %w", err)
 	}
+	deps := toolapp.DependentCount(ctx, t.deps, relationdomain.EntityKindWorkflow, args.WorkflowID)
 	if err := t.svc.Delete(ctx, args.WorkflowID); err != nil {
 		return "", fmt.Errorf("delete_workflow: %w", err)
 	}
-	return toolapp.ToJSON(map[string]any{"id": args.WorkflowID, "deleted": true}), nil
+	return toolapp.ToJSON(toolapp.AnnotateDependents(map[string]any{"id": args.WorkflowID, "deleted": true}, deps)), nil
 }

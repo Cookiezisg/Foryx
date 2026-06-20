@@ -109,6 +109,25 @@ func (s *Service) PurgeEntity(ctx context.Context, kind, id string) error {
 	return nil
 }
 
+// CountDependents counts incoming equip/link edges to (kind,id) — the entities that mounted or
+// linked this one, i.e. the dependents that may break if it is deleted. NOT the raw purge count
+// (which conflates this entity's own outgoing edges + create/edit provenance). Reuses the existing
+// ListByToAndKinds with a {equip,link} kind filter — no new repo method.
+//
+// CountDependents 数 (kind,id) 的入向 equip/link 边——挂载/外链它的实体，即删它可能坏的依赖。
+// 非裸 purge 计数（那混入了本实体的出边 + create/edit 溯源）。复用既有 ListByToAndKinds 加
+// {equip,link} kind 过滤——无新 repo 方法。
+func (s *Service) CountDependents(ctx context.Context, kind, id string) (int, error) {
+	if err := validateEntityRef(kind, id); err != nil {
+		return 0, fmt.Errorf("relationapp.CountDependents: %w", err)
+	}
+	edges, err := s.repo.ListByToAndKinds(ctx, kind, id, []string{relationdomain.KindEquip, relationdomain.KindLink})
+	if err != nil {
+		return 0, fmt.Errorf("relationapp.CountDependents: %w", err)
+	}
+	return len(edges), nil
+}
+
 // validateSync checks the fixed ref, the kind scope, and every edge (ref, kind, no
 // self-loop) up front, before any DB work.
 //

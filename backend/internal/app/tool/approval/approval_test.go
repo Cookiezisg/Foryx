@@ -37,7 +37,7 @@ func newToolSvc(t *testing.T) (*approvalapp.Service, context.Context) {
 }
 
 func TestApprovalTools_Wiring(t *testing.T) {
-	tools := ApprovalTools(nil, nil) // nil svc OK: we only inspect Name() here
+	tools := ApprovalTools(nil, nil, nil) // nil svc OK: we only inspect Name() here
 	want := map[string]bool{
 		"search_approval": false, "get_approval": false, "create_approval": false,
 		"edit_approval": false, "revert_approval": false, "delete_approval": false,

@@ -16,13 +16,13 @@ import (
 // TriggerTools constructs the trigger system tools over the app service.
 //
 // TriggerTools 在 app service 之上构造 trigger system tool。
-func TriggerTools(svc *triggerapp.Service, content *searchapp.Service) []toolapp.Tool {
+func TriggerTools(svc *triggerapp.Service, content *searchapp.Service, deps toolapp.DependentCounter) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchTriggers{svc: svc, content: content},
 		&GetTrigger{svc: svc},
 		&CreateTrigger{svc: svc},
 		&EditTrigger{svc: svc},
-		&DeleteTrigger{svc: svc},
+		&DeleteTrigger{svc: svc, deps: deps},
 		&FireTrigger{svc: svc},
 		&SearchActivations{svc: svc},
 		&GetActivation{svc: svc},

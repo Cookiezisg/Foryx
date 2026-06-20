@@ -22,14 +22,14 @@ import (
 //
 // WorkflowTools 基于 app service 构造 workflow system tool；sched 是 durable 调度器的读取面，
 // 支撑运行可观测工具（runs.go）。
-func WorkflowTools(svc *workflowapp.Service, content *searchapp.Service, sched *schedulerapp.Service) []toolapp.Tool {
+func WorkflowTools(svc *workflowapp.Service, content *searchapp.Service, sched *schedulerapp.Service, deps toolapp.DependentCounter) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchWorkflow{svc: svc, content: content},
 		&GetWorkflow{svc: svc},
 		&CreateWorkflow{svc: svc},
 		&EditWorkflow{svc: svc},
 		&RevertWorkflow{svc: svc},
-		&DeleteWorkflow{svc: svc},
+		&DeleteWorkflow{svc: svc, deps: deps},
 		&CapabilityCheckWorkflow{svc: svc},
 		// execution lifecycle (D1)
 		&TriggerWorkflow{svc: svc},

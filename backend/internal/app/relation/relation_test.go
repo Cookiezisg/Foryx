@@ -356,3 +356,46 @@ func TestList_IncompleteFilterRejected(t *testing.T) {
 		t.Errorf("want ErrIncompleteFilter, got %v", err)
 	}
 }
+
+// TestCountDependents: the honest "what breaks if I delete this" count = INCOMING equip/link only.
+// It must exclude create/edit provenance (the conversation that built it) and the entity's OWN
+// outgoing edges — counting those would report a wildly wrong dependent number for workflows/agents.
+//
+// TestCountDependents：诚实的「删了它什么会坏」计数 = **入向** equip/link only。须排除 create/edit
+// 溯源（建它的对话）与本实体**出向**边——把那些算进来会给 workflow/agent 报严重错误的依赖数。
+func TestCountDependents(t *testing.T) {
+	repo := newFakeRepo()
+	repo.rows = []*relationdomain.Relation{
+		// 2 incoming equip (a workflow + an agent mounted fn_1) — these ARE dependents.
+		{ID: "rel_1", Kind: relationdomain.KindEquip, FromKind: "workflow", FromID: "wf_1", ToKind: "function", ToID: "fn_1"},
+		{ID: "rel_2", Kind: relationdomain.KindEquip, FromKind: "agent", FromID: "ag_1", ToKind: "function", ToID: "fn_1"},
+		// 1 incoming link (a document linked fn_1) — also a dependent.
+		{ID: "rel_3", Kind: relationdomain.KindLink, FromKind: "document", FromID: "doc_1", ToKind: "function", ToID: "fn_1"},
+		// incoming create (the conversation that built fn_1) — NOT a dependent (provenance).
+		{ID: "rel_4", Kind: relationdomain.KindCreate, FromKind: "conversation", FromID: "cv_1", ToKind: "function", ToID: "fn_1"},
+		// fn_1's OWN outgoing equip (fn_1 → some handler) — NOT a dependent (it's the deleted entity's edge).
+		{ID: "rel_5", Kind: relationdomain.KindEquip, FromKind: "function", FromID: "fn_1", ToKind: "handler", ToID: "hd_9"},
+		// an unrelated entity's edge — must not be counted.
+		{ID: "rel_6", Kind: relationdomain.KindEquip, FromKind: "workflow", FromID: "wf_2", ToKind: "function", ToID: "fn_2"},
+	}
+	svc := newSvc(repo, nil)
+	ctx := context.Background()
+
+	n, err := svc.CountDependents(ctx, "function", "fn_1")
+	if err != nil {
+		t.Fatalf("CountDependents: %v", err)
+	}
+	if n != 3 {
+		t.Fatalf("CountDependents(fn_1) = %d, want 3 (2 equip + 1 link incoming; excludes create + own outgoing)", n)
+	}
+
+	// No dependents → 0 (no false alarm).
+	if n, _ := svc.CountDependents(ctx, "function", "fn_unreferenced"); n != 0 {
+		t.Fatalf("unreferenced entity = %d, want 0", n)
+	}
+
+	// Invalid ref rejected.
+	if _, err := svc.CountDependents(ctx, "boguskind", "x_1"); !errors.Is(err, relationdomain.ErrInvalidRef) {
+		t.Fatalf("invalid kind: err = %v, want ErrInvalidRef", err)
+	}
+}

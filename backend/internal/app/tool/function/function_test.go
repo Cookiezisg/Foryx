@@ -8,7 +8,7 @@ import (
 
 // TestFunctionTools_Wiring asserts the 9 tools are constructed with the expected names.
 func TestFunctionTools_Wiring(t *testing.T) {
-	tools := FunctionTools(nil, nil) // nil svc OK: we only inspect Name() here
+	tools := FunctionTools(nil, nil, nil) // nil svc OK: we only inspect Name() here
 	want := map[string]bool{
 		"search_function": false, "get_function": false, "create_function": false,
 		"edit_function": false, "revert_function": false, "delete_function": false,

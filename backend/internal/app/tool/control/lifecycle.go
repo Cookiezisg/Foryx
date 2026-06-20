@@ -8,6 +8,7 @@ import (
 
 	controlapp "github.com/sunweilin/anselm/backend/internal/app/control"
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
+	relationdomain "github.com/sunweilin/anselm/backend/internal/domain/relation"
 	schemapkg "github.com/sunweilin/anselm/backend/internal/pkg/schema"
 )
 
@@ -211,12 +212,15 @@ func (t *RevertControl) Execute(ctx context.Context, argsJSON string) (string, e
 
 // --- delete_control --------------------------------------------------------
 
-type DeleteControl struct{ svc *controlapp.Service }
+type DeleteControl struct {
+	svc  *controlapp.Service
+	deps toolapp.DependentCounter
+}
 
 func (t *DeleteControl) Name() string { return "delete_control" }
 
 func (t *DeleteControl) Description() string {
-	return "Delete a control logic and all its versions. Not reversible. Workflows that reference it will fail their capability check until repointed."
+	return "Delete a control logic and all its versions. Not reversible. Workflows that reference it will fail their capability check until repointed. The result reports how many entities referenced it — to check dependents BEFORE deleting, use get_relations."
 }
 
 func (t *DeleteControl) Parameters() json.RawMessage {
@@ -247,8 +251,9 @@ func (t *DeleteControl) Execute(ctx context.Context, argsJSON string) (string, e
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("delete_control: bad args: %w", err)
 	}
+	deps := toolapp.DependentCount(ctx, t.deps, relationdomain.EntityKindControl, args.ControlID)
 	if err := t.svc.Delete(ctx, args.ControlID); err != nil {
 		return "", fmt.Errorf("delete_control: %w", err)
 	}
-	return toolapp.ToJSON(map[string]any{"id": args.ControlID, "deleted": true}), nil
+	return toolapp.ToJSON(toolapp.AnnotateDependents(map[string]any{"id": args.ControlID, "deleted": true}, deps)), nil
 }

@@ -7,7 +7,7 @@ import (
 )
 
 func TestHandlerTools_Wiring(t *testing.T) {
-	tools := HandlerTools(nil, nil)
+	tools := HandlerTools(nil, nil, nil)
 	want := map[string]bool{
 		"search_handler": false, "get_handler": false, "create_handler": false,
 		"edit_handler": false, "revert_handler": false, "delete_handler": false,

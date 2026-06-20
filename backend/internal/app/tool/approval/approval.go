@@ -17,13 +17,13 @@ import (
 // ApprovalTools constructs the approval-form system tools over the app service.
 //
 // ApprovalTools 基于 app service 构造审批表 system tool。
-func ApprovalTools(svc *approvalapp.Service, content *searchapp.Service) []toolapp.Tool {
+func ApprovalTools(svc *approvalapp.Service, content *searchapp.Service, deps toolapp.DependentCounter) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchApproval{svc: svc, content: content},
 		&GetApproval{svc: svc},
 		&CreateApproval{svc: svc},
 		&EditApproval{svc: svc},
 		&RevertApproval{svc: svc},
-		&DeleteApproval{svc: svc},
+		&DeleteApproval{svc: svc, deps: deps},
 	}
 }

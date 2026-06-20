@@ -7,6 +7,7 @@ import (
 
 	handlerapp "github.com/sunweilin/anselm/backend/internal/app/handler"
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
+	relationdomain "github.com/sunweilin/anselm/backend/internal/domain/relation"
 )
 
 // --- revert_handler --------------------------------------------------------
@@ -64,12 +65,15 @@ func (t *RevertHandler) Execute(ctx context.Context, argsJSON string) (string, e
 
 // --- delete_handler --------------------------------------------------------
 
-type DeleteHandler struct{ svc *handlerapp.Service }
+type DeleteHandler struct {
+	svc  *handlerapp.Service
+	deps toolapp.DependentCounter
+}
 
 func (t *DeleteHandler) Name() string { return "delete_handler" }
 
 func (t *DeleteHandler) Description() string {
-	return "Delete a handler: stop its resident instance and remove all versions + environments. Not reversible."
+	return "Delete a handler: stop its resident instance and remove all versions + environments. Not reversible. The result reports how many other entities referenced it (and may now fail) — to check dependents BEFORE deleting, use get_relations."
 }
 
 func (t *DeleteHandler) Parameters() json.RawMessage {
@@ -100,10 +104,11 @@ func (t *DeleteHandler) Execute(ctx context.Context, argsJSON string) (string, e
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("delete_handler: bad args: %w", err)
 	}
+	deps := toolapp.DependentCount(ctx, t.deps, relationdomain.EntityKindHandler, args.HandlerID)
 	if err := t.svc.Delete(ctx, args.HandlerID); err != nil {
 		return "", fmt.Errorf("delete_handler: %w", err)
 	}
-	return toolapp.ToJSON(map[string]any{"id": args.HandlerID, "deleted": true}), nil
+	return toolapp.ToJSON(toolapp.AnnotateDependents(map[string]any{"id": args.HandlerID, "deleted": true}, deps)), nil
 }
 
 // --- restart_handler -------------------------------------------------------

@@ -20,15 +20,16 @@ import (
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
 )
 
-// HandlerTools constructs the handler system tools over the app service.
-func HandlerTools(svc *handlerapp.Service, content *searchapp.Service) []toolapp.Tool {
+// HandlerTools constructs the handler system tools over the app service. deps (relation
+// dependent-counter) lets delete_handler warn how many entities referenced it (F48); nil-safe.
+func HandlerTools(svc *handlerapp.Service, content *searchapp.Service, deps toolapp.DependentCounter) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchHandler{svc: svc, content: content},
 		&GetHandler{svc: svc},
 		&CreateHandler{svc: svc},
 		&EditHandler{svc: svc},
 		&RevertHandler{svc: svc},
-		&DeleteHandler{svc: svc},
+		&DeleteHandler{svc: svc, deps: deps},
 		&CallHandler{svc: svc},
 		&UpdateHandlerConfig{svc: svc},
 		&RestartHandler{svc: svc},

@@ -17,14 +17,14 @@ import (
 // AgentTools constructs the agent system tools over the app service.
 //
 // AgentTools 基于 app service 构造 agent system tool。
-func AgentTools(svc *agentapp.Service, content *searchapp.Service) []toolapp.Tool {
+func AgentTools(svc *agentapp.Service, content *searchapp.Service, deps toolapp.DependentCounter) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchAgent{svc: svc, content: content},
 		&GetAgent{svc: svc},
 		&CreateAgent{svc: svc},
 		&EditAgent{svc: svc},
 		&RevertAgent{svc: svc},
-		&DeleteAgent{svc: svc},
+		&DeleteAgent{svc: svc, deps: deps},
 		&InvokeAgent{svc: svc},
 		&SearchAgentExecutions{svc: svc},
 		&GetAgentExecution{svc: svc},

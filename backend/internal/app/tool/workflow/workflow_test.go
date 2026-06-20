@@ -21,7 +21,7 @@ import (
 // each satisfies the 5-method Tool interface: 7 build/query + 5 execution-lifecycle (D1) +
 // 2 run-observability.
 func TestWorkflowTools_Wiring(t *testing.T) {
-	tools := WorkflowTools(nil, nil, nil) // nil svc OK: we only inspect Name() here
+	tools := WorkflowTools(nil, nil, nil, nil) // nil svc OK: we only inspect Name() here
 	want := map[string]bool{
 		"search_workflow": false, "get_workflow": false, "create_workflow": false,
 		"edit_workflow": false, "revert_workflow": false, "delete_workflow": false,

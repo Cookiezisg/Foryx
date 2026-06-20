@@ -16,12 +16,12 @@ import (
 // SkillTools constructs the skill system tools over the app service.
 //
 // SkillTools 在 app service 之上构造 skill system tool。
-func SkillTools(svc *skillapp.Service) []toolapp.Tool {
+func SkillTools(svc *skillapp.Service, deps toolapp.DependentCounter) []toolapp.Tool {
 	return []toolapp.Tool{
 		&ActivateSkill{svc: svc},
 		&GetSkill{svc: svc},
 		&CreateSkill{svc: svc},
 		&EditSkill{svc: svc},
-		&DeleteSkill{svc: svc},
+		&DeleteSkill{svc: svc, deps: deps},
 	}
 }

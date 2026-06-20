@@ -7,7 +7,7 @@ import (
 )
 
 func TestAgentTools_NamesAndCount(t *testing.T) {
-	tools := AgentTools(nil, nil) // Name() does not deref svc
+	tools := AgentTools(nil, nil, nil) // Name() does not deref svc
 	want := map[string]bool{
 		"search_agent": true, "get_agent": true, "create_agent": true, "edit_agent": true,
 		"revert_agent": true, "delete_agent": true, "invoke_agent": true,

@@ -7,6 +7,7 @@ import (
 
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
 	triggerapp "github.com/sunweilin/anselm/backend/internal/app/trigger"
+	relationdomain "github.com/sunweilin/anselm/backend/internal/domain/relation"
 	triggerdomain "github.com/sunweilin/anselm/backend/internal/domain/trigger"
 	schemapkg "github.com/sunweilin/anselm/backend/internal/pkg/schema"
 )
@@ -137,12 +138,15 @@ func (t *EditTrigger) Execute(ctx context.Context, argsJSON string) (string, err
 
 // --- delete_trigger --------------------------------------------------------
 
-type DeleteTrigger struct{ svc *triggerapp.Service }
+type DeleteTrigger struct {
+	svc  *triggerapp.Service
+	deps toolapp.DependentCounter
+}
 
 func (t *DeleteTrigger) Name() string { return "delete_trigger" }
 
 func (t *DeleteTrigger) Description() string {
-	return "Delete a trigger (soft-delete). Stops its listener and removes its relation edges. Workflows that referenced it stop receiving its signal."
+	return "Delete a trigger (soft-delete). Stops its listener and removes its relation edges. Workflows that referenced it stop receiving its signal. The result reports how many entities referenced it — to check dependents BEFORE deleting, use get_relations."
 }
 
 func (t *DeleteTrigger) Parameters() json.RawMessage {
@@ -173,8 +177,9 @@ func (t *DeleteTrigger) Execute(ctx context.Context, argsJSON string) (string, e
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("delete_trigger: bad args: %w", err)
 	}
+	deps := toolapp.DependentCount(ctx, t.deps, relationdomain.EntityKindTrigger, args.TriggerID)
 	if err := t.svc.Delete(ctx, args.TriggerID); err != nil {
 		return "", fmt.Errorf("delete_trigger: %w", err)
 	}
-	return toolapp.ToJSON(map[string]any{"deleted": true, "triggerId": args.TriggerID}), nil
+	return toolapp.ToJSON(toolapp.AnnotateDependents(map[string]any{"deleted": true, "triggerId": args.TriggerID}, deps)), nil
 }

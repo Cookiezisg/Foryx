@@ -8,6 +8,7 @@ import (
 
 	approvalapp "github.com/sunweilin/anselm/backend/internal/app/approval"
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
+	relationdomain "github.com/sunweilin/anselm/backend/internal/domain/relation"
 	schemapkg "github.com/sunweilin/anselm/backend/internal/pkg/schema"
 )
 
@@ -201,12 +202,15 @@ func (t *RevertApproval) Execute(ctx context.Context, argsJSON string) (string, 
 
 // --- delete_approval -------------------------------------------------------
 
-type DeleteApproval struct{ svc *approvalapp.Service }
+type DeleteApproval struct {
+	svc  *approvalapp.Service
+	deps toolapp.DependentCounter
+}
 
 func (t *DeleteApproval) Name() string { return "delete_approval" }
 
 func (t *DeleteApproval) Description() string {
-	return "Delete an approval form and all its versions. Not reversible. Workflows that reference it will fail their capability check until repointed."
+	return "Delete an approval form and all its versions. Not reversible. Workflows that reference it will fail their capability check until repointed. The result reports how many entities referenced it — to check dependents BEFORE deleting, use get_relations."
 }
 
 func (t *DeleteApproval) Parameters() json.RawMessage {
@@ -237,8 +241,9 @@ func (t *DeleteApproval) Execute(ctx context.Context, argsJSON string) (string, 
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("delete_approval: bad args: %w", err)
 	}
+	deps := toolapp.DependentCount(ctx, t.deps, relationdomain.EntityKindApproval, args.ApprovalID)
 	if err := t.svc.Delete(ctx, args.ApprovalID); err != nil {
 		return "", fmt.Errorf("delete_approval: %w", err)
 	}
-	return toolapp.ToJSON(map[string]any{"id": args.ApprovalID, "deleted": true}), nil
+	return toolapp.ToJSON(toolapp.AnnotateDependents(map[string]any{"id": args.ApprovalID, "deleted": true}, deps)), nil
 }

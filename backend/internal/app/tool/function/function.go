@@ -23,17 +23,19 @@ import (
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
 )
 
-// FunctionTools constructs the function system tools over the app service.
+// FunctionTools constructs the function system tools over the app service. deps (the relation
+// dependent-counter) lets delete_function warn how many entities referenced it (F48); nil-safe.
 //
-// FunctionTools 基于 app service 构造 function system tool。
-func FunctionTools(svc *functionapp.Service, content *searchapp.Service) []toolapp.Tool {
+// FunctionTools 基于 app service 构造 function system tool。deps（relation 依赖计数器）使
+// delete_function 能警示有多少实体引用了它（F48）；nil 安全。
+func FunctionTools(svc *functionapp.Service, content *searchapp.Service, deps toolapp.DependentCounter) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchFunction{svc: svc, content: content},
 		&GetFunction{svc: svc},
 		&CreateFunction{svc: svc},
 		&EditFunction{svc: svc},
 		&RevertFunction{svc: svc},
-		&DeleteFunction{svc: svc},
+		&DeleteFunction{svc: svc, deps: deps},
 		&RunFunction{svc: svc},
 		&SearchFunctionExecutions{svc: svc},
 		&GetFunctionExecution{svc: svc},

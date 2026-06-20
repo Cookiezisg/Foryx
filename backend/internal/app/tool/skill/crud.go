@@ -8,6 +8,7 @@ import (
 
 	skillapp "github.com/sunweilin/anselm/backend/internal/app/skill"
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
+	relationdomain "github.com/sunweilin/anselm/backend/internal/domain/relation"
 	skilldomain "github.com/sunweilin/anselm/backend/internal/domain/skill"
 )
 
@@ -143,12 +144,15 @@ var _ toolapp.Tool = (*EditSkill)(nil)
 // DeleteSkill removes a skill directory.
 //
 // DeleteSkill 删除一个 skill 目录。
-type DeleteSkill struct{ svc *skillapp.Service }
+type DeleteSkill struct {
+	svc  *skillapp.Service
+	deps toolapp.DependentCounter
+}
 
 func (t *DeleteSkill) Name() string { return "delete_skill" }
 
 func (t *DeleteSkill) Description() string {
-	return "Delete a skill permanently (removes its directory). Cannot be undone."
+	return "Delete a skill permanently (removes its directory). Cannot be undone. The result reports how many agents equipped it (and may now fail) — to check dependents BEFORE deleting, use get_relations."
 }
 
 func (t *DeleteSkill) Parameters() json.RawMessage {
@@ -179,10 +183,13 @@ func (t *DeleteSkill) Execute(ctx context.Context, argsJSON string) (string, err
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("delete_skill: bad args: %w", err)
 	}
+	// Skill is name-as-id, so its relation id is the skill name (agents equip skills by name).
+	// skill 是名即 id，故其 relation id 就是 skill 名（agent 按名 equip skill）。
+	deps := toolapp.DependentCount(ctx, t.deps, relationdomain.EntityKindSkill, args.Name)
 	if err := t.svc.Delete(ctx, args.Name); err != nil {
 		return "", fmt.Errorf("delete_skill: %w", err)
 	}
-	return toolapp.ToJSON(map[string]any{"deleted": args.Name}), nil
+	return toolapp.ToJSON(toolapp.AnnotateDependents(map[string]any{"deleted": args.Name}, deps)), nil
 }
 
 var _ toolapp.Tool = (*DeleteSkill)(nil)

@@ -7,6 +7,7 @@ import (
 
 	functionapp "github.com/sunweilin/anselm/backend/internal/app/function"
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
+	relationdomain "github.com/sunweilin/anselm/backend/internal/domain/relation"
 )
 
 // --- revert_function -------------------------------------------------------
@@ -64,12 +65,15 @@ func (t *RevertFunction) Execute(ctx context.Context, argsJSON string) (string, 
 
 // --- delete_function -------------------------------------------------------
 
-type DeleteFunction struct{ svc *functionapp.Service }
+type DeleteFunction struct {
+	svc  *functionapp.Service
+	deps toolapp.DependentCounter
+}
 
 func (t *DeleteFunction) Name() string { return "delete_function" }
 
 func (t *DeleteFunction) Description() string {
-	return "Delete a function and all its versions and sandbox environments. This is not reversible."
+	return "Delete a function and all its versions and sandbox environments. This is not reversible. The result reports how many other entities referenced it (and may now fail) — to see what depends on something BEFORE deleting, use get_relations."
 }
 
 func (t *DeleteFunction) Parameters() json.RawMessage {
@@ -100,8 +104,11 @@ func (t *DeleteFunction) Execute(ctx context.Context, argsJSON string) (string, 
 	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
 		return "", fmt.Errorf("delete_function: bad args: %w", err)
 	}
+	// Count dependents BEFORE the delete — the purge erases the edges, so reading after is too late.
+	// 删**前**数依赖——purge 会抹掉边，删后再读已晚。
+	deps := toolapp.DependentCount(ctx, t.deps, relationdomain.EntityKindFunction, args.FunctionID)
 	if err := t.svc.Delete(ctx, args.FunctionID); err != nil {
 		return "", fmt.Errorf("delete_function: %w", err)
 	}
-	return toolapp.ToJSON(map[string]any{"id": args.FunctionID, "deleted": true}), nil
+	return toolapp.ToJSON(toolapp.AnnotateDependents(map[string]any{"id": args.FunctionID, "deleted": true}, deps)), nil
 }

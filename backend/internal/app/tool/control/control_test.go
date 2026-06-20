@@ -37,7 +37,7 @@ func newToolSvc(t *testing.T) (*controlapp.Service, context.Context) {
 }
 
 func TestControlTools_Wiring(t *testing.T) {
-	tools := ControlTools(nil, nil) // nil svc OK: we only inspect Name() here
+	tools := ControlTools(nil, nil, nil) // nil svc OK: we only inspect Name() here
 	want := map[string]bool{
 		"search_control": false, "get_control": false, "create_control": false,
 		"edit_control": false, "revert_control": false, "delete_control": false,

@@ -19,14 +19,14 @@ import (
 // ControlTools constructs the control-logic system tools over the app service.
 //
 // ControlTools 基于 app service 构造 control 逻辑 system tool。
-func ControlTools(svc *controlapp.Service, content *searchapp.Service) []toolapp.Tool {
+func ControlTools(svc *controlapp.Service, content *searchapp.Service, deps toolapp.DependentCounter) []toolapp.Tool {
 	return []toolapp.Tool{
 		&SearchControl{svc: svc, content: content},
 		&GetControl{svc: svc},
 		&CreateControl{svc: svc},
 		&EditControl{svc: svc},
 		&RevertControl{svc: svc},
-		&DeleteControl{svc: svc},
+		&DeleteControl{svc: svc, deps: deps},
 	}
 }
 

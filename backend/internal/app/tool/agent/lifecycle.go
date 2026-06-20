@@ -9,6 +9,7 @@ import (
 	agentapp "github.com/sunweilin/anselm/backend/internal/app/agent"
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
 	agentdomain "github.com/sunweilin/anselm/backend/internal/domain/agent"
+	relationdomain "github.com/sunweilin/anselm/backend/internal/domain/relation"
 )
 
 // --- revert_agent ----------------------------------------------------------
@@ -56,12 +57,15 @@ func (t *RevertAgent) Execute(ctx context.Context, argsJSON string) (string, err
 
 // --- delete_agent ----------------------------------------------------------
 
-type DeleteAgent struct{ svc *agentapp.Service }
+type DeleteAgent struct {
+	svc  *agentapp.Service
+	deps toolapp.DependentCounter
+}
 
 func (t *DeleteAgent) Name() string { return "delete_agent" }
 
 func (t *DeleteAgent) Description() string {
-	return "Delete an agent (soft-delete). Its relation edges to mounted skill/doc/fn/hd/mcp are removed; its execution history is retained."
+	return "Delete an agent (soft-delete). Its relation edges to mounted skill/doc/fn/hd/mcp are removed; its execution history is retained. The result reports how many other entities referenced it (e.g. workflow agent-nodes) and may now fail — to check dependents BEFORE deleting, use get_relations."
 }
 
 func (t *DeleteAgent) Parameters() json.RawMessage {
@@ -88,10 +92,11 @@ func (t *DeleteAgent) Execute(ctx context.Context, argsJSON string) (string, err
 	if err := json.Unmarshal([]byte(argsJSON), &a); err != nil {
 		return "", fmt.Errorf("delete_agent: bad args: %w", err)
 	}
+	deps := toolapp.DependentCount(ctx, t.deps, relationdomain.EntityKindAgent, a.AgentID)
 	if err := t.svc.Delete(ctx, a.AgentID); err != nil {
 		return "", fmt.Errorf("delete_agent: %w", err)
 	}
-	return fmt.Sprintf("Deleted agent %q.", a.AgentID), nil
+	return fmt.Sprintf("Deleted agent %q.", a.AgentID) + toolapp.DependentSuffix(deps), nil
 }
 
 // --- invoke_agent ----------------------------------------------------------

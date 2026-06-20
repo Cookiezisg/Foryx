@@ -156,6 +156,19 @@ type Service interface {
 	// PurgeEntity 硬删所有触及该实体的边（from 或 to）。由 source domain 的 Delete 同流程调。
 	PurgeEntity(ctx context.Context, kind, id string) error
 
+	// CountDependents reports how many live entities reference (mounted/linked) this one —
+	// the honest "what breaks if I delete this" signal: incoming equip/link edges only (a
+	// workflow/agent that equipped it, a document that linked it). Excludes create/edit
+	// provenance (the conversation that built it) and this entity's OWN outgoing edges, which
+	// are not dependents. Read BEFORE a delete (the purge erases the edges). Used by the delete
+	// tools so their result can warn the agent how many references may now fail.
+	//
+	// CountDependents 报告有多少存活实体引用（挂载/外链）了它——诚实的「删了它什么会坏」信号：
+	// 仅入向 equip/link 边（挂载它的 workflow/agent、外链它的 document）。排除 create/edit 溯源
+	// （建它的对话）与本实体自己的出边（那些非依赖）。须在 delete **前**读（purge 会抹掉边）。
+	// 供 delete 工具用，使结果能警示 agent 有多少引用可能因此失效。
+	CountDependents(ctx context.Context, kind, id string) (int, error)
+
 	// List returns hydrated edges matching filter, keyset-paginated; next == "" at end.
 	//
 	// List 返回匹配 filter 的 hydrate 边，keyset 分页；到底时 next == ""。
