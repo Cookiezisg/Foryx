@@ -107,6 +107,9 @@ var (
 	// ErrTestFailed: the :test probe reached the provider but it rejected the key.
 	// ErrTestFailed：:test 探活连到 provider 但 key 被拒。
 	ErrTestFailed = errorspkg.New(errorspkg.KindUnprocessable, "API_KEY_TEST_FAILED", "api key probe failed")
+	// ErrManaged: a built-in, backend-provisioned credential (free-tier gateway) cannot be edited.
+	// ErrManaged：内置、后端开通的凭证（免费档网关）不可编辑。
+	ErrManaged = errorspkg.New(errorspkg.KindUnprocessable, "API_KEY_IMMUTABLE", "managed api key cannot be edited")
 )
 
 // Repository is the storage contract for APIKey, isolated by ctx workspace.

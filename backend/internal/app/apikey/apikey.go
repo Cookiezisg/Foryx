@@ -85,6 +85,19 @@ type UpdateInput struct {
 	Key         *string
 }
 
+// ManagedCreateInput is the request for CreateManaged: a backend-provisioned credential whose probe
+// archive is seeded directly (TestResponse) instead of discovered by a live probe.
+//
+// ManagedCreateInput 是 CreateManaged 的请求：后端开通的凭证，探测档案由 TestResponse 直接播种、
+// 非 live 探针发现。
+type ManagedCreateInput struct {
+	Provider     string
+	DisplayName  string
+	Key          string
+	BaseURL      string
+	TestResponse string // synthetic OpenAI /models body, e.g. {"data":[{"id":"deepseek-v4-flash"}]}
+}
+
 func (s *Service) Create(ctx context.Context, in CreateInput) (*apikeydomain.APIKey, error) {
 	if err := validateCreate(in); err != nil {
 		return nil, err
@@ -115,6 +128,52 @@ func (s *Service) Create(ctx context.Context, in CreateInput) (*apikeydomain.API
 	return k, nil
 }
 
+// CreateManaged provisions a built-in managed credential (the free-tier gateway). Unlike Create it
+// seeds the probe archive directly — TestStatusOK + a synthetic /models body — and skips the live
+// connectivity probe, because the credential is minted by a trusted internal provisioner (the
+// gateway install), not pasted by a user. The synthetic TestResponse is REQUIRED: the model module
+// derives the picker's model list from DescribeModels(provider, TestResponse), so an empty archive
+// would yield the dead state "ok but no selectable model". Skipping the probe also sidesteps the
+// split-brain where a quota-exhausted probe would flip the key to error and hide the model.
+//
+// CreateManaged 开通内置受管凭证（免费档网关）。与 Create 不同：直接播种探测档案——TestStatusOK +
+// 合成 /models body——并跳过 live 探针，因凭证由可信内部 provisioner（网关 install）铸造、非用户粘贴。
+// 合成 TestResponse 是必需的：model 模块据 DescribeModels(provider, TestResponse) 派生 picker 模型列表，
+// 空档案 → 死状态「ok 但选择器无模型」。跳探针也避开「配额耗尽的探针把 key 翻 error、藏掉模型」的脑裂。
+func (s *Service) CreateManaged(ctx context.Context, in ManagedCreateInput) (*apikeydomain.APIKey, error) {
+	if !isValidProvider(in.Provider) {
+		return nil, apikeydomain.ErrInvalidProvider
+	}
+	if strings.TrimSpace(in.Key) == "" {
+		return nil, apikeydomain.ErrKeyRequired
+	}
+	ciphertext, err := s.encryptor.Encrypt(ctx, []byte(in.Key))
+	if err != nil {
+		return nil, fmt.Errorf("apikey.Service.CreateManaged: encrypt: %w", err)
+	}
+	now := time.Now().UTC()
+	k := &apikeydomain.APIKey{
+		ID:           newID(),
+		Provider:     in.Provider,
+		DisplayName:  strings.TrimSpace(in.DisplayName),
+		KeyEncrypted: string(ciphertext),
+		KeyMasked:    maskKey(in.Key),
+		BaseURL:      strings.TrimSpace(in.BaseURL),
+		TestStatus:   apikeydomain.TestStatusOK,
+		TestResponse: in.TestResponse,
+		LastTestedAt: &now,
+		CreatedAt:    now,
+		UpdatedAt:    now,
+	}
+	// WorkspaceID is stamped by orm from ctx on Save — never set by hand.
+	// WorkspaceID 由 orm 在 Save 时从 ctx 打上——不手设。
+	if err := s.repo.Save(ctx, k); err != nil {
+		return nil, err
+	}
+	s.log.Info("managed apikey provisioned", zap.String("key_id", k.ID), zap.String("provider", k.Provider))
+	return k, nil
+}
+
 func validateCreate(in CreateInput) error {
 	if !isValidProvider(in.Provider) {
 		return apikeydomain.ErrInvalidProvider
@@ -136,6 +195,15 @@ func (s *Service) Update(ctx context.Context, id string, in UpdateInput) (*apike
 	k, err := s.repo.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	// Managed rows (free-tier gateway) are immutable: the credential is backend-provisioned and
+	// pinned, so a user PATCH must never edit it. Deletion is separately guarded by RefScanner when
+	// the row backs a default model.
+	//
+	// 受管行（免费档网关）不可编辑：凭证由后端开通并钉定，用户 PATCH 绝不得改它。删除在它作默认模型时
+	// 另由 RefScanner 守。
+	if meta, ok := GetProviderMeta(k.Provider); ok && meta.Managed {
+		return nil, apikeydomain.ErrManaged
 	}
 	if in.DisplayName == nil && in.BaseURL == nil && in.Key == nil {
 		return k, nil // no-op PATCH {}; don't bump updated_at

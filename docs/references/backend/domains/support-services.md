@@ -19,7 +19,7 @@ audience: [human, ai]
 
 ## apikey —— 加密凭据管理
 
-凭据自身生命周期：存（AES-GCM 整密文）、probe 连通性测试、按 id 发放（`KeyProvider`/`ProbeReader` 端口）。**刻意零 provider 语义**——选哪个 key、key 隐含什么模型，是 model/websearch 的事。**删除守卫**：`RefScanner` 端口（boot 注册），Delete 询问每个 scanner、任一命中即拒（`API_KEY_IN_USE` 422）；真实引用来源二——workspace 的三 scenario 默认模型 / 默认搜索 key（`workspace.ReferencesAPIKey`）+ agent active 版本的 modelOverride（`agent.ReferencesAPIKey`），均结构满足端口、build_services 注入。probe 归档供 model 聚合解析。码 `API_KEY_*` 8；ID `aki_`。
+凭据自身生命周期：存（AES-GCM 整密文）、probe 连通性测试、按 id 发放（`KeyProvider`/`ProbeReader` 端口）。**刻意零 provider 语义**——选哪个 key、key 隐含什么模型，是 model/websearch 的事。**删除守卫**：`RefScanner` 端口（boot 注册），Delete 询问每个 scanner、任一命中即拒（`API_KEY_IN_USE` 422）；真实引用来源二——workspace 的三 scenario 默认模型 / 默认搜索 key（`workspace.ReferencesAPIKey`）+ agent active 版本的 modelOverride（`agent.ReferencesAPIKey`），均结构满足端口、build_services 注入。probe 归档供 model 聚合解析。**内置受管 provider（免费档网关 `anselm`）**：`ProviderMeta.Managed=true` 标记（`GET /providers` 暴露 `managed`，前端据此排除手动「添加 key」列表）；`CreateManaged` 直接播种探测档案（`test_status=ok` + 合成 `/models` body，**跳 live 探针**——否则「ok 但选择器无模型」死状态，且避开配额耗尽探针翻 key 的脑裂），凭证（`gwk_` install token）骑既有 AES-GCM 加密路径、provider=`anselm`、base=`api.anselm.host/v1`；`Update` 对受管行返 `API_KEY_IMMUTABLE`（422，不可编辑），删除仍由 `RefScanner` 守（作默认模型时）。码 `API_KEY_*` 9；ID `aki_`。
 
 ## model —— 模型选择与能力
 

@@ -34,12 +34,21 @@ const (
 //
 // ProviderMeta 是 apikey 校验、连接、探测一家所需——不含模型、不含选择。
 type ProviderMeta struct {
-	Name            string           `json:"name"`
-	DisplayName     string           `json:"displayName"`
-	DefaultBaseURL  string           `json:"defaultBaseUrl,omitempty"`
-	BaseURLRequired bool             `json:"baseUrlRequired"`
-	TestMethod      TestMethod       `json:"-"`
-	Category        ProviderCategory `json:"category"`
+	Name            string `json:"name"`
+	DisplayName     string `json:"displayName"`
+	DefaultBaseURL  string `json:"defaultBaseUrl,omitempty"`
+	BaseURLRequired bool   `json:"baseUrlRequired"`
+	// Managed marks a built-in, backend-provisioned provider whose credential is minted by the app
+	// (not pasted by the user): its key row is created via CreateManaged (seeded probe archive, no
+	// live test) and is immutable (Update rejects it). The free-tier Anselm gateway is the only one
+	// today. The frontend uses this to keep it out of the manual "add a key" list.
+	//
+	// Managed 标记内置、由后端开通的 provider：凭证由 app 铸造（非用户粘贴），key 行经 CreateManaged
+	// 创建（播种探测档案、不跑 live 探针）且不可编辑（Update 拒绝）。当前仅免费档 Anselm 网关。前端据此
+	// 把它排除出手动「添加 key」列表。
+	Managed    bool             `json:"managed"`
+	TestMethod TestMethod       `json:"-"`
+	Category   ProviderCategory `json:"category"`
 }
 
 var providers = map[string]ProviderMeta{
@@ -47,6 +56,7 @@ var providers = map[string]ProviderMeta{
 	"anthropic":  {Name: "anthropic", DisplayName: "Anthropic", DefaultBaseURL: "https://api.anthropic.com", TestMethod: TestMethodAnthropicModels, Category: CategoryLLM},
 	"google":     {Name: "google", DisplayName: "Google Gemini", DefaultBaseURL: "https://generativelanguage.googleapis.com/v1beta", TestMethod: TestMethodGoogleListModels, Category: CategoryLLM},
 	"deepseek":   {Name: "deepseek", DisplayName: "DeepSeek", DefaultBaseURL: "https://api.deepseek.com", TestMethod: TestMethodGetModels, Category: CategoryLLM},
+	"anselm":     {Name: "anselm", DisplayName: "Anselm Free (DeepSeek)", DefaultBaseURL: "https://api.anselm.host/v1", TestMethod: TestMethodGetModels, Category: CategoryLLM, Managed: true},
 	"openrouter": {Name: "openrouter", DisplayName: "OpenRouter", DefaultBaseURL: "https://openrouter.ai/api/v1", TestMethod: TestMethodGetModels, Category: CategoryLLM},
 	"qwen":       {Name: "qwen", DisplayName: "通义千问 (Alibaba Qwen)", DefaultBaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", TestMethod: TestMethodGetModels, Category: CategoryLLM},
 	"zhipu":      {Name: "zhipu", DisplayName: "智谱 GLM", DefaultBaseURL: "https://open.bigmodel.cn/api/paas/v4", TestMethod: TestMethodGetModels, Category: CategoryLLM},
