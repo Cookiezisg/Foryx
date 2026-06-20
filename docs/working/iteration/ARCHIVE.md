@@ -103,6 +103,7 @@ landed-into:
 | F71 capability_check 不校必填 input 接线→Option A「声明即必填」(RefInfo.DeclaredInputs+resolver 灌+check)、不动 schema | workflow·校验 | 跨实体/happy→报错 | promise≠reality/不可发现 | fixed·locked |
 | F45 无工作区级坏链接体检工具→运行时 fail-fast 已兜、relation 边硬删无法 cheap 扫→产品设计不做 | workflow·relation | 能力缺口 | 用户判定非问题 | 评估关闭(产品设计) |
 | F38 agent 无会话管理工具→编造 compact UI 按钮→manage_conversation 工具(archive/pin·复用 Service.Update)+prompt 声明压缩自动 | conversation·chat | happy | promise≠reality/能力缺口 | fixed·locked |
+| F39 todo 全完成后 reminder 抑制+无读回→agent 编造→加常驻 todo_read(含已完成项·复用 ReadRendered)、不动抑制 | todo | happy | 假成功/能力缺口 | fixed·locked |
 ### 已探·无缺陷（绿格——探过、当前行为正确；记下免重挖。details→LOG 元注 0618 + round-1）
 | 绿格 | target | regime |
 |---|---|---|

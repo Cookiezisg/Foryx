@@ -166,6 +166,52 @@ func TestWrite_Validation(t *testing.T) {
 	}
 }
 
+// TestReadRendered_IncludesCompleted is the F39 core: the read-back path must surface completed
+// items (the exact gap — a fully-completed list is suppressed from the per-turn reminder, so the
+// only way to list it truthfully is this read). Empty → soft "(todo list cleared)" string.
+//
+// TestReadRendered_IncludesCompleted 是 F39 核心：读回路径必须浮出已完成项（正是缺口——全完成
+// 清单被每轮 reminder 抑制，真实列出它的唯一途径就是此读）。空 → 软 "(todo list cleared)" 串。
+func TestReadRendered_IncludesCompleted(t *testing.T) {
+	svc, _ := newSvc(t)
+	ctx := runCtx("conv_1")
+
+	// Empty list → soft cleared string (not an error).
+	out, err := svc.ReadRendered(ctx)
+	if err != nil {
+		t.Fatalf("empty ReadRendered: %v", err)
+	}
+	if !strings.Contains(out, "cleared") {
+		t.Errorf("empty read should render cleared string: %q", out)
+	}
+
+	// A list with a completed item alongside an open one — both must be readable.
+	_, _ = svc.Write(ctx, []tododomain.Item{
+		{Content: "Done thing", Status: tododomain.StatusCompleted},
+		{Content: "Open thing", Status: tododomain.StatusInProgress, ActiveForm: "Doing open thing"},
+	})
+	out, err = svc.ReadRendered(ctx)
+	if err != nil {
+		t.Fatalf("ReadRendered: %v", err)
+	}
+	if !strings.Contains(out, "[x] Done thing") {
+		t.Errorf("completed item must be readable (the F39 gap): %q", out)
+	}
+	if !strings.Contains(out, "[→] Doing open thing") {
+		t.Errorf("open item must be readable: %q", out)
+	}
+
+	// A fully-completed list: still readable via todo_read, even though the reminder suppresses it.
+	_, _ = svc.Write(ctx, []tododomain.Item{{Content: "All done", Status: tododomain.StatusCompleted}})
+	if _, ok := svc.SystemReminder(ctx); ok {
+		t.Error("guard: a fully-completed list must NOT inject the reminder (suppression stays)")
+	}
+	out, _ = svc.ReadRendered(ctx)
+	if !strings.Contains(out, "[x] All done") {
+		t.Errorf("fully-completed list must still be readable via todo_read: %q", out)
+	}
+}
+
 func TestSystemReminder_InjectsOnlyWhenOpen(t *testing.T) {
 	svc, _ := newSvc(t)
 	ctx := runCtx("conv_1")

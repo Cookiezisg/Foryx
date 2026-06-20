@@ -121,6 +121,23 @@ func (s *Service) SystemReminder(ctx context.Context) (string, bool) {
 	return reminder(items)
 }
 
+// ReadRendered returns the current scope's full checklist rendered (INCLUDING completed items)
+// for the todo_read tool — the read-back path so the agent lists its todos from the saved truth,
+// not from memory. Without it a fully-completed list is invisible (the per-turn reminder suppresses
+// a 0-open list and there was no read tool), so the agent confabulated when asked to list todos.
+// Empty list renders the "(todo list cleared — no tasks)" string (soft, not an error).
+//
+// ReadRendered 返回当前作用域整张清单的渲染（含已完成项）给 todo_read 工具——读回路径，使 agent
+// 从已存真相而非记忆列出 todo。没它，全完成清单不可见（每轮 reminder 抑制 0-open 清单、又无读
+// 工具），故被问列 todo 时 agent 编造。空清单渲染 "(todo list cleared — no tasks)" 串（软、非错）。
+func (s *Service) ReadRendered(ctx context.Context) (string, error) {
+	items, err := s.Get(ctx)
+	if err != nil {
+		return "", err
+	}
+	return render(items), nil
+}
+
 func (s *Service) itemsFor(ctx context.Context, scope string) ([]tododomain.Item, error) {
 	l, err := s.repo.GetByScope(ctx, scope)
 	if err != nil {

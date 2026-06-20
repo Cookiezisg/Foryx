@@ -17,4 +17,4 @@ audience: [human, ai]
 
 ## 2. 契约（引用）
 
-表 `todos`（每执行作用域一行——PK `scope_id` = subagent run 内取 subagent id、否则对话 id；列含 conversation_id + subagent_id + items json）→ [database.md](../database.md) · 码 `TODO_*` 4 → [error-codes.md](../error-codes.md)。LLM 工具：todo_write（resident）。被消费：chat host（实现 loop 的 `ReminderProvider` 端口）+ messages 流 + 只读看板 `GET /conversations/{id}/todos`（`?subagentId=` 可选）→ [api.md](../api.md)。
+表 `todos`（每执行作用域一行——PK `scope_id` = subagent run 内取 subagent id、否则对话 id；列含 conversation_id + subagent_id + items json）→ [database.md](../database.md) · 码 `TODO_*` 4 → [error-codes.md](../error-codes.md)。LLM 工具：todo_write + todo_read（均 resident）——todo_read 无参、读回当前作用域整张清单**含已完成项**（复用 `Service.ReadRendered`=`Get`+`render`，空清单软返 cleared 串、无新码）。它补的缺口：**reminder 抑制全完成清单**（`reminder()` 在 0-open 时 return false——刻意不让完成清单每轮注入），故没 todo_read 时 agent 完成后被问列清单凭记忆**编造**；常驻（非懒）使读回无需 search_tools 跳转。被消费：chat host（实现 loop 的 `ReminderProvider` 端口）+ messages 流 + 只读看板 `GET /conversations/{id}/todos`（`?subagentId=` 可选）→ [api.md](../api.md)。
