@@ -107,6 +107,7 @@ landed-into:
 | F44 构建 turn 0-block+null-error+孤儿实体→两面皆已覆盖(FACE1=F34 填非空因·FACE2=per-tool durable commit 有意)→补 F34 守测 | loop·build | 报错 | 恢复无门 | 评估关闭(非问题·已覆盖) |
 | F48 delete 结果不报依赖数+边被同 op 删→地基 CountDependents(入向 equip/link)+8 delete 工具删前读注入(避 Delete 签名级联) | relation·8 实体 delete | happy | 静默降级 | fixed·locked |
 | F87 手动 trigger_workflow 绕过并发策略(StartRun 不走 overlapDecision)但工具不说→agent 困惑→描述+workflow.md 点明仅真 fire 受策略 | workflow·trigger | happy | promise≠reality/不可发现 | fixed(措辞)·locked |
+| F88 capability_check 不校引用上游不存在的声明 output 字段→**static 校 unsound**(F40 声明 output 对 fn/hd advisory、toResultMap 直通真 dict)·假阳+假阴比诚实不校更糟→运行时 fail-fast+needsAttention 是正解 | workflow·capability | happy→报错 | promise≠reality | 评估关闭(非问题·unsound) |
 ### 已探·无缺陷（绿格——探过、当前行为正确；记下免重挖。details→LOG 元注 0618 + round-1）
 | 绿格 | target | regime |
 |---|---|---|
@@ -122,6 +123,9 @@ landed-into:
 | concurrency serial/skip | workflow(并发) | 并发 |
 | concurrency replace/buffer_one（真 webhook fire：replace 取消在途 run·buffer_one defer 留最新 superseded 旧的）+ 手动 :trigger 绕过策略=设计 | workflow(并发)·trigger | 并发（真 fire 席） |
 | **kill-9 硬崩溃恢复 from agent 席**（agent 建+trigger parked run→kill -9→重启 run 存活[记忆化+版本 pin]→agent resume 到 completed） | durable-engine | 真崩溃恢复 |
+| 广告配置选项 use-time 真生效（agent modelOverride[negative-control 坐实]/挂载 fn/knowledge doc·handler config-update→新 instance 重启非 stale；零 accepted-but-no-op） | agent·handler·model | happy（多选项） |
+| code-bug 失败 run 恢复（agent get_flowrun 诊断→edit_function 修→正确选 fresh trigger·知 replay 用旧 pin；replay gotcha 写在工具描述；无 :rerun-with-latest=D1 record-once 有意） | durable-engine·function | 报错→恢复 |
+| 多节点 dataflow 契约（order-processing：接线 <nodeId>.field 全对·声明 object output 穿下游 CEL 非 .text 吞·control 两分支两值终态全对·capability_check 缺 output 校但 fail-fast+needsAttention 兜=F88 by-design） | workflow·durable | happy（真实世界） |
 | skill allowed-tools 预授权免确认 | skill | happy |
 | agent knowledge（doc）挂载 | agent·document | happy |
 | MCP 真 server 运行时（echo，name 形接 workflow） | mcp→workflow | happy |
@@ -192,6 +196,8 @@ landed-into:
 > round-9（0619）透明度轴 sweep：function 运行错、trigger 失败路径全绿；ctlerr 逮 F69（author-time CEL 丢因，已修）。透明度轴大体硬化（F7/F8/F33/F34/F35/F49/F63/F66/F69），剩 F64/F67 同族。
 > round-10（0619）：深 durable 循环引擎全绿、D2 隔离边界全程守住（无泄露）；逮 F70（add_node 静默丢 input，已修）+ F71（capability dataflow，=F35 深层）+ F72（跨ws messages 200-空 vs 404 一致性，low）。
 > round-11（0619）≈收敛完成：删级联 + 大规模 全绿；concur2 仅重确认 F61（仅外部并行客户端触发）+ F73(low)。**本轮零新 clean fix——产品高度硬化**。
+> round-补薄格（0620）：两薄格补绿——kill-9 真崩溃恢复 from agent 席 GREEN、concurrency replace/buffer_one 真 webhook fire VERIFIED；逮 F87（手动 trigger 绕策略，已修措辞）。
+> round-explore（0620，3 lane 并发真 deepseek）：广告配置选项 use-time 真生效 + code-bug 失败恢复 + 多节点 dataflow 契约 **三格全绿/by-design**；逮 F88（capability_check 不校声明 output——读码判 static 校 unsound、by-design）+ 一模型行为非后端料。**零可修 bug——续高度硬化**。
 
 **确诊待修 backlog（"想还有什么"已变"该修什么"，= LOG）：**
 - **HIGH（wind-down careful 修）：** F40 declared-outputs 静默 no-op（标量返回忽略声明名、落 .text）· F41 concurrency=skip 对阻塞工作流退化成 serial（同步 Advance 蒸发 overlap 信号）。
@@ -209,8 +215,8 @@ landed-into:
 - ~~**concurrency `replace`/`buffer_one` from agent 席**~~ **VERIFIED（0620，真 webhook fire）**：逮 F87（手动 trigger_workflow 绕过策略——已修）后经真 webhook fire 实测——replace 取消在途 run、buffer_one defer 留最新。手动 `:trigger` 路径**设计上不走策略**（仅真 fire 受治）。见 LOG 元注 + F87。
 
 **镜头 / 能力缺口（待判/待探）：**
-- **代码-bug 失败 run 无原地恢复**（triage latent）：replay 按原 pin、改 code 要 fresh trigger（新 id）；无 `:rerun-with-latest`。待判值不值得做。
-- **capability_check 静态 dataflow 校验**（F35 深层）：F35 已让绿检查诚实（doc 声明不校），但**真做静态 node-input 字段校验**（比 doc 更硬）仍开放。
+- ~~**代码-bug 失败 run 无原地恢复**（triage latent）~~ **GREEN/by-design（0620 explore recovery lane）**：replay 按原 pin、改 code 要 fresh trigger，gotcha 写在 `replay_flowrun` 描述里 agent 读得到；无 `:rerun-with-latest` 是 D1 record-once 有意（历史 run 不可变）；agent 实测正确诊断+修+选 fresh trigger 恢复。
+- ~~**capability_check 静态 dataflow 校验**（F35 深层）~~ **CLOSED by-design（0620 explore dataflow lane→F88）**：真做静态 node-input 字段校验**unsound**——声明 output 对 fn/hd 是 advisory（F40，`toResultMap` 直通真 dict），按声明 output 校下游引用会假阳+假阴、比诚实不校(F35)更糟；运行时 fail-fast + needsAttention 是正解。input 可校(F71)≠output(advisory) 不对称是有意。
 - **无原生 email/通知投递工具**（toolpick lane）：疑产品设计取舍（同 F23 待拍板），非 bug。
 - **`白烧` 直接猎**：round-2 wasted lane 撞到 F35（绿检查骗人）；纯 ergonomics（绕远/耗 turn）仍可深挖。
 - **跨轴迁移未尽**（沿 pattern 轴扫）：F33「非-data 行跳 ctx」已扫 anthropic（对）；F32/F35 的 schema-less/dataflow 已跨 fn/hd/mcp/agent；「广告选项是否真实现」「数据传递隐形契约」等轴待续。
