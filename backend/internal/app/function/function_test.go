@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	_ "github.com/glebarez/go-sqlite"
@@ -250,6 +251,11 @@ func TestRunFunction_WallClockTimeout(t *testing.T) {
 	}
 	if got := page.Executions[0].Status; got != functiondomain.ExecutionStatusTimeout {
 		t.Fatalf("status = %q, want %q", got, functiondomain.ExecutionStatusTimeout)
+	}
+	// F105: the durable message names a RUN wall-clock timeout, not the leaked sandbox-internal
+	// "spawn process timeout" (which connotes a process-launch failure and mis-leads :triage).
+	if msg := page.Executions[0].ErrorMessage; !strings.Contains(msg, "wall-clock") || strings.Contains(msg, "spawn") {
+		t.Errorf("timeout message should name the run wall-clock limit, not a spawn failure; got: %q", msg)
 	}
 }
 

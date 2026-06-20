@@ -113,8 +113,16 @@ func (s *Service) recordExecution(ctx context.Context, in RunInput, v *functiond
 		errMsg = sandboxErr.Error()
 		if errors.Is(runCtxErr, context.DeadlineExceeded) {
 			status = functiondomain.ExecutionStatusTimeout
+			// A clear run-duration message: the raw sandbox "spawn process timeout" connotes a process
+			// LAUNCH failure and mis-leads :triage into chasing a phantom env/cold-start problem (F105;
+			// the status itself is already correct, F97). Mirrors handler "instance RPC timeout" / mcp.
+			//
+			// 清晰的运行时长消息：裸 sandbox "spawn process timeout" 暗示进程**启动**失败，误导 :triage 去
+			// 追幻象的 env/冷启动问题（F105；status 本身已对，F97）。镜像 handler "instance RPC timeout" / mcp。
+			errMsg = fmt.Sprintf("function run exceeded the %ds wall-clock limit", limitspkg.Current().Timeout.FunctionRunSec)
 		} else if errors.Is(runCtxErr, context.Canceled) {
 			status = functiondomain.ExecutionStatusCancelled
+			errMsg = "function run cancelled"
 		}
 	case res != nil:
 		if !res.OK {
