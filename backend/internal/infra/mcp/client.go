@@ -20,6 +20,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"go.uber.org/zap"
@@ -28,6 +29,14 @@ import (
 )
 
 const stderrBufferMax = 256 * 1024
+
+// remoteConnectAttempt bounds ONE transport attempt so a hanging wrong-transport try (SSE GET to a
+// streamable server) fails fast and the fallback gets its own budget instead of eating the whole
+// install timeout.
+//
+// remoteConnectAttempt 限单次 transport 尝试，使挂住的错 transport（对 streamable server 发 SSE GET）快速失败、
+// fallback 有自己的预算，而非吃掉整个安装超时。
+const remoteConnectAttempt = 25 * time.Second
 
 // ClientSpec is the resolved connection recipe. URL != "" → remote (Transport + Headers);
 // else stdio — Stdin/Stdout/Stderr are the pipes of a sandbox-owned subprocess.
@@ -101,21 +110,13 @@ func (c *client) Initialize(ctx context.Context) error {
 	sdkClient := mcpsdk.NewClient(&mcpsdk.Implementation{Name: "anselm", Version: "1.2.0"},
 		&mcpsdk.ClientOptions{ProgressNotificationHandler: c.onProgress})
 
-	var transport mcpsdk.Transport
 	if c.spec.isRemote() {
-		t, err := c.remoteTransport()
-		if err != nil {
-			return err
-		}
-		transport = t
-	} else {
-		if c.spec.Stderr != nil {
-			go c.drainStderr(c.spec.Stderr)
-		}
-		transport = &mcpsdk.IOTransport{Reader: c.spec.Stdout, Writer: c.spec.Stdin}
+		return c.connectRemote(ctx, sdkClient)
 	}
-
-	session, err := sdkClient.Connect(ctx, transport, nil)
+	if c.spec.Stderr != nil {
+		go c.drainStderr(c.spec.Stderr)
+	}
+	session, err := sdkClient.Connect(ctx, &mcpsdk.IOTransport{Reader: c.spec.Stdout, Writer: c.spec.Stdin}, nil)
 	if err != nil {
 		return fmt.Errorf("mcp.Client.Initialize: connect %s: %w: %v",
 			c.spec.Name, mcpdomain.ErrServerNotConnected, err)
@@ -124,12 +125,16 @@ func (c *client) Initialize(ctx context.Context) error {
 	return nil
 }
 
-// remoteTransport builds an SSE / streamable-HTTP transport whose HTTP client injects the
-// configured headers (Authorization: Bearer ...) on every request.
+// connectRemote dials a remote MCP server, trying the declared transport first then falling back to
+// the other. Registry transport_type labels are widely stale — after the MCP SSE deprecation many
+// servers labeled "sse" actually serve streamable-http (and vice versa), so a single fixed transport
+// silently fails to connect (F85). The HTTP client (static header or refreshing OAuth bearer) is
+// shared across attempts.
 //
-// remoteTransport 构造 SSE / streamable-HTTP transport，其 HTTP client 在每个请求注入配置的
-// header（Authorization: Bearer ...）。
-func (c *client) remoteTransport() (mcpsdk.Transport, error) {
+// connectRemote 连 remote MCP server，先试声明的 transport、失败再退另一个。registry 的 transport_type
+// 标签普遍陈旧——MCP SSE 弃用后大量标「sse」的 server 实际服 streamable-http（反之亦然），单一固定 transport
+// 会静默连不上（F85）。HTTP client（静态 header 或会刷新的 OAuth bearer）跨尝试共享。
+func (c *client) connectRemote(ctx context.Context, sdkClient *mcpsdk.Client) error {
 	var rt http.RoundTripper
 	if c.spec.TokenSource != nil {
 		rt = &oauthRoundTripper{base: http.DefaultTransport, src: c.spec.TokenSource, extra: c.spec.Headers}
@@ -137,15 +142,43 @@ func (c *client) remoteTransport() (mcpsdk.Transport, error) {
 		rt = &headerRoundTripper{base: http.DefaultTransport, headers: c.spec.Headers}
 	}
 	httpClient := &http.Client{Transport: rt}
-	switch c.spec.Transport {
-	case mcpdomain.TransportSSE:
-		return &mcpsdk.SSEClientTransport{Endpoint: c.spec.URL, HTTPClient: httpClient}, nil
-	case mcpdomain.TransportStreamableHTTP, "":
-		return &mcpsdk.StreamableClientTransport{Endpoint: c.spec.URL, HTTPClient: httpClient}, nil
-	default:
-		return nil, fmt.Errorf("mcp.Client.Initialize: %w: unknown transport %q",
-			mcpdomain.ErrServerNotConnected, c.spec.Transport)
+	var lastErr error
+	for _, tt := range remoteTransportOrder(c.spec.Transport) {
+		var transport mcpsdk.Transport
+		if tt == mcpdomain.TransportSSE {
+			transport = &mcpsdk.SSEClientTransport{Endpoint: c.spec.URL, HTTPClient: httpClient}
+		} else {
+			transport = &mcpsdk.StreamableClientTransport{Endpoint: c.spec.URL, HTTPClient: httpClient}
+		}
+		// Bound each attempt: a wrong transport can HANG (an SSE GET to a streamable server holds the
+		// connection open) instead of erroring, so without this the fallback waits out the whole install
+		// timeout. The session outlives this ctx (Connect's ctx is handshake-only — the caller already
+		// cancels its connect ctx after Initialize and sessions persist), so cancelling here is safe.
+		// 给每次尝试设界：错的 transport 会卡住（对 streamable server 发 SSE GET 会挂住连接）而非报错，否则 fallback
+		// 会耗尽整个安装超时。session 比此 ctx 活得久（Connect 的 ctx 只管握手——调用方 Initialize 后即取消其连接 ctx、
+		// session 仍存），故在此取消安全。
+		attemptCtx, cancel := context.WithTimeout(ctx, remoteConnectAttempt)
+		session, err := sdkClient.Connect(attemptCtx, transport, nil)
+		cancel()
+		if err == nil {
+			c.session = session
+			return nil
+		}
+		lastErr = err
 	}
+	return fmt.Errorf("mcp.Client.Initialize: connect %s: %w: %v",
+		c.spec.Name, mcpdomain.ErrServerNotConnected, lastErr)
+}
+
+// remoteTransportOrder lists the transports to try, declared first then the other. streamable-http
+// is the modern default, so a blank/unknown label tries it before SSE.
+//
+// remoteTransportOrder 返回要试的 transport，先声明的再另一个。streamable-http 是现代默认，故空/未知标签先试它再 SSE。
+func remoteTransportOrder(declared string) []string {
+	if declared == mcpdomain.TransportSSE {
+		return []string{mcpdomain.TransportSSE, mcpdomain.TransportStreamableHTTP}
+	}
+	return []string{mcpdomain.TransportStreamableHTTP, mcpdomain.TransportSSE}
 }
 
 // ListTools fetches tools/list and converts SDK Tools to domain ToolDefs (stamps ServerName).
