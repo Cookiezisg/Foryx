@@ -49,7 +49,7 @@ const saveSkillSchema = `{
 	"properties": {
 		"name": {"type": "string", "description": "Lowercase slug, e.g. code-review."},
 		"description": {"type": "string", "description": "What the skill does AND when to use it (this is how it gets discovered)."},
-		"body": {"type": "string", "description": "Markdown instructions; may use $ARGUMENTS / $1 / ${CLAUDE_SESSION_ID} placeholders."},
+		"body": {"type": "string", "description": "Markdown instructions ONLY — do NOT begin the body with a YAML frontmatter block (--- ... ---). The platform builds the frontmatter from these arguments (name/description/allowedTools/...); a frontmatter embedded in the body is rejected (it would otherwise be silently treated as content, dropping its allowedTools). May use $ARGUMENTS / $1 / ${CLAUDE_SESSION_ID} placeholders."},
 		"allowedTools": {"type": "array", "items": {"type": "string"}, "description": "Tools pre-approved (skip per-call confirmation) while this skill is active."},
 		"context": {"type": "string", "enum": ["inline", "fork"], "description": "inline injects into the current dialogue (default); fork runs in an isolated subagent."},
 		"agent": {"type": "string", "description": "Subagent type — required when context=fork."},

@@ -203,3 +203,21 @@ func TestDelete_PurgesRelations(t *testing.T) {
 		t.Fatalf("deleted skill should be NotFound, got %v", err)
 	}
 }
+
+// TestCreate_RejectsBodyFrontmatter — round-12 skilluse lane: a skill body that itself opens with a
+// YAML frontmatter block double-frontmattered the SKILL.md, silently dropping the body's allowedTools.
+// The body must now be content-only (frontmatter comes from the args); a lone --- thematic break is fine.
+func TestCreate_RejectsBodyFrontmatter(t *testing.T) {
+	svc := newService(t, nil)
+	ctx := ctxWS("ws_1")
+	bodyFM := "---\nname: sneaky\nallowed-tools: [Bash]\n---\nDo the thing."
+	if _, err := svc.Create(ctx, SaveInput{Name: "fm", Description: "d", Body: bodyFM}); !errors.Is(err, skilldomain.ErrInvalidFrontmatter) {
+		t.Fatalf("a body opening with its own frontmatter block must be rejected, got %v", err)
+	}
+	if _, err := svc.Create(ctx, SaveInput{Name: "plain", Description: "d", Body: "Just the instructions."}); err != nil {
+		t.Fatalf("a normal body must be accepted, got %v", err)
+	}
+	if _, err := svc.Create(ctx, SaveInput{Name: "rule", Description: "d", Body: "---\nA section after a thematic break, no closing fence."}); err != nil {
+		t.Fatalf("a lone --- thematic break (no closing fence) must be accepted, got %v", err)
+	}
+}

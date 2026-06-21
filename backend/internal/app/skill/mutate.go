@@ -127,6 +127,16 @@ func (s *Service) validate(in SaveInput) error {
 	if len(in.Body) > skilldomain.MaxBodyBytes {
 		return skilldomain.ErrBodyTooLarge
 	}
+	// A body that opens with its own YAML frontmatter (--- … ---) would assemble into a DOUBLE
+	// frontmatter: the platform writes the real frontmatter (from the name/allowedTools args) and the
+	// body's block becomes plain content — so an agent that put allowedTools in a body frontmatter has
+	// them SILENTLY dropped (never honored). Reject it with a clear pointer to the right place.
+	// 以自带 YAML frontmatter（--- … ---）开头的 body 会组装成**双 frontmatter**：平台写真 frontmatter（取自
+	// name/allowedTools 参数），body 的块沦为正文——把 allowedTools 塞进 body frontmatter 的 agent 就被静默丢。
+	if bodyHasLeadingFrontmatter(in.Body) {
+		return skilldomain.ErrInvalidFrontmatter.WithDetails(map[string]any{
+			"reason": "the skill body must not begin with its own YAML frontmatter (--- ... ---); the platform assembles the frontmatter from the name/description/allowedTools arguments — put those there, the body is the instruction content only (otherwise a body frontmatter is silently treated as content and its allowedTools are dropped)"})
+	}
 	if in.Source != "" && !skilldomain.IsValidSource(in.Source) {
 		return skilldomain.ErrInvalidFrontmatter.WithDetails(map[string]any{"reason": "invalid source"})
 	}
@@ -134,4 +144,24 @@ func (s *Service) validate(in SaveInput) error {
 		return skilldomain.ErrForkRequiresAgent
 	}
 	return nil
+}
+
+// bodyHasLeadingFrontmatter reports whether body opens with a YAML frontmatter block (a "---" fence
+// line followed by a later closing "---" fence) — as opposed to a lone "---" markdown thematic break,
+// which has no closing fence and is fine.
+//
+// bodyHasLeadingFrontmatter 报告 body 是否以 YAML frontmatter 块开头（"---" 围栏行 + 之后的闭合 "---" 围栏）
+// ——区别于孤立的 "---" markdown 分隔线（无闭合围栏、无妨）。
+func bodyHasLeadingFrontmatter(body string) bool {
+	b := strings.TrimLeft(body, " \t\r\n")
+	nl := strings.IndexByte(b, '\n')
+	if nl < 0 || strings.TrimRight(b[:nl], "\r") != "---" {
+		return false
+	}
+	for _, line := range strings.Split(b[nl+1:], "\n") {
+		if strings.TrimRight(line, "\r") == "---" {
+			return true // found the closing fence → it's a frontmatter block
+		}
+	}
+	return false
 }

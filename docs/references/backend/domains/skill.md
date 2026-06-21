@@ -17,7 +17,7 @@ skill 是**指令载体、非构建实体**——memory 的近亲（文件式注
 
 **持久化 = 文件**（`infra/fs/skill`，复用 memory 的文件式范式）：每 skill 一个目录 `~/.anselm/workspaces/<ws>/skills/<name>/SKILL.md`（目录而非扁平文件——未来 references/assets 可同住）。**纯按需**：每次 List 现扫目录，无缓存/无 watcher；坏文件跳过不连坐。slug 正则（`^[a-z][a-z0-9_-]{0,63}$`）**既是身份校验也是路径穿越守卫**（合法 name 1:1 映射目录）。
 
-**Frontmatter 逐字镜像 Anthropic SKILL.md spec**（跨厂字段全留以便无缝导入）+ Anselm 自有扩展 `source: user|ai`（谁创作）。护栏：body ≤32KB、description ≤1024 字符。
+**Frontmatter 逐字镜像 Anthropic SKILL.md spec**（跨厂字段全留以便无缝导入）+ Anselm 自有扩展 `source: user|ai`（谁创作）。frontmatter 由平台从 create/edit 参数（name/description/allowedTools/…）**组装**、body 仅正文——**body 不得自带 frontmatter 块**（`--- … ---` 开头则 `SKILL_INVALID_FRONTMATTER` 拒，否则会双 frontmatter、body 里的 allowedTools 沦为正文被静默丢；孤立 `---` 分隔线无闭合围栏、放行）。护栏：body ≤32KB、description ≤1024 字符。
 
 ## 2. 行为
 
