@@ -100,6 +100,8 @@
       .grow { flex: 1 1 auto; min-width: var(--zero); }
       .c { min-width: 0; flex: 0 1 auto; display: flex; align-items: center; justify-content: flex-end; }
       .v { min-width: 0; font-size: var(--t-body); color: var(--ink-2); text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* wrap：长 value 换行多行自适应（observed 有 wrap，此前无 CSS 是死属性）——换行即左对齐、anywhere 断无空格长串 */
+      :host([wrap]) .v { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; text-align: left; }
       /* 铅笔：可编辑 + hover 才显；editing 时藏（:not([editing]) 直接挡掉 hover 揭示，让位 ✓✕） */
       .pencil { display: none; }
       :host([editable]:not([editing]):hover) .pencil { display: inline-flex; }
@@ -156,6 +158,8 @@
       .vwrap { min-width: 0; flex: 0 1 auto; display: flex; align-items: center; justify-content: flex-end; }
       .v { min-width: 0; color: var(--ink-3); font-size: var(--t-meta); line-height: var(--lh-ui); font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       :host([mono]) .v { font-family: var(--mono); }
+      /* wrap：长 value 换行多行自适应（observed 有 wrap，此前无 CSS 是死属性）*/
+      :host([wrap]) .v { white-space: normal; overflow-wrap: anywhere; text-overflow: clip; text-align: left; }
       /* 铅笔：可编辑行 hover 显、editing 藏（:not(.editing) 直接挡掉 hover 揭示） */
       .pencil { display: none; }
       .row.editable:not(.editing):hover .pencil { display: inline-flex; }

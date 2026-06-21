@@ -79,9 +79,8 @@
     var keysCol = h.el.querySelector(".an-mp-keys");
     var activeModel = cur.model;
     function renderKeys(id) { activeModel = id; keysCol.innerHTML = keysHtml(findModel(models, id), cur); }
-    // 初始高亮当前模型行
-    var curBtn = h.el.querySelector('.an-mp-model[data-model="' + (cur.model || "") + '"]');
-    if (curBtn) curBtn.classList.add("is-active");
+    // 初始高亮当前模型行：JS 遍历比对 data-model（getAttribute 已解码，与原值匹配）——【勿】把 cur.model 原值拼进 querySelector：含特殊字符会 SyntaxError 崩，且 data-model 经 e() 写入与裸值不等值永不命中
+    h.el.querySelectorAll(".an-mp-model").forEach(function (b) { if (b.getAttribute("data-model") === (cur.model || "")) b.classList.add("is-active"); });
     // hover 左栏可用模型 → 右栏列其 keys + 行高亮（横向移入右栏选 key，不经过其它模型行）
     h.el.querySelectorAll(".an-mp-model").forEach(function (b) {
       if (b.classList.contains("is-disabled")) return;

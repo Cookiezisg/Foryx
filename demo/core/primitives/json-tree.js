@@ -17,9 +17,12 @@
     return kind(v);
   }
 
+  var MAX_NODES = 2000;   // 节点上限：海量 JSON 一次性建全树会冻主线程 + DOM 爆，超限截断显「… N more」
+  var MAX_VAL = 500;      // 单值串上限：超长串只入 DOM 前 500（CSS 已 ellipsis 视觉截，此处防巨文本节点）
+
   function valueText(v) {
     if (v === null) return "null";
-    if (typeof v === "string") return v === "" ? '""' : v;
+    if (typeof v === "string") return v === "" ? '""' : (v.length > MAX_VAL ? v.slice(0, MAX_VAL) + "…" : v);
     if (typeof v === "number" || typeof v === "boolean") return String(v);
     return meta(v);
   }
@@ -29,11 +32,17 @@
     return ` style="padding-left: calc(${depth} * var(--indent))"`;
   }
 
-  function children(v, depth, openDepth) {
-    if (Array.isArray(v)) {
-      return v.map(function (item, i) { return node(String(i), item, depth, openDepth); }).join("");
+  // ctx = { seen:[祖先路径对象], count:已建节点数, max }——seen 仅记当前下钻路径（push/pop），同一对象出现在不同兄弟分支非环、只有自含才是环
+  function children(v, depth, openDepth, ctx) {
+    var entries = Array.isArray(v)
+      ? v.map(function (item, i) { return [String(i), item]; })
+      : Object.keys(v || {}).map(function (key) { return [key, v[key]]; });
+    var out = "";
+    for (var j = 0; j < entries.length; j++) {
+      if (ctx.count >= ctx.max) { out += '<div class="row leaf"' + pad(depth) + '><span class="key">…</span><span class="value null">' + (entries.length - j) + " more (truncated)</span></div>"; break; }
+      out += node(entries[j][0], entries[j][1], depth, openDepth, ctx);
     }
-    return Object.keys(v || {}).map(function (key) { return node(key, v[key], depth, openDepth); }).join("");
+    return out;
   }
 
   function leaf(label, v, depth) {
@@ -44,19 +53,29 @@
       + "</div>";
   }
 
-  function node(label, v, depth, openDepth) {
+  function node(label, v, depth, openDepth, ctx) {
     var e = window.anEsc, k = kind(v);
+    ctx.count++;
     if (k !== "object" && k !== "array") return leaf(label, v, depth);
+    // 环检测：值已在当前祖先路径 → [Circular]，不下钻（防 RangeError 栈溢出）
+    if (ctx.seen.indexOf(v) !== -1) {
+      return '<div class="row leaf"' + pad(depth) + '><span class="key">' + e(label) + '</span><span class="value null">[Circular]</span></div>';
+    }
     var open = depth < openDepth ? " open" : "";
+    ctx.seen.push(v);
+    var inner = children(v, depth + 1, openDepth, ctx);
+    ctx.seen.pop();
     return '<details class="node ' + k + '"' + open + ">"
       + '<summary class="row branch"' + pad(depth) + ">"
       + '<span class="lead">' + window.icon("chevr") + "</span>"
       + '<span class="key">' + e(label) + "</span>"
       + '<span class="meta">' + e(meta(v)) + "</span>"
       + "</summary>"
-      + '<div class="children">' + children(v, depth + 1, openDepth) + "</div>"
+      + '<div class="children">' + inner + "</div>"
       + "</details>";
   }
+
+  function newCtx() { return { seen: [], count: 0, max: MAX_NODES }; }
 
   class AnJsonTree extends window.AnElement {
     static tag = "an-json-tree";
@@ -125,9 +144,9 @@
       var openDepth = od == null || od === "" ? (root ? 2 : 1) : this.num("open-depth", root ? 2 : 1);
       var k = kind(parsed.value);
       if (!root && (k === "object" || k === "array")) {
-        return '<div class="tree">' + children(parsed.value, 0, openDepth) + "</div>";
+        return '<div class="tree">' + children(parsed.value, 0, openDepth, newCtx()) + "</div>";
       }
-      return '<div class="tree">' + node(label, parsed.value, 0, openDepth) + "</div>";
+      return '<div class="tree">' + node(label, parsed.value, 0, openDepth, newCtx()) + "</div>";
     }
   }
   window.AnElement.define(AnJsonTree);

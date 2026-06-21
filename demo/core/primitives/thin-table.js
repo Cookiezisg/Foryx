@@ -53,8 +53,8 @@
       const e = window.anEsc;
       const cols = this._columns || [];
       const rows = this._rows || [];
-      // 列轨：首列吃富余（minmax(0,1fr)），其余 auto 贴内容——同 KV 的 [1fr auto] 语汇推广到 N 列
-      const tracks = cols.map((c, i) => (i === 0 ? "minmax(0, 1fr)" : "auto")).join(" ");
+      // 列轨：首列吃富余 minmax(0,1fr)，其余 minmax(0,auto) 贴内容但【可缩】——裸 auto 无下限会被超长值撑破整表、ellipsis 失效；minmax(0,auto) 让非首列也能压缩截断
+      const tracks = cols.map((c, i) => (i === 0 ? "minmax(0, 1fr)" : "minmax(0, auto)")).join(" ");
 
       const head = cols
         .map((c) => `<span class="th${this._alignCls(c.align)}">${e(c.label != null ? c.label : c.key)}</span>`)

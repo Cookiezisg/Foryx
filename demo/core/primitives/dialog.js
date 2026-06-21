@@ -91,10 +91,10 @@
     );
     mask.appendChild(card);
 
-    // 内容：节点直接挂、串走 HTML（调用方信任的已拼好片段）。
+    // 内容契约：Node 直接挂（调用方自建富内容）；【串走 textContent 转义】——确认弹窗常嵌实体名等不可信文本，innerHTML 会 XSS。要富 HTML 就传 Node。
     var bodyEl = card.querySelector(".an-dialog-body");
     if (o.content instanceof Node) bodyEl.appendChild(o.content);
-    else if (o.content != null) bodyEl.innerHTML = String(o.content);
+    else if (o.content != null) bodyEl.textContent = String(o.content);
 
     // 底栏：用已有 <an-button> 原语拼，variant 透传；onClick 返回 false 阻止关闭。
     var footEl = card.querySelector(".an-dialog-foot");
