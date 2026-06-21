@@ -61,14 +61,20 @@ type fakeControl struct{ fakeReaders }
 func (fakeControl) Get(_ context.Context, _ string) (*controldomain.ControlLogic, error) {
 	return &controldomain.ControlLogic{
 		ActiveVersionID: "ctlv_1",
-		ActiveVersion:   &controldomain.Version{Branches: []controldomain.Branch{{Port: "pass", When: "input.ok"}, {Port: "else", When: "true"}}},
+		ActiveVersion: &controldomain.Version{
+			Inputs:   []schemapkg.Field{{Name: "score", Type: schemapkg.TypeNumber}}, // when/emit read input.score
+			Branches: []controldomain.Branch{{Port: "pass", When: "input.ok"}, {Port: "else", When: "true"}},
+		},
 	}, nil
 }
 
 type fakeApproval struct{ fakeReaders }
 
 func (fakeApproval) Get(_ context.Context, _ string) (*approvaldomain.ApprovalForm, error) {
-	return &approvaldomain.ApprovalForm{ActiveVersionID: "apfv_1"}, nil
+	return &approvaldomain.ApprovalForm{
+		ActiveVersionID: "apfv_1",
+		ActiveVersion:   &approvaldomain.Version{Inputs: []schemapkg.Field{{Name: "amount", Type: schemapkg.TypeNumber}}}, // template reads input.amount
+	}, nil
 }
 
 type fakeTrigger struct{ fakeReaders }
@@ -132,10 +138,15 @@ func TestRefResolver_ResolvesEachKind(t *testing.T) {
 	if len(info.BranchPorts) != 2 || info.BranchPorts[0] != "pass" || info.BranchPorts[1] != "else" {
 		t.Fatalf("control branch ports: %+v", info.BranchPorts)
 	}
+	if len(info.DeclaredInputs) != 1 || info.DeclaredInputs[0] != "score" { // F168-M6: control's declared inputs must all be wired
+		t.Fatalf("control declared inputs: %+v", info.DeclaredInputs)
+	}
 
-	// apf_ → approval.
+	// apf_ → approval; DeclaredInputs from the active version (F168-M6: template reads input.*).
 	if info, err := r.Resolve(ctx, "apf_1"); err != nil || info.Kind != relationdomain.EntityKindApproval || info.ActiveVersionID != "apfv_1" {
 		t.Fatalf("apf resolve: %+v err=%v", info, err)
+	} else if len(info.DeclaredInputs) != 1 || info.DeclaredInputs[0] != "amount" {
+		t.Fatalf("approval declared inputs: %+v", info.DeclaredInputs)
 	}
 
 	// trg_ → trigger: version-less, existence = usable (HasActiveVersion true, empty version).

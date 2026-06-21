@@ -104,12 +104,14 @@ func (s *Service) CapabilityCheck(ctx context.Context, g *workflowdomain.Graph) 
 		// Required-input wiring (F71): every DECLARED input of a node must be wired — the schema model
 		// is "declared = required" by design (no optional flag; `ToJSONSchema` treats every field as
 		// required). A declared input left unwired otherwise passes this green check and crashes at
-		// runtime with a "missing argument". DeclaredInputs is populated only for fn / hd(.method) /
-		// agent, so mcp (external-tool contract) / control / approval leave it empty and skip naturally.
+		// runtime with a "missing argument". DeclaredInputs is populated for fn / hd(.method) / agent /
+		// control / approval (all have canonical declared inputs — F71 + F168-M6); only mcp leaves it
+		// empty (external-tool contract, no local declared inputs) and skips naturally.
 		//
 		// 必填输入接线（F71）：节点每个**声明**的 input 都须接线——schema 模型本就「声明即必填」（无可选标记、
 		// ToJSONSchema 视全字段必填）。否则漏接的声明 input 过这道绿检查、运行时才崩「缺参数」。DeclaredInputs
-		// 仅 fn/hd/agent 填，mcp/control/approval 留空、自然跳过。
+		// 对 fn/hd/agent/control/approval 都填（均有 canonical 声明 input——F71+F168-M6）；仅 mcp 留空
+		//（外部工具契约、无本地声明 input）、自然跳过。
 		for _, field := range info.DeclaredInputs {
 			if _, wired := n.Input[field]; !wired {
 				report.Problems = append(report.Problems, fmt.Sprintf("node %q: required input %q is not wired", n.ID, field))

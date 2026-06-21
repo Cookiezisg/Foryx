@@ -180,12 +180,16 @@ func (r refResolver) Resolve(ctx context.Context, ref string) (workflowapp.RefIn
 			HasActiveVersion: c.ActiveVersionID != "",
 			ActiveVersionID:  c.ActiveVersionID,
 		}
-		// BranchPorts feeds CapabilityCheck's edge-port reconciliation (every ctl_ out-edge port
-		// must name a real branch). Get already attached the active version.
+		// BranchPorts feeds CapabilityCheck's edge-port reconciliation (every ctl_ out-edge port must
+		// name a real branch). DeclaredInputs feeds the required-input-wiring check: a control's declared
+		// inputs are canonical (when/emit read input.*), so an unwired one passes the green check then
+		// crashes evalControl at runtime — same "declared = required" rule as fn/hd/agent (F71/F168-M6).
+		// Get already attached the active version.
 		if c.ActiveVersion != nil {
 			for i := range c.ActiveVersion.Branches {
 				info.BranchPorts = append(info.BranchPorts, c.ActiveVersion.Branches[i].Port)
 			}
+			info.DeclaredInputs = fieldNames(c.ActiveVersion.Inputs)
 		}
 		return info, nil
 
@@ -194,11 +198,18 @@ func (r refResolver) Resolve(ctx context.Context, ref string) (workflowapp.RefIn
 		if err != nil {
 			return refMiss(err)
 		}
-		return workflowapp.RefInfo{
+		info := workflowapp.RefInfo{
 			Kind:             relationdomain.EntityKindApproval,
 			HasActiveVersion: a.ActiveVersionID != "",
 			ActiveVersionID:  a.ActiveVersionID,
-		}, nil
+		}
+		// DeclaredInputs: an approval's declared inputs are canonical (the template reads input.*), so
+		// an unwired one passes the green check then crashes renderApproval at runtime — same
+		// "declared = required" rule as control/fn/hd/agent (F71/F168-M6). Get attached the version.
+		if a.ActiveVersion != nil {
+			info.DeclaredInputs = fieldNames(a.ActiveVersion.Inputs)
+		}
+		return info, nil
 
 	case strings.HasPrefix(ref, workflowdomain.RefPrefixTrigger):
 		if _, err := r.trg.Get(ctx, ref); err != nil {
