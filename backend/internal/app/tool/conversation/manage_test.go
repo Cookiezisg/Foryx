@@ -120,6 +120,21 @@ func Test_manageConversation_Rename(t *testing.T) {
 	if err := tool.ValidateInput([]byte(`{"action":"rename","title":"x"}`)); err != nil {
 		t.Fatalf("rename with a title must pass: %v", err)
 	}
+	// A whitespace-only title is a blank rename in disguise — must reject (trim-aware), at both the
+	// ValidateInput guard and the Execute write point.
+	if err := tool.ValidateInput([]byte(`{"action":"rename","title":"   "}`)); err == nil {
+		t.Fatal("rename with a whitespace-only title must reject")
+	}
+	if _, err := tool.Execute(ctx, `{"action":"rename","title":"   "}`); err == nil {
+		t.Fatal("Execute rename with a whitespace-only title must reject")
+	}
+	// A padded title is stored trimmed.
+	if _, err := tool.Execute(ctx, `{"action":"rename","title":"  Padded  "}`); err != nil {
+		t.Fatalf("padded rename: %v", err)
+	}
+	if fm.gotIn.Title == nil || *fm.gotIn.Title != "Padded" {
+		t.Fatalf("padded title must be stored trimmed as 'Padded', got %v", fm.gotIn.Title)
+	}
 }
 
 // Test_manageConversation_ValidateInput rejects an action outside the enum + bad JSON.

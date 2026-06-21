@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	conversationapp "github.com/sunweilin/anselm/backend/internal/app/conversation"
 	toolapp "github.com/sunweilin/anselm/backend/internal/app/tool"
@@ -70,7 +71,7 @@ func (t *ManageConversation) ValidateInput(args json.RawMessage) error {
 	case "archive", "unarchive", "pin", "unpin":
 		return nil
 	case "rename":
-		if a.Title == "" {
+		if strings.TrimSpace(a.Title) == "" {
 			return fmt.Errorf("manage_conversation: rename requires a non-empty title")
 		}
 		return nil
@@ -113,7 +114,14 @@ func (t *ManageConversation) Execute(ctx context.Context, argsJSON string) (stri
 	case "rename":
 		// UpdateInput.Title already exists + Service.Update applies it (the HTTP PATCH renames fine);
 		// the tool was just asymmetric, so the agent fabricated a UI gesture for rename (F107, the F38 class).
-		in.Title = &a.Title
+		// Trim + reject whitespace-only at the write point too (not just ValidateInput) so a "   " title
+		// can't slip a blank rename through, and a padded title is stored clean.
+		// 写入点也 trim + 拒纯空白（非仅 ValidateInput），使 "   " 无法溜进空改名、带空格的标题存得干净。
+		title := strings.TrimSpace(a.Title)
+		if title == "" {
+			return "", fmt.Errorf("manage_conversation: rename requires a non-empty title")
+		}
+		in.Title = &title
 	default:
 		return "", fmt.Errorf("manage_conversation: action must be one of archive/unarchive/pin/unpin/rename, got %q", a.Action)
 	}
