@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -11,6 +12,7 @@ import (
 	agentdomain "github.com/sunweilin/anselm/backend/internal/domain/agent"
 	apikeydomain "github.com/sunweilin/anselm/backend/internal/domain/apikey"
 	modeldomain "github.com/sunweilin/anselm/backend/internal/domain/model"
+	errorspkg "github.com/sunweilin/anselm/backend/internal/pkg/errors"
 	idgenpkg "github.com/sunweilin/anselm/backend/internal/pkg/idgen"
 	reqctxpkg "github.com/sunweilin/anselm/backend/internal/pkg/reqctx"
 	schemapkg "github.com/sunweilin/anselm/backend/internal/pkg/schema"
@@ -104,6 +106,14 @@ func (s *Service) MountHealth(ctx context.Context, agentID string) (*MountHealth
 		refs = a.ActiveVersion.Tools
 	}
 	mounts := s.invoke.Mounts.CheckHealth(ctx, refs)
+	// Knowledge docs are mounts too — a deleted/dangling knowledge doc must show in the red-dot preview,
+	// not only fail (loudly) at the next invoke. CheckHealth covers fn/hd/mcp tools; this covers the
+	// knowledge axis so the preview is symmetric with what invoke actually validates (F98 family).
+	// 知识文档也是挂载——被删/dangling 的知识文档须现身红点预检，而非仅在下次 invoke 才（大声）失败。
+	// CheckHealth 覆盖 fn/hd/mcp 工具；此处补知识轴，使预检与 invoke 实际校验的对称（F98 家族）。
+	if a.ActiveVersion != nil {
+		mounts = append(mounts, s.knowledgeHealth(ctx, a.ActiveVersion.Knowledge)...)
+	}
 	report := &MountHealthReport{Mounts: mounts, AllHealthy: true}
 	for _, m := range mounts {
 		if !m.Healthy {
@@ -112,6 +122,38 @@ func (s *Service) MountHealth(ctx context.Context, agentID string) (*MountHealth
 		}
 	}
 	return report, nil
+}
+
+// knowledgeHealth returns one MountHealth row per attached knowledge doc id, marking the ones that no
+// longer resolve as unhealthy — reusing invoke's BuildKnowledgePrefix (which reports the missing set
+// in ErrKnowledgeNotFound's details) so the check matches invoke exactly. nil provider / no docs → nil.
+//
+// knowledgeHealth 为每个挂的知识文档 id 返一条 MountHealth，把已不可解析的标为 unhealthy——复用 invoke 的
+// BuildKnowledgePrefix（它在 ErrKnowledgeNotFound 的 details 报缺失集），使检查与 invoke 完全一致。
+func (s *Service) knowledgeHealth(ctx context.Context, docIDs []string) []agentdomain.MountHealth {
+	if len(docIDs) == 0 || s.invoke.Knowledge == nil {
+		return nil
+	}
+	missing := map[string]bool{}
+	if _, err := s.invoke.Knowledge.BuildKnowledgePrefix(ctx, docIDs); err != nil {
+		var de *errorspkg.Error
+		if errors.As(err, &de) {
+			if ms, ok := de.Details["missing"].([]string); ok {
+				for _, id := range ms {
+					missing[id] = true
+				}
+			}
+		}
+	}
+	out := make([]agentdomain.MountHealth, 0, len(docIDs))
+	for _, id := range docIDs {
+		h := agentdomain.MountHealth{Ref: id, Healthy: !missing[id]}
+		if missing[id] {
+			h.Error = "knowledge document does not exist"
+		}
+		out = append(out, h)
+	}
+	return out
 }
 
 // ListVersions returns one keyset page of an agent's versions (newest first, N4).

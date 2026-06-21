@@ -41,7 +41,7 @@ Agent **自己不写代码**：它是一份"LLM 员工配置"——提示词 + *
 
 **fail-fast**：目标被删（冒具体码如 `FUNCTION_NOT_FOUND`）/ method 不存在（`HANDLER_METHOD_NOT_FOUND`）/ MCP server 离线 / ref 格式坏 / 两挂载合成同名（撞名检测）→ **invoke 失败**（mount 自身问题 = `AGENT_MOUNT_INVALID`）。worker 缺声明能力**绝不静默降级跑**。**create/edit 期 eager 校验全挂载 ref**（skill F96 · knowledge/tool F98——经 invoke 的**同一** resolver：skill→`Guide`、knowledge→`BuildKnowledgePrefix`、tool→`CheckHealth`，不存在即在 build 期拒，免 dangling ref 建出 dead-on-arrival/静默降级的 agent；domain `ValidateTools` 只校格式不校存在）。
 
-**挂载健康预检**（`Resolver.CheckHealth` + `GET /agents/{id}/mount-health`）：Resolve 的按需、**非 fail-fast** 对应物——逐挂载独立解析、收集每条状态（`MountHealth{ref,name?,healthy,error?}` + `allHealthy`），用同一批 per-ref 解析器**且同样做撞名检测**（两挂载合成同名时第二个标 unhealthy——与 Resolve 对称，故此处坏的正是 invoke 会拒的那个；否则单独可解析、合起来撞名的挂载会过 eager 校验却每次 invoke 0 步即败=DOA agent）。给 UI 在 invoke 前红点预警；List 不投影（逐 agent 逐挂载 N+1 不划算，按需单 agent 才对）。
+**挂载健康预检**（`Resolver.CheckHealth` + `GET /agents/{id}/mount-health`）：Resolve 的按需、**非 fail-fast** 对应物——逐挂载独立解析、收集每条状态（`MountHealth{ref,name?,healthy,error?}` + `allHealthy`），用同一批 per-ref 解析器**且同样做撞名检测**（两挂载合成同名时第二个标 unhealthy——与 Resolve 对称，故此处坏的正是 invoke 会拒的那个；否则单独可解析、合起来撞名的挂载会过 eager 校验却每次 invoke 0 步即败=DOA agent）。**知识文档也覆盖**（`knowledgeHealth`，复用 invoke 的 `BuildKnowledgePrefix`——它在 `AGENT_KNOWLEDGE_NOT_FOUND` 的 details.missing 报缺失集）：每个挂的知识 doc 一条 `ref=doc_…` 行、被删的标 unhealthy，使预检覆盖 invoke 实际校验的两条轴（tool + knowledge）而非只 tool（F98 家族——否则 create 后被删的知识文档在红点预检里隐形、仅下次 invoke 才大声失败）。给 UI 在 invoke 前红点预警；List 不投影（逐 agent 逐挂载 N+1 不划算，按需单 agent 才对）。
 
 ## 4. Invoke 生命周期（所有路径唯一漏斗，对标 RunFunction）
 

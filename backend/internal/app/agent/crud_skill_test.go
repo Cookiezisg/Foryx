@@ -110,3 +110,50 @@ func TestCreateEdit_RejectsDanglingMounts(t *testing.T) {
 		t.Fatalf("edit to dangling knowledge must reject, got: %v", err)
 	}
 }
+
+// TestMountHealth_CoversKnowledge — F98-family (round-11 agentknow2): the mount-health preview covered
+// fn/hd/mcp tools but NOT knowledge docs, so a knowledge doc DELETED after create was invisible in the
+// red-dot preview (only failed at the next invoke). MountHealth now reports a row per knowledge doc.
+func TestMountHealth_CoversKnowledge(t *testing.T) {
+	svc, ctx := newSvc(t)
+	known := map[string]bool{"doc_real": true}
+	svc.SetInvokeDeps(InvokeDeps{
+		Mounts:    fakeMountResolver{known: map[string]bool{}},
+		Knowledge: fakeKnowledgeGuide{known: known},
+	})
+	a, _, err := svc.Create(ctx, CreateInput{Name: "scholar", Config: Config{Prompt: "p", Knowledge: []string{"doc_real"}}})
+	if err != nil {
+		t.Fatalf("create with valid knowledge: %v", err)
+	}
+
+	// Initially healthy: the knowledge doc appears as a healthy mount-health row.
+	rep, err := svc.MountHealth(ctx, a.ID)
+	if err != nil {
+		t.Fatalf("mount health: %v", err)
+	}
+	var row *agentdomain.MountHealth
+	for i := range rep.Mounts {
+		if rep.Mounts[i].Ref == "doc_real" {
+			row = &rep.Mounts[i]
+		}
+	}
+	if row == nil || !row.Healthy || !rep.AllHealthy {
+		t.Fatalf("knowledge doc must appear as a healthy mount-health row, got %+v", rep.Mounts)
+	}
+
+	// Simulate the doc being DELETED after create — mount-health must now flag it (was invisible before).
+	delete(known, "doc_real")
+	rep2, _ := svc.MountHealth(ctx, a.ID)
+	if rep2.AllHealthy {
+		t.Fatalf("a deleted knowledge doc must make mount-health unhealthy, got %+v", rep2.Mounts)
+	}
+	var flagged bool
+	for _, m := range rep2.Mounts {
+		if m.Ref == "doc_real" && !m.Healthy {
+			flagged = true
+		}
+	}
+	if !flagged {
+		t.Fatalf("the deleted knowledge doc must be an unhealthy row, got %+v", rep2.Mounts)
+	}
+}
