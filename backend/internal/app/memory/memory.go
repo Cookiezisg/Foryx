@@ -67,16 +67,31 @@ func (s *Service) Upsert(ctx context.Context, in UpsertInput) (*memorydomain.Mem
 	if err := validateUpsert(in); err != nil {
 		return nil, err
 	}
-	action := "updated"
-	if _, err := s.repo.Get(ctx, in.Name); errors.Is(err, memorydomain.ErrNotFound) {
-		action = "created"
+	existing, gerr := s.repo.Get(ctx, in.Name)
+	if gerr != nil && !errors.Is(gerr, memorydomain.ErrNotFound) {
+		return nil, fmt.Errorf("memoryapp.Upsert: %w", gerr)
 	}
+	exists := gerr == nil
+	action := "created"
 	m := &memorydomain.Memory{
 		Name:        in.Name,
 		Description: strings.TrimSpace(in.Description),
 		Content:     in.Content,
 		Pinned:      in.Pinned,
 		Source:      in.Source,
+	}
+	if exists {
+		// A content update PRESERVES the user's curation: Pinned is the user's choice (changed only via
+		// the dedicated pin/unpin endpoints) and Source is immutable authorship. Without this, an LLM
+		// write_memory — which always sends source=ai and never sets pinned — silently UN-PINS and
+		// re-attributes a user's verbatim-injected rule on every edit, demoting a pinned safety rule to a
+		// lazy index line (F147). Re-pinning / re-authoring is not a content-write concern.
+		// 内容更新**保留**用户策展：Pinned 是用户的选择（仅经专用 pin/unpin 端点改）、Source 是不可变作者归属。
+		// 否则 LLM 的 write_memory（永远发 source=ai、从不设 pinned）每次编辑都静默取消置顶 + 改归属，把置顶安全
+		// 规则降级成懒加载目录行（F147）。重新置顶/改归属不归内容写入管。
+		action = "updated"
+		m.Pinned = existing.Pinned
+		m.Source = existing.Source
 	}
 	if err := s.repo.Save(ctx, m); err != nil {
 		return nil, fmt.Errorf("memoryapp.Upsert: %w", err)

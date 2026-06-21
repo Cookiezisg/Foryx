@@ -56,6 +56,34 @@ func (f *fakeEmitter) Emit(_ context.Context, eventType string, _ map[string]any
 	return nil
 }
 
+// TestUpsert_UpdatePreservesUserCuration — F147: a content update must NOT change Pinned or Source. An
+// LLM write_memory (source=ai, pinned unset) editing a user's PINNED, user-authored rule must keep it
+// pinned + source=user — else the verbatim-injected safety rule is silently demoted to a lazy index line.
+func TestUpsert_UpdatePreservesUserCuration(t *testing.T) {
+	repo := newFakeRepo()
+	svc := NewService(repo, nil, zap.NewNop())
+	ctx := context.Background()
+
+	// The user curates a pinned, user-authored rule.
+	if _, err := svc.Upsert(ctx, UpsertInput{Name: "rule", Description: "d", Content: "NEVER deploy on Fridays", Pinned: true, Source: "user"}); err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	// The LLM edits its wording (write_memory always sends source=ai and never sets pinned).
+	m, err := svc.Upsert(ctx, UpsertInput{Name: "rule", Description: "d", Content: "NEVER deploy on Fridays or weekends", Source: "ai"})
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if !m.Pinned {
+		t.Fatalf("update must PRESERVE the user's pin — a pinned safety rule was silently demoted")
+	}
+	if m.Source != "user" {
+		t.Fatalf("update must PRESERVE authorship=user, got %q", m.Source)
+	}
+	if m.Content != "NEVER deploy on Fridays or weekends" {
+		t.Fatalf("the content edit must still apply, got %q", m.Content)
+	}
+}
+
 func TestUpsert_CreateThenUpdate_Notifies(t *testing.T) {
 	repo := newFakeRepo()
 	em := &fakeEmitter{}

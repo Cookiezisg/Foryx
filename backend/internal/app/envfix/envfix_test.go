@@ -136,6 +136,29 @@ func TestProvision_FixSucceeds(t *testing.T) {
 	}
 }
 
+// TestProvision_RejectsDepDrop — F148: a "fix" that DROPS a declared package (shrinks below the
+// original count) must be rejected. The retry must NOT install the shrunken set, the env stays failed
+// (OK=false) with the real install error, and FinalDeps preserves what the user declared — never an
+// empty, false-ready env that defers the failure to a runtime ModuleNotFoundError.
+func TestProvision_RejectsDepDrop(t *testing.T) {
+	fs := &fakeSandbox{failFirst: 1} // 1st install fails; an empty-set retry WOULD succeed
+	factory := llminfra.NewFactory()
+	factory.Mock().PushScript(depsScript()) // LLM "fixes" by dropping the package → {"deps":[]}
+	p := newProvisioner(t, fs, okPicker(), factory)
+
+	res := p.Provision(context.Background(), baseRequest([]string{"definitely-not-a-real-pkg"}, nil))
+
+	if res.OK {
+		t.Fatalf("dropping the declared package must NOT count as a fix (it would false-ready an env missing the pkg)")
+	}
+	if len(res.FinalDeps) != 1 || res.FinalDeps[0] != "definitely-not-a-real-pkg" {
+		t.Fatalf("the declared dep must be PRESERVED, got %v", res.FinalDeps)
+	}
+	if fs.calls != 1 {
+		t.Fatalf("the dep-dropping retry must never be installed, got %d install calls", fs.calls)
+	}
+}
+
 func TestProvision_ExhaustsAttempts(t *testing.T) {
 	fs := &fakeSandbox{failFirst: 3} // default max 3 → never succeeds
 	factory := llminfra.NewFactory()

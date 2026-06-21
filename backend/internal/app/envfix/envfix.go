@@ -183,6 +183,20 @@ func (p *Provisioner) Provision(ctx context.Context, req Request) Result {
 				zap.String("ownerId", req.Owner.ID), zap.Error(fixErr))
 			break
 		}
+		// Reject a "fix" that DROPS a declared package — i.e. shrinks the list below the count the user
+		// ORIGINALLY requested. Renaming a typo or loosening a version keeps the count; silently removing a
+		// required package only makes the install error vanish while producing a green env that is MISSING
+		// the package — a false-ready signal that defers the failure to a runtime ModuleNotFoundError and
+		// throws away what the user declared. Keep the env FAILED with the real install error instead, so
+		// the run-time guard (FUNCTION_ENV_NOT_READY) stays reachable and the declared deps are preserved (F148).
+		// 拒绝「丢包」式修复——即修正后列表比用户**最初**声明的更短。改拼写/松版本会保持包数；静默删掉必需包只是让
+		// 装错消失、却得到**缺包的绿 env**——假就绪信号，把失败推迟到运行时 ModuleNotFoundError 且丢掉用户所声明。
+		// 改为保持 env **失败** + 真实装错，使运行时门控（FUNCTION_ENV_NOT_READY）仍可达、声明的 deps 不丢（F148）。
+		if len(newDeps) < len(req.Deps) {
+			p.log.Warn("envfix: rejecting a dep-dropping fix (would discard a declared package and false-ready the env)",
+				zap.String("ownerId", req.Owner.ID), zap.Int("declared", len(req.Deps)), zap.Int("suggested", len(newDeps)))
+			break
+		}
 		deps = newDeps
 	}
 

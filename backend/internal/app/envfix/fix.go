@@ -85,6 +85,7 @@ Rules:
 - Do NOT add packages unrelated to the current list.
 - Do NOT modify any code — code is not your concern here.
 - Keep the same packages where possible; adjust versions or fix names.
+- NEVER drop/remove a declared package just to make the error disappear: renaming a typo (e.g. "beautifulsoup" -> "beautifulsoup4") or loosening a version is a fix; removing a required package is NOT — the code still imports it, so the env would build but fail at runtime. Return one package per originally-declared package.
 - If you cannot determine a fix, return the deps unchanged.
 
 Return JSON only, no commentary:

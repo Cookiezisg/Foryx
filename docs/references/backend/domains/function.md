@@ -38,7 +38,7 @@ audience: [human, ai]
 
 **代码校验是刻意的词法检查、非 AST**：要求至少一个顶层 `def `（首个 def 名即执行入口）；黑名单 `import anselm_handler`（**无状态/有状态边界**：function 无状态、handler 持久——function 不许碰 handler SDK）。
 
-**env 物化（`ensureEnv`）**：写 syncing → 委托 `envfix.Provisioner`（带 LLM 改依赖的修复循环，≤3 次——装不上时让 LLM 改依赖列表重试）→ 终态（ready/failed + **修正后的依赖**）写回 Version 行。create/edit **容忍**失败（env failed 也创建成功，状态可见）；run 时未 ready 才报 `FUNCTION_ENV_NOT_READY`。`Edit` 空 ops = "重建 active env"路径（重试失败的安装），发 `function.env_rebuilt`。
+**env 物化（`ensureEnv`）**：写 syncing → 委托 `envfix.Provisioner`（带 LLM 改依赖的修复循环，≤3 次——装不上时让 LLM 改依赖列表重试）→ 终态（ready/failed + **修正后的依赖**）写回 Version 行。**修复不丢包**（F148）：拒绝把声明的依赖列表**缩短到原始声明数以下**的"修复"——改拼写/松版本保持包数是修复，静默删掉必需包只是让装错消失、却得到**缺包的绿 env**（假就绪、把失败推迟到运行时 ModuleNotFoundError 且丢用户所声明）；这类丢包建议被拒、env 保持 failed + 真实装错、声明 deps 不丢。create/edit **容忍**失败（env failed 也创建成功，状态可见）；run 时未 ready 才报 `FUNCTION_ENV_NOT_READY`（含依赖装不上的 failed env——`ensureEnv` 不会再靠丢包假装 ready）。`Edit` 空 ops = "重建 active env"路径（重试失败的安装），发 `function.env_rebuilt`。
 
 **执行（`RunFunction`，所有路径唯一漏斗）**：nil input 在 runner 前归一成 `{}`（driver 做 `f(**input)`，nil→JSON `null`→`f(**None)` TypeError；无参调用方如 sensor/无接线 workflow 节点不该崩）；取版本（空→active）→ env 未 ready 则懒物化 → `runner.Run` → **`ErrEnvNotFound`（env 被 GC 回收）= 重建 env + 重试一次** → `recordExecution`。五个调用方：`run_function` 工具（chat/agent，按 ctx 推）、HTTP `:run`（manual）、workflow 调度器 `dispatch.RunAction`（workflow，fail-fast：`OK=false` 转 error 使节点行写 failed）、sensor 触发器、agent 挂载工具（`mount.go`：`fn_<id>` 挂为 agent 专属工具，TriggeredBy=agent）。
 

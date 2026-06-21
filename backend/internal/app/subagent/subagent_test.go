@@ -91,7 +91,7 @@ func TestRegistry_BuiltInTypes(t *testing.T) {
 }
 
 func TestFilterTools(t *testing.T) {
-	all := []toolapp.Tool{fakeTool{"Read"}, fakeTool{"Grep"}, fakeTool{"Write"}, fakeTool{"Subagent"}}
+	all := []toolapp.Tool{fakeTool{"Read"}, fakeTool{"Grep"}, fakeTool{"Write"}, fakeTool{"Subagent"}, fakeTool{"get_subagent_trace"}}
 
 	explore, _ := NewRegistry().Get("Explore")
 	got := names(filterTools(explore, all))
@@ -102,9 +102,10 @@ func TestFilterTools(t *testing.T) {
 
 	gp, _ := NewRegistry().Get("general-purpose")
 	got = names(filterTools(gp, all))
-	// general-purpose keeps everything EXCEPT Subagent (recursion guard).
-	if len(got) != 3 || has(got, "Subagent") {
-		t.Fatalf("general-purpose filter wrong: %v", got)
+	// general-purpose keeps everything EXCEPT Subagent (recursion guard) AND get_subagent_trace
+	// (isolation: a subagent must not read the parent conversation's subagent traces, F149).
+	if len(got) != 3 || has(got, "Subagent") || has(got, "get_subagent_trace") {
+		t.Fatalf("general-purpose filter wrong (must strip Subagent + get_subagent_trace): %v", got)
 	}
 }
 

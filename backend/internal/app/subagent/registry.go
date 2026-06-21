@@ -14,6 +14,17 @@ import (
 // subagent（递归守卫第 1 层）。
 const subagentToolName = "Subagent"
 
+// traceToolName is get_subagent_trace — also always stripped from a subagent's tool set: it reads a
+// subagent run's hidden trace from the PARENT conversation's sub-messages, so leaving it in would let a
+// subagent read its parent's other subagent traces (an isolation leak), and a subagent has no siblings
+// of its own to read. build_services.go's wiring comment already asserts this invariant; filterTools
+// must enforce it (F149).
+//
+// traceToolName 即 get_subagent_trace——也总从 subagent 工具集剔除：它从**父**对话的 sub-message 读 subagent
+// 运行的隐藏 trace，留着会让 subagent 读到父的其它 subagent trace（隔离泄漏），且 subagent 自己没兄弟可读。
+// build_services.go 装配注释已声明此不变量；filterTools 必须强制它（F149）。
+const traceToolName = "get_subagent_trace"
+
 // Type is one built-in subagent kind: a system prompt + a tool allow-list + a default turn cap.
 // AllowedTools empty means "everything the parent provides" (general-purpose); a non-empty list
 // restricts the subagent to those tools (Explore / Plan). The Subagent tool itself is always
@@ -112,7 +123,9 @@ func filterTools(t Type, all []toolapp.Tool) []toolapp.Tool {
 	}
 	out := make([]toolapp.Tool, 0, len(all))
 	for _, tool := range all {
-		if tool.Name() == subagentToolName {
+		// Always strip the Subagent tool (no recursive spawn) AND get_subagent_trace (no reading the
+		// parent conversation's subagent traces — isolation), regardless of the type's allow-list.
+		if tool.Name() == subagentToolName || tool.Name() == traceToolName {
 			continue
 		}
 		if allow != nil && !allow[tool.Name()] {
