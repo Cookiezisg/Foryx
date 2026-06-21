@@ -14,7 +14,7 @@ import (
 func TestBuildOutput_SurfacesRuntimeState(t *testing.T) {
 	v := &handlerdomain.Version{ID: "hdv_1", Version: 2, EnvStatus: "ready"}
 
-	running := buildOutput("hd_1", v, 1, nil, handlerdomain.RuntimeStateRunning)
+	running := buildOutput("hd_1", v, 1, nil, handlerdomain.RuntimeStateRunning, false)
 	if running["runtimeState"] != handlerdomain.RuntimeStateRunning {
 		t.Fatalf("running edit must report runtimeState, got %+v", running)
 	}
@@ -22,7 +22,7 @@ func TestBuildOutput_SurfacesRuntimeState(t *testing.T) {
 		t.Fatalf("a running instance must NOT carry a warning, got %+v", running)
 	}
 
-	broken := buildOutput("hd_1", v, 1, nil, handlerdomain.RuntimeStateStopped)
+	broken := buildOutput("hd_1", v, 1, nil, handlerdomain.RuntimeStateStopped, false)
 	if broken["runtimeState"] != handlerdomain.RuntimeStateStopped {
 		t.Fatalf("broken edit must report runtimeState=stopped, got %+v", broken)
 	}
@@ -30,9 +30,29 @@ func TestBuildOutput_SurfacesRuntimeState(t *testing.T) {
 		t.Fatalf("a not-running instance after edit MUST carry a warning (else the brick is silent), got %+v", broken)
 	}
 
-	created := buildOutput("hd_1", v, 1, nil, "")
+	created := buildOutput("hd_1", v, 1, nil, "", false)
 	if _, has := created["runtimeState"]; has {
 		t.Fatalf("create (runtimeState=\"\") must stay silent on runtime state, got %+v", created)
+	}
+}
+
+// TestBuildOutput_EmptyOpsRestartIsVisible — F140: an empty-ops edit_handler rebuilds the env and
+// restarts the resident instance (wiping in-memory state) but applies no ops and mints no version —
+// it must NOT read as a no-op. The result carries restarted:true + a note so the state wipe is visible.
+func TestBuildOutput_EmptyOpsRestartIsVisible(t *testing.T) {
+	v := &handlerdomain.Version{ID: "hdv_1", Version: 2, EnvStatus: "ready"}
+
+	restarted := buildOutput("hd_1", v, 0, nil, handlerdomain.RuntimeStateRunning, true)
+	if restarted["restarted"] != true {
+		t.Fatalf("empty-ops restart must surface restarted:true (else it reads as a no-op), got %+v", restarted)
+	}
+	if _, has := restarted["restartNote"]; !has {
+		t.Fatalf("a restart must carry a note that in-memory state was wiped, got %+v", restarted)
+	}
+
+	normal := buildOutput("hd_1", v, 2, nil, handlerdomain.RuntimeStateRunning, false)
+	if _, has := normal["restarted"]; has {
+		t.Fatalf("a normal op-applying edit must NOT flag restarted (the version bump already signals change), got %+v", normal)
 	}
 }
 

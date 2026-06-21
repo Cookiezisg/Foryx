@@ -81,7 +81,7 @@ func (t *CreateHandler) Execute(ctx context.Context, argsJSON string) (string, e
 	// so "not running" is expected here and would only be noise. The signal matters on EDIT, where a
 	// broken change can brick a previously-running instance.
 	// create 不报 runtimeState：新建 handler 不 spawn（几乎总要先配 config），此处"未运行"是预期、只会成噪声。
-	return toolapp.ToJSON(buildOutput(h.ID, v, len(ops), sink.attempts, "")), nil
+	return toolapp.ToJSON(buildOutput(h.ID, v, len(ops), sink.attempts, "", false)), nil
 }
 
 // --- edit_handler ----------------------------------------------------------
@@ -91,7 +91,7 @@ type EditHandler struct{ svc *handlerapp.Service }
 func (t *EditHandler) Name() string { return "edit_handler" }
 
 func (t *EditHandler) Description() string {
-	return `Edit a handler: apply ops on top of its active version, producing a new version that takes effect immediately — the resident instance is restarted to load the new code (which WIPES in-memory state). EXCEPTION: a metadata-only edit (all ops are set_meta — just name/description/tags) does NOT mint a version or restart, so it preserves in-memory state; prefer it for pure renames. Same op shapes as create_handler. Empty ops rebuilds the environment + restarts. The result includes runtimeState: if it is not "running" after a code edit, the new version failed to spawn (broken __init__ or missing config) — call get_handler for details, fix the code, or revert_handler to the last good version. Use revert_handler to switch to an older version, restart_handler to just reset a misbehaving instance.`
+	return `Edit a handler: apply ops on top of its active version, producing a new version that takes effect immediately — the resident instance is restarted to load the new code (which WIPES in-memory state). EXCEPTION: a metadata-only edit (all ops are set_meta — just name/description/tags) does NOT mint a version or restart, so it preserves in-memory state; prefer it for pure renames. Same op shapes as create_handler. Empty ops rebuilds the environment + restarts the instance, which WIPES in-memory state (the result then carries restarted:true — it is not a no-op); if you only want to reset a misbehaving instance, prefer restart_handler. The result includes runtimeState: if it is not "running" after a code edit, the new version failed to spawn (broken __init__ or missing config) — call get_handler for details, fix the code, or revert_handler to the last good version. Use revert_handler to switch to an older version, restart_handler to just reset a misbehaving instance.`
 }
 
 func (t *EditHandler) Parameters() json.RawMessage {
@@ -153,16 +153,26 @@ func (t *EditHandler) Execute(ctx context.Context, argsJSON string) (string, err
 	if h, gerr := t.svc.Get(ctx, args.HandlerID); gerr == nil {
 		runtimeState = h.RuntimeState
 	}
-	return toolapp.ToJSON(buildOutput(args.HandlerID, v, len(ops), sink.attempts, runtimeState)), nil
+	// Empty ops is the env-rebuild + restart path (no ops, no version) — flag the resulting state wipe.
+	return toolapp.ToJSON(buildOutput(args.HandlerID, v, len(ops), sink.attempts, runtimeState, len(ops) == 0)), nil
 }
 
-func buildOutput(handlerID string, v *handlerdomain.Version, opsApplied int, attempts []envfixapp.Attempt, runtimeState string) map[string]any {
+func buildOutput(handlerID string, v *handlerdomain.Version, opsApplied int, attempts []envfixapp.Attempt, runtimeState string, restarted bool) map[string]any {
 	out := map[string]any{
 		"id":         handlerID,
 		"versionId":  v.ID,
 		"version":    v.Version,
 		"envStatus":  v.EnvStatus,
 		"opsApplied": opsApplied,
+	}
+	// An empty-ops edit_handler rebuilds the env and RESTARTS the resident instance but applies no ops
+	// and mints no version — so opsApplied:0 + an unchanged version reads like a no-op while the restart
+	// WIPED in-memory state. Signal the restart so a stateful handler's state loss is visible, not silent.
+	// 空 ops 的 edit_handler 重建 env 并重启常驻实例、却不应用 op、不铸版本——故 opsApplied:0 + 版本不变读着像
+	// no-op，而重启已抹掉内存态。显式上呈重启，使有状态 handler 的态丢失可见、非静默。
+	if restarted {
+		out["restarted"] = true
+		out["restartNote"] = "rebuilt the environment and restarted the resident instance — in-memory state was wiped (no ops applied, no new version). If you only meant to reset a misbehaving instance, restart_handler does the same; a no-op was not intended here."
 	}
 	if v.EnvError != "" {
 		out["envError"] = v.EnvError
