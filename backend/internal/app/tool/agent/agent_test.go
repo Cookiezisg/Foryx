@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	agentapp "github.com/sunweilin/anselm/backend/internal/app/agent"
+	agentdomain "github.com/sunweilin/anselm/backend/internal/domain/agent"
 )
 
 func TestAgentTools_NamesAndCount(t *testing.T) {
@@ -60,5 +63,48 @@ func TestInvokeAgent_RequiresAgentID(t *testing.T) {
 func TestConfigProps_AgentChainRedirect(t *testing.T) {
 	if !strings.Contains(configProps, "workflow with an agent node") {
 		t.Fatalf("the tools-field desc must redirect agent-chaining to the workflow path")
+	}
+}
+
+// TestEditAgent_ValidateInput_NoPromptRequired — edit_agent now MERGES, so a partial edit overlays
+// only provided fields; agentId alone is valid (prompt no longer required), missing agentId still fails.
+func TestEditAgent_ValidateInput_NoPromptRequired(t *testing.T) {
+	tl := &EditAgent{}
+	if err := tl.ValidateInput(json.RawMessage(`{"agentId":"ag_1","tools":[]}`)); err != nil {
+		t.Fatalf("agentId-only partial edit must be valid: %v", err)
+	}
+	if err := tl.ValidateInput(json.RawMessage(`{"tools":[]}`)); err == nil {
+		t.Fatal("missing agentId should fail")
+	}
+}
+
+// TestMergeConfig_PreservesOmittedClearsExplicit — the heart of the edit_agent merge fix: a prompt-only
+// edit must KEEP the agent's mounted skill/knowledge/tools (the old full-replace silently wiped them at a
+// measured ~40% drop rate), while an explicitly-empty field still clears it.
+func TestMergeConfig_PreservesOmittedClearsExplicit(t *testing.T) {
+	current := agentapp.Config{
+		Prompt:    "old prompt",
+		Skill:     "reviewer",
+		Knowledge: []string{"doc_1"},
+		Tools:     []agentdomain.ToolRef{{Ref: "fn_1"}},
+	}
+	// Prompt-only edit: prompt changes, everything else PRESERVED.
+	got := mergeConfig(current, []byte(`{"agentId":"ag_1","prompt":"new prompt","changeReason":"tweak"}`))
+	if got.Prompt != "new prompt" {
+		t.Fatalf("prompt must update, got %q", got.Prompt)
+	}
+	if got.Skill != "reviewer" || len(got.Knowledge) != 1 || len(got.Tools) != 1 {
+		t.Fatalf("omitted skill/knowledge/tools must be PRESERVED, got %+v", got)
+	}
+	if got.ChangeReason != "tweak" {
+		t.Fatalf("changeReason must apply, got %q", got.ChangeReason)
+	}
+	// An explicitly-empty field still clears it (a provided value wins, even when empty).
+	cleared := mergeConfig(current, []byte(`{"agentId":"ag_1","tools":[]}`))
+	if len(cleared.Tools) != 0 {
+		t.Fatalf("explicit empty tools must clear, got %+v", cleared.Tools)
+	}
+	if cleared.Prompt != "old prompt" || len(cleared.Knowledge) != 1 {
+		t.Fatalf("non-tools fields must stay preserved, got %+v", cleared)
 	}
 }

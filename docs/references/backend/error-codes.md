@@ -102,7 +102,6 @@ audience: [human, ai]
 | code | HTTP | message |
 |---|---|---|
 | `AGENT_EXECUTION_ID_REQUIRED` | 400 | executionId is required |
-| `AGENT_ID_PROMPT_REQUIRED` | 400 | agentId and prompt are required |
 | `AGENT_ID_REQUIRED` | 400 | agentId is required |
 | `AGENT_INPUT_REQUIRED` | 400 | input is required (an object; pass {} if the agent's prompt is self-contained — there is no 'prompt' field) |
 | `AGENT_NAME_PROMPT_REQUIRED` | 400 | name and prompt are required |

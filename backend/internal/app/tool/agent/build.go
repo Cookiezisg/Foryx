@@ -13,9 +13,11 @@ import (
 	schemapkg "github.com/sunweilin/anselm/backend/internal/pkg/schema"
 )
 
-// configArgs is the shared create/edit config payload (a full snapshot — edit REPLACES).
+// configArgs is the shared create/edit config payload. create takes a full snapshot; edit MERGES —
+// only the fields actually present in the request overlay the agent's current config (see mergeConfig).
 //
-// configArgs 是 create/edit 共享的配置载荷（全量快照——edit 替换）。
+// configArgs 是 create/edit 共享的配置载荷。create 取全量快照；edit 合并——只有请求中实际出现的字段覆盖
+// agent 当前配置（见 mergeConfig）。
 type configArgs struct {
 	Prompt        string                `json:"prompt"`
 	Skill         string                `json:"skill"`
@@ -107,13 +109,13 @@ type EditAgent struct{ svc *agentapp.Service }
 func (t *EditAgent) Name() string { return "edit_agent" }
 
 func (t *EditAgent) Description() string {
-	return "Edit an agent: REPLACE its full configuration, producing a new version that takes effect immediately. Read the agent first (get_agent) — this is a whole-config replace, not a merge. Use revert_agent to switch back to an older version."
+	return "Edit an agent: change ONLY the fields you pass — every omitted field keeps its current value (a partial edit no longer wipes the agent's mounted tools/knowledge). To clear a field, pass it explicitly empty ([] / \"\"). Each edit produces a new version that takes effect immediately; use revert_agent to switch back to an older one."
 }
 
 func (t *EditAgent) Parameters() json.RawMessage {
 	return json.RawMessage(`{
 		"type": "object",
-		"required": ["agentId", "prompt"],
+		"required": ["agentId"],
 		"properties": {
 			"agentId": {"type": "string"},` + configProps + `
 		}
@@ -123,13 +125,15 @@ func (t *EditAgent) Parameters() json.RawMessage {
 func (t *EditAgent) ValidateInput(args json.RawMessage) error {
 	var a struct {
 		AgentID string `json:"agentId"`
-		Prompt  string `json:"prompt"`
 	}
 	if err := json.Unmarshal(args, &a); err != nil {
 		return fmt.Errorf("edit_agent: bad args: %w", err)
 	}
-	if strings.TrimSpace(a.AgentID) == "" || strings.TrimSpace(a.Prompt) == "" {
-		return ErrIDPromptRequired
+	// A partial edit overlays only provided fields, so prompt is no longer required — agentId alone is.
+	//
+	// 部分编辑只覆盖所提供字段，故 prompt 不再必填——仅 agentId 必填。
+	if strings.TrimSpace(a.AgentID) == "" {
+		return ErrAgentIDRequired
 	}
 	return nil
 }
@@ -142,9 +146,74 @@ func (t *EditAgent) Execute(ctx context.Context, argsJSON string) (string, error
 	if err := json.Unmarshal([]byte(argsJSON), &a); err != nil {
 		return "", fmt.Errorf("edit_agent: bad args: %w", err)
 	}
-	v, err := t.svc.Edit(ctx, agentapp.EditInput{ID: a.AgentID, Config: a.configArgs.toConfig()})
+	// MERGE, not full-replace: start from the agent's current active config and overlay only the fields
+	// the agent actually provided. edit_agent used to REPLACE the whole config, so a prompt-only edit
+	// silently wiped the agent's mounted tools/knowledge — a MEASURED ~40% config-drop rate that the
+	// "whole-config replace, read first" description failed to prevent (F-edit-agent-merge).
+	// 合并、非全替换：从 agent 当前 active 配置起、只覆盖 agent 真正提供的字段。edit_agent 原先全替换，故只改
+	// prompt 的编辑会静默抹掉挂载的 tools/knowledge——实测约 40% 丢配率，"整配替换、先读" 的描述拦不住。
+	cur, err := t.svc.Get(ctx, a.AgentID)
+	if err != nil {
+		return "", fmt.Errorf("edit_agent: %w", err)
+	}
+	merged := mergeConfig(configFromActive(cur), []byte(argsJSON))
+	v, err := t.svc.Edit(ctx, agentapp.EditInput{ID: a.AgentID, Config: merged})
 	if err != nil {
 		return "", fmt.Errorf("edit_agent: %w", err)
 	}
 	return toolapp.ToJSON(map[string]any{"agentId": a.AgentID, "versionId": v.ID, "version": v.Version}), nil
+}
+
+// configFromActive maps an agent's current active version back to a Config — the merge base for a
+// partial edit_agent. A nil active version yields a zero config.
+//
+// configFromActive 把 agent 当前 active 版本映回 Config——partial edit_agent 的合并基底。无 active 版本→零配置。
+func configFromActive(a *agentdomain.Agent) agentapp.Config {
+	v := a.ActiveVersion
+	if v == nil {
+		return agentapp.Config{}
+	}
+	return agentapp.Config{
+		Prompt: v.Prompt, Skill: v.Skill, Knowledge: v.Knowledge, Tools: v.Tools,
+		Inputs: v.Inputs, Outputs: v.Outputs, ModelOverride: v.ModelOverride,
+	}
+}
+
+// mergeConfig overlays onto current ONLY the config fields actually present in argsJSON (an absent
+// field keeps its current value; a provided field — even empty/null — is set). Pure, so the
+// preserve-omitted / clear-on-explicit-empty semantics are unit-testable without a service.
+//
+// mergeConfig 把 argsJSON 中**实际出现**的配置字段覆盖到 current（缺省字段保留当前值；提供的字段——哪怕
+// 空/null——被设置）。纯函数，使「省略则保留 / 显式空则清」语义无需服务即可单测。
+func mergeConfig(current agentapp.Config, argsJSON []byte) agentapp.Config {
+	var a configArgs
+	_ = json.Unmarshal(argsJSON, &a)
+	var present map[string]json.RawMessage
+	_ = json.Unmarshal(argsJSON, &present)
+	merged := current
+	if _, ok := present["prompt"]; ok {
+		merged.Prompt = a.Prompt
+	}
+	if _, ok := present["skill"]; ok {
+		merged.Skill = a.Skill
+	}
+	if _, ok := present["knowledge"]; ok {
+		merged.Knowledge = a.Knowledge
+	}
+	if _, ok := present["tools"]; ok {
+		merged.Tools = a.Tools
+	}
+	if _, ok := present["inputs"]; ok {
+		merged.Inputs = a.Inputs
+	}
+	if _, ok := present["outputs"]; ok {
+		merged.Outputs = a.Outputs
+	}
+	if _, ok := present["modelOverride"]; ok {
+		merged.ModelOverride = a.ModelOverride
+	}
+	if _, ok := present["changeReason"]; ok {
+		merged.ChangeReason = a.ChangeReason
+	}
+	return merged
 }

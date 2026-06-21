@@ -79,7 +79,7 @@ InvokeAgent(in)
 
 ## 6. 契约（引用）
 
-端点 → [api.md](../api.md)#agent · 表 → [database.md](../database.md)#agent · 码 → [error-codes.md](../error-codes.md)（domain `AGENT_*` 11 + 工具校验 6）· 事件 → [events.md](../events.md)。LLM 工具 10 个：search/get/create/edit/revert/delete_agent + invoke_agent + 执行日志查询（search_agent_executions + get_agent_execution）+ **`update_agent_meta`**（只改 row 的 name/desc/tags、不铸版本——name/desc/tags 不在版本化 config 内，edit_agent 改不了它们，纯改名/改述用它）；create/edit 是 build 工具（config 镜像 entities 流）。
+端点 → [api.md](../api.md)#agent · 表 → [database.md](../database.md)#agent · 码 → [error-codes.md](../error-codes.md)（domain `AGENT_*` 11 + 工具校验 5）· 事件 → [events.md](../events.md)。LLM 工具 10 个：search/get/create/edit/revert/delete_agent + invoke_agent + 执行日志查询（search_agent_executions + get_agent_execution）+ **`update_agent_meta`**（只改 row 的 name/desc/tags、不铸版本——name/desc/tags 不在版本化 config 内，edit_agent 改不了它们，纯改名/改述用它）；create/edit 是 build 工具（config 镜像 entities 流）。**`edit_agent` 合并语义**（工具层、非 HTTP 层）：只覆盖请求中实际出现的 config 字段、缺省字段保留 agent 当前值（清空须显式传空 `[]`/`""`）——防只改 prompt 的部分编辑静默抹掉挂载的 tools/knowledge；HTTP `PUT` 路径仍整配替换。
 
 ## 7. 跨域集成
 

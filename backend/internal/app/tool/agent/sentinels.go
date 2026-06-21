@@ -14,6 +14,5 @@ var (
 	ErrAgentInputRequired  = errorspkg.New(errorspkg.KindInvalid, "AGENT_INPUT_REQUIRED", "input is required (an object; pass {} if the agent's prompt is self-contained — there is no 'prompt' field)")
 	ErrExecutionIDRequired = errorspkg.New(errorspkg.KindInvalid, "AGENT_EXECUTION_ID_REQUIRED", "executionId is required")
 	ErrNamePromptRequired  = errorspkg.New(errorspkg.KindInvalid, "AGENT_NAME_PROMPT_REQUIRED", "name and prompt are required")
-	ErrIDPromptRequired    = errorspkg.New(errorspkg.KindInvalid, "AGENT_ID_PROMPT_REQUIRED", "agentId and prompt are required")
 	ErrRevertArgsRequired  = errorspkg.New(errorspkg.KindInvalid, "AGENT_REVERT_ARGS_REQUIRED", "agentId and a positive version are required")
 )
