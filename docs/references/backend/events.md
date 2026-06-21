@@ -91,5 +91,6 @@ audience: [human, ai]
 ## P6 支撑域挂载
 
 **notifications 流本体**：notification.Emit = DB 行 + durable 信号（scope=notification:<id>，node.type=事件类型）——流是推送、行是真相。
+**relation**：`relation.dependency_broken`（payload `{deletedKind, deletedId, dependents:[{kind,id,name,edge}]}`）——删一个被依赖的实体时，`PurgeEntity` 在 purge 抹边**前**快照其入向 equip/link 依赖、purge 后发 **ONE 聚合**通知点名（hydrate + 去重）这些被留下悬空挂载的实体。是 F160 瞬时 delete-tool 提示的**持久**对应物：经通知中心在任意删除路径（HTTP 或 LLM 工具）触达、跨重启留存（F161）。刻意用通知、非实体 attention 标志（agent 无 attention 列、workflow run-attention 仅在 run 完成时清会永久点亮）。无依赖 / nil emitter → 不发；hydrate/emit 失败只记录、绝不让删除失败。
 **entities 流本体**：entitystream 是全部实体面板活动的唯一生产原语（open→delta*→close / Signal）。
 **messages 流**：humanloop 的 interaction ephemeral 信号（chat 注入 Surface）。

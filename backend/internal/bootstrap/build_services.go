@@ -210,7 +210,8 @@ func buildServices(st *stores, inf infra, bus buses, mux *http.ServeMux, dataDir
 			relationdomain.EntityKindDocument:     doc,
 			relationdomain.EntityKindConversation: conv,
 		},
-		Log: log,
+		Notif: notif, // durable dependency-broken notification on entity delete (F161)
+		Log:   log,
 	})
 
 	// --- toolset: Resident (filesystem/search/shell) + Lazy (entity tools + web) ---

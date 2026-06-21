@@ -18,6 +18,7 @@ import (
 
 	"go.uber.org/zap"
 
+	notificationdomain "github.com/sunweilin/anselm/backend/internal/domain/notification"
 	relationdomain "github.com/sunweilin/anselm/backend/internal/domain/relation"
 	idgenpkg "github.com/sunweilin/anselm/backend/internal/pkg/idgen"
 )
@@ -38,17 +39,20 @@ type Namer interface {
 // Service 实现 relationdomain.Service。
 type Service struct {
 	repo   relationdomain.Repository
-	namers map[string]Namer // EntityKind → Namer; missing = no names for that kind
+	namers map[string]Namer           // EntityKind → Namer; missing = no names for that kind
+	notif  notificationdomain.Emitter // nil-tolerant → no dependency-broken notification on delete
 	log    *zap.Logger
 }
 
 // Config bundles dependencies; Namers may be partial or nil (kinds without a namer
-// just show ids).
+// just show ids). Notif is optional (nil → no dependency-broken notification on delete).
 //
-// Config 打包依赖；Namers 可部分或 nil（无 namer 的 kind 仅显示 id）。
+// Config 打包依赖；Namers 可部分或 nil（无 namer 的 kind 仅显示 id）。Notif 可选
+// （nil → 删除时不发依赖断裂通知）。
 type Config struct {
 	Repo   relationdomain.Repository
 	Namers map[string]Namer
+	Notif  notificationdomain.Emitter
 	Log    *zap.Logger
 }
 
@@ -66,7 +70,7 @@ func NewService(cfg Config) *Service {
 	if namers == nil {
 		namers = map[string]Namer{}
 	}
-	return &Service{repo: cfg.Repo, namers: namers, log: cfg.Log}
+	return &Service{repo: cfg.Repo, namers: namers, notif: cfg.Notif, log: cfg.Log}
 }
 
 var _ relationdomain.Service = (*Service)(nil)
@@ -99,6 +103,21 @@ func (s *Service) PurgeEntity(ctx context.Context, kind, id string) error {
 	if err := validateEntityRef(kind, id); err != nil {
 		return fmt.Errorf("relationapp.PurgeEntity: %w", err)
 	}
+	// Snapshot the incoming equip/link dependents BEFORE the purge wipes the edges — they are
+	// exactly the entities about to be left with a dangling mount, and the only record of WHICH
+	// ones once the edges are gone (the durable counterpart of F160's ephemeral delete-tool note).
+	//
+	// 在 purge 抹掉边之前先快照入向 equip/link 依赖——它们正是将被留下悬空挂载的实体，也是边没了之后
+	// 唯一能追的「曾依赖谁」（是 F160 瞬时 delete-tool 提示的持久对应物）。
+	dependents, derr := s.repo.ListByToAndKinds(ctx, kind, id, []string{relationdomain.KindEquip, relationdomain.KindLink})
+	if derr != nil {
+		// A read failure here must not block the delete; we just lose the courtesy notification.
+		// 这里读失败不能挡删除；只是丢掉这条好意通知。
+		s.log.Warn("relationapp.PurgeEntity: dependent snapshot failed (best-effort, skipping notify)",
+			zap.String("kind", kind), zap.String("id", id), zap.Error(derr))
+		dependents = nil
+	}
+
 	n, err := s.repo.PurgeEntity(ctx, kind, id)
 	if err != nil {
 		return fmt.Errorf("relationapp.PurgeEntity: %w", err)
@@ -106,7 +125,63 @@ func (s *Service) PurgeEntity(ctx context.Context, kind, id string) error {
 	if n > 0 {
 		s.log.Info("relation purge", zap.String("kind", kind), zap.String("id", id), zap.Int64("removed", n))
 	}
+	s.notifyDependencyBroken(ctx, kind, id, dependents)
 	return nil
+}
+
+// notifyDependencyBroken raises ONE durable, aggregated notification naming the entities left with a
+// dangling mount when (kind,id) was deleted — the proactive, persisted counterpart to the delete
+// tool's ephemeral advisory (F160): it reaches the user via the notification center on ANY delete
+// path (HTTP or LLM tool) and survives restart, where a tool-result line does not. Deliberately a
+// notification, not an entity "attention" flag (F161): agents have no attention column, and a
+// workflow's run-attention clears only on a completed run, so a flag would latch on forever — a
+// user-dismissable inbox entry is the right durability primitive. No dependents or a nil emitter →
+// no-op; a hydrate/emit failure is logged, never propagated (a courtesy must not fail a delete).
+//
+// notifyDependencyBroken 发 ONE 持久化、聚合的通知，点名删除 (kind,id) 后被留下悬空挂载的实体——是
+// delete 工具瞬时提示（F160）的主动、持久对应物：经通知中心在任意删除路径（HTTP 或 LLM 工具）触达用户、
+// 且跨重启留存（tool-result 行做不到）。刻意用通知、非实体「attention」标志（F161）：agent 无 attention 列、
+// workflow 的 run-attention 仅在 run 完成时清，标志会永久点亮——可被用户消去的收件箱条目才是对的持久原语。
+// 无依赖或 emitter 为 nil → no-op；hydrate/emit 失败只记录、绝不上抛（好意不该让删除失败）。
+func (s *Service) notifyDependencyBroken(ctx context.Context, deletedKind, deletedID string, dependents []*relationdomain.Relation) {
+	if s.notif == nil || len(dependents) == 0 {
+		return
+	}
+	// Hydrate names so the notification names which entities to repair (the actionable part); on a
+	// namer failure fall back to ids — a named-by-id notification still beats none.
+	//
+	// hydrate 名字让通知点名要修哪些实体（可行动的部分）；namer 失败则回退用 id——按 id 命名也胜过没有。
+	views, err := s.hydrateNames(ctx, dependents)
+	if err != nil {
+		s.log.Warn("relationapp.notifyDependencyBroken: name hydrate failed, naming by id", zap.Error(err))
+		views = nil
+	}
+
+	seen := map[string]bool{}
+	refs := make([]map[string]any, 0, len(dependents))
+	add := func(fromKind, fromID, name, edge string) {
+		key := fromKind + "\x00" + fromID
+		if seen[key] {
+			return
+		}
+		seen[key] = true
+		refs = append(refs, map[string]any{"kind": fromKind, "id": fromID, "name": name, "edge": edge})
+	}
+	if views != nil {
+		for _, v := range views {
+			add(v.FromKind, v.FromID, v.FromName, v.Kind)
+		}
+	} else {
+		for _, r := range dependents {
+			add(r.FromKind, r.FromID, r.FromID, r.Kind)
+		}
+	}
+
+	payload := map[string]any{"deletedKind": deletedKind, "deletedId": deletedID, "dependents": refs}
+	if err := s.notif.Emit(ctx, "relation.dependency_broken", payload); err != nil {
+		s.log.Warn("relationapp.notifyDependencyBroken: emit failed",
+			zap.String("deletedKind", deletedKind), zap.String("deletedId", deletedID), zap.Error(err))
+	}
 }
 
 // CountDependents counts incoming equip/link edges to (kind,id) — the entities that mounted or

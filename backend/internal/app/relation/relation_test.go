@@ -399,3 +399,127 @@ func TestCountDependents(t *testing.T) {
 		t.Fatalf("invalid kind: err = %v, want ErrInvalidRef", err)
 	}
 }
+
+// fakeEmitter captures the notifications a deleted entity's dependents trigger.
+//
+// fakeEmitter 捕获被删实体的依赖触发的通知。
+type fakeEmitter struct {
+	types    []string
+	payloads []map[string]any
+	err      error
+}
+
+func (e *fakeEmitter) Emit(_ context.Context, eventType string, payload map[string]any) error {
+	e.types = append(e.types, eventType)
+	e.payloads = append(e.payloads, payload)
+	return e.err
+}
+
+// TestPurgeEntity_EmitsDependencyBroken: deleting a depended-on entity raises ONE durable,
+// aggregated relation.dependency_broken notification naming exactly the incoming equip/link
+// dependents (hydrated + deduped) — NOT create-provenance, NOT the entity's own outgoing edges —
+// the persisted counterpart to F160's ephemeral delete-tool note (F161).
+//
+// TestPurgeEntity_EmitsDependencyBroken：删一个被依赖的实体发 ONE 持久化、聚合的
+// relation.dependency_broken 通知，恰好点名入向 equip/link 依赖（hydrate + 去重）——非 create 溯源、
+// 非本实体出边——是 F160 瞬时 delete-tool 提示的持久对应物（F161）。
+func TestPurgeEntity_EmitsDependencyBroken(t *testing.T) {
+	repo := newFakeRepo()
+	repo.rows = []*relationdomain.Relation{
+		{ID: "rel_1", Kind: relationdomain.KindEquip, FromKind: "agent", FromID: "ag_1", ToKind: "function", ToID: "fn_1"},
+		{ID: "rel_2", Kind: relationdomain.KindLink, FromKind: "workflow", FromID: "wf_1", ToKind: "function", ToID: "fn_1"},
+		// a SECOND link edge from the same workflow (two nodes referencing fn_1) — must dedup to one ref.
+		{ID: "rel_3", Kind: relationdomain.KindLink, FromKind: "workflow", FromID: "wf_1", ToKind: "function", ToID: "fn_1"},
+		// create-provenance (the conversation that built fn_1) — NOT a dependency break.
+		{ID: "rel_4", Kind: relationdomain.KindCreate, FromKind: "conversation", FromID: "cv_1", ToKind: "function", ToID: "fn_1"},
+		// fn_1's OWN outgoing equip — NOT a dependent.
+		{ID: "rel_5", Kind: relationdomain.KindEquip, FromKind: "function", FromID: "fn_1", ToKind: "handler", ToID: "hd_9"},
+	}
+	em := &fakeEmitter{}
+	svc := NewService(Config{
+		Repo: repo,
+		Namers: map[string]Namer{
+			relationdomain.EntityKindAgent:    fakeNamer{names: map[string]string{"ag_1": "My Agent"}},
+			relationdomain.EntityKindWorkflow: fakeNamer{names: map[string]string{"wf_1": "My Flow"}},
+		},
+		Notif: em,
+		Log:   zap.NewNop(),
+	})
+
+	if err := svc.PurgeEntity(context.Background(), "function", "fn_1"); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(em.types) != 1 || em.types[0] != "relation.dependency_broken" {
+		t.Fatalf("want exactly one relation.dependency_broken emit, got types=%v", em.types)
+	}
+	p := em.payloads[0]
+	if p["deletedKind"] != "function" || p["deletedId"] != "fn_1" {
+		t.Errorf("payload deleted ref = %v/%v, want function/fn_1", p["deletedKind"], p["deletedId"])
+	}
+	deps, ok := p["dependents"].([]map[string]any)
+	if !ok {
+		t.Fatalf("dependents wrong type: %T", p["dependents"])
+	}
+	if len(deps) != 2 { // ag_1 + wf_1 (the duplicate wf_1 link edge deduped; create + own-outgoing excluded)
+		t.Fatalf("want 2 deduped dependents (agent + workflow), got %d: %+v", len(deps), deps)
+	}
+	byID := map[string]map[string]any{}
+	for _, d := range deps {
+		byID[d["id"].(string)] = d
+	}
+	if d := byID["ag_1"]; d == nil || d["name"] != "My Agent" || d["kind"] != "agent" || d["edge"] != relationdomain.KindEquip {
+		t.Errorf("agent dependent wrong: %+v", d)
+	}
+	if d := byID["wf_1"]; d == nil || d["name"] != "My Flow" || d["kind"] != "workflow" || d["edge"] != relationdomain.KindLink {
+		t.Errorf("workflow dependent wrong: %+v", d)
+	}
+}
+
+// TestPurgeEntity_NotifyEdgeCases: no incoming dependents → no notification (no false alarm); a nil
+// emitter is tolerated (CRUD-only wiring); an emit failure never fails the delete (best-effort).
+//
+// TestPurgeEntity_NotifyEdgeCases：无入向依赖 → 不发通知（不虚惊）；nil emitter 容忍（仅 CRUD 装配）；
+// emit 失败绝不让删除失败（尽力而为）。
+func TestPurgeEntity_NotifyEdgeCases(t *testing.T) {
+	ctx := context.Background()
+
+	// No dependents (only create-provenance + own outgoing) → no emit.
+	repo := newFakeRepo()
+	repo.rows = []*relationdomain.Relation{
+		{ID: "rel_1", Kind: relationdomain.KindCreate, FromKind: "conversation", FromID: "cv_1", ToKind: "function", ToID: "fn_1"},
+		{ID: "rel_2", Kind: relationdomain.KindEquip, FromKind: "function", FromID: "fn_1", ToKind: "handler", ToID: "hd_9"},
+	}
+	em := &fakeEmitter{}
+	svc := NewService(Config{Repo: repo, Notif: em, Log: zap.NewNop()})
+	if err := svc.PurgeEntity(ctx, "function", "fn_1"); err != nil {
+		t.Fatal(err)
+	}
+	if len(em.types) != 0 {
+		t.Fatalf("no dependents must emit nothing, got %v", em.types)
+	}
+
+	// Nil emitter (CRUD-only wiring) with real dependents → no panic, delete still succeeds.
+	repo2 := newFakeRepo()
+	repo2.rows = []*relationdomain.Relation{
+		{ID: "rel_1", Kind: relationdomain.KindEquip, FromKind: "agent", FromID: "ag_1", ToKind: "function", ToID: "fn_1"},
+	}
+	svcNil := NewService(Config{Repo: repo2, Log: zap.NewNop()})
+	if err := svcNil.PurgeEntity(ctx, "function", "fn_1"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Emit failure is swallowed — the delete must still succeed.
+	repo3 := newFakeRepo()
+	repo3.rows = []*relationdomain.Relation{
+		{ID: "rel_1", Kind: relationdomain.KindEquip, FromKind: "agent", FromID: "ag_1", ToKind: "function", ToID: "fn_1"},
+	}
+	emErr := &fakeEmitter{err: errors.New("emit boom")}
+	svcErr := NewService(Config{Repo: repo3, Notif: emErr, Log: zap.NewNop()})
+	if err := svcErr.PurgeEntity(ctx, "function", "fn_1"); err != nil {
+		t.Fatalf("emit failure must not fail the delete, got %v", err)
+	}
+	if len(repo3.rows) != 0 {
+		t.Errorf("delete must still purge edges despite emit failure, rows=%+v", repo3.rows)
+	}
+}
