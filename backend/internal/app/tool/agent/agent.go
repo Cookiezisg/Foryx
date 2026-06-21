@@ -25,6 +25,7 @@ func AgentTools(svc *agentapp.Service, content *searchapp.Service, deps toolapp.
 		&EditAgent{svc: svc},
 		&RevertAgent{svc: svc},
 		&DeleteAgent{svc: svc, deps: deps},
+		&UpdateAgentMeta{svc: svc},
 		&InvokeAgent{svc: svc},
 		&SearchAgentExecutions{svc: svc},
 		&GetAgentExecution{svc: svc},

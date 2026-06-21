@@ -13,7 +13,7 @@ audience: [human, ai]
 
 ## 1. 定位
 
-Agent **自己不写代码**：它是一份"LLM 员工配置"——提示词 + **按引用挂载**的能力（fn_/hd_/mcp 工具、skill、文档、模型覆盖），运行时跑共享的 ReAct 引擎（`app/loop.Run`）。代码层级：`domain/agent`（2 文件）→ `app/agent`（8 文件 + invoke 是核心）→ `infra/store/agent` + `app/tool/mount`（挂载合成，agent 专属机制）+ `app/tool/agent`（9 工具）。
+Agent **自己不写代码**：它是一份"LLM 员工配置"——提示词 + **按引用挂载**的能力（fn_/hd_/mcp 工具、skill、文档、模型覆盖），运行时跑共享的 ReAct 引擎（`app/loop.Run`）。代码层级：`domain/agent`（2 文件）→ `app/agent`（8 文件 + invoke 是核心）→ `infra/store/agent` + `app/tool/mount`（挂载合成，agent 专属机制）+ `app/tool/agent`（10 工具）。
 
 ## 2. 心智模型
 
@@ -79,7 +79,7 @@ InvokeAgent(in)
 
 ## 6. 契约（引用）
 
-端点 → [api.md](../api.md)#agent · 表 → [database.md](../database.md)#agent · 码 → [error-codes.md](../error-codes.md)（domain `AGENT_*` 11 + 工具校验 6）· 事件 → [events.md](../events.md)。LLM 工具 9 个：search/get/create/edit/revert/delete_agent + invoke_agent + 执行日志查询（search_agent_executions + get_agent_execution）；create/edit 是 build 工具（config 镜像 entities 流）。
+端点 → [api.md](../api.md)#agent · 表 → [database.md](../database.md)#agent · 码 → [error-codes.md](../error-codes.md)（domain `AGENT_*` 11 + 工具校验 6）· 事件 → [events.md](../events.md)。LLM 工具 10 个：search/get/create/edit/revert/delete_agent + invoke_agent + 执行日志查询（search_agent_executions + get_agent_execution）+ **`update_agent_meta`**（只改 row 的 name/desc/tags、不铸版本——name/desc/tags 不在版本化 config 内，edit_agent 改不了它们，纯改名/改述用它）；create/edit 是 build 工具（config 镜像 entities 流）。
 
 ## 7. 跨域集成
 

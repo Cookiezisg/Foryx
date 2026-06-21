@@ -19,7 +19,7 @@ type RevertAgent struct{ svc *agentapp.Service }
 func (t *RevertAgent) Name() string { return "revert_agent" }
 
 func (t *RevertAgent) Description() string {
-	return "Revert an agent's active version to an existing older version number (does not renumber). Use when a recent edit made it worse — the version history is the undo. Note: name, description and tags are NOT versioned (they live on the agent), so a revert restores only the versioned config (prompt/tools/knowledge/skill/inputs/outputs/model) and leaves name/description/tags unchanged — use edit_agent set_meta to also change those."
+	return "Revert an agent's active version to an existing older version number (does not renumber). Use when a recent edit made it worse — the version history is the undo. Note: name, description and tags are NOT versioned (they live on the agent), so a revert restores only the versioned config (prompt/tools/knowledge/skill/inputs/outputs/model) and leaves name/description/tags unchanged — use update_agent_meta to also change those."
 }
 
 func (t *RevertAgent) Parameters() json.RawMessage {
@@ -151,4 +151,57 @@ func (t *InvokeAgent) Execute(ctx context.Context, argsJSON string) (string, err
 		return "", fmt.Errorf("invoke_agent: %w", err)
 	}
 	return toolapp.ToJSON(res), nil
+}
+
+// --- update_agent_meta -----------------------------------------------------
+
+type UpdateAgentMeta struct{ svc *agentapp.Service }
+
+func (t *UpdateAgentMeta) Name() string { return "update_agent_meta" }
+
+func (t *UpdateAgentMeta) Description() string {
+	return "Rename or re-describe an agent: patches name/description/tags on the agent row only — NO new version. This is the right tool for a pure rename/redescribe; name/description/tags are NOT part of the versioned config (prompt/tools/knowledge/skill/io/model), so edit_agent cannot change them. Pass only the fields you want to change (omit the rest)."
+}
+
+func (t *UpdateAgentMeta) Parameters() json.RawMessage {
+	return json.RawMessage(`{
+		"type": "object",
+		"required": ["agentId"],
+		"properties": {
+			"agentId": {"type": "string"},
+			"name": {"type": "string", "description": "New name (lowercase alphanumeric + dashes/underscores, 1-64 chars)."},
+			"description": {"type": "string"},
+			"tags": {"type": "array", "items": {"type": "string"}}
+		}
+	}`)
+}
+
+func (t *UpdateAgentMeta) ValidateInput(args json.RawMessage) error {
+	var a struct {
+		AgentID string `json:"agentId"`
+	}
+	if err := json.Unmarshal(args, &a); err != nil {
+		return fmt.Errorf("update_agent_meta: bad args: %w", err)
+	}
+	if a.AgentID == "" {
+		return ErrAgentIDRequired
+	}
+	return nil
+}
+
+func (t *UpdateAgentMeta) Execute(ctx context.Context, argsJSON string) (string, error) {
+	var args struct {
+		AgentID     string    `json:"agentId"`
+		Name        *string   `json:"name"`
+		Description *string   `json:"description"`
+		Tags        *[]string `json:"tags"`
+	}
+	if err := json.Unmarshal([]byte(argsJSON), &args); err != nil {
+		return "", fmt.Errorf("update_agent_meta: bad args: %w", err)
+	}
+	ag, err := t.svc.UpdateMeta(ctx, agentapp.UpdateMetaInput{ID: args.AgentID, Name: args.Name, Description: args.Description, Tags: args.Tags})
+	if err != nil {
+		return "", fmt.Errorf("update_agent_meta: %w", err)
+	}
+	return toolapp.ToJSON(map[string]any{"id": ag.ID, "name": ag.Name, "description": ag.Description, "tags": ag.Tags}), nil
 }

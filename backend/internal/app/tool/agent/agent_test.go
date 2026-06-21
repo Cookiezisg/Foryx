@@ -11,7 +11,7 @@ func TestAgentTools_NamesAndCount(t *testing.T) {
 	want := map[string]bool{
 		"search_agent": true, "get_agent": true, "create_agent": true, "edit_agent": true,
 		"revert_agent": true, "delete_agent": true, "invoke_agent": true,
-		"search_agent_executions": true, "get_agent_execution": true,
+		"search_agent_executions": true, "get_agent_execution": true, "update_agent_meta": true,
 	}
 	if len(tools) != len(want) {
 		t.Fatalf("want %d tools, got %d", len(want), len(tools))
