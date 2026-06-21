@@ -7,6 +7,7 @@ import (
 	"go.uber.org/zap"
 
 	middlewarehttpapi "github.com/sunweilin/anselm/backend/internal/transport/httpapi/middleware"
+	responsehttpapi "github.com/sunweilin/anselm/backend/internal/transport/httpapi/response"
 )
 
 // Chain wraps h with the standard middleware stack, outermost first:
@@ -20,6 +21,7 @@ import (
 // IdentifyWorkspace → RequireWorkspace(豁免)。resolver 在 workspace 模块接线前可为 nil（跳过校验）。
 // bootstrap 构造 mux、注册所有 handler 后把结果过 Chain。
 func Chain(h http.Handler, log *zap.Logger, resolver middlewarehttpapi.WorkspaceResolver) http.Handler {
+	h = envelopeMuxErrors(h) // innermost: rewrite the mux's plain-text 404/405 into the N1 envelope
 	h = requireWorkspaceExempt(h)
 	h = middlewarehttpapi.IdentifyWorkspace(resolver)(h)
 	h = middlewarehttpapi.InjectLocale(h)
@@ -59,4 +61,52 @@ func requireWorkspaceExempt(next http.Handler) http.Handler {
 		}
 		guarded.ServeHTTP(w, r)
 	})
+}
+
+// envelopeMuxErrors rewrites the stdlib ServeMux's plain text/plain 404 (no route matched) and 405
+// (method not allowed) into the N1 error envelope for /api/v1/* paths. Without it those bypass the N1
+// contract (failure MUST be {"error":{code,message,details}} JSON) — a client that always parses the
+// error envelope hits a JSON parse error on every unknown route / wrong method (F172). It intercepts
+// ONLY a 404/405 status on /api/v1/*; every other response (incl. large bodies) passes through with no
+// buffering. The 405's Allow header set by the mux is preserved (response.Error does not touch it).
+//
+// envelopeMuxErrors 把标准库 ServeMux 的纯 text/plain 404（无路由匹配）/405（方法不允许）在 /api/v1/* 上改写成
+// N1 错误 envelope。否则它们绕过 N1 契约（失败须 `{"error":{code,message,details}}` JSON）——总解析错误 envelope
+// 的客户端会在每个未知路由/错误方法上 JSON 解析失败（F172）。仅拦 /api/v1/* 上的 404/405 状态；其余响应（含大 body）
+// 原样透传、不缓冲。mux 设的 405 Allow header 保留（response.Error 不动它）。
+func envelopeMuxErrors(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/v1/") {
+			next.ServeHTTP(w, r)
+			return
+		}
+		next.ServeHTTP(&muxErrorWriter{ResponseWriter: w}, r)
+	})
+}
+
+// muxErrorWriter intercepts a 404/405 WriteHeader and writes the N1 envelope instead, swallowing the
+// stdlib's subsequent plain-text body. Any other status passes through untouched.
+type muxErrorWriter struct {
+	http.ResponseWriter
+	intercepted bool
+}
+
+func (e *muxErrorWriter) WriteHeader(code int) {
+	switch code {
+	case http.StatusNotFound:
+		e.intercepted = true
+		responsehttpapi.Error(e.ResponseWriter, code, "ROUTE_NOT_FOUND", "no route matches this path", nil)
+	case http.StatusMethodNotAllowed:
+		e.intercepted = true
+		responsehttpapi.Error(e.ResponseWriter, code, "METHOD_NOT_ALLOWED", "this method is not allowed for this path", nil)
+	default:
+		e.ResponseWriter.WriteHeader(code)
+	}
+}
+
+func (e *muxErrorWriter) Write(b []byte) (int, error) {
+	if e.intercepted {
+		return len(b), nil // the stdlib's "404 page not found" / "Method Not Allowed" body — already replaced
+	}
+	return e.ResponseWriter.Write(b)
 }

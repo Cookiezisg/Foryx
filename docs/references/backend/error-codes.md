@@ -11,7 +11,7 @@ audience: [human, ai]
 
 # 错误码 —— 错误系统 + 全量 wire code 登记
 
-> 后端错误的单一事实源：框架 / 规约 + **286 个 sentinel wire code 完整登记**（按域）+ **2 个 transport 合成码**（`FromDomainError` 从 stdlib `context` 错误直发、非 `errorspkg.New` sentinel）。机械守卫保证「全用 `errorspkg.New`」+「码全库唯一」——`pkg/errors/standard_test.go`，进 `make verify`。
+> 后端错误的单一事实源：框架 / 规约 + **sentinel wire code 完整登记**（按域）+ **4 个 transport 合成码**（`FromDomainError` 从 stdlib `context` 错误直发 2 个 + `envelopeMuxErrors` 改写 ServeMux 404/405 2 个，均非 `errorspkg.New` sentinel）。机械守卫保证「全用 `errorspkg.New`」+「码全库唯一」——`pkg/errors/standard_test.go`，进 `make verify`。
 
 ## 框架（`pkg/errors`）
 
@@ -56,14 +56,16 @@ audience: [human, ai]
 | `INTERNAL_ERROR` | 500 | internal error（recover 的 panic；原始细节记日志、不上线缆） |
 | `STREAMING_UNSUPPORTED` | 500 | streaming not supported（SSE 端点遇非流式 ResponseWriter；`response/sse.go` 经 `FromDomainError` 发此 sentinel） |
 
-### transport 合成码（`FromDomainError`，非 `errorspkg.New` sentinel）
+### transport 合成码（非 `errorspkg.New` sentinel）
 
-> `transport/httpapi/response/errmap.go::FromDomainError` 把 stdlib `context` 错误直发为 wire 码——不走 `errorspkg.New`，故不在上面 281 的机械抽取内，但前端确会收到。这是 transport 唯一认识的非 `Error` sentinel（见 errmap.go 注释）。
+> `FromDomainError`（`errmap.go`）把 stdlib `context` 错误直发为 wire 码 + `router/chain.go::envelopeMuxErrors` 把 ServeMux 的纯文本 404/405 改写成 N1 envelope——均不走 `errorspkg.New`、不在上面机械抽取内，但前端确会收到。
 
 | code | HTTP | message | 触发 |
 |---|---|---|---|
 | `CLIENT_CLOSED` | 499 | client closed request | `errors.Is(err, context.Canceled)`（客户端断连 / 取消） |
 | `REQUEST_TIMEOUT` | 504 | request timed out | `errors.Is(err, context.DeadlineExceeded)`（请求超时） |
+| `ROUTE_NOT_FOUND` | 404 | no route matches this path | `/api/v1/*` 无路由匹配（`envelopeMuxErrors` 改写 ServeMux 纯文本 404，F172） |
+| `METHOD_NOT_ALLOWED` | 405 | this method is not allowed for this path | `/api/v1/*` 路径方法不允许（同上改写 405、保留 mux 的 `Allow` header，F172） |
 
 ### `app/aispawn`
 
