@@ -51,9 +51,9 @@ audience: [human, ai]
 **后台路径不再内联跑节点。** `DrainFirings` phase-1（claim/seed/overlap 决策）**严格顺序+有序**（overlap 正确性依赖每存活者在下条被决策前已落 running），phase-2 把每个 seed 的 run **入队**到有界 worker 池（`pool.go`，`advanceWorkers=4`）；`Recover` 与 `CheckTimeouts→settleTimeout` 同样入队。**手动路径**（`StartRun`/`DecideApproval`/`Replay`）仍**内联**经 `drive` 同步跑到终态/parked（一个用户、一个 run，无 HOL）。
 
 - **为什么池小（N=4）**：SQLite 单连接（`SetMaxOpenConns(1)`）使所有 durable 写 Go 层串行、handler 常驻实例单 mutex stdio 管道——故池唯一并行的是 I/O 密集的慢调用（function sandbox / agent LLM turn / MCP），小 N 吃满收益又封顶子进程扇出（R 系列）。非 settings 旋钮。
-- **per-run 单飞 + redrive**：`drive` 保证同 run 同时至多一个 goroutine；并发触发同一 run 时其余置 redrive 标志、活跃驱动者再走一轮（record-once 护持久性、guard 防重复副作用）。池未启动时（测试/纯手动）`enqueueAdvance` 内联驱动——故现有测试保持同步、向后兼容。
+- **per-run 单飞 + redrive**：`drive` 保证同 run 同时至多一个 goroutine；并发触发同一 run 时其余置 redrive 标志、活跃驱动者再走一轮（record-once 护持久性、guard 防重复副作用）。**redrive 仅在 ctx 仍活时进行**——ctx 一取消即停止再走（否则 Advance 立刻返 ctx.Err，关停期的信号风暴会空转钉 CPU；F101 加固）。池未启动时（测试/纯手动）`enqueueAdvance` 内联驱动——故现有测试保持同步、向后兼容。`enqueueAdvance` 的入队发送在释放锁后进行、故与 `StopPool` 的 `close(queue)` 竞争：发送经 `sendJob` **recover 兜 panic**（关停期撞上已关队列 = 丢弃该入队、清去重槽、run 下次 boot 续，绝不崩进程；F101）。
 - **HOL 已消除**：一个 30s 慢节点跑在池 worker 上，drain goroutine 只 claim+入队即返回——慢节点再卡不住后面的 firing / workspace / 下一 tick / 审批超时。
-- **关闭序（R3/F100）**：停 drain+timeout ticker（不再喂池）→ 等两循环返回（快）→ `WaitPoolDrained`（有界宽限给在飞节点干净收尾）→ `scheduler.Shutdown()`（cancel 全部在飞 ctx，含池 worker）→ `StopPool()`（关队列 + WaitGroup 等 worker 退出）**才** `db.Close`。
+- **关闭序（R3/F100）**：停 drain+timeout ticker（不再喂池）→ **受 shutdown ctx 上界**等两循环返回（快——只 claim+enqueue；但若 DB 操作卡死，宽限到期照常往下走、绝不把 SIGTERM 拖成 SIGKILL，F101）→ `WaitPoolDrained`（有界宽限给在飞节点干净收尾）→ `scheduler.Shutdown()`（cancel 全部在飞 ctx，含池 worker）→ `StopPool()`（关队列 + WaitGroup 等 worker 退出）**才** `db.Close`。两循环的等待早退后可能仍有 feeder 在 mid-send，由 `sendJob` 的 recover 兜住（见上条）。
 
 ## 5. 后台播种惯例（P3-1 教训，背景工作的铁律）
 

@@ -421,11 +421,27 @@ func (a *App) Shutdown(ctx context.Context) {
 	// **池 worker** 有限宽限跑完当前节点（record-once 持久化、下次 boot 干净续）。宽限超时则取消所有在飞 Advance
 	// （池上 + 手动 :trigger），免其继续 spawn 子进程或撞 db.Close，再**等池 worker 退出**才 db.Close（StopPool 的
 	// WaitGroup）——drainDone 单独已不再表示「所有 Advance 完」、只表示 drain ticker 停了。被打断的 run 记 failed、可 :replay。
+	// Bound BOTH waits by the shutdown ctx: the loops return fast now (claim + enqueue only, F174), but a
+	// wedged DB op inside forEachWorkspace must never turn SIGTERM into a SIGKILL (the F101 shutdown-hang
+	// symptom). If a loop overruns the grace we proceed anyway — the pool's send is panic-safe (sendJob),
+	// so a still-feeding loop racing StopPool can no longer crash the process; its late enqueue is dropped
+	// and the run resumes next boot.
+	// 两个等待都受 shutdown ctx 上界约束：循环现在很快返回（只 claim+enqueue，F174），但 forEachWorkspace 里
+	// 卡死的 DB 操作绝不能把 SIGTERM 拖成 SIGKILL（F101 关停挂起症状）。循环超出宽限则照常往下走——池的发送已
+	// panic-safe（sendJob），仍在喂的循环撞上 StopPool 不再崩进程，其迟到入队被丢、run 下次 boot 续。
 	if a.drainDone != nil {
-		<-a.drainDone // drain ticker loop returned (fast — claim + enqueue only)
+		select {
+		case <-a.drainDone: // drain ticker loop returned (fast — claim + enqueue only)
+		case <-ctx.Done():
+			a.log.Warn("bootstrap: drain loop did not return within shutdown grace; proceeding")
+		}
 	}
 	if a.timeoutDone != nil {
-		<-a.timeoutDone // timeout ticker loop returned
+		select {
+		case <-a.timeoutDone: // timeout ticker loop returned
+		case <-ctx.Done():
+			a.log.Warn("bootstrap: timeout loop did not return within shutdown grace; proceeding")
+		}
 	}
 	a.svc.scheduler.WaitPoolDrained(ctx, drainShutdownGrace) // bounded grace for in-flight nodes to finish cleanly
 	a.svc.scheduler.Shutdown()                               // cancel every still-in-flight Advance (pooled + manual :trigger)

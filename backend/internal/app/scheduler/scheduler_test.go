@@ -1182,3 +1182,33 @@ func TestPool_ShutdownDrainsWorkers(t *testing.T) {
 		t.Fatal("a shutdown-interrupted run must not record completed")
 	}
 }
+
+// TestPool_SendJobRecoversOnClosedQueue pins the F101 shutdown-hardening invariant: a late enqueue whose
+// send races StopPool's close(q) must NOT crash the process. Shutdown now bounds its drain waits, so it
+// can reach StopPool while a feeder goroutine is still mid-send (the send happens after advMu is released
+// — it can't hold the lock). The recover in sendJob turns that benign shutdown race into a dropped
+// enqueue (dedup slot cleared, run resumes next boot) instead of a fatal "send on closed channel".
+func TestPool_SendJobRecoversOnClosedQueue(t *testing.T) {
+	disp := newDisp()
+	svc, _ := mkSvc(t, holGraph(), disp, nil, nil, workflowdomain.ConcurrencyAllowAll)
+	svc.StartPool()
+
+	// Capture the live queue + mark a run queued exactly as enqueueAdvance does just before its send,
+	// then let StopPool close the queue out from under us — the precise mid-send race.
+	svc.advMu.Lock()
+	q := svc.advQueue
+	svc.advQueued["run_x"] = true
+	svc.advMu.Unlock()
+	svc.StopPool() // closes q
+
+	// The late send must recover (no panic) and clear the dedup slot. A panic here fails the test by
+	// crashing the goroutine; reaching the assertion at all proves the recover fired.
+	svc.sendJob(q, advanceJob{context.Background(), "run_x"}, "run_x")
+
+	svc.advMu.Lock()
+	queued := svc.advQueued["run_x"]
+	svc.advMu.Unlock()
+	if queued {
+		t.Fatal("sendJob on a closed queue must clear the dedup slot so the run can be re-enqueued later")
+	}
+}

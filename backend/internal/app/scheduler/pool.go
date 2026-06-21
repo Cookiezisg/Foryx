@@ -143,7 +143,31 @@ func (s *Service) enqueueAdvance(ctx context.Context, runID string) {
 	s.advQueued[runID] = true
 	q := s.advQueue
 	s.advMu.Unlock()
-	q <- advanceJob{ctx, runID}
+	s.sendJob(q, advanceJob{ctx, runID}, runID)
+}
+
+// sendJob delivers a job to the worker queue, recovering from the "send on closed channel" panic that a
+// concurrent StopPool (close(q)) can cause — the send happens after advMu is released (it must not block
+// the lock), so it races close. A closed queue means the pool is already shutting down: the run's ctx is
+// covered by Shutdown's cancel-all and the run resumes next boot via Recover, so DROPPING the enqueue is
+// safe (we just clear its dedup slot). Without this guard a late enqueue racing StopPool would crash the
+// whole single-process backend — and Shutdown now bounds its drain waits (build.go) so it CAN reach
+// StopPool while a feeder is still mid-send. record-once keeps durability intact regardless (F101).
+//
+// sendJob 把 job 投到 worker 队列，并从并发 StopPool（close(q)）可能引发的「向已关闭 channel 发送」panic 中
+// 恢复——发送在释放 advMu 之后（不能持锁发送以免阻塞），故与 close 竞争。队列已关 = 池正在关停：run 的 ctx 已被
+// Shutdown 的 cancel-all 覆盖、下次 boot 经 Recover 续跑，故**丢弃**该入队是安全的（只清其去重槽）。无此保护，
+// 一个与 StopPool 竞争的迟到入队会崩掉整个单进程后端——而 Shutdown 现在给排空等待设了上界（build.go），故它
+// **能**在某 feeder 仍在 mid-send 时就走到 StopPool。无论如何 record-once 保住持久性（F101）。
+func (s *Service) sendJob(q chan advanceJob, job advanceJob, runID string) {
+	defer func() {
+		if recover() != nil {
+			s.advMu.Lock()
+			delete(s.advQueued, runID)
+			s.advMu.Unlock()
+		}
+	}()
+	q <- job
 }
 
 // drive is the single-flight advancer: AT MOST ONE goroutine drives a given run at a time. If another
@@ -175,11 +199,20 @@ func (s *Service) drive(ctx context.Context, runID string) error {
 	for {
 		err = s.Advance(ctx, runID) // one full walk to quiescence (terminal / parked / interrupted)
 		s.advMu.Lock()
-		if s.advPending[runID] {
+		// Redrive only if a signal arrived mid-walk AND ctx is still live. A cancelled run must NOT be
+		// re-walked: Advance returns ctx.Err immediately on a dead ctx, so a signal-storm during shutdown
+		// would spin this loop hot with no forward progress (an F101 CPU-pin vector). Clear advPending on
+		// EVERY exit so a pending redrive can't leak past the in-progress slot's release.
+		//
+		// 仅当 mid-walk 来了信号 **且** ctx 仍活时才 redrive。已取消的 run 绝不可再走：ctx 死后 Advance 立刻
+		// 返 ctx.Err，故关停期的信号风暴会让本循环空转钉 CPU（F101 钉 CPU 的一个向量）。每个出口都清 advPending，
+		// 免 pending redrive 泄漏过 in-progress 槽的释放。
+		if s.advPending[runID] && ctx.Err() == nil {
 			delete(s.advPending, runID)
 			s.advMu.Unlock()
 			continue // a signal arrived mid-walk — walk once more
 		}
+		delete(s.advPending, runID)
 		delete(s.advInProgress, runID)
 		s.advMu.Unlock()
 		return err
