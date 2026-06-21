@@ -289,3 +289,20 @@ func TestCancelParkedNodes(t *testing.T) {
 		t.Fatalf("only fr_2's parked node should remain in the inbox, got %+v", parked)
 	}
 }
+
+// TestListRuns_RejectsInvalidStatus pins F168-M2: an out-of-enum status filter (e.g. "parked", which
+// is a NODE status, not a run status) is rejected 422 ErrInvalidStatus instead of silently matching
+// zero rows — which an agent/REST caller would read as a false "no such runs exist".
+func TestListRuns_RejectsInvalidStatus(t *testing.T) {
+	s := newStore(t)
+	ctx := ctxWS("ws_1")
+	if _, _, err := s.ListRuns(ctx, flowrundomain.ListFilter{Status: "parked"}); !errors.Is(err, flowrundomain.ErrInvalidStatus) {
+		t.Fatalf("invalid status must return ErrInvalidStatus, got %v", err)
+	}
+	if _, _, err := s.ListRuns(ctx, flowrundomain.ListFilter{Status: flowrundomain.StatusCompleted}); err != nil {
+		t.Fatalf("valid status must succeed (even with zero rows), got %v", err)
+	}
+	if _, _, err := s.ListRuns(ctx, flowrundomain.ListFilter{}); err != nil {
+		t.Fatalf("empty filter must succeed, got %v", err)
+	}
+}

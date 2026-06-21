@@ -42,7 +42,7 @@ audience: [human, ai]
 
 ---
 
-## 全量登记（286 码，按域）
+## 全量登记（297 码，按域）
 
 > `errorspkg.New` 机械抽取（281，不含 `*_test.go` 测试 sentinel 如 DUP/THING_NOT_FOUND）+ `pkg/errors` 自身 bare `New` 的跨域 sentinel（5）。每条：code · HTTP（Kind 映射）· message。`(dynamic)` = 消息含运行时格式化。
 
@@ -279,6 +279,7 @@ audience: [human, ai]
 | `AGENT_OUTPUT_NOT_STRUCTURED` | 422 | agent declared multiple structured outputs but its final answer was not a JSON object |
 | `AGENT_MOUNT_INVALID` | 422 | agent mounted tool ref is invalid or unresolvable |
 | `AGENT_NAME_CONFLICT` | 409 | agent name already exists |
+| `AGENT_EXECUTION_INVALID_STATUS` | 422 | agent execution status filter must be one of: ok, failed, cancelled, timeout (F168-M2; `details.allowed`) |
 | `AGENT_NOT_FOUND` | 404 | agent not found |
 | `AGENT_NO_ACTIVE_VERSION` | 422 | agent has no active version to invoke |
 | `AGENT_SKILL_NOT_FOUND` | 422 | agent mounts a skill that does not exist（create/edit 期 eager 校验，details.skill；此前 dangling skill 名只在首次 invoke 才报，F96） |
@@ -368,6 +369,7 @@ audience: [human, ai]
 |---|---|---|
 | `FLOWRUN_APPROVAL_NOT_PARKED` | 422 | approval node is not awaiting a decision |
 | `FLOWRUN_INVALID_DECISION` | 422 | approval decision must be 'yes' or 'no' |
+| `FLOWRUN_INVALID_STATUS` | 422 | flowrun status filter must be one of: running, completed, failed, cancelled (F168-M2; `details.allowed`) |
 | `FLOWRUN_INVALID_ENTRY` | 422 | invalid or ambiguous trigger entry node |
 | `FLOWRUN_NOT_FOUND` | 404 | flowrun not found |
 | `FLOWRUN_NOT_REPLAYABLE` | 422 | flowrun is not in a replayable (failed) state |
@@ -381,6 +383,7 @@ audience: [human, ai]
 | `FUNCTION_INVALID_CODE` | 422 | function code invalid |
 | `FUNCTION_INVALID_NAME` | 400 | invalid function name (lowercase alphanumeric + dashes/underscores, 1-64 chars) |
 | `FUNCTION_NAME_DUPLICATE` | 409 | function name already exists |
+| `FUNCTION_EXECUTION_INVALID_STATUS` | 422 | function execution status filter must be one of: ok, failed, cancelled, timeout (F168-M2; `details.allowed`) |
 | `FUNCTION_NOT_FOUND` | 404 | function not found |
 | `FUNCTION_NO_ACTIVE_VERSION` | 422 | function has no active version |
 | `FUNCTION_OP_INVALID` | 422 | invalid build op |
@@ -403,6 +406,7 @@ audience: [human, ai]
 | `HANDLER_INVALID_NAME` | 400 | invalid handler name (lowercase alphanumeric + dashes/underscores, 1-64 chars) |
 | `HANDLER_METHOD_NOT_FOUND` | 404 | handler method not found |
 | `HANDLER_NAME_DUPLICATE` | 409 | handler name already exists |
+| `HANDLER_CALL_INVALID_STATUS` | 422 | handler call status filter must be one of: ok, failed, cancelled, timeout (F168-M2; `details.allowed`) |
 | `HANDLER_NOT_FOUND` | 404 | handler not found |
 | `HANDLER_NO_ACTIVE_VERSION` | 422 | handler has no active version |
 | `HANDLER_OP_INVALID` | 422 | invalid build op |
@@ -429,6 +433,7 @@ audience: [human, ai]
 | `MCP_REGISTRY_NOT_FOUND` | 404 | mcp registry entry not found |
 | `MCP_RPC_ERROR` | 502 | mcp tool call failed |
 | `MCP_SERVER_DOWN` | 503 | mcp server not connected |
+| `MCP_CALL_INVALID_STATUS` | 422 | mcp call status filter must be one of: ok, failed, cancelled, timeout (F168-M2; `details.allowed`) |
 | `MCP_SERVER_NOT_FOUND` | 404 | mcp server not found |
 | `MCP_TOOL_NOT_FOUND` | 404 | mcp tool not found on server |
 | `MCP_TOOL_TIMEOUT` | 504 | mcp tool call timed out |

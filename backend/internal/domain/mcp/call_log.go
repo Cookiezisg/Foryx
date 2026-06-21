@@ -9,6 +9,12 @@ import (
 // Call status values (mirror handler 1:1).
 //
 // Call 状态值（与 handler 1:1）。
+// CallStatuses is the closed call-status enum — used to reject illegal list-filter values (an
+// out-of-set status would otherwise silently match zero rows, F168-M2).
+//
+// CallStatuses 是调用状态封闭集——用于拒非法 list 过滤值（非集内状态否则静默匹配 0 行，F168-M2）。
+var CallStatuses = []string{CallStatusOK, CallStatusFailed, CallStatusCancelled, CallStatusTimeout}
+
 const (
 	CallStatusOK        = "ok"
 	CallStatusFailed    = "failed"

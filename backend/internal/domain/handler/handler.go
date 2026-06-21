@@ -107,8 +107,12 @@ const (
 )
 
 var (
-	ErrNotFound            = errorspkg.New(errorspkg.KindNotFound, "HANDLER_NOT_FOUND", "handler not found")
-	ErrDuplicateName       = errorspkg.New(errorspkg.KindConflict, "HANDLER_NAME_DUPLICATE", "handler name already exists")
+	ErrNotFound      = errorspkg.New(errorspkg.KindNotFound, "HANDLER_NOT_FOUND", "handler not found")
+	ErrDuplicateName = errorspkg.New(errorspkg.KindConflict, "HANDLER_NAME_DUPLICATE", "handler name already exists")
+	// ErrInvalidCallStatus: a list filter passed a status outside CallStatuses — 422 with the allowed set
+	// in Details so the caller self-corrects instead of silently getting an empty page (F168-M2).
+	// ErrInvalidCallStatus：list 过滤传了 CallStatuses 外的状态——返 422、Details 带合法集自纠（F168-M2）。
+	ErrInvalidCallStatus   = errorspkg.New(errorspkg.KindUnprocessable, "HANDLER_CALL_INVALID_STATUS", "handler call status filter must be one of: ok, failed, cancelled, timeout")
 	ErrVersionNotFound     = errorspkg.New(errorspkg.KindNotFound, "HANDLER_VERSION_NOT_FOUND", "handler version not found")
 	ErrVersionConflict     = errorspkg.New(errorspkg.KindConflict, "HANDLER_VERSION_CONFLICT", "handler version already exists (concurrent edit)")
 	ErrCallNotFound        = errorspkg.New(errorspkg.KindNotFound, "HANDLER_CALL_NOT_FOUND", "handler call not found")

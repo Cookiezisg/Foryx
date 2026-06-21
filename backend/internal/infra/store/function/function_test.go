@@ -297,3 +297,19 @@ func TestExecutions_LogsOnGetNotList(t *testing.T) {
 		}
 	}
 }
+
+// TestListExecutions_RejectsInvalidStatus pins F168-M2 for the execution-list path (agent/handler/mcp
+// stores mirror this exactly): an out-of-enum status is rejected 422 instead of silently empty.
+func TestListExecutions_RejectsInvalidStatus(t *testing.T) {
+	s := newStore(t)
+	ctx := ctxWS("ws_1")
+	if _, _, err := s.ListExecutions(ctx, functiondomain.ExecutionFilter{Status: "running"}); !errors.Is(err, functiondomain.ErrInvalidExecutionStatus) {
+		t.Fatalf("invalid status must return ErrInvalidExecutionStatus, got %v", err) // "running" is a flowrun status, not an execution status
+	}
+	if _, _, err := s.ListExecutions(ctx, functiondomain.ExecutionFilter{Status: functiondomain.ExecutionStatusOK}); err != nil {
+		t.Fatalf("valid status must succeed, got %v", err)
+	}
+	if _, _, err := s.ListExecutions(ctx, functiondomain.ExecutionFilter{}); err != nil {
+		t.Fatalf("empty filter must succeed, got %v", err)
+	}
+}

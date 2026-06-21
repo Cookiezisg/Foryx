@@ -91,6 +91,13 @@ var (
 	// ErrDuplicateName：workspace 内已有同名活跃 function。
 	ErrDuplicateName = errorspkg.New(errorspkg.KindConflict, "FUNCTION_NAME_DUPLICATE", "function name already exists")
 
+	// ErrInvalidExecutionStatus: a list filter passed a status outside ExecutionStatuses. 422 with the
+	// allowed set in Details so the caller self-corrects instead of silently getting an empty page (F168-M2).
+	//
+	// ErrInvalidExecutionStatus：list 过滤传了 ExecutionStatuses 外的状态。返 422、Details 带合法集，让调
+	// 用方自纠，而非静默拿空页（F168-M2）。
+	ErrInvalidExecutionStatus = errorspkg.New(errorspkg.KindUnprocessable, "FUNCTION_EXECUTION_INVALID_STATUS", "function execution status filter must be one of: ok, failed, cancelled, timeout")
+
 	// ErrVersionNotFound: version id / number miss.
 	//
 	// ErrVersionNotFound：version id / 号未命中。

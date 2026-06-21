@@ -15,6 +15,12 @@ const (
 	ExecutionStatusTimeout   = "timeout"
 )
 
+// ExecutionStatuses is the closed execution-status enum — used to reject illegal list-filter values
+// (an out-of-set status would otherwise silently match zero rows, F168-M2).
+//
+// ExecutionStatuses 是执行状态封闭集——用于拒非法 list 过滤值（非集内状态否则静默匹配 0 行，F168-M2）。
+var ExecutionStatuses = []string{ExecutionStatusOK, ExecutionStatusFailed, ExecutionStatusCancelled, ExecutionStatusTimeout}
+
 // TriggeredBy values record which execution body invoked the function. The axis is
 // "who ran it" (an execution body), not "how the request arrived":
 //   - chat:     LLM ran run_function inside a user conversation

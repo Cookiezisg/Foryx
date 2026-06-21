@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	functiondomain "github.com/sunweilin/anselm/backend/internal/domain/function"
 	ormpkg "github.com/sunweilin/anselm/backend/internal/pkg/orm"
@@ -28,6 +29,11 @@ func (s *Store) GetExecutionByID(ctx context.Context, id string) (*functiondomai
 }
 
 func (s *Store) ListExecutions(ctx context.Context, filter functiondomain.ExecutionFilter) ([]*functiondomain.Execution, string, error) {
+	// Reject an out-of-enum status loudly (422) instead of silently matching zero rows (F168-M2).
+	// 非枚举状态大声拒（422），而非静默匹配 0 行（F168-M2）。
+	if filter.Status != "" && !slices.Contains(functiondomain.ExecutionStatuses, filter.Status) {
+		return nil, "", functiondomain.ErrInvalidExecutionStatus.WithDetails(map[string]any{"allowed": functiondomain.ExecutionStatuses, "got": filter.Status})
+	}
 	q := s.execFilterQuery(filter, true)
 	rows, next, err := q.Page(ctx, filter.Cursor, filter.Limit)
 	if err != nil {

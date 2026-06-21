@@ -15,6 +15,12 @@ const (
 	CallStatusTimeout   = "timeout"
 )
 
+// CallStatuses is the closed call-status enum — used to reject illegal list-filter values (an
+// out-of-set status would otherwise silently match zero rows, F168-M2).
+//
+// CallStatuses 是调用状态封闭集——用于拒非法 list 过滤值（非集内状态否则静默匹配 0 行，F168-M2）。
+var CallStatuses = []string{CallStatusOK, CallStatusFailed, CallStatusCancelled, CallStatusTimeout}
+
 // TriggeredBy values record which execution body invoked the method (same axis as
 // function: who ran it, not how the request arrived).
 //

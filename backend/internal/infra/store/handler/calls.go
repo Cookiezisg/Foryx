@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	handlerdomain "github.com/sunweilin/anselm/backend/internal/domain/handler"
 	ormpkg "github.com/sunweilin/anselm/backend/internal/pkg/orm"
@@ -28,6 +29,11 @@ func (s *Store) GetCallByID(ctx context.Context, id string) (*handlerdomain.Call
 }
 
 func (s *Store) ListCalls(ctx context.Context, filter handlerdomain.CallFilter) ([]*handlerdomain.Call, string, error) {
+	// Reject an out-of-enum status loudly (422) instead of silently matching zero rows (F168-M2).
+	// 非枚举状态大声拒（422），而非静默匹配 0 行（F168-M2）。
+	if filter.Status != "" && !slices.Contains(handlerdomain.CallStatuses, filter.Status) {
+		return nil, "", handlerdomain.ErrInvalidCallStatus.WithDetails(map[string]any{"allowed": handlerdomain.CallStatuses, "got": filter.Status})
+	}
 	rows, next, err := s.callFilterQuery(filter, true).Page(ctx, filter.Cursor, filter.Limit)
 	if err != nil {
 		return nil, "", fmt.Errorf("handlerstore.ListCalls: %w", err)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	agentdomain "github.com/sunweilin/anselm/backend/internal/domain/agent"
 	ormpkg "github.com/sunweilin/anselm/backend/internal/pkg/orm"
@@ -28,6 +29,11 @@ func (s *Store) GetExecutionByID(ctx context.Context, id string) (*agentdomain.E
 }
 
 func (s *Store) ListExecutions(ctx context.Context, filter agentdomain.ExecutionFilter) ([]*agentdomain.Execution, string, error) {
+	// Reject an out-of-enum status loudly (422) instead of silently matching zero rows (F168-M2).
+	// 非枚举状态大声拒（422），而非静默匹配 0 行（F168-M2）。
+	if filter.Status != "" && !slices.Contains(agentdomain.ExecutionStatuses, filter.Status) {
+		return nil, "", agentdomain.ErrInvalidExecutionStatus.WithDetails(map[string]any{"allowed": agentdomain.ExecutionStatuses, "got": filter.Status})
+	}
 	rows, next, err := s.execFilterQuery(filter, true).Page(ctx, filter.Cursor, filter.Limit)
 	if err != nil {
 		return nil, "", fmt.Errorf("agentstore.ListExecutions: %w", err)

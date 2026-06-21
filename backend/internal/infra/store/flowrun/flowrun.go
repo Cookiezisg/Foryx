@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"time"
 
 	flowrundomain "github.com/sunweilin/anselm/backend/internal/domain/flowrun"
@@ -175,6 +176,12 @@ func (s *Store) ListRuns(ctx context.Context, filter flowrundomain.ListFilter) (
 		q = q.WhereEq("workflow_id", filter.WorkflowID)
 	}
 	if filter.Status != "" {
+		// Reject an out-of-enum status loudly (422) instead of silently matching zero rows, which
+		// reads to the caller as "no such runs exist" (F168-M2).
+		// 非枚举状态大声拒（422），而非静默匹配 0 行——那会被读作「无此类 run」（F168-M2）。
+		if !slices.Contains(flowrundomain.RunStatuses, filter.Status) {
+			return nil, "", flowrundomain.ErrInvalidStatus.WithDetails(map[string]any{"allowed": flowrundomain.RunStatuses, "got": filter.Status})
+		}
 		q = q.WhereEq("status", filter.Status)
 	}
 	rows, next, err := q.Page(ctx, filter.Cursor, filter.Limit)

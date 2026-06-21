@@ -39,6 +39,14 @@ const (
 	StatusCancelled = "cancelled"
 )
 
+// RunStatuses is the closed set of flowrun (run-header) statuses — used to reject illegal list-filter
+// values. parked is a NODE status (below), NOT a run status: a parked run is derived from a parked
+// node row, so it is intentionally absent here.
+//
+// RunStatuses 是 flowrun（run 头）状态的封闭集——用于拒非法 list 过滤值。parked 是节点级状态（见下）、
+// 非 run 状态（parked run 由 parked 节点行派生），故此处刻意不含。
+var RunStatuses = []string{StatusRunning, StatusCompleted, StatusFailed, StatusCancelled}
+
 // Node statuses. Rows are written TERMINAL-ONLY (no transient "running" row): an action runs and
 // completes within one synchronous advance() pass, so there is no mid-flight node state to persist
 // — a crash before the row is written simply re-runs (at-least-once). parked is the one non-terminal
@@ -165,4 +173,14 @@ var (
 	// ErrInvalidDecision: an approval decision was neither "yes" nor "no".
 	// ErrInvalidDecision：审批决策既非 "yes" 也非 "no"。
 	ErrInvalidDecision = errorspkg.New(errorspkg.KindUnprocessable, "FLOWRUN_INVALID_DECISION", "approval decision must be 'yes' or 'no'")
+
+	// ErrInvalidStatus: a list filter passed a status outside RunStatuses. Returned 422 with the allowed
+	// set in Details so the caller (REST or the search_flowruns LLM tool) self-corrects, instead of
+	// silently getting an empty page — an illegal status (e.g. "parked", a node status) matched zero rows,
+	// reading as a false "no such runs exist" (F168-M2).
+	//
+	// ErrInvalidStatus：list 过滤传了 RunStatuses 外的状态。返 422、Details 带合法集，让调用方（REST 或
+	// search_flowruns 工具）自纠，而非静默拿空页——非法状态（如 "parked"，那是节点状态）匹配 0 行、读作
+	// 假「无此类 run」（F168-M2）。
+	ErrInvalidStatus = errorspkg.New(errorspkg.KindUnprocessable, "FLOWRUN_INVALID_STATUS", "flowrun status filter must be one of: running, completed, failed, cancelled")
 )

@@ -192,8 +192,12 @@ type Repository interface {
 // 错误字典。KindBadGateway（502）给上游 MCP/安装失败，KindUnavailable（503）给挂掉的子进程
 // ——与 handler 同款划分。
 var (
-	ErrServerNotFound        = errorspkg.New(errorspkg.KindNotFound, "MCP_SERVER_NOT_FOUND", "mcp server not found")
-	ErrServerNotConnected    = errorspkg.New(errorspkg.KindUnavailable, "MCP_SERVER_DOWN", "mcp server not connected")
+	ErrServerNotFound     = errorspkg.New(errorspkg.KindNotFound, "MCP_SERVER_NOT_FOUND", "mcp server not found")
+	ErrServerNotConnected = errorspkg.New(errorspkg.KindUnavailable, "MCP_SERVER_DOWN", "mcp server not connected")
+	// ErrInvalidCallStatus: a list filter passed a status outside CallStatuses — 422 with the allowed set
+	// in Details so the caller self-corrects instead of silently getting an empty page (F168-M2).
+	// ErrInvalidCallStatus：list 过滤传了 CallStatuses 外的状态——返 422、Details 带合法集自纠（F168-M2）。
+	ErrInvalidCallStatus     = errorspkg.New(errorspkg.KindUnprocessable, "MCP_CALL_INVALID_STATUS", "mcp call status filter must be one of: ok, failed, cancelled, timeout")
 	ErrToolNotFound          = errorspkg.New(errorspkg.KindNotFound, "MCP_TOOL_NOT_FOUND", "mcp tool not found on server")
 	ErrToolCallFailed        = errorspkg.New(errorspkg.KindBadGateway, "MCP_RPC_ERROR", "mcp tool call failed")
 	ErrToolCallTimeout       = errorspkg.New(errorspkg.KindGatewayTimeout, "MCP_TOOL_TIMEOUT", "mcp tool call timed out")

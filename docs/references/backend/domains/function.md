@@ -58,7 +58,7 @@ audience: [human, ai]
 
 ## 6. 契约（引用，不重列）
 
-端点 → [api.md](../api.md)#function · 表 → [database.md](../database.md)#function · 码（`FUNCTION_*`，domain 11 + 工具校验 4）→ [error-codes.md](../error-codes.md) · 事件 → [events.md](../events.md)。LLM 工具 10 个：search/get/create/edit/revert/delete/run + 执行日志两查询 + **`update_function_meta`**（只改 row 的 name/desc/tags、不铸版本/不重建 env——纯改名/改述用它，免 edit set_meta 的冗余同码版本+env 重建）；create/edit 是 **build 工具**（流式 code args 镜像 entities 流，面板实时填充；env-fix 尝试折进结果 + 实时流出）。
+端点 → [api.md](../api.md)#function · 表 → [database.md](../database.md)#function · 码（`FUNCTION_*`，domain 12 + 工具校验 4；含 `FUNCTION_EXECUTION_INVALID_STATUS`——`search_function_executions` 的 status 越出 `{ok,failed,cancelled,timeout}` 即 422、非静默空页，F168-M2）→ [error-codes.md](../error-codes.md) · 事件 → [events.md](../events.md)。LLM 工具 10 个：search/get/create/edit/revert/delete/run + 执行日志两查询 + **`update_function_meta`**（只改 row 的 name/desc/tags、不铸版本/不重建 env——纯改名/改述用它，免 edit set_meta 的冗余同码版本+env 重建）；create/edit 是 **build 工具**（流式 code args 镜像 entities 流，面板实时填充；env-fix 尝试折进结果 + 实时流出）。
 
 ## 7. 跨域集成
 

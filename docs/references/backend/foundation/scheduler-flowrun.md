@@ -54,7 +54,7 @@ audience: [human, ai]
 
 - 表：`flowruns` / `flowrun_nodes` → [database.md](../database.md)；ID：`fr_` / `frn_`。两张都是 Log 表（D1 不删；唯一例外 = replay 清 failed 行）。
 - 端点：`GET/POST /flowruns` · `GET /flowruns/{id}`（头+全节点行）· `POST /flowruns/{id}:replay` · `GET /flowrun-inbox` · `POST /flowruns/{id}/approvals/{node}:decide` → [api.md](../api.md)。LLM 面（住 app/tool/workflow）：`get_flowrun`（同「头+全节点行」）+ `search_flowruns`（闭合 trigger_workflow → flowrunId → 检查的环）+ `replay_flowrun`（包 `:replay`——从断点重跑失败 run，仅 failed 可重放、按原 pin 版本）+ `decide_approval`（包 `:decide`——批/拒 park 在审批节点的 run，首决胜，补全 agent 席的人在环决策半边）。
-- 码：`FLOWRUN_*` domain 5 + 工具校验 1（`FLOWRUN_ID_REQUIRED`，住 app/tool/workflow）→ [error-codes.md](../error-codes.md)。
+- 码：`FLOWRUN_*` domain 6 + 工具校验 1（`FLOWRUN_ID_REQUIRED`，住 app/tool/workflow）→ [error-codes.md](../error-codes.md)。`FLOWRUN_INVALID_STATUS`（F168-M2）：list 过滤的 status 越出 `{running,completed,failed,cancelled}` 即 422、非静默空页（parked 是节点态非 run 态、不可作 run 过滤）。
 - 事件：advance 每节点向 entities 流 workflow scope 发进度 Signal（durable 记录是 frn 行）；终态与挂起走 notifications **唤回环**——failed → `workflow.run_failed` + 点亮 needsAttention（经 LifecycleReconciler.MarkRunAttention，completed 熄灭、cancelled 两不做），approval park → `workflow.approval_pending`（at-least-once）→ [events.md](../events.md)。
 
 ## 7. 跨域集成
