@@ -33,5 +33,25 @@ func ContentSearch(ctx context.Context, engine *searchapp.Service, t searchdomai
 	for _, h := range page.Hits {
 		out = append(out, searchdomain.EntitySlim{ID: h.EntityID, Name: h.Name, Description: h.Snippet})
 	}
-	return ToJSON(map[string]any{"count": len(out), listKey: out}), true
+	return ToJSON(SlimPageResult(len(out), page.Total, page.NextCursor, listKey, out)), true
+}
+
+// SlimPageResult renders a vertical search tool's slim list WITH truncation metadata: `count` is what
+// was returned (≤ the engine page limit), `total` is the full match count, and nextCursor/hasMore
+// signal that more results exist. Without total the LLM reads a 20-item list as "exactly 20 exist" —
+// a silent false negative. The slim tool schemas take only `query`, so paging itself is REST-side;
+// these fields just tell the agent the result was truncated. Centralized so every search tool
+// discloses truncation identically (F175-M4).
+//
+// SlimPageResult 渲染垂搜工具的 slim 列表并带截断元数据：`count` 是本次返回数（≤引擎页上限），`total`
+// 是全量匹配数，nextCursor/hasMore 示意还有更多。没 total，LLM 把 20 条读成「恰有 20 条」=静默假阴。
+// slim 工具 schema 只收 query、翻页在 REST 侧；这些字段只告诉 agent 结果被截断了。集中一处，使每个搜索
+// 工具的截断披露一致（F175-M4）。
+func SlimPageResult(count, total int, nextCursor, listKey string, list any) map[string]any {
+	res := map[string]any{"count": count, "total": total, listKey: list}
+	if nextCursor != "" {
+		res["nextCursor"] = nextCursor
+		res["hasMore"] = true
+	}
+	return res
 }

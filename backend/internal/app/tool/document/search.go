@@ -90,7 +90,10 @@ func (t *SearchDocuments) Execute(ctx context.Context, argsJSON string) (string,
 			for _, h := range page.Hits {
 				out = append(out, docHit{ID: h.EntityID, Name: h.Name, Snippet: h.Snippet})
 			}
-			return toolapp.ToJSON(map[string]any{"count": len(out), "documents": out}), nil
+			// Disclose truncation (total + nextCursor/hasMore) so the LLM doesn't read `count` as the
+			// full match count (F175-M4, sibling of the entity-search ContentSearch fix; shared helper).
+			// 披露截断（total + nextCursor/hasMore），免 LLM 把 `count` 当全量匹配数（F175-M4，与实体搜 ContentSearch 同修；共用 helper）。
+			return toolapp.ToJSON(toolapp.SlimPageResult(len(out), page.Total, page.NextCursor, "documents", out)), nil
 		}
 	}
 	rows, err := t.svc.Search(ctx, a.Query, a.Limit)
