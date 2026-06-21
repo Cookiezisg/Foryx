@@ -34,7 +34,13 @@ func (s *Service) InstallFromRegistry(ctx context.Context, fullName string, user
 		return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s: %w", fullName, mcpdomain.ErrNoRunnablePackage)
 	}
 	if missing := missingEnv(plan.EnvVars, userEnv); len(missing) > 0 {
-		return nil, fmt.Errorf("mcpapp.InstallFromRegistry %s: %w: %s", fullName, mcpdomain.ErrEnvMissing, strings.Join(missing, ", "))
+		// Carry the missing variable NAMES in Details, not as a `%s` tail after `%w` — the tail lives only
+		// in the wrap chain's .Error() string, which errorspkg.Surface strips, so the LLM/HTTP error said
+		// "required environment variables missing" with no clue WHICH (F169-M5). Details survives Surface
+		// + the N1 envelope, so the agent learns exactly which keys to supply.
+		// 缺失变量**名**进 Details、而非 `%w` 后的 `%s` 尾——尾只在包裹链 .Error() 串里、被 errorspkg.Surface 剥掉，
+		// 故 LLM/HTTP 错误只说"缺必填环境变量"却不知**是哪些**（F169-M5）。Details 穿过 Surface + N1 envelope，使 agent 知道究竟补哪些键。
+		return nil, mcpdomain.ErrEnvMissing.WithDetails(map[string]any{"missing": missing})
 	}
 
 	wsID, err := reqctxpkg.RequireWorkspaceID(ctx)

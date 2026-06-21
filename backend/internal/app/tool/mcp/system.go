@@ -27,19 +27,25 @@ func (t *ListMarketplace) Parameters() json.RawMessage {
 }
 func (t *ListMarketplace) ValidateInput(json.RawMessage) error { return nil }
 func (t *ListMarketplace) Description() string {
-	return "Browse the MCP server marketplace (the GitHub MCP Registry). Returns installable servers — each with its full name, description, runtime, and the environment variables you must provide. Pass a `query` to filter by capability/name (preferred — the catalog is large); omit it to list everything. To install one, call install_mcp_server with its name."
+	return "Browse the MCP server marketplace (the GitHub MCP Registry). Returns installable servers — each with its full name, description, runtime, and its `env` vars. Each env var carries a `required` flag: required:true MUST be supplied or the server won't start; required:false is OPTIONAL (the server runs without it) — do NOT tell the user an optional var is mandatory. Pass a `query` to filter by capability/name (preferred — the catalog is large); omit it to list everything. To install one, call install_mcp_server with its name."
 }
 
 type marketView struct {
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
-	Runtime     string    `json:"runtime"` // node|python|docker|dotnet|remote
-	RequiredEnv []envView `json:"requiredEnv,omitempty"`
+	Runtime     string    `json:"runtime"`       // node|python|docker|dotnet|remote
+	Env         []envView `json:"env,omitempty"` // the server's env vars; each carries its OWN required flag
 }
 
 type envView struct {
 	Name        string `json:"name"`
 	Description string `json:"description,omitempty"`
+	// Required preserves the registry's per-var required/optional distinction — the field used to be
+	// erased (every env var projected under a `requiredEnv` key), so the agent could not tell a mandatory
+	// key from an optional one and falsely told users an OPTIONAL key was mandatory (F169).
+	// Required 保留 registry 每个变量的必填/可选区分——此前被抹（所有 env var 都塞进 `requiredEnv` 键），故 agent
+	// 分不清必填与可选、错告用户**可选**键是必填（F169）。
+	Required bool `json:"required"`
 }
 
 func (t *ListMarketplace) Execute(ctx context.Context, argsJSON string) (string, error) {
@@ -100,7 +106,7 @@ func filterMarketViews(entries []mcpdomain.RegistryEntry, q string) []marketView
 			v.Runtime = "remote"
 		}
 		for _, ev := range plan.EnvVars {
-			v.RequiredEnv = append(v.RequiredEnv, envView{Name: ev.Name, Description: ev.Description})
+			v.Env = append(v.Env, envView{Name: ev.Name, Description: ev.Description, Required: ev.Required})
 		}
 		scored = append(scored, scoredView{view: v, score: score})
 	}

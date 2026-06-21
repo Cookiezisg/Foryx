@@ -103,6 +103,7 @@ audience: [human, ai]
 |---|---|---|
 | `AGENT_EXECUTION_ID_REQUIRED` | 400 | executionId is required |
 | `AGENT_ID_REQUIRED` | 400 | agentId is required |
+| `AGENT_META_NOT_IN_EDIT` | 400 | name/description/tags are not editable via edit_agent (they are not part of the versioned config) — use update_agent_meta to change them |
 | `AGENT_INPUT_REQUIRED` | 400 | input is required (an object; pass {} if the agent's prompt is self-contained — there is no 'prompt' field) |
 | `AGENT_NAME_PROMPT_REQUIRED` | 400 | name and prompt are required |
 | `AGENT_REVERT_ARGS_REQUIRED` | 400 | agentId and a positive version are required |

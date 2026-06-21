@@ -135,6 +135,20 @@ func (t *EditAgent) ValidateInput(args json.RawMessage) error {
 	if strings.TrimSpace(a.AgentID) == "" {
 		return ErrAgentIDRequired
 	}
+	// name/description/tags are NOT part of the versioned config edit_agent edits — they live on the
+	// agent ROW and change only via update_agent_meta. Reject them LOUDLY instead of silently swallowing
+	// them (edit_agent used to return success with the meta change lost, and the LLM reported it applied,
+	// F171). Pointer to the right tool, mirroring the function/workflow set_meta asymmetry.
+	// name/description/tags **不在** edit_agent 所编辑的版本化 config 里——它们在 agent 行、只经 update_agent_meta
+	// 改。**大声**拒之而非静默吞（edit_agent 原先返成功却把 meta 改动丢了、LLM 还报已应用，F171）。指向正确工具。
+	var present map[string]json.RawMessage
+	if json.Unmarshal(args, &present) == nil {
+		for _, k := range []string{"name", "description", "tags"} {
+			if _, ok := present[k]; ok {
+				return ErrAgentMetaNotInEdit
+			}
+		}
+	}
 	return nil
 }
 

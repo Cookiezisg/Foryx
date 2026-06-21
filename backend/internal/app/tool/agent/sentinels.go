@@ -15,4 +15,5 @@ var (
 	ErrExecutionIDRequired = errorspkg.New(errorspkg.KindInvalid, "AGENT_EXECUTION_ID_REQUIRED", "executionId is required")
 	ErrNamePromptRequired  = errorspkg.New(errorspkg.KindInvalid, "AGENT_NAME_PROMPT_REQUIRED", "name and prompt are required")
 	ErrRevertArgsRequired  = errorspkg.New(errorspkg.KindInvalid, "AGENT_REVERT_ARGS_REQUIRED", "agentId and a positive version are required")
+	ErrAgentMetaNotInEdit  = errorspkg.New(errorspkg.KindInvalid, "AGENT_META_NOT_IN_EDIT", "name/description/tags are not editable via edit_agent (they are not part of the versioned config) — use update_agent_meta to change them")
 )

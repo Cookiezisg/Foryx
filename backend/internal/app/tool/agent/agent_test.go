@@ -2,6 +2,7 @@ package agent
 
 import (
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -75,6 +76,26 @@ func TestEditAgent_ValidateInput_NoPromptRequired(t *testing.T) {
 	}
 	if err := tl.ValidateInput(json.RawMessage(`{"tools":[]}`)); err == nil {
 		t.Fatal("missing agentId should fail")
+	}
+}
+
+// TestEditAgent_RejectsMetaFields — F171: name/description/tags are NOT in edit_agent's versioned config
+// (they live on the agent row, changed via update_agent_meta). edit_agent must REJECT them loudly with a
+// pointer, not silently swallow them (it used to return success with the meta change lost).
+func TestEditAgent_RejectsMetaFields(t *testing.T) {
+	tl := &EditAgent{}
+	for _, args := range []string{
+		`{"agentId":"ag_1","tags":["demo"]}`,
+		`{"agentId":"ag_1","name":"renamed"}`,
+		`{"agentId":"ag_1","description":"new desc"}`,
+	} {
+		if err := tl.ValidateInput(json.RawMessage(args)); !errors.Is(err, ErrAgentMetaNotInEdit) {
+			t.Fatalf("edit_agent must reject meta field in %s, got %v", args, err)
+		}
+	}
+	// A real config edit (prompt) is still fine.
+	if err := tl.ValidateInput(json.RawMessage(`{"agentId":"ag_1","prompt":"new prompt"}`)); err != nil {
+		t.Fatalf("a config-only edit must pass, got %v", err)
 	}
 }
 

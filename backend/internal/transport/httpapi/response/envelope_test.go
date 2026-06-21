@@ -21,6 +21,27 @@ func TestSuccessEnvelope(t *testing.T) {
 	}
 }
 
+// TestSuccessEnvelope_NilSliceIsArray — F170: a NON-paged list endpoint (documents/skills/memories) that
+// returns a nil slice when empty must still serialize as {"data": []}, never {"data": null} — otherwise
+// the same endpoint flips between [] (populated) and null (empty) and breaks a client's `for (x of data)`.
+// A single-object body still passes through (not coerced to a slice).
+func TestSuccessEnvelope_NilSliceIsArray(t *testing.T) {
+	w := httptest.NewRecorder()
+	Success(w, 200, []int(nil))
+	if got := w.Body.String(); got != "{\"data\":[]}\n" && got != "{\"data\":[]}" {
+		t.Fatalf("empty list must be [] not null, got %q", got)
+	}
+	// A single object must NOT be coerced.
+	w2 := httptest.NewRecorder()
+	Success(w2, 200, map[string]string{"x": "y"})
+	var env struct {
+		Data map[string]string `json:"data"`
+	}
+	if err := json.Unmarshal(w2.Body.Bytes(), &env); err != nil || env.Data["x"] != "y" {
+		t.Fatalf("single-object body must pass through untouched, got %q err=%v", w2.Body.String(), err)
+	}
+}
+
 func TestPagedEnvelope(t *testing.T) {
 	w := httptest.NewRecorder()
 	Paged(w, []int{1, 2}, "cur1", true)

@@ -41,11 +41,16 @@ type errorBody struct {
 	Details any    `json:"details,omitempty"`
 }
 
-// Success writes {"data": body} with the given status.
+// Success writes {"data": body} with the given status. A nil typed slice body is normalized to [] (it
+// would otherwise serialize to JSON null) so a NON-paged list endpoint never flips between [] (populated)
+// and null (empty) and break a client's `for (x of resp.data)` — the non-paged sibling of Paged's
+// empty-slice guarantee (F170). A non-slice body (single object) passes through untouched.
 //
-// Success 写出 {"data": body} 及给定状态码。
+// Success 写出 {"data": body} 及给定状态码。nil 类型化 slice body 归一成 [](否则序列化成 JSON null），使
+// **非分页**列表端点不在 []（有值）与 null（空）间翻转、不崩客户端 for-of——Paged 空-slice 保证的非分页兄弟
+// （F170）。非 slice body（单对象）原样透传。
 func Success(w http.ResponseWriter, status int, body any) {
-	writeJSON(w, status, envelope{Data: body})
+	writeJSON(w, status, envelope{Data: emptySliceIfNil(body)})
 }
 
 // Created is Success(w, 201, body).
