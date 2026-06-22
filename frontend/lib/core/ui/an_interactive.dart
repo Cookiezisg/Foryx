@@ -2,16 +2,16 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 /// The interaction substrate every actionable surface composes — buttons, rows, chips, tabs all
-/// build on this one place so hover / focus / pressed / disabled behave identically everywhere
-/// (the demo had this scattered; the rebuild's `_Grip` hand-rolled a MouseRegion — this replaces
-/// that pattern). The [builder] receives the live [WidgetState] set; the caller paints per state
-/// from tokens. Pointer AND keyboard activate ([onTap] fires on tap and on Enter/Space when
-/// focused). When disabled the surface is non-focusable and swallows neither pointer nor key — a
-/// disabled control truly can't be activated (the demo matrix's disabled-passthrough gate).
+/// build on this one place so hover / focus / pressed / disabled behave identically everywhere.
+/// Built on the framework's [FocusableActionDetector] (principle #8 — standard API over hand-rolled
+/// MouseRegion/Focus/key handling): FAD drives hover + focus via the platform highlight mode (so the
+/// focus ring shows on KEYBOARD focus, not on a mouse click) and nulls them when disabled; Enter/
+/// Space activate through the standard [ActivateIntent]; we keep only the pressed tracking (a
+/// GestureDetector) and the [builder]'s live [WidgetState] set. Disabled = non-focusable, inert.
 ///
-/// 可交互基座——按钮/行/chip/tab 都搭在这一处,hover/focus/pressed/disabled 全局一致(取代 _Grip 里
-/// 手搓的 MouseRegion)。builder 收到实时 WidgetState 集,调用方据态用 token 上色。指针与键盘都能激活
-/// (onTap 在点击 + 聚焦时 Enter/Space 触发)。禁用时不可聚焦、指针/按键都不激活(对齐 demo 的 disabled 门)。
+/// 可交互基座——按钮/行/chip/tab 都搭在这一处,hover/focus/pressed/disabled 全局一致。搭在框架的
+/// FocusableActionDetector 上(原则 #8:用标准 API 而非手搓):FAD 按平台高亮模式驱动 hover/focus(焦点环只在
+/// 键盘聚焦时显、点击不显)并在禁用时清零;Enter/Space 走标准 ActivateIntent;我们只留 pressed 跟踪 + 态集。
 class AnInteractive extends StatefulWidget {
   const AnInteractive({
     required this.builder,
@@ -59,67 +59,64 @@ class _AnInteractiveState extends State<AnInteractive> {
         if (widget.enabled && _pressed) WidgetState.pressed,
       };
 
-  void _press(bool v) {
-    if (_pressed != v) setState(() => _pressed = v);
-  }
-
-  void _hover(bool v) {
-    if (_hovered != v) setState(() => _hovered = v);
+  void _set(VoidCallback f) {
+    if (mounted) setState(f);
   }
 
   @override
   void didUpdateWidget(AnInteractive old) {
     super.didUpdateWidget(old);
-    // Disabling clears stale interaction state — when disabled the MouseRegion onExit is null, so a
-    // mouse-away can't clear _hovered; without this it'd stick "hovered" after re-enable.
-    // 禁用时清残留交互态:禁用时 onExit 为 null,鼠标移开清不掉 hover,不清则重新启用后卡在 hover。
+    // FAD stops tracking when disabled but won't fire a hover/focus-off if the pointer leaves while
+    // disabled — so a control disabled mid-hover would re-enable stuck "hovered". Clear on disable.
+    // FAD 禁用时停止跟踪,但禁用期间指针移开不会回调 → 重新启用会卡在 hover。禁用时清零。
     if (old.enabled && !widget.enabled && (_hovered || _focused || _pressed)) {
-      setState(() {
-        _hovered = false;
-        _focused = false;
-        _pressed = false;
-      });
+      _hovered = false;
+      _focused = false;
+      _pressed = false;
     }
   }
 
-  KeyEventResult _onKey(FocusNode node, KeyEvent event) {
-    if (event is KeyDownEvent &&
-        (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.space)) {
-      widget.onTap!();
-      return KeyEventResult.handled;
-    }
-    return KeyEventResult.ignored;
-  }
+  void _activate() => widget.onTap?.call();
 
   @override
   Widget build(BuildContext context) {
     final canActivate = _canActivate;
-    Widget result = widget.builder(context, _states);
 
-    result = GestureDetector(
+    // Pressed is the one state FAD doesn't track — keep a GestureDetector for it + the tap. pressed 自管。
+    Widget result = GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: canActivate ? widget.onTap : null,
-      onTapDown: canActivate ? (_) => _press(true) : null,
-      onTapUp: canActivate ? (_) => _press(false) : null,
-      onTapCancel: canActivate ? () => _press(false) : null,
-      child: result,
+      onTapDown: canActivate ? (_) => _set(() => _pressed = true) : null,
+      onTapUp: canActivate ? (_) => _set(() => _pressed = false) : null,
+      onTapCancel: canActivate ? () => _set(() => _pressed = false) : null,
+      child: widget.builder(context, _states),
     );
 
-    result = MouseRegion(
-      cursor: canActivate ? (widget.cursor ?? SystemMouseCursors.click) : (widget.cursor ?? MouseCursor.defer),
-      onEnter: widget.enabled ? (_) => _hover(true) : null,
-      onExit: widget.enabled ? (_) => _hover(false) : null,
-      child: result,
-    );
-
-    return Focus(
+    return FocusableActionDetector(
+      enabled: canActivate,
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
-      canRequestFocus: canActivate,
-      skipTraversal: !canActivate,
-      onFocusChange: (f) => setState(() => _focused = f),
-      onKeyEvent: canActivate ? _onKey : null,
-      child: result,
+      mouseCursor: canActivate
+          ? (widget.cursor ?? SystemMouseCursors.click)
+          : (widget.cursor ?? MouseCursor.defer),
+      shortcuts: const <ShortcutActivator, Intent>{
+        SingleActivator(LogicalKeyboardKey.enter): ActivateIntent(),
+        SingleActivator(LogicalKeyboardKey.space): ActivateIntent(),
+      },
+      actions: <Type, Action<Intent>>{
+        ActivateIntent: CallbackAction<ActivateIntent>(onInvoke: (_) {
+          _activate();
+          return null;
+        }),
+      },
+      onShowHoverHighlight: (h) => _set(() => _hovered = h),
+      onShowFocusHighlight: (f) => _set(() => _focused = f),
+      child: Semantics(
+        button: widget.onTap != null,
+        enabled: widget.enabled,
+        selected: widget.selected,
+        child: result,
+      ),
     );
   }
 }

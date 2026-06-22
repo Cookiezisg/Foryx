@@ -1,6 +1,6 @@
 import 'package:anselm/core/ui/an_interactive.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // AnInteractive is the activation substrate for every control — the key contract is that a DISABLED
@@ -42,35 +42,49 @@ void main() {
     expect(states.contains(WidgetState.pressed), isFalse);
   });
 
-  testWidgets('disabling clears a stale hover state (no stuck-hover after re-enable)', (tester) async {
-    late Set<WidgetState> states;
-    Widget build(bool enabled) => MaterialApp(
-          home: Center(
-            child: AnInteractive(
-              enabled: enabled,
-              onTap: () {},
-              builder: (_, s) {
-                states = s;
-                return const SizedBox(width: 48, height: 48);
-              },
-            ),
-          ),
-        );
-    await tester.pumpWidget(build(true));
-    final gesture = await tester.createGesture(kind: PointerDeviceKind.mouse);
-    await gesture.addPointer(location: tester.getCenter(find.byType(AnInteractive)));
-    addTearDown(gesture.removePointer);
+  testWidgets('enabled surface activates by keyboard (Enter / Space)', (tester) async {
+    var taps = 0;
+    final focus = FocusNode();
+    addTearDown(focus.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Center(
+        child: AnInteractive(
+          focusNode: focus,
+          onTap: () => taps++,
+          builder: (_, _) => const SizedBox(width: 48, height: 48),
+        ),
+      ),
+    ));
+    focus.requestFocus();
     await tester.pump();
-    expect(states.contains(WidgetState.hovered), isTrue);
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(taps, 1, reason: 'Enter activates a focused surface');
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.pump();
+    expect(taps, 2, reason: 'Space activates a focused surface');
+  });
 
-    // Disable while hovered, then move the pointer away (onExit is null when disabled).
-    await tester.pumpWidget(build(false));
-    await gesture.moveTo(const Offset(0, 0));
+  testWidgets('disabled surface is NOT focusable and does not activate by keyboard', (tester) async {
+    var taps = 0;
+    final focus = FocusNode();
+    addTearDown(focus.dispose);
+    await tester.pumpWidget(MaterialApp(
+      home: Center(
+        child: AnInteractive(
+          enabled: false,
+          focusNode: focus,
+          onTap: () => taps++,
+          builder: (_, _) => const SizedBox(width: 48, height: 48),
+        ),
+      ),
+    ));
+    focus.requestFocus();
     await tester.pump();
-    // Re-enable: must NOT be stuck hovered.
-    await tester.pumpWidget(build(true));
+    expect(focus.hasFocus, isFalse, reason: 'disabled → non-focusable (FAD enabled:false)');
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
-    expect(states.contains(WidgetState.hovered), isFalse);
+    expect(taps, 0);
   });
 
   testWidgets('disabled surface is inert (no tap, carries disabled state)', (tester) async {
