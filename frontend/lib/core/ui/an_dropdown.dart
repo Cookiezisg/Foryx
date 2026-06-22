@@ -126,27 +126,9 @@ class _AnDropdownState<T> extends State<AnDropdown<T>> {
       child: Icon(AnIcons.chevronDown, size: AnSize.iconSm, color: c.inkFaint),
     );
 
-    // Two zones: label LEFT, meta RIGHT (next to the caret). BOTH can be long → both get a Flexible
-    // + ellipsis so neither overflows (they share the row when both long). meta is null for a single-
-    // value dropdown. 两区:标签左、meta 右(贴箭头);两者都可能超长→各 Flexible + 省略,谁都不溢出;单值时无 meta。
-    final hasMeta = sel?.meta != null;
-    final children = <Widget>[
-      Flexible(flex: hasMeta ? 3 : 1, child: label),
-      if (hasMeta) ...[
-        const SizedBox(width: AnSpace.s8),
-        Flexible(
-          flex: 2,
-          child: Text(sel!.meta!,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              textAlign: TextAlign.right,
-              style: AnText.meta.copyWith(color: c.inkFaint, fontFeatures: const [FontFeature.tabularFigures()])),
-        ),
-      ],
-      SizedBox(width: ghost ? AnSpace.s6 : AnSpace.s8),
-      caret,
-    ];
+    final metaStyle = AnText.meta.copyWith(color: c.inkFaint, fontFeatures: const [FontFeature.tabularFigures()]);
 
+    // Ghost = compact, content-hugging (settings-style) — label + caret, intrinsic. Ghost 紧凑贴合内容。
     if (ghost) {
       return AnimatedContainer(
         duration: AnMotion.fast,
@@ -156,10 +138,19 @@ class _AnDropdownState<T> extends State<AnDropdown<T>> {
           color: active ? c.surfaceHover : c.surfaceHover.withValues(alpha: 0),
           borderRadius: BorderRadius.circular(AnRadius.button),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: children),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(child: label),
+            const SizedBox(width: AnSpace.s6),
+            caret,
+          ],
+        ),
       );
     }
 
+    // Boxed = TWO ZONES: label fills LEFT, meta caps RIGHT, caret pinned right (see _TwoZone).
+    // 盒式=两区:label 占满左、meta 上限右、箭头钉右。
     return AnimatedContainer(
       duration: AnMotion.fast,
       height: AnSize.control,
@@ -170,21 +161,20 @@ class _AnDropdownState<T> extends State<AnDropdown<T>> {
         border: Border.all(color: active ? c.lineStrong : c.line, width: AnSize.hairline),
         borderRadius: BorderRadius.circular(AnRadius.button),
       ),
-      child: Row(children: children),
+      child: _TwoZone(label: label, meta: sel?.meta, metaStyle: metaStyle, trailing: caret),
     );
   }
 
   Widget _menu(BuildContext context, Size? anchorSize) {
     final c = context.colors;
-    // Menu is at least the trigger width; cap extra growth at 360 — but never below the trigger
-    // (a block/full-width trigger makes minWidth large, so maxWidth must rise with it or the
-    // constraints go non-normalized minWidth>maxWidth). 菜单≥触发器宽,上限≥触发器宽(否则 min>max 非法)。
+    // Menu width == the trigger width EXACTLY (the user's rule: always aligned to its own box,
+    // dropped directly below). leaderSize is the laid-out trigger size; fallback only pre-layout.
+    // 菜单宽 = 触发框宽(完全相等、紧贴其下);leaderSize 为已布局的触发器尺寸。
     final triggerW = anchorSize?.width ?? AnSize.inputMin;
-    final maxW = triggerW > AnSize.menuMaxWidth ? triggerW : AnSize.menuMaxWidth;
     return ConstrainedBox(
       constraints: BoxConstraints(
         minWidth: triggerW,
-        maxWidth: maxW,
+        maxWidth: triggerW,
         maxHeight: AnSize.menuMaxHeight,
       ),
       child: DecoratedBox(
@@ -230,6 +220,9 @@ class _MenuRow<T> extends StatelessWidget {
       builder: (context, states) {
         final c = context.colors;
         final active = states.contains(WidgetState.hovered) || states.contains(WidgetState.focused);
+        // Menu row = same TWO ZONES as the trigger: optional leading icon, then label LEFT + meta
+        // RIGHT (via _TwoZone), with the selected-check as the trailing slot (reserved when unchecked
+        // so rows align). 菜单行=与触发器同两区:可选前导图标 + label 左 + meta 右,选中勾为尾槽(未选留位对齐)。
         return AnimatedContainer(
           duration: AnMotion.fast,
           height: AnSize.row,
@@ -242,31 +235,59 @@ class _MenuRow<T> extends StatelessWidget {
                 const SizedBox(width: AnSpace.s8),
               ],
               Expanded(
-                child: Text(
-                  option.label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: AnText.body.copyWith(color: c.ink),
+                child: _TwoZone(
+                  label: Text(option.label,
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: AnText.body.copyWith(color: c.ink)),
+                  meta: option.meta,
+                  metaStyle: AnText.meta.copyWith(color: c.inkFaint),
+                  trailing: SizedBox(
+                    width: AnSize.iconSm,
+                    child: selected ? Icon(AnIcons.check, size: AnSize.iconSm, color: c.ink) : null,
+                  ),
                 ),
-              ),
-              if (option.meta != null) ...[
-                const SizedBox(width: AnSpace.s8),
-                Text(option.meta!,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AnText.meta.copyWith(color: c.inkFaint)),
-              ],
-              SizedBox(
-                width: AnSize.icon + AnSpace.s8,
-                child: selected
-                    ? Padding(
-                        padding: const EdgeInsets.only(left: AnSpace.s8),
-                        child: Icon(AnIcons.check, size: AnSize.iconSm, color: c.ink),
-                      )
-                    : null,
               ),
             ],
           ),
+        );
+      },
+    );
+  }
+}
+
+/// Two-zone row content (the demo's `.lab{flex:1}` + `.meta{flex:none;max-width}`, in Flutter):
+/// primary [label] fills the LEFT and ellipsis-truncates last; secondary [meta] sits RIGHT, capped
+/// at ≤45% of the row so a long id can't crowd out the label, ellipsis when over; [trailing]
+/// (caret / check) is pinned to the right edge because the label is [Expanded] (greedy). Both texts
+/// truncate independently — no overflow. Shared by the dropdown trigger AND its menu rows.
+///
+/// 两区行(demo 的 lab flex:1 + meta flex:none·max-width 的 Flutter 版):label 占满左、最后才省略;meta 居右、
+/// 上限 45%(长 id 挤不掉 label)、超长省略;trailing(箭头/勾)因 label Expanded 而钉在右沿。两者各自截断、不溢出。
+class _TwoZone extends StatelessWidget {
+  const _TwoZone({required this.label, this.meta, this.metaStyle, required this.trailing});
+
+  final Widget label;
+  final String? meta;
+  final TextStyle? metaStyle;
+  final Widget trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final metaCap = constraints.maxWidth.isFinite ? constraints.maxWidth * 0.45 : 160.0;
+        return Row(
+          children: [
+            Expanded(child: label),
+            if (meta != null) ...[
+              const SizedBox(width: AnSpace.s8),
+              ConstrainedBox(
+                constraints: BoxConstraints(maxWidth: metaCap),
+                child: Text(meta!, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: metaStyle),
+              ),
+            ],
+            const SizedBox(width: AnSpace.s8),
+            trailing,
+          ],
         );
       },
     );
