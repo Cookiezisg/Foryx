@@ -19,7 +19,7 @@ audience: [human, ai]
 
 - `tokens.dart` —— 主题无关几何/时间:`AnSpace`(4 网格间距)· `AnRadius`(tag/button/chip/card/island/pill)· `AnSize`(行高 32、控件 28、图标 16/12/20、三岛列宽、窗体外廓)· `AnMotion`(fast 120 / mid 240 / slow 340 / breath 1800ms + easeOut/spring 缓动)。
 - `colors.dart` —— `AnColors` ThemeExtension(明暗双值 + lerp,糖 `context.colors`)。**中性 chrome + toB 蓝 accent + 功能色**:`accent`=蓝(demo `#0071e3`/暗 `#0a84ff`)——主动作/选中/聚焦/run 状态显蓝;`ok`/`warn`/`danger`(+ soft)语义色。值镜像 demo `tokens.css`。
-- `typography.dart` —— `AnText`,模数字阶锚 13px 正文。**UI=随包 MiSans VF**(`assets/fonts/MiSansVF.ttf`,变量字体 wght 150–700,Latin+简中,全平台同字面)+ PingFang SC 兜底;**渲染压细**——正文 ExtraLight(w200)、标签/次级 Light(w300)、强调 Regular(w400)、标题 Medium(w500),摆脱 MiSans 在 Regular 下的厚重。**代码=JetBrains Mono**(随包,OFL)。
+- `typography.dart` —— `AnText`,模数字阶锚 13px 正文。**UI=随包 MiSans VF**(`assets/fonts/MiSansVF.ttf`,变量字体 wght 150–700,Latin+简中,全平台同字面)+ PingFang SC 兜底;**渲染压细**——正文/标签/次级 Light(w300)、强调 Regular(w400)、标题 Medium(w500),摆脱 MiSans 在 Regular 下的厚重(ExtraLight 200 部分字偏细)。**代码=JetBrains Mono**(随包,OFL)。
 - `theme.dart` —— 装配 `ThemeData`,注册 `AnColors` 扩展,剥 Material 涟漪 + **hover/highlight/focus/splash 全置透明**(表面自管态,杜绝 Material 默认灰叠加)。
 
 ## 2. 命名 + 纪律

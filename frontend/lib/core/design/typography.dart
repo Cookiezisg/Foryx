@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 
 /// Typography — a modular scale anchored on a 13px UI body. [uiFamily] = BUNDLED MiSans, a variable
 /// font (wght axis 150–700) covering Latin + Simplified Chinese, so the bilingual UI renders the
-/// same on every machine (the demo's intent). We render it LIGHT — body at ExtraLight (w200) — to
-/// shed the heavy look MiSans has at Regular; the weight ramp climbs from there. Colorless on
-/// purpose: the theme applies ink once and it inherits, so light/dark just work.
+/// same on every machine (the demo's intent). We render it LIGHT — body at Light (w300) — to shed
+/// the heavy look MiSans has at Regular (ExtraLight 200 was too thin for some glyphs); the ramp
+/// climbs from there. Colorless on purpose: the theme applies ink once and it inherits.
 ///
 /// 字体——模数阶梯,锚 13px 正文。[uiFamily]=**随包 MiSans**(变量字体,wght 150–700,Latin+简中),每台机器同字面
-/// (demo 本意)。整体**压细**——正文 ExtraLight(w200),摆脱 MiSans 在 Regular 下的厚重;字重阶梯由此上爬。
+/// (demo 本意)。整体**压细**——正文 Light(w300)(ExtraLight 200 部分字偏细);字重阶梯由此上爬。
 abstract final class AnText {
   static const String uiFamily = 'MiSans'; // BUNDLED VF (assets/fonts/MiSansVF.ttf), rendered light 随包变量字体,渲染压细
   static const List<String> uiFallback = [
@@ -38,7 +38,7 @@ abstract final class AnText {
   );
   static const TextStyle body = TextStyle(
     fontFamily: uiFamily, fontFamilyFallback: uiFallback,
-    fontSize: 13, height: 1.4, fontWeight: FontWeight.w200, // the UI anchor — ExtraLight 正文锚·ExtraLight
+    fontSize: 13, height: 1.4, fontWeight: FontWeight.w300, // the UI anchor — Light 正文锚·Light
   );
   static const TextStyle label = TextStyle(
     fontFamily: uiFamily, fontFamilyFallback: uiFallback,
