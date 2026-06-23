@@ -21,6 +21,7 @@ export 'an_skeleton.dart';
 export 'an_state.dart';
 export 'an_status_dot.dart';
 export 'an_stepper.dart';
+export 'an_typewriter.dart';
 export 'an_window_controls.dart';
 export 'icons.dart';
 export 'tone.dart';

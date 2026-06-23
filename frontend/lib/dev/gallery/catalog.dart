@@ -114,6 +114,12 @@ final GalleryCategory _g2Feedback = GalleryCategory('反馈态 Feedback', AnIcon
     GallerySpecimen('row', (_) => const AnSkeleton.row(), span: true),
     GallerySpecimen('card', (_) => const AnSkeleton.card(), span: true),
   ]),
+  GalleryItem('AnTypewriter', '打字机:type→hold→delete→循环(降级=静态主句)', [
+    GallerySpecimen('cycling', (_) => const AnTypewriter(['Build agents.', 'Wire workflows.', 'Ship faster.'])),
+    GallerySpecimen('welcome (accent, 不循环)', (_) => const AnTypewriter(['Welcome to Anselm'], loop: false, accentCaret: true)),
+    GallerySpecimen('emoji 字素', (_) => const AnTypewriter(['Ready 👋🏽 to go'], loop: false)),
+    GallerySpecimen('无光标', (_) => const AnTypewriter(['No caret here'], loop: false, showCaret: false)),
+  ]),
 ]);
 
 // ── small stateful demo wrappers (specimens need live state) 小型有态演示包 ──

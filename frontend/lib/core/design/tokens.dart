@@ -120,6 +120,12 @@ abstract final class AnMotion {
   static const Duration slow = Duration(milliseconds: 340);
   static const Duration breath = Duration(milliseconds: 1800);
 
+  // AnTypewriter cadences. 打字机节奏。
+  static const Duration typePerChar = Duration(milliseconds: 55); // per-grapheme reveal 每字素揭示
+  static const Duration deletePerChar = Duration(milliseconds: 28); // delete (faster than typing) 删除(快于打字)
+  static const Duration typeHold = Duration(milliseconds: 1400); // pause at a full phrase 满句停顿
+  static const Duration typeGap = Duration(milliseconds: 400); // blank gap before the next phrase 换句空隙
+
   static const Cubic easeOut = Cubic(0.16, 1, 0.3, 1);
   static const Cubic spring = Cubic(0.2, 0.9, 0.25, 1);
 }
