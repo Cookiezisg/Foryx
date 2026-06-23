@@ -62,6 +62,7 @@ abstract final class AnSize {
   static const double inlineEditMin = 32; // in-place edit field min width — an empty seamless field has ~0 intrinsic width and would be un-clickable 就地编辑框最小宽(空 seamless 框固有宽≈0、否则不可点)
   static const double stateIcon = 40; // AnState placeholder glyph — larger than iconLg(20), distinct from control icons 状态占位大字形
   static const double stateMaxWidth = 360; // AnState centered content column max width (short lines stay readable) 状态内容列最大宽
+  static const double stepCurrent = 18; // AnStepper elongated current-dot width (done/upcoming use dot=7) 步进器当前点拉长宽
   static const double block = 280; // inspector 2-col min track + badge max-width 检查器列 + 徽章最大宽
   static const double menuMinWidth = 200; // dropdown/menu min width (rich rows fit even off a compact trigger) 菜单最小宽(紧凑触发器也容得下富行)
   static const double menuMaxWidth = 360; // dropdown/menu popover max width 菜单浮层最大宽
