@@ -133,6 +133,7 @@ G3 共 **9 件展示/布局件** + **3 个必须先行抽出的共享原语**。
   - `value == null` → 渲调用方传入的 **`child`(任意控件:下拉/开关,右对齐)**,**无铅笔、无编辑核**。这是 Field 区别于 Kv 的本质(Field 承载控件,Kv 只承文本)。
 - **行高(吸收 contract HIGH)**:`AnEditableValue` 传 `rowHeight: AnSize.islandHead(44)`(=demo `--field-row`/`--island-head` 阅读行)+ `padV: AnSpace.s4`(=--grid)。**与 Kv(32)不同 → 共享核必须参数化外提**。
 - **复用**:行外壳走 `AnTwoZone`(label+hint 列 左 / 铅笔槽 / 撑开 / value-or-child 右 / ✓✕);hint = `AnText.meta` + `context.colors.inkFaint` + softWrap anywhere。
+- **`[doc-fix]` G3.8 落地修正(本节即重述,与落地代码对齐)**:① **行外壳手搓 `Row`(key-hug + value 撑右几何),不走 AnTwoZone**——AnTwoZone 的 label 强制 Expanded 几何不适此行,同 AnKv(上文「行外壳走 AnTwoZone」作废,与 §1 原语 B 的「AnKv 不用」一致);可编辑态走 **`AnEditableValue`**(`rowHeight: AnSize.islandHead`=44、`valueColor: inkMuted`)、只读/child 态自渲;② hint = `AnText.meta`+`inkFaint`+`softWrap`(**词边界**;break-anywhere 留待 AnRow §166 同款处理);③ **值列 tabular** 对 AnField 是有意增强(demo Field `.v` 实无 tabular,只 Kv 有)——理由是与 AnEditableValue 编辑态对齐 + 数值列对齐;④ **只读/child 态无 hover 提墨**(只读无可点性、hover 无功能意义,有意偏离 demo `.field` 全态 hover);⑤ **editing 态 specimen 委托 AnEditableValue**(AnField/AnKv 可编辑路径=AnEditableValue 零包装,消解 §266 字面要求)。
 - **token**:行 hover 底 surfaceHover、圆角 `AnRadius.button`、水平内距 `AnSpace.s8`(--pad-row)、行内 gap `AnSpace.s8`(--sp-2)、label/hint 列内 gap `AnSpace.s2`(--grid/2)。**无新增 token**。
 - **a11y / reduced**:同 AnKv(只读/可编辑分支、门控 `reduced`)。slot 态(child)的语义由 child 自带。
 

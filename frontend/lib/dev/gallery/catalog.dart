@@ -189,6 +189,14 @@ final GalleryCategory _g3RowsCards = GalleryCategory('行与卡 Rows & Cards', A
     GallerySpecimen('editing (input)', (_) => const _EditableDemo(value: '0.85', startEditing: true), span: true),
     GallerySpecimen('select (常驻下拉)', (_) => const _EditableDemo(value: 'medium', editor: AnEditKind.select, options: _effortOptions), span: true),
   ]),
+  GalleryItem('AnField', '键值大行:label(+hint)左 + 值右;可编辑 / 只读 / 控件槽 三态', [
+    GallerySpecimen('可编辑值', (_) => const _FieldDemo(label: 'Name', value: 'normalize-input'), span: true),
+    GallerySpecimen('label + hint', (_) => const _FieldDemo(label: 'Timeout', hint: 'seconds before the run is aborted', value: '30'), span: true),
+    GallerySpecimen('select 可编辑', (_) => const _FieldDemo(label: 'Effort', value: 'medium', editor: AnEditKind.select, options: _effortOptions), span: true),
+    GallerySpecimen('只读', (_) => const AnField(label: 'Kind', value: 'function'), span: true),
+    GallerySpecimen('控件槽 (value=null)', (_) => const AnField(label: 'Visibility', child: _DropdownDemo(initial: 'med', simple: true)), span: true),
+    GallerySpecimen('超长 label/value', (_) => const _FieldDemo(label: 'an-extremely-long-field-label-that-must-ellipsis', value: 'and-a-very-long-value-that-truncates-on-the-right'), stress: true, maxWidth: 280, span: true),
+  ]),
 ]);
 
 // dev-only grid cell: a bordered block of a given height, to show AnAutoGrid's auto-fit columns +
@@ -241,6 +249,41 @@ class _KvDemoState extends State<_KvDemo> {
   @override
   Widget build(BuildContext context) =>
       AnKv(rows: _rows, wrap: widget.wrap, onChanged: (r) => setState(() => _rows = r));
+}
+
+// AnField is controlled — the demo owns the value so an in-place edit sticks. AnField 受控。
+class _FieldDemo extends StatefulWidget {
+  const _FieldDemo({
+    required this.label,
+    this.hint,
+    required this.value,
+    this.editor = AnEditKind.input,
+    this.options = const [],
+  });
+
+  final String label;
+  final String? hint;
+  final String value;
+  final AnEditKind editor;
+  final List<AnDropdownOption<String>> options;
+
+  @override
+  State<_FieldDemo> createState() => _FieldDemoState();
+}
+
+class _FieldDemoState extends State<_FieldDemo> {
+  late String _v = widget.value;
+
+  @override
+  Widget build(BuildContext context) => AnField(
+        label: widget.label,
+        hint: widget.hint,
+        value: _v,
+        editable: true,
+        editor: widget.editor,
+        options: widget.options,
+        onChanged: (v) => setState(() => _v = v),
+      );
 }
 
 // AnEditableValue is controlled — the demo owns the value so a commit sticks. AnEditableValue 受控。

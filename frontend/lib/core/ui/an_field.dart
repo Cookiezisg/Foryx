@@ -134,3 +134,120 @@ class AnKv extends StatelessWidget {
     );
   }
 }
+
+/// C2 — a key/value big row: [label] (+ optional [hint]) left, value right. Three modes:
+/// • [value] != null + [editable] (+ onChanged) → editable in place via [AnEditableValue] (pencil →
+///   field / dropdown, blur-commit, cancel-priority);
+/// • [value] != null, not editable → a read-only value (right-aligned, no pencil);
+/// • [value] == null → the [child] control (a dropdown / switch / button) sits right-aligned, no edit.
+/// Taller than [AnKv] ([AnSize.islandHead]) — a reading-weight field, not a dense list. Field's label is
+/// full-ink and the value inkMuted (vs Kv's muted key + faint value), via the shared core's params.
+/// [wrap] lets a long value wrap.
+///
+/// C2——键值大行:label(+ 可选 hint)左 + 值右。三态:value+editable→AnEditableValue 就地编辑;value 非可编辑→
+/// 只读值;value 为空→渲 child 控件(下拉/开关,右对齐)。行高比 AnKv 高(islandHead)、阅读型字段。
+/// Field label=ink、value=inkMuted(异于 Kv 的 muted key + faint value)。wrap=长值换行。
+class AnField extends StatelessWidget {
+  const AnField({
+    required this.label,
+    this.hint,
+    this.value,
+    this.editable = false,
+    this.editor = AnEditKind.input,
+    this.options = const [],
+    this.wrap = false,
+    this.child,
+    this.onChanged,
+    super.key,
+  });
+
+  final String label;
+  final String? hint;
+  final String? value;
+  final bool editable;
+  final AnEditKind editor;
+  final List<AnDropdownOption<String>> options;
+  final bool wrap;
+
+  /// Control rendered when [value] is null (a dropdown / switch / button), right-aligned. value 为空时渲的控件。
+  final Widget? child;
+  final ValueChanged<String>? onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    final lead = _leading(c);
+
+    // value + editable → shared edit core (handles pencil / field / ✓✕ / blur / focus / announce).
+    if (value != null && editable && onChanged != null) {
+      return AnEditableValue(
+        leading: lead,
+        fieldLabel: label,
+        value: value!,
+        rowHeight: AnSize.islandHead,
+        valueColor: c.inkMuted,
+        editor: editor,
+        options: options,
+        wrap: wrap,
+        onChanged: onChanged!, // guarded above (instance field isn't promoted by the null-check) 上文已判非空
+      );
+    }
+
+    // read-only value, or the child-slot control.
+    final String? semValue;
+    final Widget right;
+    if (value != null) {
+      final shown = value!.isEmpty ? '—' : value!;
+      semValue = shown;
+      right = Text(
+        shown,
+        textAlign: wrap ? TextAlign.left : TextAlign.right,
+        maxLines: wrap ? null : 1,
+        softWrap: wrap,
+        overflow: wrap ? TextOverflow.clip : TextOverflow.ellipsis,
+        style: AnText.body.copyWith(color: c.inkMuted, fontFeatures: const [FontFeature.tabularFigures()]),
+      );
+    } else {
+      semValue = null;
+      right = child ?? const SizedBox.shrink();
+    }
+
+    final row = Container(
+      constraints: const BoxConstraints(minHeight: AnSize.islandHead),
+      padding: const EdgeInsets.symmetric(horizontal: AnSpace.s8, vertical: AnSpace.s4),
+      child: Row(
+        children: [
+          Flexible(child: lead),
+          const SizedBox(width: AnSpace.s8),
+          const Expanded(child: SizedBox.shrink()), // grow: pins the value / control right 撑开、值/控件钉右
+          Flexible(child: right),
+        ],
+      ),
+    );
+
+    // read-only value → one merged "label(, hint): value" node; child slot → label + child each
+    // keep their own semantics (the control must stay reachable). 只读单节点;child 态各自可达。
+    if (semValue != null) {
+      final sem = hint != null ? '$label, $hint: $semValue' : '$label: $semValue';
+      return Semantics(label: sem, child: ExcludeSemantics(child: row));
+    }
+    // child slot: container (NOT merged — the control must stay reachable) so label + control group,
+    // matching the editable path's explicitChildNodes. 控件槽:容器不 merge(控件可达),三态语义齐。
+    return Semantics(container: true, explicitChildNodes: true, child: row);
+  }
+
+  Widget _leading(AnColors c) {
+    final labelText = Text(label, maxLines: 1, overflow: TextOverflow.ellipsis, style: AnText.body.copyWith(color: c.ink));
+    if (hint == null) return labelText;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        labelText,
+        const SizedBox(height: AnSpace.s2), // demo .l gap = --grid/2 列内间距
+        // hint: faint meta, wraps onto multiple lines (word boundaries) — a long mechanism / description. hint 多行换行。
+        Text(hint!, softWrap: true, style: AnText.meta.copyWith(color: c.inkFaint)),
+      ],
+    );
+  }
+}
