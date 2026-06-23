@@ -5,6 +5,7 @@ import '../design/tokens.dart';
 import '../design/typography.dart';
 import 'an_interactive.dart';
 import 'an_popover.dart';
+import 'an_two_zone.dart';
 import 'icons.dart';
 
 /// B3 — a controlled single-select dropdown (replaces the native select). The trigger echoes the
@@ -154,7 +155,7 @@ class _AnDropdownState<T> extends State<AnDropdown<T>> {
       );
     }
 
-    // Boxed = TWO ZONES: label fills LEFT, meta caps RIGHT, caret pinned right (see _TwoZone).
+    // Boxed = TWO ZONES: label fills LEFT, meta caps RIGHT, caret pinned right (see AnTwoZone).
     // 盒式=两区:label 占满左、meta 上限右、箭头钉右。
     return AnimatedContainer(
       duration: AnMotion.fast,
@@ -166,7 +167,7 @@ class _AnDropdownState<T> extends State<AnDropdown<T>> {
         border: Border.all(color: active ? c.lineStrong : c.line, width: AnSize.hairline),
         borderRadius: BorderRadius.circular(AnRadius.button),
       ),
-      child: _TwoZone(label: label, meta: sel?.meta, metaStyle: metaStyle, trailing: caret),
+      child: AnTwoZone(label: label, meta: sel?.meta, metaStyle: metaStyle, trailing: caret),
     );
   }
 
@@ -235,7 +236,7 @@ class _MenuRow<T> extends StatelessWidget {
         final c = context.colors;
         final active = states.isActive;
         // Menu row = same TWO ZONES as the trigger: optional leading icon, then label LEFT + meta
-        // RIGHT (via _TwoZone), with the selected-check as the trailing slot (reserved when unchecked
+        // RIGHT (via AnTwoZone), with the selected-check as the trailing slot (reserved when unchecked
         // so rows align). 菜单行=与触发器同两区:可选前导图标 + label 左 + meta 右,选中勾为尾槽(未选留位对齐)。
         return AnimatedContainer(
           duration: AnMotion.fast,
@@ -249,7 +250,7 @@ class _MenuRow<T> extends StatelessWidget {
                 const SizedBox(width: AnSpace.s8),
               ],
               Expanded(
-                child: _TwoZone(
+                child: AnTwoZone(
                   label: Text(option.label,
                       maxLines: 1, overflow: TextOverflow.ellipsis, style: AnText.body.copyWith(color: c.ink)),
                   meta: option.meta,
@@ -262,49 +263,6 @@ class _MenuRow<T> extends StatelessWidget {
               ),
             ],
           ),
-        );
-      },
-    );
-  }
-}
-
-/// Two-zone row content (the demo's `.lab{flex:1}` + `.meta{flex:none;max-width}`, in Flutter):
-/// primary [label] fills the LEFT and ellipsis-truncates last; secondary [meta] sits RIGHT, capped
-/// at ≤45% of the row so a long id can't crowd out the label, ellipsis when over; [trailing]
-/// (caret / check) is pinned to the right edge because the label is [Expanded] (greedy). Both texts
-/// truncate independently — no overflow. Shared by the dropdown trigger AND its menu rows.
-///
-/// 两区行(demo 的 lab flex:1 + meta flex:none·max-width 的 Flutter 版):label 占满左、最后才省略;meta 居右、
-/// 上限 45%(长 id 挤不掉 label)、超长省略;trailing(箭头/勾)因 label Expanded 而钉在右沿。两者各自截断、不溢出。
-const double _kMetaMaxFraction = 0.45; // meta zone ≤ 45% of the row (label keeps ≥ 55%) meta 区上限
-const double _kMetaFallbackWidth = 160; // meta cap when the row width is unbounded 无界时 meta 上限
-
-class _TwoZone extends StatelessWidget {
-  const _TwoZone({required this.label, this.meta, this.metaStyle, required this.trailing});
-
-  final Widget label;
-  final String? meta;
-  final TextStyle? metaStyle;
-  final Widget trailing;
-
-  @override
-  Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final metaCap = constraints.maxWidth.isFinite ? constraints.maxWidth * _kMetaMaxFraction : _kMetaFallbackWidth;
-        return Row(
-          children: [
-            Expanded(child: label),
-            if (meta != null) ...[
-              const SizedBox(width: AnSpace.s8),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: metaCap),
-                child: Text(meta!, maxLines: 1, overflow: TextOverflow.ellipsis, textAlign: TextAlign.right, style: metaStyle),
-              ),
-            ],
-            const SizedBox(width: AnSpace.s8),
-            trailing,
-          ],
         );
       },
     );

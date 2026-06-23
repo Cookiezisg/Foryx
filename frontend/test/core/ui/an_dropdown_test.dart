@@ -120,7 +120,7 @@ void main() {
 
   testWidgets('massive option list opens and scrolls without overflow', (tester) async {
     // Mirror the gallery's massive specimen: rich rows WITH meta, so the gate exercises the same
-    // _TwoZone two-zone overflow path the gallery shows. 与画廊 massive 一致:带 meta 的富行。
+    // AnTwoZone two-zone overflow path the gallery shows. 与画廊 massive 一致:带 meta 的富行。
     final many = [for (var i = 0; i < 80; i++) AnDropdownOption(value: '$i', label: 'Option number $i', meta: 'opt_$i')];
     await tester.pumpWidget(host(AnDropdown<String>(options: many, value: '0', onChanged: (_) {})));
     await tester.tap(find.byType(AnDropdown<String>));
