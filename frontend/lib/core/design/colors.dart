@@ -34,6 +34,8 @@ class AnColors extends ThemeExtension<AnColors> {
     required this.warnSoft,
     required this.danger,
     required this.dangerSoft,
+    required this.skeletonBase,
+    required this.skeletonHighlight,
     required this.shadowIsland,
     required this.shadowFloat,
     required this.shadowPop,
@@ -71,6 +73,10 @@ class AnColors extends ThemeExtension<AnColors> {
   final Color danger;
   final Color dangerSoft;
 
+  // Skeleton/shimmer bones — monochrome muted fill + a slightly lighter sweep highlight. 骨架:哑底 + 微亮扫光。
+  final Color skeletonBase;
+  final Color skeletonHighlight;
+
   // Elevation shadows. 高度阴影。
   final List<BoxShadow> shadowIsland;
   final List<BoxShadow> shadowFloat;
@@ -100,6 +106,8 @@ class AnColors extends ThemeExtension<AnColors> {
     warnSoft: Color.fromRGBO(191, 106, 2, 0.12),
     danger: Color(0xFFD70015),
     dangerSoft: Color.fromRGBO(215, 0, 21, 0.10),
+    skeletonBase: Color(0xFFE4E4E8),
+    skeletonHighlight: Color(0xFFF2F2F4),
     shadowIsland: [
       BoxShadow(color: Color.fromRGBO(0, 0, 0, 0.03), blurRadius: 2, offset: Offset(0, 1)),
       BoxShadow(color: Color.fromRGBO(0, 0, 0, 0.035), blurRadius: 10, offset: Offset(0, 3)),
@@ -138,6 +146,8 @@ class AnColors extends ThemeExtension<AnColors> {
     warnSoft: Color.fromRGBO(255, 159, 10, 0.16),
     danger: Color(0xFFFF453A),
     dangerSoft: Color.fromRGBO(255, 69, 58, 0.16),
+    skeletonBase: Color(0xFF2E2E33),
+    skeletonHighlight: Color(0xFF3C3C42),
     shadowIsland: [
       BoxShadow(color: Color.fromRGBO(0, 0, 0, 0.40), blurRadius: 2, offset: Offset(0, 1)),
       BoxShadow(color: Color.fromRGBO(0, 0, 0, 0.50), blurRadius: 28, offset: Offset(0, 8)),
@@ -176,6 +186,8 @@ class AnColors extends ThemeExtension<AnColors> {
     Color? warnSoft,
     Color? danger,
     Color? dangerSoft,
+    Color? skeletonBase,
+    Color? skeletonHighlight,
     List<BoxShadow>? shadowIsland,
     List<BoxShadow>? shadowFloat,
     List<BoxShadow>? shadowPop,
@@ -203,6 +215,8 @@ class AnColors extends ThemeExtension<AnColors> {
       warnSoft: warnSoft ?? this.warnSoft,
       danger: danger ?? this.danger,
       dangerSoft: dangerSoft ?? this.dangerSoft,
+      skeletonBase: skeletonBase ?? this.skeletonBase,
+      skeletonHighlight: skeletonHighlight ?? this.skeletonHighlight,
       shadowIsland: shadowIsland ?? this.shadowIsland,
       shadowFloat: shadowFloat ?? this.shadowFloat,
       shadowPop: shadowPop ?? this.shadowPop,
@@ -237,6 +251,8 @@ class AnColors extends ThemeExtension<AnColors> {
       warnSoft: c(warnSoft, other.warnSoft),
       danger: c(danger, other.danger),
       dangerSoft: c(dangerSoft, other.dangerSoft),
+      skeletonBase: c(skeletonBase, other.skeletonBase),
+      skeletonHighlight: c(skeletonHighlight, other.skeletonHighlight),
       shadowIsland: s(shadowIsland, other.shadowIsland),
       shadowFloat: s(shadowFloat, other.shadowFloat),
       shadowPop: s(shadowPop, other.shadowPop),

@@ -17,6 +17,7 @@ export 'an_interactive.dart';
 export 'an_island.dart';
 export 'an_popover.dart';
 export 'an_shell.dart';
+export 'an_skeleton.dart';
 export 'an_state.dart';
 export 'an_status_dot.dart';
 export 'an_stepper.dart';

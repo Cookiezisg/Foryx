@@ -108,6 +108,12 @@ final GalleryCategory _g2Feedback = GalleryCategory('反馈态 Feedback', AnIcon
     GallerySpecimen('all done (4/3)', (_) => const AnStepper(count: 3, current: 4, variant: AnStepperVariant.numbered)),
     GallerySpecimen('海量步 (4/10)', (_) => const AnStepper(count: 10, current: 4), stress: true, maxWidth: 200),
   ]),
+  GalleryItem('AnSkeleton', '加载骨架:扫光(降级=静态);row/card/text/lines', [
+    GallerySpecimen('text', (_) => const AnSkeleton.text(), span: true),
+    GallerySpecimen('lines (3)', (_) => const AnSkeleton.lines(3), span: true),
+    GallerySpecimen('row', (_) => const AnSkeleton.row(), span: true),
+    GallerySpecimen('card', (_) => const AnSkeleton.card(), span: true),
+  ]),
 ]);
 
 // ── small stateful demo wrappers (specimens need live state) 小型有态演示包 ──
