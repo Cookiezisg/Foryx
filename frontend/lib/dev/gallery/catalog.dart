@@ -197,6 +197,29 @@ final GalleryCategory _g3RowsCards = GalleryCategory('行与卡 Rows & Cards', A
     GallerySpecimen('控件槽 (value=null)', (_) => const AnField(label: 'Visibility', child: _DropdownDemo(initial: 'med', simple: true)), span: true),
     GallerySpecimen('超长 label/value', (_) => const _FieldDemo(label: 'an-extremely-long-field-label-that-must-ellipsis', value: 'and-a-very-long-value-that-truncates-on-the-right'), stress: true, maxWidth: 280, span: true),
   ]),
+  GalleryItem('AnCard', '有边卡片容器:normal / accent / 可选 / 紧凑', [
+    GallerySpecimen('normal', (_) => const AnCard(child: Text('A bordered card collects settings / MCP config / onboarding choices.')), span: true),
+    GallerySpecimen('accent 变体', (_) => const AnCard(variant: AnCardVariant.accent, child: Text('Editing — accent border draws focus.')), span: true),
+    GallerySpecimen('可选 (点选)', (_) => const _CardSelectDemo(), span: true),
+    GallerySpecimen('selected (静态·2px accent 边)', (_) => AnCard(selectable: true, selected: true, onSelect: () {}, child: const Text('Selected card')), span: true),
+    GallerySpecimen('row child (横向卡)', (_) => AnCard(child: Row(children: [Icon(AnIcons.mcp, size: AnSize.icon), const SizedBox(width: AnSpace.s8), const Expanded(child: Text('Horizontal card — compose a Row as the child')), AnButton(label: 'Edit', size: AnButtonSize.sm, onPressed: () {})])), span: true),
+    GallerySpecimen('pad=tight', (_) => const AnCard(pad: AnCardPad.tight, child: Text('Tight inset')), span: true),
+  ]),
+  GalleryItem('AnInfoCard', '无边信息单元:head(icon+title+meta)+ body + actions', [
+    GallerySpecimen('head + body', (_) => AnInfoCard(
+          title: 'Schedule',
+          icon: AnIcons.scheduler,
+          meta: 'UTC',
+          child: const AnKv(rows: [AnKvRow('Cron', '0 0 * * *'), AnKvRow('Next run', 'in 3h')]),
+        ), span: true),
+    GallerySpecimen('title + actions', (_) => AnInfoCard(
+          title: 'Environment',
+          actions: [AnButton(label: 'Edit', size: AnButtonSize.sm, onPressed: () {})],
+          child: const AnKv(rows: [AnKvRow('NODE_ENV', 'production'), AnKvRow('REGION', 'us-east')]),
+        ), span: true),
+    GallerySpecimen('无 head (body only)', (_) => const AnInfoCard(child: Text('A headless info unit — just body content, organised by whitespace.')), span: true),
+    GallerySpecimen('超长 title + meta', (_) => const AnInfoCard(title: 'an-extremely-long-info-card-title-that-must-ellipsis', meta: 'and-a-long-meta', child: Text('body')), stress: true, maxWidth: 260, span: true),
+  ]),
 ]);
 
 // dev-only grid cell: a bordered block of a given height, to show AnAutoGrid's auto-fit columns +
@@ -249,6 +272,26 @@ class _KvDemoState extends State<_KvDemo> {
   @override
   Widget build(BuildContext context) =>
       AnKv(rows: _rows, wrap: widget.wrap, onChanged: (r) => setState(() => _rows = r));
+}
+
+// AnCard selectable demo — owns the selected toggle. AnCard 可选演示,自持选中态。
+class _CardSelectDemo extends StatefulWidget {
+  const _CardSelectDemo();
+
+  @override
+  State<_CardSelectDemo> createState() => _CardSelectDemoState();
+}
+
+class _CardSelectDemoState extends State<_CardSelectDemo> {
+  bool _sel = false;
+
+  @override
+  Widget build(BuildContext context) => AnCard(
+        selectable: true,
+        selected: _sel,
+        onSelect: () => setState(() => _sel = !_sel),
+        child: Text(_sel ? 'Selected — tap to deselect' : 'Selectable — tap to select'),
+      );
 }
 
 // AnField is controlled — the demo owns the value so an in-place edit sticks. AnField 受控。
