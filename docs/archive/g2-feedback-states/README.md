@@ -7,7 +7,7 @@ created: 2026-06-23
 reviewed: 2026-06-23
 review-due: 2026-09-21
 audience: [human, ai]
-landed-into:
+landed-into: references/frontend/design-system.md
 ---
 
 # G2 反馈态套件 —— 联网调研已确认的建造规范（开工前对齐用）
