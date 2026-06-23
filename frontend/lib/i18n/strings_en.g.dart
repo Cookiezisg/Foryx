@@ -48,6 +48,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$action$en action = Translations$action$en.internal(_root);
 	late final Translations$feedback$en feedback = Translations$feedback$en.internal(_root);
 	late final Translations$ref$en ref = Translations$ref$en.internal(_root);
+	late final Translations$a11y$en a11y = Translations$a11y$en.internal(_root);
 }
 
 // Path: status
@@ -173,6 +174,18 @@ class Translations$ref$en {
 	String get approval => 'Approval';
 }
 
+// Path: a11y
+class Translations$a11y$en {
+	Translations$a11y$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Editing $field'
+	String editingField({required Object field}) => 'Editing ${field}';
+}
+
 /// The flat map containing all translations for locale <en>.
 /// Only for edge cases! For simple maps, use the map function of this library.
 ///
@@ -211,6 +224,7 @@ extension on Translations {
 			'ref.trigger' => 'Trigger',
 			'ref.control' => 'Control',
 			'ref.approval' => 'Approval',
+			'a11y.editingField' => ({required Object field}) => 'Editing ${field}',
 			_ => null,
 		};
 	}

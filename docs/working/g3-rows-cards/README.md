@@ -69,6 +69,7 @@ G3 共 **9 件展示/布局件** + **3 个必须先行抽出的共享原语**。
 - **编辑核内部叶子**:`DryIntrinsicWidth` + `ConstrainedBox(minWidth: AnSize.inlineEditMin)` + `EdgeInsetsDirectional.only(end: AnSize.caretEndPad)` + `AnInput(seamless, autofocus)`。**不给 placeholder**(污染固有宽 flutter#93337),空态占位用 idle 的 `—` 文本。
 - **进编辑不全选**:光标落值末尾(`collapse(false)`,改值语义),**不照抄 `AnInlineEdit._selectAll`**(那是重命名语义)。
 - **blur-commit 拍板(见 decisions)**:demo `finish(true)` 在失焦即提交。若采纳 blur-commit,须把它列为 `AnInput` 地基增强 + 让 `AnInlineEdit` 一并获得(避免两套失焦语义);若不采纳,与既有 AnInlineEdit 对齐(只 Enter/✓ 提交)。
+- **`[doc-fix]` G3.6 落地修正(本节即重述,与落地代码对齐)**:① **AnEditableValue 公开**(非 library-private)——独立文件 `an_editable_value.dart` 导出,为可单测 + 可复用(是正经 kit 编辑核,非内部细节);② **select 编辑器 = 常驻 ghost `AnDropdown`**(非 demo 的 pencil→下拉)——下拉自管 open/close/pick/dismiss,**根除「外点/Esc 关浮层却卡在编辑态」的悬空 bug**(HIGH 修);input 编辑器才走 pencil→field→✓✕;③ **blur-commit 采纳**:`AnInput.onTapOutside`(地基增强,原语 D)已落,AnEditableValue 用之、✓✕ 套 `TextFieldTapRegion` 取消优先;**`AnInlineEdit` 不取 blur-commit**(`onTapOutside:null`)——重命名点别处不该静默改名,与「值编辑」语义区分(非「两套失焦语义」,是 input-rename 有意不失焦);④ **共享叶子 `AnSeamlessField`** 已提取(AnInlineEdit 重构复用、byte-equal);⑤ **原语 D tabular** 已落:`AnInput` mono 路径 + AnEditableValue mono 展示值加 `FontFeature.tabularFigures`;⑥ commit 去首尾空白(同 demo);焦点 Enter/Esc 回落铅笔、失焦不回落;`SemanticsService.sendAnnouncement`(非 deprecated announce)。
 
 #### 原语 B — `AnTwoZone` 升格(右锚两区布局,从 AnDropdown 提为顶层共享)
 - **现状**:`_TwoZone` 已在 `an_dropdown.dart` 落地(private),是「左填充 Expanded + 右 meta 上限 ≤45% + trailing 钉右」骨架,被 dropdown trigger + menu row 共用。

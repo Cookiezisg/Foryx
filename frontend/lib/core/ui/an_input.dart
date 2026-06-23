@@ -26,6 +26,7 @@ class AnInput extends StatefulWidget {
     this.readOnly = false,
     this.focusNode,
     this.autofocus = false,
+    this.onTapOutside,
     super.key,
   });
 
@@ -49,6 +50,10 @@ class AnInput extends StatefulWidget {
   final bool readOnly;
   final FocusNode? focusNode;
   final bool autofocus;
+
+  /// Pointer-down outside the field — for in-place edit's blur-commit. Wrap confirm buttons in a
+  /// [TextFieldTapRegion] so tapping them isn't "outside" (cancel-priority). 失焦提交;✓✕ 套 TapRegion 防误触。
+  final TapRegionCallback? onTapOutside;
 
   @override
   State<AnInput> createState() => _AnInputState();
@@ -110,7 +115,10 @@ class _AnInputState extends State<AnInput> {
   @override
   Widget build(BuildContext context) {
     final c = context.colors;
-    final base = widget.mono ? AnText.mono.copyWith(fontSize: AnText.meta.fontSize) : AnText.body;
+    // mono → tabular figures (原语 D): numbers align + match a mono display value digit-for-digit. 等宽数字对齐。
+    final base = widget.mono
+        ? AnText.mono.copyWith(fontSize: AnText.meta.fontSize, fontFeatures: const [FontFeature.tabularFigures()])
+        : AnText.body;
     final style = base.copyWith(color: widget.readOnly ? c.inkFaint : c.ink);
     final borderColor = _focused ? c.lineStrong : c.line;
 
@@ -122,6 +130,7 @@ class _AnInputState extends State<AnInput> {
       autofocus: widget.autofocus,
       onChanged: widget.onChanged,
       onSubmitted: widget.onSubmitted,
+      onTapOutside: widget.onTapOutside,
       maxLines: widget.multiline ? null : 1,
       minLines: widget.multiline ? 3 : 1,
       expands: false,

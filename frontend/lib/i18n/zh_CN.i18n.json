@@ -36,5 +36,8 @@
     "trigger": "触发器",
     "control": "控制",
     "approval": "审批"
+  },
+  "a11y": {
+    "editingField": "正在编辑 $field"
   }
 }

@@ -1,12 +1,10 @@
-import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../design/colors.dart';
 import '../design/tokens.dart';
 import '../design/typography.dart';
 import 'an_edit_affordance.dart';
-import 'an_input.dart';
-import 'dry_intrinsic_width.dart';
+import 'an_seamless_field.dart';
 
 /// B6 — in-place rename: a title that swaps to a CONTENT-SIZED edit field. IDLE shows [value] as
 /// text with the pencil a gap after it (ellipsis + pencil-pins-right when long). EDITING swaps in a
@@ -108,8 +106,11 @@ class _AnInlineEditState extends State<AnInlineEdit> {
           // Flexible (not Expanded): content-sized until the affordance needs room — then the field
           // scrolls / the text ellipsizes (never overflow). Flexible:内容定宽,affordance 需位时框横滚/文字省略。
           Flexible(
+            // Rename keeps Enter / ✓ / Esc only (onTapOutside: null) — clicking away from a rename
+            // shouldn't silently commit; value-edit (AnEditableValue) opts into blur-commit instead.
+            // 重命名只 Enter/✓/Esc(不失焦提交,点别处不该静默改名);改值件 AnEditableValue 才用失焦提交。
             child: _editing
-                ? _EditZone(controller: _ctl, onCommit: _commit, onAbort: _abort)
+                ? AnSeamlessField(controller: _ctl, onCommit: _commit, onAbort: _abort)
                 : Text(
                     _committed,
                     maxLines: 1,
@@ -126,46 +127,6 @@ class _AnInlineEditState extends State<AnInlineEdit> {
             onAbort: _abort,
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// The editing zone: a seamless field sized to its content (via [_DryIntrinsicWidth]) but never
-/// narrower than [AnSize.inlineEditMin] (an empty field stays clickable) nor wider than the space
-/// the affordance leaves (the enclosing [Flexible] caps it → field scrolls at the cap). A trailing
-/// pad reserves room so the last glyph isn't clipped under the caret at end-of-line (flutter#24612).
-/// No placeholder — a hint would pollute the intrinsic width on older SDKs (flutter#93337).
-///
-/// 编辑区:seamless 框按内容定宽(_DryIntrinsicWidth),不窄于 inlineEditMin(空框可点)、不宽于 affordance 让出
-/// 的空间(外层 Flexible 封顶 → 到顶转横滚);尾部留位,光标在行尾不压住末字符(flutter#24612)。不给 placeholder
-/// (hint 会污染固有宽,flutter#93337)。Enter 存、Esc 弃。
-class _EditZone extends StatelessWidget {
-  const _EditZone({required this.controller, required this.onCommit, required this.onAbort});
-
-  final TextEditingController controller;
-  final VoidCallback onCommit;
-  final VoidCallback onAbort;
-
-  @override
-  Widget build(BuildContext context) {
-    return CallbackShortcuts(
-      bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): onAbort,
-      },
-      child: DryIntrinsicWidth(
-        child: Padding(
-          padding: const EdgeInsetsDirectional.only(end: AnSize.caretEndPad), // caret room at line end 行尾光标留位
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: AnSize.inlineEditMin),
-            child: AnInput(
-              controller: controller,
-              seamless: true,
-              autofocus: true,
-              onSubmitted: (_) => onCommit(),
-            ),
-          ),
-        ),
       ),
     );
   }

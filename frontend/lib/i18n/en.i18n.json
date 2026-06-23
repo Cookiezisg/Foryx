@@ -36,5 +36,8 @@
     "trigger": "Trigger",
     "control": "Control",
     "approval": "Approval"
+  },
+  "a11y": {
+    "editingField": "Editing $field"
   }
 }

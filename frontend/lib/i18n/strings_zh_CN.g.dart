@@ -44,6 +44,7 @@ class TranslationsZhCn extends Translations with BaseTranslations<AppLocale, Tra
 	@override late final _Translations$action$zh_CN action = _Translations$action$zh_CN._(_root);
 	@override late final _Translations$feedback$zh_CN feedback = _Translations$feedback$zh_CN._(_root);
 	@override late final _Translations$ref$zh_CN ref = _Translations$ref$zh_CN._(_root);
+	@override late final _Translations$a11y$zh_CN a11y = _Translations$a11y$zh_CN._(_root);
 }
 
 // Path: status
@@ -111,6 +112,16 @@ class _Translations$ref$zh_CN extends Translations$ref$en {
 	@override String get approval => '审批';
 }
 
+// Path: a11y
+class _Translations$a11y$zh_CN extends Translations$a11y$en {
+	_Translations$a11y$zh_CN._(TranslationsZhCn root) : this._root = root, super.internal(root);
+
+	final TranslationsZhCn _root; // ignore: unused_field
+
+	// Translations
+	@override String editingField({required Object field}) => '正在编辑 ${field}';
+}
+
 /// The flat map containing all translations for locale <zh-CN>.
 /// Only for edge cases! For simple maps, use the map function of this library.
 ///
@@ -149,6 +160,7 @@ extension on TranslationsZhCn {
 			'ref.trigger' => '触发器',
 			'ref.control' => '控制',
 			'ref.approval' => '审批',
+			'a11y.editingField' => ({required Object field}) => '正在编辑 ${field}',
 			_ => null,
 		};
 	}
