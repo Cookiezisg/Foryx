@@ -338,6 +338,15 @@ final GalleryCategory _g4NavShell = GalleryCategory('导航与壳 Nav & Shell', 
   GalleryItem('AnSidebarList', '左岛侧栏:New + 域内过滤(sliders 菜单)+ groups→types→rows 递归树(文档树可折叠)', [
     GallerySpecimen('sidebar (filter + tree + select)', (_) => const _SidebarDemo(), height: 420, span: true),
   ]),
+  GalleryItem('AnOceanHeader', '海洋页头:面包屑 + H2 标题(可就地改名)+ 右动作 + meta', [
+    GallerySpecimen('editable (crumb + H2 + actions + meta)', (_) => const _OceanHeaderDemo(), span: true),
+    GallerySpecimen('read-only', (_) => AnOceanHeader(
+          crumbs: const ['Docs', 'API'],
+          title: 'reference.md',
+          actions: [AnButton.iconOnly(AnIcons.more, semanticLabel: 'More', onPressed: () {})],
+          meta: const [AnBadge('document', tone: AnTone.accent)],
+        ), span: true),
+  ]),
 ]);
 
 // AnMenu demos (stateful: hold the picked / checked state). AnMenu 演示(持选中态)。
@@ -755,4 +764,29 @@ class _SidebarDemoState extends State<_SidebarDemo> {
       ],
     );
   }
+}
+
+// AnOceanHeader demo (stateful: holds the editable title). AnOceanHeader 演示(持可改标题)。
+class _OceanHeaderDemo extends StatefulWidget {
+  const _OceanHeaderDemo();
+  @override
+  State<_OceanHeaderDemo> createState() => _OceanHeaderDemoState();
+}
+
+class _OceanHeaderDemoState extends State<_OceanHeaderDemo> {
+  String _title = 'normalize-input';
+  @override
+  Widget build(BuildContext context) => AnOceanHeader(
+        crumbs: const ['Workspace', 'Functions'],
+        title: _title,
+        onTitleChange: (v) => setState(() => _title = v),
+        actions: [
+          AnButton.iconOnly(AnIcons.run, semanticLabel: 'Run', onPressed: () {}),
+          AnButton.iconOnly(AnIcons.more, semanticLabel: 'More', onPressed: () {}),
+        ],
+        meta: const [
+          AnBadge('function', tone: AnTone.accent),
+          AnBadge('passed', tone: AnTone.ok, dot: AnStatus.done),
+        ],
+      );
 }
