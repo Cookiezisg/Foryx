@@ -2,6 +2,7 @@
 /// An* 套件桶文件——features + gallery 一行导入,随组(G0–G6)扩充。
 library;
 
+export '../model/sidebar_model.dart';
 export '../model/status_state.dart' show AnStatus, AnTone;
 export 'an_action_group.dart';
 export 'an_auto_grid.dart';
@@ -32,6 +33,7 @@ export 'an_scroll_behavior.dart';
 export 'an_seamless_field.dart';
 export 'an_section.dart';
 export 'an_shell.dart';
+export 'an_sidebar_list.dart';
 export 'an_skeleton.dart';
 export 'an_state.dart';
 export 'an_status_dot.dart';

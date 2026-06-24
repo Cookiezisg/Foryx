@@ -335,6 +335,9 @@ final GalleryCategory _g4NavShell = GalleryCategory('导航与壳 Nav & Shell', 
     GallerySpecimen('tabs (underline + panes)', (_) => const _TabsDemo(), height: 220, span: true),
     GallerySpecimen('many tabs (horizontal scroll)', (_) => const _TabsDemo(many: true), height: 200, span: true),
   ]),
+  GalleryItem('AnSidebarList', '左岛侧栏:New + 域内过滤(sliders 菜单)+ groups→types→rows 递归树(文档树可折叠)', [
+    GallerySpecimen('sidebar (filter + tree + select)', (_) => const _SidebarDemo(), height: 420, span: true),
+  ]),
 ]);
 
 // AnMenu demos (stateful: hold the picked / checked state). AnMenu 演示(持选中态)。
@@ -696,4 +699,60 @@ class _TabsDemoState extends State<_TabsDemo> {
 
   @override
   Widget build(BuildContext context) => AnTabs(items: _items, value: _v, onPick: (k) => setState(() => _v = k));
+}
+
+// AnSidebarList demo (stateful: holds selection + slider checks). AnSidebarList 演示(持选中 + 滑块勾选)。
+class _SidebarDemo extends StatefulWidget {
+  const _SidebarDemo();
+  @override
+  State<_SidebarDemo> createState() => _SidebarDemoState();
+}
+
+class _SidebarDemoState extends State<_SidebarDemo> {
+  String _sel = 'fn1';
+  final Set<String> _opts = {'updated', 'versions', 'status'};
+  void _opt(String k) => setState(() => _opts.contains(k) ? _opts.remove(k) : _opts.add(k));
+
+  @override
+  Widget build(BuildContext context) {
+    final model = SidebarModel(
+      newLabel: 'New entity',
+      filterPlaceholder: 'Filter…',
+      groups: [
+        SidebarGroup(label: 'Pinned', types: [
+          SidebarType(label: 'Functions', icon: AnIcons.function, count: 2, rows: const [
+            SidebarRow(id: 'fn1', label: 'normalize-input', dot: AnStatus.done),
+            SidebarRow(id: 'fn2', label: 'validate-schema', dot: AnStatus.idle),
+          ]),
+          SidebarType(label: 'Workflows', icon: AnIcons.workflow, count: 1, rows: const [
+            SidebarRow(id: 'wf1', label: 'nightly-deploy', dot: AnStatus.run, meta: '4821'),
+          ]),
+        ]),
+        SidebarGroup(types: [
+          SidebarType(rows: [
+            SidebarRow(id: 'd1', label: 'docs', icon: AnIcons.doc, children: [
+              SidebarRow(id: 'd2', label: 'guide.md', icon: AnIcons.doc),
+              SidebarRow(id: 'd3', label: 'api', icon: AnIcons.doc, children: const [
+                SidebarRow(id: 'd4', label: 'reference.md'),
+              ]),
+            ]),
+          ]),
+        ]),
+      ],
+    );
+    return AnSidebarList(
+      model: model,
+      selectedId: _sel,
+      onSelect: (id) => setState(() => _sel = id),
+      onNew: () {},
+      menuEntries: [
+        const AnMenuSection('Sort'),
+        AnMenuItem(label: 'Recently updated', checked: _opts.contains('updated'), keepOpen: true, onTap: () => _opt('updated')),
+        AnMenuItem(label: 'Name', checked: _opts.contains('name'), keepOpen: true, onTap: () => _opt('name')),
+        const AnMenuSection('Display'),
+        AnMenuItem(label: 'Show versions', checked: _opts.contains('versions'), keepOpen: true, onTap: () => _opt('versions')),
+        AnMenuItem(label: 'Show status dots', checked: _opts.contains('status'), keepOpen: true, onTap: () => _opt('status')),
+      ],
+    );
+  }
 }
