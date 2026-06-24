@@ -45,6 +45,7 @@ class TranslationsZhCn extends Translations with BaseTranslations<AppLocale, Tra
 	@override late final _Translations$feedback$zh_CN feedback = _Translations$feedback$zh_CN._(_root);
 	@override late final _Translations$ref$zh_CN ref = _Translations$ref$zh_CN._(_root);
 	@override late final _Translations$a11y$zh_CN a11y = _Translations$a11y$zh_CN._(_root);
+	@override late final _Translations$tree$zh_CN tree = _Translations$tree$zh_CN._(_root);
 }
 
 // Path: status
@@ -127,6 +128,19 @@ class _Translations$a11y$zh_CN extends Translations$a11y$en {
 	@override String get displayOptions => '显示选项';
 	@override String codeBlock({required Object lang, required Object lines}) => '代码块,${lang},${lines} 行';
 	@override String codeBlockPlain({required Object lines}) => '代码块,${lines} 行';
+	@override String jsonTree({required Object count}) => 'JSON 树,${count} 项';
+}
+
+// Path: tree
+class _Translations$tree$zh_CN extends Translations$tree$en {
+	_Translations$tree$zh_CN._(TranslationsZhCn root) : this._root = root, super.internal(root);
+
+	final TranslationsZhCn _root; // ignore: unused_field
+
+	// Translations
+	@override String get invalidJson => '无效 JSON';
+	@override String get circular => '[循环引用]';
+	@override String moreItems({required Object count}) => '${count} 项已省略';
 }
 
 /// The flat map containing all translations for locale <zh-CN>.
@@ -175,6 +189,10 @@ extension on TranslationsZhCn {
 			'a11y.displayOptions' => '显示选项',
 			'a11y.codeBlock' => ({required Object lang, required Object lines}) => '代码块,${lang},${lines} 行',
 			'a11y.codeBlockPlain' => ({required Object lines}) => '代码块,${lines} 行',
+			'a11y.jsonTree' => ({required Object count}) => 'JSON 树,${count} 项',
+			'tree.invalidJson' => '无效 JSON',
+			'tree.circular' => '[循环引用]',
+			'tree.moreItems' => ({required Object count}) => '${count} 项已省略',
 			_ => null,
 		};
 	}

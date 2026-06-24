@@ -45,6 +45,12 @@
     "editingField": "Editing $field",
     "displayOptions": "Display options",
     "codeBlock": "Code block, $lang, $lines lines",
-    "codeBlockPlain": "Code block, $lines lines"
+    "codeBlockPlain": "Code block, $lines lines",
+    "jsonTree": "JSON tree, $count items"
+  },
+  "tree": {
+    "invalidJson": "Invalid JSON",
+    "circular": "[Circular]",
+    "moreItems": "$count more (truncated)"
   }
 }

@@ -49,6 +49,7 @@ class Translations with BaseTranslations<AppLocale, Translations> {
 	late final Translations$feedback$en feedback = Translations$feedback$en.internal(_root);
 	late final Translations$ref$en ref = Translations$ref$en.internal(_root);
 	late final Translations$a11y$en a11y = Translations$a11y$en.internal(_root);
+	late final Translations$tree$en tree = Translations$tree$en.internal(_root);
 }
 
 // Path: status
@@ -205,6 +206,27 @@ class Translations$a11y$en {
 
 	/// en: 'Code block, $lines lines'
 	String codeBlockPlain({required Object lines}) => 'Code block, ${lines} lines';
+
+	/// en: 'JSON tree, $count items'
+	String jsonTree({required Object count}) => 'JSON tree, ${count} items';
+}
+
+// Path: tree
+class Translations$tree$en {
+	Translations$tree$en.internal(this._root);
+
+	final Translations _root; // ignore: unused_field
+
+	// Translations
+
+	/// en: 'Invalid JSON'
+	String get invalidJson => 'Invalid JSON';
+
+	/// en: '[Circular]'
+	String get circular => '[Circular]';
+
+	/// en: '$count more (truncated)'
+	String moreItems({required Object count}) => '${count} more (truncated)';
 }
 
 /// The flat map containing all translations for locale <en>.
@@ -253,6 +275,10 @@ extension on Translations {
 			'a11y.displayOptions' => 'Display options',
 			'a11y.codeBlock' => ({required Object lang, required Object lines}) => 'Code block, ${lang}, ${lines} lines',
 			'a11y.codeBlockPlain' => ({required Object lines}) => 'Code block, ${lines} lines',
+			'a11y.jsonTree' => ({required Object count}) => 'JSON tree, ${count} items',
+			'tree.invalidJson' => 'Invalid JSON',
+			'tree.circular' => '[Circular]',
+			'tree.moreItems' => ({required Object count}) => '${count} more (truncated)',
 			_ => null,
 		};
 	}

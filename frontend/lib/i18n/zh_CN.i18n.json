@@ -45,6 +45,12 @@
     "editingField": "正在编辑 $field",
     "displayOptions": "显示选项",
     "codeBlock": "代码块,$lang,$lines 行",
-    "codeBlockPlain": "代码块,$lines 行"
+    "codeBlockPlain": "代码块,$lines 行",
+    "jsonTree": "JSON 树,$count 项"
+  },
+  "tree": {
+    "invalidJson": "无效 JSON",
+    "circular": "[循环引用]",
+    "moreItems": "$count 项已省略"
   }
 }

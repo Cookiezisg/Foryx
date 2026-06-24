@@ -364,6 +364,24 @@ const _jsonCode = '{\n'
     '  "retries": 3,\n'
     '  "tags": ["prod", "io"]\n'
     '}';
+const _flowrunNode = {
+  'nodeId': 'normalize',
+  'status': 'completed',
+  'iteration': 0,
+  'result': {'name': 'john', 'len': 4, 'valid': true, 'score': 0.92},
+  'tags': ['prod', 'io', 'fast'],
+  'startedAt': '2026-06-24T10:00:00Z',
+  'error': null,
+};
+const _deepJson = {
+  'a': {
+    'b': {
+      'c': {
+        'd': {'e': 'deep', 'n': 42}
+      }
+    }
+  }
+};
 
 final GalleryCategory _g5CodeData = GalleryCategory('代码与数据 Code & Data', AnIcons.function, [
   GalleryItem('AnCodeEditor', '唯一代码块/轻编辑:高亮 + 行号 + 顶栏;只读/可编辑/内联/换行', [
@@ -380,6 +398,21 @@ final GalleryCategory _g5CodeData = GalleryCategory('代码与数据 Code & Data
     GallerySpecimen('空', (_) => const AnCodeEditor(code: '', lang: 'py'), stress: true, span: true),
     GallerySpecimen('海量行 (内容高、父滚动)', (_) => AnCodeEditor(code: [for (var i = 0; i < 60; i++) 'line_$i = step($i)'].join('\n'), lang: 'py'), stress: true, span: true),
     GallerySpecimen('注入转义', (_) => const AnCodeEditor(code: '<b>not</b> & <i>html</i> — \${raw}', lang: 'md'), stress: true, span: true),
+  ]),
+  GalleryItem('AnJsonTree', '唯一 JSON/结构化展示:可折叠树 + 类型着色(TreeSliver 虚拟化);只读', [
+    GallerySpecimen('flowrun 节点结果', (_) => const AnJsonTree(data: _flowrunNode), span: true, height: 280),
+    GallerySpecimen('数组根', (_) => const AnJsonTree(data: ['alpha', 'beta', 'gamma'], rootLabel: 'tags'), span: true, height: 160),
+    GallerySpecimen('深嵌套 (open-depth)', (_) => const AnJsonTree(data: _deepJson, openDepth: 5), span: true, height: 220),
+    GallerySpecimen('无根行 (showRoot=false)', (_) => const AnJsonTree(data: _flowrunNode, showRoot: false), span: true, height: 240),
+    GallerySpecimen('标量 / null / 空', (_) => const AnJsonTree(data: {'s': '', 'n': null, 'empty': <String, Object?>{}, 'arr': <Object?>[]}), span: true, height: 180),
+    GallerySpecimen('无效 JSON', (_) => const AnJsonTree(jsonString: '{ bad json,, }'), span: true, height: 80),
+    GallerySpecimen('环检测 [Circular]', (_) {
+      final m = <String, Object?>{'name': 'node'};
+      m['self'] = m;
+      return AnJsonTree(data: m, openDepth: 3);
+    }, stress: true, span: true, height: 140),
+    GallerySpecimen('海量键 (截断)', (_) => AnJsonTree(data: {for (var i = 0; i < 80; i++) 'key_$i': 'value_$i'}), stress: true, span: true, height: 260),
+    GallerySpecimen('注入转义', (_) => const AnJsonTree(data: {'html': '<b>not</b> & <i>x</i>', 'tmpl': '\${raw} {{cel}}'}), stress: true, span: true, height: 140),
   ]),
 ]);
 
