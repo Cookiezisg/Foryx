@@ -18,14 +18,15 @@ import 'icons.dart';
 ///
 /// Interaction: a [collapsible] non-[passive] row toggles on the LEAD (chevron) and selects on the rest;
 /// other rows select on tap. The whole row is one [AnInteractive] (hover drives the lead + trail reveal;
-/// passive → not focusable). The collapsible toggle is MOUSE-ONLY, so v1 deliberately does NOT expose
-/// `expanded` semantics (announcing expandable with no keyboard path is a false promise — see [build]).
+/// passive → not focusable). A [collapsible] row announces its `expanded` disclosure state; the keyboard
+/// expand/collapse (←/→, WAI-ARIA tree) is owned by the tree CONSUMER's roving focus (AnSidebarList), not
+/// AnRow — so AnRow gains no competing keyboard owner.
 ///
 /// C1 列表核心行:三列网格 [lead | label 1fr | trail],对齐靠结构。lead = 状态点 或 icon(collapsible 行 hover 换
 /// chevron、open 转 90°)。trail = meta 与 hover 揭示的 actions 叠同一右锚(opacity 互换、不重排)。hint → 行变高顶对齐、
 /// hint 换行。selected 提墨;emphatic+selected = accentSoft 底 + 左 accent 条(run 看板)。depth 每级缩进;mono 等宽 label;
 /// passive 不可交互。交互:collapsible 非 passive 行点 lead 折叠、点其余选中;其它行点即选。整行一个 AnInteractive
-/// (hover 驱动 lead/trail 揭示;passive 不可聚焦;collapsible 折叠仅鼠标 → v1 故意不暴露 expanded 语义,见 build)。
+/// (hover 驱动 lead/trail 揭示;passive 不可聚焦;collapsible 行透 expanded 折叠态语义,键盘展开 ←/→ 归树消费方 AnSidebarList、不在 AnRow)。
 class AnRow extends StatelessWidget {
   const AnRow({
     this.icon,
@@ -73,13 +74,15 @@ class AnRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // v1 does NOT expose `expanded` semantics: the chevron toggle is mouse-only (a GestureDetector on
-    // the lead), so announcing "expandable" with no keyboard path would be a false promise (WCAG
-    // 2.1.1 / 4.1.2). Keyboard toggle + disclosure semantics (on the lead button) are a documented
-    // follow-up — see design-system §G3. v1 不暴露 expanded:lead 折叠仅鼠标、无键盘途径,announce 可展开=谎报;留待补。
+    // A collapsible row announces its disclosure state via `expanded` (screen readers say "collapsed/
+    // expanded") — null on non-collapsible rows (no false disclosure promise). The KEYBOARD expand/collapse
+    // (←/→, WAI-ARIA tree) is owned by the tree CONSUMER's roving-focus group (AnSidebarList), NOT baked
+    // into AnRow — so AnRow doesn't grow a competing keyboard owner. collapsible 行透 expanded(屏读播报折叠态);
+    // 键盘展开(←/→)归树消费方(AnSidebarList)的 roving 焦点组,不塞进 AnRow(避免双键盘属主)。
     return AnInteractive(
       onTap: passive ? null : onSelect,
       selected: selected,
+      expanded: collapsible ? open : null,
       cursor: passive ? MouseCursor.defer : null,
       builder: (context, states) => _row(context, states.isActive && !passive),
     );

@@ -43,11 +43,15 @@ void main() {
     expect(toggles, 1);
   });
 
-  testWidgets('collapsible does NOT expose expanded semantics in v1 (mouse-only toggle → no false promise)', (tester) async {
-    // The chevron toggle is mouse-only (GestureDetector); announcing "expandable" with no keyboard path
-    // would be a false disclosure (WCAG 2.1.1/4.1.2). Keyboard toggle + expanded is a documented follow-up.
+  testWidgets('collapsible exposes expanded disclosure semantics; non-collapsible does not', (tester) async {
+    // G4: a collapsible row announces its disclosure state (the keyboard expand/collapse lives in the tree
+    // consumer's roving focus, e.g. AnSidebarList). A non-collapsible row makes no disclosure promise.
     final handle = tester.ensureSemantics();
     await tester.pumpWidget(host(AnRow(collapsible: true, open: true, label: 'open node', onSelect: () {}, onToggle: () {})));
+    expect(tester.getSemantics(find.byType(AnInteractive)).flagsCollection.isExpanded.toBoolOrNull(), isTrue);
+    await tester.pumpWidget(host(AnRow(collapsible: true, open: false, label: 'closed node', onSelect: () {}, onToggle: () {})));
+    expect(tester.getSemantics(find.byType(AnInteractive)).flagsCollection.isExpanded.toBoolOrNull(), isFalse);
+    await tester.pumpWidget(host(AnRow(label: 'plain', onSelect: () {})));
     expect(tester.getSemantics(find.byType(AnInteractive)).flagsCollection.isExpanded.toBoolOrNull(), isNull);
     handle.dispose();
   });
