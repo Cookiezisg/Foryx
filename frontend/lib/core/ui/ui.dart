@@ -18,6 +18,7 @@ export 'an_group_label.dart';
 export 'an_info_card.dart';
 export 'an_inline_edit.dart';
 export 'an_input.dart';
+export 'an_inspector.dart';
 export 'an_interactive.dart';
 export 'an_island.dart';
 export 'an_lead_value.dart';

@@ -274,6 +274,46 @@ final GalleryCategory _g4NavShell = GalleryCategory('导航与壳 Nav & Shell', 
           trailing: [AnButton.iconOnly(AnIcons.more, semanticLabel: 'More', onPressed: () {})],
         ), stress: true, maxWidth: 280, span: true),
   ]),
+  GalleryItem('AnInspector', '右岛内容壳:head(icon+title)+ 滚动块流 body(不画岛皮,AnIsland 供)· headless 占满自管', [
+    GallerySpecimen('head + body (in island)', (_) => SizedBox(
+          width: 320,
+          child: AnIsland(
+            padding: EdgeInsets.zero,
+            child: AnInspector(
+              title: 'normalize-input',
+              icon: AnIcons.function,
+              children: const [
+                AnInfoCard(title: 'Overview', child: AnKv(rows: [AnKvRow('Kind', 'function'), AnKvRow('Created', '2026-06-24')])),
+                AnInfoCard(title: 'Source', child: AnKv(rows: [AnKvRow('Lines', '42'), AnKvRow('Lang', 'CEL')])),
+              ],
+            ),
+          ),
+        ), height: 360, span: true),
+    GallerySpecimen('headless (slot fills + self-manages)', (_) => const SizedBox(
+          width: 320,
+          child: AnIsland(
+            padding: EdgeInsets.zero,
+            child: AnInspector(
+              headless: true,
+              child: AnState(kind: AnStateKind.empty, size: AnStateSize.inset, title: 'Headless', hint: 'slot self-draws its head + scroll'),
+            ),
+          ),
+        ), height: 220, span: true),
+    GallerySpecimen('超长标题 + 多卡滚动', (_) => SizedBox(
+          width: 320,
+          child: AnIsland(
+            padding: EdgeInsets.zero,
+            child: AnInspector(
+              title: 'an-extremely-long-inspector-title-that-must-ellipsis-in-the-head',
+              icon: AnIcons.workflow,
+              children: [
+                for (final t in const ['Overview', 'Source', 'Versions', 'History'])
+                  AnInfoCard(title: t, child: const AnKv(rows: [AnKvRow('k', 'v')])),
+              ],
+            ),
+          ),
+        ), height: 200, stress: true, span: true),
+  ]),
 ]);
 
 // AnThinTable sample data. AnThinTable 演示数据。
