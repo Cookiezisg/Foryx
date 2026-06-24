@@ -225,9 +225,10 @@ class _AnOverlayHostState extends ConsumerState<AnOverlayHost> {
 }
 
 /// The toast stack — a column that grows UPWARD from the bottom-right (newest at the bottom, demo
-/// column-reverse). Only THIS widget watches the toast list, so a toast change repaints just the
-/// stack, never the app content. Clamped to the viewport height; the corner footprint is small so the
-/// rest of the screen stays click-through (no IgnorePointer needed). toast 栈:右下向上堆(最新在底)。仅此件 watch。
+/// column-reverse). Only THIS widget watches the toast list, so a toast change repaints just the stack,
+/// never the app content. NOT clipped (so each chip's shadow spreads freely — the soft cap bounds the
+/// height); the small corner footprint keeps the rest of the screen click-through (no IgnorePointer).
+/// toast 栈:右下向上堆(最新在底)。仅此件 watch;不裁(阴影自由扩散,软上限兜高);角落小占位故余屏可穿透。
 class _AnToastLayer extends ConsumerWidget {
   const _AnToastLayer();
 
@@ -235,38 +236,32 @@ class _AnToastLayer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final toasts = ref.watch(overlayProvider.select((s) => s.toasts));
     if (toasts.isEmpty) return const SizedBox.shrink();
-    // clamp ≥0: a sub-48 viewport would feed ConstrainedBox a negative maxHeight → assert. clamp 防负约束。
-    final maxH = (MediaQuery.sizeOf(context).height - AnSpace.s48).clamp(
-      0.0,
-      double.infinity,
-    );
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxHeight: maxH),
-      child: ClipRect(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          verticalDirection: VerticalDirection
-              .up, // newest at the bottom, older pushed up 最新在底
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            for (final t in toasts)
-              Padding(
-                padding: const EdgeInsets.only(
-                  top: AnSpace.s8,
-                ), // gap between stacked toasts 栈间距
-                child: AnToast(
-                  key: ValueKey(t.id),
-                  text: t.text,
-                  tone: t.tone,
-                  action: t.action,
-                  duration: t.duration,
-                  onDismissed: () =>
-                      ref.read(overlayProvider.notifier).dismissToast(t.id),
-                ),
-              ),
-          ],
-        ),
-      ),
+    // NO ClipRect / maxHeight ConstrainedBox: the soft cap (5) already bounds the stack height, and any
+    // clip here CUTS the toasts' shadows — each chip's shadowPop must spread freely past the column on
+    // all four sides (the real-machine review caught the shadow being sliced at the column box). The
+    // only bound we want is the host Stack's screen clip. 不裁/不限高:软上限已兜高度;裁会切掉 toast 四向阴影(真机复审揪出)。
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      verticalDirection:
+          VerticalDirection.up, // newest at the bottom, older pushed up 最新在底
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        for (final t in toasts)
+          Padding(
+            padding: const EdgeInsets.only(
+              top: AnSpace.s8,
+            ), // gap between stacked toasts 栈间距
+            child: AnToast(
+              key: ValueKey(t.id),
+              text: t.text,
+              tone: t.tone,
+              action: t.action,
+              duration: t.duration,
+              onDismissed: () =>
+                  ref.read(overlayProvider.notifier).dismissToast(t.id),
+            ),
+          ),
+      ],
     );
   }
 }
