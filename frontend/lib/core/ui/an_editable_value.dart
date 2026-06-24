@@ -262,6 +262,7 @@ class _AnEditableValueState extends State<AnEditableValue> {
         controller: _ctl,
         mono: widget.mono,
         tabular: true, // value column: digits always tabular (idle ↔ editing same width) 值列数字恒等宽
+        framed: true, // demo edit frame (no row-height growth, right-only horizontal) 编辑框(不加行高、右生长)
         onCommit: () => _finish(true, returnFocus: true),
         onAbort: () => _finish(false, returnFocus: true),
         onTapOutside: (_) => _finish(true, returnFocus: false), // blur-commit; focus stays where clicked 失焦提交、焦点不回落

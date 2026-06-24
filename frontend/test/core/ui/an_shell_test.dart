@@ -92,12 +92,33 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.bySemanticsLabel('inspectorProbe'), findsOneWidget); // open → announced
 
+    // Mid-close: the island is STILL painted (sliding out, content held full-width behind the clip) — the
+    // ExcludeFocus/ExcludeSemantics wrapper must keep it inert NOW (this is the transient the wrapper guards;
+    // once fully closed the subtree is dropped entirely). 滑出中仍绘制,惰化包裹须此刻生效。
     await tester.pumpWidget(shell(false));
+    await tester.pump(const Duration(milliseconds: 120)); // partway through the slide-out 滑出途中
+    expect(find.bySemanticsLabel('inspectorProbe'), findsNothing, reason: 'sliding-out content excluded from semantics');
+
     await tester.pumpAndSettle();
-    // closed: clipped to 0 width but content still laid out at full width → must be excluded from
-    // semantics + focus, else a real inspector's controls become an invisible focus trap. 收起=惰化。
-    expect(find.bySemanticsLabel('inspectorProbe'), findsNothing);
+    expect(find.bySemanticsLabel('inspectorProbe'), findsNothing, reason: 'fully closed → subtree removed (SizedBox.shrink)');
     handle.dispose();
+  });
+
+  testWidgets('the open right island shadow is intact + matches the left (not cut by a clip)', (tester) async {
+    tester.view.physicalSize = const Size(1400, 900);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(harness()); // inspectorOpen defaults true
+    await tester.pumpAndSettle();
+
+    // Both islands are the SAME AnIsland primitive → identical shadowFloat (one source). 同一原语=阴影同源。
+    expect(find.byType(AnIsland), findsNWidgets(2));
+    // The open right island's reveal clip uses a NO-OP clipper, so the float shadow paints past the bounds
+    // (unlike the old always-on ClipRect that cut it into a pointy dead corner). 敞开态用空裁切器,阴影不被裁。
+    final clip = tester.widget<ClipRect>(
+      find.ancestor(of: find.byType(AnIsland).last, matching: find.byType(ClipRect)),
+    );
+    expect(clip.clipper, isNotNull, reason: 'open island → no-op clipper → shadow not clipped (matches the left island)');
   });
 
   test('minimum window keeps the ocean ≥ its min column even with the left island at max', () {

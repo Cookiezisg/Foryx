@@ -4,6 +4,7 @@ import '../design/colors.dart';
 import '../design/tokens.dart';
 import '../design/typography.dart';
 import 'an_interactive.dart';
+import 'an_menu_surface.dart';
 import 'an_popover.dart';
 import 'an_two_zone.dart';
 import 'icons.dart';
@@ -103,8 +104,7 @@ class _AnDropdownState<T> extends State<AnDropdown<T>> {
       opacity: enabled ? 1 : AnOpacity.disabled,
       child: AnPopover(
         controller: _popover,
-        targetAnchor: widget.menuAlignEnd ? Alignment.bottomRight : Alignment.bottomLeft,
-        followerAnchor: widget.menuAlignEnd ? Alignment.topRight : Alignment.topLeft,
+        alignEnd: widget.menuAlignEnd,
         overlayBuilder: (context, anchorSize) => _menu(context, anchorSize),
         anchor: widget.block ? SizedBox(width: double.infinity, child: trigger) : trigger,
       ),
@@ -172,48 +172,26 @@ class _AnDropdownState<T> extends State<AnDropdown<T>> {
   }
 
   Widget _menu(BuildContext context, Size? anchorSize) {
-    final c = context.colors;
     // Menu width = the trigger width CLAMPED to [menuMin, menuMax] — tracks the trigger (aligned,
-    // dropped directly below) but never narrower than menuMin (so rich rows fit even off a compact
-    // ghost trigger) nor wider than menuMax. Forcing exact = trigger overflowed the ghost menu.
-    // 菜单宽 = 触发框宽夹到 [min,max]:跟随触发器(对齐、正下方),但不窄于 min(紧凑触发器也容富行)、不宽于 max。
+    // dropped directly below) but never narrower than menuMin (so rich rows fit even off a compact ghost
+    // trigger) nor wider than menuMax. (The MENU hugs content via IntrinsicWidth; the DROPDOWN deliberately
+    // matches its trigger instead.) 下拉宽=触发框宽夹 [min,max](菜单贴内容、下拉跟触发器,各自策略)。
     final triggerW = anchorSize?.width ?? AnSize.inputMin;
     final menuW = triggerW.clamp(AnSize.menuMinWidth, AnSize.menuMaxWidth);
     return ConstrainedBox(
-      constraints: BoxConstraints(
-        minWidth: menuW,
-        maxWidth: menuW,
-        maxHeight: AnSize.menuMaxHeight,
-      ),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: c.surface,
-          borderRadius: BorderRadius.circular(AnRadius.chip),
-          border: Border.all(color: c.line, width: AnSize.hairline),
-          boxShadow: c.shadowPop,
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(AnRadius.chip),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(vertical: AnSpace.s4),
-            // Keyboard nav: rows are focusable (AnInteractive); seed focus on the selected row (or
-            // the first when none) so arrow-up/down traverse and Enter selects. 键盘导航:聚焦选中行,方向键遍历。
-            child: FocusTraversalGroup(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  for (final o in widget.options)
-                    _MenuRow(
-                      option: o,
-                      selected: o.value == widget.value,
-                      autofocus: _autofocusValue == o.value,
-                      onTap: () => _pick(o.value),
-                    ),
-                ],
-              ),
+      constraints: BoxConstraints(minWidth: menuW, maxWidth: menuW, maxHeight: AnSize.menuMaxHeight),
+      // shared menu chrome (surface + s4-all-sides inset + FocusTraversalGroup) — same standard AnMenu uses
+      // so the selected/hover pill floats inset, not edge-to-edge. 共用面板壳(与 AnMenu 同标准、药丸内缩)。
+      child: AnMenuSurface(
+        children: [
+          for (final o in widget.options)
+            _MenuRow(
+              option: o,
+              selected: o.value == widget.value,
+              autofocus: _autofocusValue == o.value, // seed focus on the selected (else first) row 聚焦选中行
+              onTap: () => _pick(o.value),
             ),
-          ),
-        ),
+        ],
       ),
     );
   }
@@ -229,40 +207,35 @@ class _MenuRow<T> extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnInteractive(
+    // Shared row standard (rounded inset pill, hover/active fill, reduced-gate, autofocus) — same surface
+    // AnMenu items use; only the content below (TWO ZONES + trailing check) is dropdown-specific. 共用行标准。
+    return AnMenuRow(
       onTap: onTap,
       autofocus: autofocus,
-      builder: (context, states) {
+      builder: (context, active) {
         final c = context.colors;
-        final active = states.isActive;
-        // Menu row = same TWO ZONES as the trigger: optional leading icon, then label LEFT + meta
-        // RIGHT (via AnTwoZone), with the selected-check as the trailing slot (reserved when unchecked
-        // so rows align). 菜单行=与触发器同两区:可选前导图标 + label 左 + meta 右,选中勾为尾槽(未选留位对齐)。
-        return AnimatedContainer(
-          duration: AnMotion.fast,
-          height: AnSize.row,
-          padding: const EdgeInsets.symmetric(horizontal: AnSpace.s8),
-          color: c.surfaceHover.whenActive(active),
-          child: Row(
-            children: [
-              if (option.icon != null) ...[
-                Icon(option.icon, size: AnSize.icon, color: c.inkMuted),
-                const SizedBox(width: AnSpace.s8),
-              ],
-              Expanded(
-                child: AnTwoZone(
-                  label: Text(option.label,
-                      maxLines: 1, overflow: TextOverflow.ellipsis, style: AnText.body.copyWith(color: c.ink)),
-                  meta: option.meta,
-                  metaStyle: AnText.meta.copyWith(color: c.inkFaint),
-                  trailing: SizedBox(
-                    width: AnSize.iconSm,
-                    child: selected ? Icon(AnIcons.check, size: AnSize.iconSm, color: c.ink) : null,
-                  ),
+        // Menu row = same TWO ZONES as the trigger: optional leading icon, then label LEFT + meta RIGHT
+        // (via AnTwoZone), with the selected-check as the trailing slot (reserved when unchecked so rows
+        // align). 菜单行=与触发器同两区:可选前导图标 + label 左 + meta 右,选中勾为尾槽(未选留位对齐)。
+        return Row(
+          children: [
+            if (option.icon != null) ...[
+              Icon(option.icon, size: AnSize.icon, color: c.inkMuted),
+              const SizedBox(width: AnSpace.s8),
+            ],
+            Expanded(
+              child: AnTwoZone(
+                label: Text(option.label,
+                    maxLines: 1, overflow: TextOverflow.ellipsis, style: AnText.body.copyWith(color: c.ink)),
+                meta: option.meta,
+                metaStyle: AnText.meta.copyWith(color: c.inkFaint),
+                trailing: SizedBox(
+                  width: AnSize.iconSm,
+                  child: selected ? Icon(AnIcons.check, size: AnSize.iconSm, color: c.ink) : null,
                 ),
               ),
-            ],
-          ),
+            ),
+          ],
         );
       },
     );

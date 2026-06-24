@@ -232,7 +232,7 @@ final GalleryCategory _g3RowsCards = GalleryCategory('行与卡 Rows & Cards', A
     GallerySpecimen('passive', (_) => AnRow(icon: AnIcons.doc, label: 'read-only annotation', passive: true), span: true),
     GallerySpecimen('超长 label', (_) => AnRow(icon: AnIcons.workflow, label: 'an-extremely-long-row-label-that-must-ellipsis-not-overflow-the-row', meta: 'now', onSelect: () {}), stress: true, maxWidth: 240, span: true),
   ]),
-  GalleryItem('AnRowDetail', '可展开详情行:点行展开下方详情(AnimatedSize 高度揭示)', [
+  GalleryItem('AnRowDetail', '可展开详情行:点行展开下方详情(AnExpandReveal 高度揭示)', [
     GallerySpecimen('expandable (点开/收起)', (_) => const _RowDetailDemo(), span: true),
   ]),
   GalleryItem('AnThinTable', '对齐多列(非表格、无 chrome):首列吃富余 + 其余贴内容、表头灰 meta', [

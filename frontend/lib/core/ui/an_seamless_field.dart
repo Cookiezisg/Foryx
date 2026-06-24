@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
+import '../design/colors.dart';
 import '../design/tokens.dart';
 import 'an_input.dart';
 import 'dry_intrinsic_width.dart';
@@ -29,6 +30,7 @@ class AnSeamlessField extends StatelessWidget {
     this.autofocus = true,
     this.mono = false,
     this.tabular = false,
+    this.framed = false,
     this.style,
     super.key,
   });
@@ -46,32 +48,72 @@ class AnSeamlessField extends StatelessWidget {
   /// Tabular figures (mono already implies it) — match a tabular display value. 等宽数字(匹配 tabular 展示值)。
   final bool tabular;
 
+  /// Show the demo's edit FRAME while editing — a 1px [AnColors.lineStrong] inset border + [AnColors.surface]
+  /// fill + [AnRadius.tag] corner. It takes NO vertical layout height (the box bleeds over the host row's
+  /// fixed-height slack, demo `.v.editing` negative vertical margin) and grows ONLY to the right
+  /// ([AnSize.editBoxPadX]) while the text stays anchored (left pad bleeds over slack). Requires the host to
+  /// reserve ≥ text-height + [AnSize.editBoxPadY]·2 (true for control/row/islandHead). 编辑框:不占行高、只右生长、文字不跳。
+  final bool framed;
+
   /// Text-style override to match the display text it replaces (e.g. an H2 title). 文字样式覆写(匹配被替换文字)。
   final TextStyle? style;
 
   @override
   Widget build(BuildContext context) {
-    return CallbackShortcuts(
-      bindings: {const SingleActivator(LogicalKeyboardKey.escape): onAbort},
-      child: DryIntrinsicWidth(
-        child: Padding(
-          padding: const EdgeInsetsDirectional.only(end: AnSize.caretEndPad), // caret room at line end 行尾光标留位
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minWidth: AnSize.inlineEditMin),
-            child: AnInput(
-              controller: controller,
-              focusNode: focusNode,
-              seamless: true,
-              autofocus: autofocus,
-              mono: mono,
-              tabular: tabular,
-              style: style,
-              onSubmitted: (_) => onCommit(),
-              onTapOutside: onTapOutside,
-            ),
+    Widget field = DryIntrinsicWidth(
+      child: Padding(
+        padding: const EdgeInsetsDirectional.only(end: AnSize.caretEndPad), // caret room at line end 行尾光标留位
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(minWidth: AnSize.inlineEditMin),
+          child: AnInput(
+            controller: controller,
+            focusNode: focusNode,
+            seamless: true,
+            autofocus: autofocus,
+            mono: mono,
+            tabular: tabular,
+            style: style,
+            onSubmitted: (_) => onCommit(),
+            onTapOutside: onTapOutside,
           ),
         ),
       ),
+    );
+
+    if (framed) {
+      final c = context.colors;
+      // The frame is drawn BEHIND the field via a Stack so its vertical padding overflows the row's slack
+      // (zero layout height — demo's negative vertical margin) and its left padding bleeds over slack (text
+      // stays anchored). Only the right pad is REAL layout (EdgeInsetsDirectional.end) so the box grows right.
+      // 框经 Stack 画在字段后:纵向溢出余量(零行高)、左溢出(文字不跳),仅右内距真占位(框右生长)。
+      field = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Positioned.directional(
+            textDirection: Directionality.of(context),
+            start: -AnSize.editBoxPadX, // bleed left over slack (cancel left pad → text anchored) 左溢出
+            end: 0, // right edge = the real right pad (Padding below) 右缘=真右内距
+            top: -AnSize.editBoxPadY,
+            bottom: -AnSize.editBoxPadY,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: c.surface,
+                border: Border.all(color: c.lineStrong, width: AnSize.hairline),
+                borderRadius: BorderRadius.circular(AnRadius.tag),
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsetsDirectional.only(end: AnSize.editBoxPadX), // real right growth 右真占位
+            child: field,
+          ),
+        ],
+      );
+    }
+
+    return CallbackShortcuts(
+      bindings: {const SingleActivator(LogicalKeyboardKey.escape): onAbort},
+      child: field,
     );
   }
 }

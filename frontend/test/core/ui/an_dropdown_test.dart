@@ -49,6 +49,15 @@ void main() {
     expect(find.text('Apple'), findsNothing); // menu dismissed
   });
 
+  testWidgets('the menu uses the shared AnMenuSurface + AnMenuRow standard (rows match AnMenu)', (tester) async {
+    await tester.pumpWidget(host(AnDropdown<String>(options: opts, value: 'a', onChanged: (_) {})));
+    await tester.tap(find.byType(AnDropdown<String>));
+    await tester.pumpAndSettle();
+    // same chrome + row primitives as AnMenu → the selected/hover pill is a rounded inset, not edge-to-edge. 共用标准。
+    expect(find.byType(AnMenuSurface), findsOneWidget);
+    expect(find.byType(AnMenuRow), findsNWidgets(opts.length));
+  });
+
   testWidgets('menu is keyboard-navigable — arrow focuses a row, Enter selects', (tester) async {
     // After the FAD rewrite the rows are focusable + Enter-activatable; MaterialApp maps arrow keys
     // to directional focus, so the menu gets keyboard nav without per-row wiring.

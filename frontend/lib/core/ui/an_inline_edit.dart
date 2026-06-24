@@ -120,7 +120,7 @@ class _AnInlineEditState extends State<AnInlineEdit> {
             // shouldn't silently commit; value-edit (AnEditableValue) opts into blur-commit instead.
             // 重命名只 Enter/✓/Esc(不失焦提交,点别处不该静默改名);改值件 AnEditableValue 才用失焦提交。
             child: _editing
-                ? AnSeamlessField(controller: _ctl, style: widget.style, onCommit: _commit, onAbort: _abort)
+                ? AnSeamlessField(controller: _ctl, style: widget.style, framed: true, onCommit: _commit, onAbort: _abort)
                 : Text(
                     _committed,
                     maxLines: 1,

@@ -69,7 +69,8 @@ class AnOceanHeader extends StatelessWidget {
                 ? AnInlineEdit(
                     value: title,
                     style: titleStyle,
-                    minHeight: titleStyle.fontSize! * (titleStyle.height ?? 1.0),
+                    // H2 line box + slack for the edit frame's vertical bleed (editBoxPadY each side). H2 行盒 + 编辑框纵向余量。
+                    minHeight: titleStyle.fontSize! * (titleStyle.height ?? 1.0) + AnSize.editBoxPadY * 2,
                     onCommit: onChange,
                   )
                 // The page's PRIMARY heading — header semantics so screen readers can jump to it (rotor /

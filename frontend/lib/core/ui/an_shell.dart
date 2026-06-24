@@ -24,8 +24,10 @@ class AnShell extends StatefulWidget {
   final Widget? inspector;
 
   /// Reveal / hide the right island (a feature opens it for a selected entity, closes it otherwise). It
-  /// slides in/out (width + gap animate 0↔[AnSize.rightIsland]); the content stays full-width behind a clip
-  /// so it doesn't reflow during the slide. Default true (the island is shown). 右岛揭示/收起(滑入滑出、内容不重排)。
+  /// slides in/out (width + gap animate 0↔[AnSize.rightIsland]); the content is held full-width so it
+  /// doesn't reflow during the slide, and the island is the SAME [AnIsland] the left island uses with its
+  /// float shadow LEFT UNCLIPPED when open (so both islands' shadows match). Default true (shown).
+  /// 右岛揭示/收起(滑入滑出、内容不重排);与左岛同一 AnIsland,敞开态阴影不裁、两岛阴影一致。
   final bool inspectorOpen;
 
   @override
@@ -68,11 +70,12 @@ class _AnShellState extends State<AnShell> {
                   () => _leftW = (_leftW + dx).clamp(AnSize.sidebarMin, AnSize.sidebarMax)),
             ),
             Expanded(child: widget.ocean ?? const _Placeholder('Ocean')),
-            // Right island REVEAL: the gap + island width animate 0↔320; the content is held full-width by
-            // an OverflowBox behind a ClipRect so it slides (doesn't reflow) during the reveal. 右岛揭示:宽+间距动画、内容不重排。
+            // Right island REVEAL: the gap + island width animate 0↔320. _RightReveal wraps the content in
+            // the SAME [AnIsland] the left island uses (one shadow source) and leaves it UNCLIPPED when open
+            // so its float shadow is intact + identical to the left's. 右岛揭示:与左岛同一 AnIsland,敞开态不裁、阴影同源。
             _RightReveal(
               open: widget.inspectorOpen,
-              child: AnIsland(child: widget.inspector ?? const _Placeholder('Inspector')),
+              child: widget.inspector ?? const _Placeholder('Inspector'),
             ),
           ],
         ),
@@ -97,47 +100,101 @@ class _ChromeBar extends StatelessWidget {
   }
 }
 
-/// Animated reveal / hide of the fixed-width right island: the leading gap + the island width animate
-/// 0↔[AnSize.rightIsland] together, while an [OverflowBox] holds the content at full width behind a
-/// [ClipRect] so it slides rather than reflowing during the reveal. reduced-motion → instant.
-/// 右岛揭示:间距 + 宽一起动画 0↔320,内容经 OverflowBox 保持满宽、ClipRect 裁切,滑入而非重排;reduced→即时。
-class _RightReveal extends StatelessWidget {
+/// Animated reveal / hide of the fixed-width right island. The leading gap + island width animate
+/// 0↔[AnSize.rightIsland]; an [OverflowBox] holds the content at full width so it slides rather than
+/// reflows. The island is the SAME [AnIsland] the left island uses, so its float shadow is one source —
+/// and the slot is CLIPPED ONLY WHILE SLIDING: in the open steady state there is no clip, so the shadow
+/// is intact + identical to the left island's (an always-on ClipRect was cutting it into a "pointy" dead
+/// corner). reduced-motion → instant. Collapsed content is held full-width but made fully inert
+/// (ExcludeFocus + ExcludeSemantics + IgnorePointer) so it isn't a focus trap behind the clip.
+///
+/// 右岛揭示:间距 + 宽动画 0↔320,OverflowBox 保持满宽(滑入不重排)。岛=与左岛同一 [AnIsland](阴影同源),
+/// **仅滑动中裁切**——敞开态不裁,故阴影完整、与左岛一致(原 always-on ClipRect 把阴影裁成死角尖尖)。reduced→即时;
+/// 收起态满宽但彻底惰化(ExcludeFocus+ExcludeSemantics+IgnorePointer),不成焦点陷阱。
+class _RightReveal extends StatefulWidget {
   const _RightReveal({required this.open, required this.child});
   final bool open;
   final Widget child;
 
   @override
+  State<_RightReveal> createState() => _RightRevealState();
+}
+
+class _RightRevealState extends State<_RightReveal> with SingleTickerProviderStateMixin {
+  late final AnimationController _ctl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctl = AnimationController(vsync: this, duration: AnMotion.mid, value: widget.open ? 1 : 0);
+  }
+
+  @override
+  void didUpdateWidget(_RightReveal old) {
+    super.didUpdateWidget(old);
+    if (old.open != widget.open) {
+      if (AnMotionPref.reduced(context)) {
+        _ctl.value = widget.open ? 1 : 0;
+      } else {
+        widget.open ? _ctl.forward() : _ctl.reverse();
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final dur = AnMotionPref.reduced(context) ? Duration.zero : AnMotion.mid;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        AnimatedContainer(duration: dur, curve: AnMotion.easeOut, width: open ? AnSize.shellGap : 0),
-        ClipRect(
-          child: AnimatedContainer(
-            duration: dur,
-            curve: AnMotion.easeOut,
-            width: open ? AnSize.rightIsland : 0,
-            child: OverflowBox(
-              minWidth: AnSize.rightIsland,
-              maxWidth: AnSize.rightIsland,
-              alignment: AlignmentDirectional.centerStart,
-              // When closed the content stays laid out at full width (so it slides, not reflows), but the
-              // ClipRect only clips paint/hit-test — so make the hidden subtree fully inert, else its
-              // buttons/fields stay keyboard-focusable + screen-reader-announced behind the 0-width clip
-              // (a focus trap; same fix as AnRow._HoverSwap). 收起时内容仍满宽布局,故彻底惰化隐藏子树(同 _HoverSwap)。
-              child: SizedBox(
-                width: AnSize.rightIsland,
-                child: open
-                    ? child
-                    : ExcludeFocus(child: ExcludeSemantics(child: IgnorePointer(child: child))),
-              ),
-            ),
+    // The island is the SAME primitive the left side uses (one shadow source). Built once (stable across
+    // animation frames). Collapsed → held full-width but fully inert (clip hides paint, not focus/SR).
+    // 岛=左岛同一原语(阴影同源);收起态满宽但彻底惰化。
+    final island = AnIsland(
+      child: widget.open
+          ? widget.child
+          : ExcludeFocus(child: ExcludeSemantics(child: IgnorePointer(child: widget.child))),
+    );
+    return AnimatedBuilder(
+      animation: _ctl,
+      builder: (context, _) {
+        final t = _ctl.value;
+        if (t == 0) return const SizedBox.shrink(); // fully closed: take no space 全收:不占位
+        final fullyOpen = t >= 1.0;
+        final slot = SizedBox(
+          width: AnSize.rightIsland * t,
+          child: OverflowBox(
+            minWidth: AnSize.rightIsland,
+            maxWidth: AnSize.rightIsland,
+            alignment: AlignmentDirectional.centerEnd, // island docks right; reveals leftward 右锚揭示
+            child: SizedBox(width: AnSize.rightIsland, child: island),
           ),
-        ),
-      ],
+        );
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(width: AnSize.shellGap * t), // gap animates with the reveal 间距随揭示
+            // Clip ONLY while sliding; fully open → an effectively-unbounded clip so the shadow shows (the
+            // ClipRect widget stays in the tree to keep the island's element identity stable). 仅滑动中裁,敞开态不裁。
+            ClipRect(clipper: fullyOpen ? const _UnclippedRect() : null, child: slot),
+          ],
+        );
+      },
     );
   }
+}
+
+/// A no-op [CustomClipper] — returns an effectively-unbounded rect so a [ClipRect] in the tree clips
+/// nothing (lets the open island's float shadow paint past its bounds while keeping the widget stable).
+/// 不裁切的 clipper(返回极大矩形):保留 ClipRect 在树中但不裁,放行敞开岛的阴影。
+class _UnclippedRect extends CustomClipper<Rect> {
+  const _UnclippedRect();
+  @override
+  Rect getClip(Size size) => const Rect.fromLTRB(-1e5, -1e5, 1e5, 1e5);
+  @override
+  bool shouldReclip(CustomClipper<Rect> oldClipper) => false;
 }
 
 /// Skeleton placeholder — a faint centered label so each empty region is identifiable. Replaced

@@ -35,6 +35,39 @@ void main() {
     expect(tester.getSize(find.byType(AnInlineEdit)).height, AnSize.islandHead);
   });
 
+  testWidgets('editing draws the edit frame (bordered) without growing the row height', (tester) async {
+    await tester.pumpWidget(host(AnInlineEdit(value: 'Hello', minHeight: AnSize.control, onCommit: (_) {})));
+    final idleH = tester.getSize(find.byType(AnInlineEdit)).height;
+
+    await tester.tap(find.byType(AnButton)); // pencil → edit
+    await tester.pumpAndSettle();
+    expect(find.byType(AnSeamlessField), findsOneWidget);
+    // the frame is a bordered DecoratedBox inside the seamless field (1px lineStrong inset, tag radius). 框=有边 DecoratedBox。
+    final bordered = tester.widgetList<DecoratedBox>(
+      find.descendant(of: find.byType(AnSeamlessField), matching: find.byType(DecoratedBox)),
+    ).where((d) => (d.decoration as BoxDecoration).border != null);
+    expect(bordered, isNotEmpty, reason: 'edit mode shows the bordered frame');
+    // no vertical jump: the row keeps its height despite the frame's vertical bleed. 行高不变(框纵向溢出余量)。
+    expect(tester.getSize(find.byType(AnInlineEdit)).height, idleH);
+  });
+
+  testWidgets('H2 edit frame fits the zero-slack production row height (no clip past the row)', (tester) async {
+    // AnOceanHeader's production formula: minHeight = h2 line box + editBoxPadY*2 — EXACTLY the frame height
+    // (zero slack), so this pins frame-height <= row-height (Clip.none overflow wouldn't otherwise error).
+    final style = AnText.h2.weight(FontWeight.w600);
+    final minH = style.fontSize! * (style.height ?? 1.0) + AnSize.editBoxPadY * 2;
+    await tester.pumpWidget(host(AnInlineEdit(value: 'Title', style: style, minHeight: minH, startEditing: true, onCommit: (_) {})));
+    await tester.pumpAndSettle();
+    final rowH = tester.getSize(find.byType(AnInlineEdit)).height;
+    final frame = find.descendant(
+      of: find.byType(AnSeamlessField),
+      matching: find.byWidgetPredicate((w) => w is DecoratedBox && (w.decoration as BoxDecoration).border != null),
+    );
+    expect(frame, findsOneWidget);
+    expect(tester.getSize(frame).height, lessThanOrEqualTo(rowH + 0.5),
+        reason: 'the edit frame must not exceed the zero-slack H2 row height (no clip)');
+  });
+
   testWidgets('idle shows the value; tapping the pencil enters edit', (tester) async {
     await tester.pumpWidget(host(AnInlineEdit(value: 'Hello', onCommit: (_) {})));
     expect(find.text('Hello'), findsOneWidget);

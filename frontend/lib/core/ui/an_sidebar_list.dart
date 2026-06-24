@@ -6,6 +6,7 @@ import '../design/tokens.dart';
 import '../design/typography.dart';
 import '../model/sidebar_model.dart';
 import 'an_button.dart';
+import 'an_expand_reveal.dart';
 import 'an_input.dart';
 import 'an_interactive.dart';
 import 'an_menu.dart';
@@ -171,7 +172,8 @@ class _AnSidebarListState extends State<AnSidebarList> {
                 Text('${g.totalRows}', style: AnText.meta.weight(FontWeight.w500).copyWith(color: c.inkFaint)),
                 const Spacer(),
                 AnimatedRotation(
-                  duration: AnMotionPref.reduced(context) ? Duration.zero : AnMotion.mid,
+                  // snap (not spin) when a filter forces the group open, so chevron + content stay in lockstep. 过滤强制展开时即时。
+                  duration: (active || AnMotionPref.reduced(context)) ? Duration.zero : AnMotion.mid,
                   curve: AnMotion.spring,
                   turns: open ? 0.25 : 0,
                   child: Icon(AnIcons.chevronRight, size: AnSize.iconSm, color: c.inkFaint),
@@ -180,7 +182,8 @@ class _AnSidebarListState extends State<AnSidebarList> {
             ),
           ),
         ),
-        if (open) types,
+        // animated reveal; a filter-forced open snaps (no per-keystroke height tween). 揭示动效;过滤强制展开即时。
+        AnExpandReveal(open: open, duration: active ? Duration.zero : null, child: types),
       ],
     );
   }
@@ -212,8 +215,14 @@ class _AnSidebarListState extends State<AnSidebarList> {
           onSelect: () => _toggle(key),
           onToggle: () => _toggle(key),
         ),
-        if (open)
-          for (final r in t.rows) _row(c, r, 1, active, visible),
+        AnExpandReveal(
+          open: open,
+          duration: active ? Duration.zero : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [for (final r in t.rows) _row(c, r, 1, active, visible)],
+          ),
+        ),
       ],
     );
   }
@@ -237,12 +246,19 @@ class _AnSidebarListState extends State<AnSidebarList> {
       onToggle: branch ? () => _toggle('r:${r.id}') : null,
       actions: widget.rowActionsBuilder?.call(r.id) ?? const [],
     );
-    if (!branch || !open) return row;
+    if (!branch) return row;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         row,
-        for (final child in r.children) _row(c, child, depth + 1, active, visible),
+        AnExpandReveal(
+          open: open,
+          duration: active ? Duration.zero : null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [for (final child in r.children) _row(c, child, depth + 1, active, visible)],
+          ),
+        ),
       ],
     );
   }

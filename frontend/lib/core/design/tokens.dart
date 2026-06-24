@@ -61,6 +61,8 @@ abstract final class AnSize {
   static const double badgePadX = 9; // badge horizontal pad 徽章水平内距
   static const double inputMin = 180; // single-line input min width 单行输入最小宽
   static const double inlineEditMin = 32; // in-place edit field min width — an empty seamless field has ~0 intrinsic width and would be un-clickable 就地编辑框最小宽(空 seamless 框固有宽≈0、否则不可点)
+  static const double editBoxPadX = 8; // in-place edit FRAME horizontal pad (demo .v.editing padding-x=--sp-2): left bleeds over slack (text anchored), right is real growth 就地编辑框横向内距(左溢出、右真占位)
+  static const double editBoxPadY = 4; // edit-frame vertical pad — layout-compensated to add NO row height (demo --grid, cancelled by negative margin) so the box bleeds over the fixed row's slack 编辑框纵向内距(布局补偿、不加行高,溢出到固定行余量)
   static const double stateIcon = 40; // AnState placeholder glyph — larger than iconLg(20), distinct from control icons 状态占位大字形
   static const double stateMaxWidth = 360; // AnState centered content column max width (short lines stay readable) 状态内容列最大宽
   static const double stepCurrent = 18; // AnStepper elongated current-dot width (done/upcoming use dot=7) 步进器当前点拉长宽
