@@ -10,7 +10,7 @@ window.SETTINGS = {
     { name: "anthropic", label: "Anthropic", glyph: "An", base: "https://api.anthropic.com", category: "llm" },
     { name: "google", label: "Google Gemini", glyph: "G", base: "https://generativelanguage.googleapis.com/v1beta", category: "llm" },
     { name: "deepseek", label: "DeepSeek", glyph: "DS", base: "https://api.deepseek.com", category: "llm" },
-    { name: "anselm", label: "Anselm Free", glyph: "✦", base: "https://api.anselm.host/v1", category: "llm", managed: true },
+    { name: "anselm", label: "Anselm Free", glyph: "✦", base: "https://api.anselm.website/v1", category: "llm", managed: true },
     { name: "openrouter", label: "OpenRouter", glyph: "OR", base: "https://openrouter.ai/api/v1", category: "llm" },
     { name: "qwen", label: "通义千问", glyph: "通", base: "https://dashscope.aliyuncs.com/compatible-mode/v1", category: "llm" },
     { name: "zhipu", label: "智谱 GLM", glyph: "智", base: "https://open.bigmodel.cn/api/paas/v4", category: "llm" },

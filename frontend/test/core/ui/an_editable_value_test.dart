@@ -1,6 +1,7 @@
 import 'package:anselm/core/design/theme.dart';
 import 'package:anselm/core/ui/ui.dart';
 import 'package:anselm/i18n/strings.g.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -74,6 +75,39 @@ void main() {
     await tester.tap(find.text('Cancel'));
     await tester.pumpAndSettle();
     expect(read(), 'v1'); // aborted, not committed-on-blur
+  });
+
+  testWidgets('mouse-click ✓ does NOT focus the pencil (no focus ring)', (tester) async {
+    // The pencil must not gain focus from a ✓✕ CLICK — neither via an explicit requestFocus (the button
+    // path passes returnFocus:false) nor via Flutter restoring focus when the focused field is removed
+    // (dropped pre-rebuild in _finish). Else revealPencil (reads hasFocus) pins it visible + paints a focus
+    // ring. Uses a real MOUSE pointer so highlightMode is `traditional` (desktop). NB: the headless text
+    // field never takes primary focus, so this guards the EXPLICIT-focus path (the prior regression: a
+    // ✓ click calling returnFocus:true); the restoration path is verified on device via `make gallery`.
+    // 鼠标点 ✓ 不该聚焦铅笔(否则可见+焦点框)。用鼠标指针(桌面 traditional);无头文本框不取主焦点,故守显式聚焦路径,恢复路径真机验。
+    final read = await pump(tester);
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+
+    Future<void> click(Finder f) async {
+      final p = tester.getCenter(f);
+      await mouse.moveTo(p);
+      await tester.pump();
+      await mouse.down(p);
+      await mouse.up();
+      await tester.pumpAndSettle();
+    }
+
+    await click(find.byIcon(AnIcons.edit)); // open
+    await tester.enterText(find.byType(TextField), 'changed');
+    await tester.pump();
+    await click(find.text('Save')); // commit with a MOUSE click
+
+    expect(read(), 'changed'); // committed
+    expect(find.byType(TextField), findsNothing); // edit closed, pencil back
+    expect(FocusManager.instance.primaryFocus?.debugLabel, isNot('AnEditableValue.pencil'),
+        reason: 'a ✓ click must not pull focus onto the pencil (else it shows a focus ring)');
   });
 
   testWidgets('Save commits', (tester) async {

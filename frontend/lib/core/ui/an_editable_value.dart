@@ -152,8 +152,25 @@ class _AnEditableValueState extends State<AnEditableValue> {
     if (_finished) return;
     _finished = true;
     final next = _ctl.text.trim();
+    if (!returnFocus) {
+      // Pointer finish (✓✕ click / blur): drop focus from the about-to-be-removed editing zone (the field
+      // or the ✓✕ button) BEFORE the rebuild — otherwise, when that focused node is removed, Flutter
+      // RESTORES focus to the nearest survivor (the pencil), re-revealing + focus-ringing it. Doing it
+      // pre-rebuild (synchronously) avoids the restoration entirely; a click elsewhere then takes focus via
+      // its own gesture. 指针完成:重建前(同步)卸掉编辑区焦点,杜绝被自动恢复到铅笔(否则铅笔再现+画焦点框)。
+      FocusManager.instance.primaryFocus?.unfocus();
+    }
     setState(() => _editing = false);
     if (commit && next != widget.value) widget.onChanged(next);
+    // returnFocus is decided by the SOURCE of the finish, NOT the input modality: the KEYBOARD paths
+    // (Enter/Esc in the field) pass true so keyboard nav continues on the pencil; the POINTER paths (a
+    // ✓✕ click, blur) pass false — a click must NOT focus the pencil, else `revealPencil` (reads hasFocus)
+    // pins it visible AND it paints its focus ring instead of returning to its hidden resting state.
+    // NB: FocusManager.highlightMode can't tell mouse from keyboard on desktop — a MOUSE pointer is also
+    // `traditional` (only finger-touch is `touch`) — so the call site, not highlightMode, decides.
+    // returnFocus 按完成「来源」(非输入模态)判定:键盘路径(字段 Enter/Esc)传 true 续导航;指针路径(点 ✓✕、失焦)
+    // 传 false——点击不该聚焦铅笔(否则 revealPencil 读 hasFocus 卡可见 + 画焦点框而非隐回默认)。注:桌面上鼠标指针
+    // 的 highlightMode 也是 traditional(只有触摸是 touch),分不开鼠标/键盘,故按调用点而非 highlightMode 判定。
     if (returnFocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) _pencilFocus.requestFocus();
@@ -223,13 +240,15 @@ class _AnEditableValueState extends State<AnEditableValue> {
             ),
       trailing: _inputValueZone(c),
       // TextFieldTapRegion: tapping cancel / save isn't "outside" the field → no blur-commit
-      // (cancel-priority). 点 ✓✕ 不算字段外 → 不触发失焦提交(取消优先)。
+      // (cancel-priority). returnFocus:false — a ✓✕ CLICK is a pointer action: it must not focus the
+      // pencil (else it stays revealed + focus-ringed). The keyboard commit/abort path is Enter/Esc in the
+      // field (below, returnFocus:true). 点 ✓✕ 是指针动作,不回落焦点到铅笔(否则卡可见+焦点框);键盘提交走字段 Enter/Esc。
       afterValue: _editing
           ? TextFieldTapRegion(
               child: AnEditAffordance(
                 editing: true,
-                onCommit: () => _finish(true, returnFocus: true),
-                onAbort: () => _finish(false, returnFocus: true),
+                onCommit: () => _finish(true, returnFocus: false),
+                onAbort: () => _finish(false, returnFocus: false),
               ),
             )
           : null,

@@ -1,14 +1,14 @@
 package llm
 
 // anselmProvider is the built-in free-tier provider: the Anselm gateway, an OpenAI-wire proxy in
-// front of DeepSeek (api.anselm.host). It embeds deepseekProvider to inherit the ENTIRE DeepSeek
+// front of DeepSeek (api.anselm.website). It embeds deepseekProvider to inherit the ENTIRE DeepSeek
 // wire dialect verbatim — BuildRequest, ParseStream, the reasoning_content round-trip, tool-call
 // streaming — overriding only identity (Name/DefaultBaseURL) and the model catalog. The managed
 // api_key row (provider "anselm") carries the gwk_ install token as its Bearer key, so the
 // inherited BuildRequest authenticates with zero change. Tools flow through unchanged: the gateway
 // forwards them to DeepSeek, so the free tier is fully agentic.
 //
-// anselmProvider 是内置免费档 provider：Anselm 网关（DeepSeek 前置的 OpenAI-wire 反代，api.anselm.host）。
+// anselmProvider 是内置免费档 provider：Anselm 网关（DeepSeek 前置的 OpenAI-wire 反代，api.anselm.website）。
 // embed deepseekProvider 原样继承整套 DeepSeek wire 方言——BuildRequest / ParseStream /
 // reasoning_content round-trip / tool-call 流式——仅覆盖身份与模型目录。受管 api_key 行（provider
 // "anselm"）以 gwk_ install token 作 Bearer key，故继承的 BuildRequest 零改即可鉴权。tools 原样透传：
@@ -29,7 +29,7 @@ func newAnselmProvider() *anselmProvider {
 // AnselmBaseURL 是生产免费档网关 base（OpenAI-compat 路径根，含网关要求的 /v1 前缀——探针追加 /models、
 // wire 追加 /chat/completions、install 追加 /install）。导出供免费档 provisioner 从单一事实源播种受管
 // key 的 base_url 与 install 端点。
-const AnselmBaseURL = "https://api.anselm.host/v1"
+const AnselmBaseURL = "https://api.anselm.website/v1"
 
 func (p *anselmProvider) Name() string           { return "anselm" }
 func (p *anselmProvider) DefaultBaseURL() string { return AnselmBaseURL }

@@ -16,7 +16,7 @@ func TestCreateManaged_SeedsOKProbeArchive(t *testing.T) {
 		Provider:     "anselm",
 		DisplayName:  "Anselm Free (DeepSeek)",
 		Key:          "gwk_token123456",
-		BaseURL:      "https://api.anselm.host/v1",
+		BaseURL:      "https://api.anselm.website/v1",
 		TestResponse: anselmModelsBody,
 	})
 	if err != nil {
@@ -61,7 +61,7 @@ func TestUpdate_ManagedImmutable(t *testing.T) {
 	s, _ := newSvc(nil)
 	k, _ := s.CreateManaged(ctxWS(), ManagedCreateInput{
 		Provider: "anselm", DisplayName: "Anselm Free (DeepSeek)", Key: "gwk_x123456789",
-		BaseURL: "https://api.anselm.host/v1", TestResponse: anselmModelsBody,
+		BaseURL: "https://api.anselm.website/v1", TestResponse: anselmModelsBody,
 	})
 	name := "hacked"
 	if _, err := s.Update(ctxWS(), k.ID, UpdateInput{DisplayName: &name}); !errors.Is(err, apikeydomain.ErrManaged) {
@@ -80,7 +80,7 @@ func TestAnselmProviderIsManaged(t *testing.T) {
 	if !ok || !meta.Managed {
 		t.Errorf("anselm meta = %+v, ok=%v; want Managed=true", meta, ok)
 	}
-	if meta.DefaultBaseURL != "https://api.anselm.host/v1" {
+	if meta.DefaultBaseURL != "https://api.anselm.website/v1" {
 		t.Errorf("anselm base = %q, want the gateway /v1 root", meta.DefaultBaseURL)
 	}
 	// The only managed provider today — guard against accidentally flagging a user-key provider.

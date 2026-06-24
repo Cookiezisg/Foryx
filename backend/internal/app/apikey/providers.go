@@ -56,7 +56,7 @@ var providers = map[string]ProviderMeta{
 	"anthropic":  {Name: "anthropic", DisplayName: "Anthropic", DefaultBaseURL: "https://api.anthropic.com", TestMethod: TestMethodAnthropicModels, Category: CategoryLLM},
 	"google":     {Name: "google", DisplayName: "Google Gemini", DefaultBaseURL: "https://generativelanguage.googleapis.com/v1beta", TestMethod: TestMethodGoogleListModels, Category: CategoryLLM},
 	"deepseek":   {Name: "deepseek", DisplayName: "DeepSeek", DefaultBaseURL: "https://api.deepseek.com", TestMethod: TestMethodGetModels, Category: CategoryLLM},
-	"anselm":     {Name: "anselm", DisplayName: "Anselm Free (DeepSeek)", DefaultBaseURL: "https://api.anselm.host/v1", TestMethod: TestMethodGetModels, Category: CategoryLLM, Managed: true},
+	"anselm":     {Name: "anselm", DisplayName: "Anselm Free (DeepSeek)", DefaultBaseURL: "https://api.anselm.website/v1", TestMethod: TestMethodGetModels, Category: CategoryLLM, Managed: true},
 	"openrouter": {Name: "openrouter", DisplayName: "OpenRouter", DefaultBaseURL: "https://openrouter.ai/api/v1", TestMethod: TestMethodGetModels, Category: CategoryLLM},
 	"qwen":       {Name: "qwen", DisplayName: "通义千问 (Alibaba Qwen)", DefaultBaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1", TestMethod: TestMethodGetModels, Category: CategoryLLM},
 	"zhipu":      {Name: "zhipu", DisplayName: "智谱 GLM", DefaultBaseURL: "https://open.bigmodel.cn/api/paas/v4", TestMethod: TestMethodGetModels, Category: CategoryLLM},
