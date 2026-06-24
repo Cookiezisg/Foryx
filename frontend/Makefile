@@ -22,6 +22,7 @@ help:
 	@echo "         make analyze  flutter analyze（须净）"
 	@echo "         make test     flutter test"
 	@echo "         make verify   pre-push 门禁（gen + analyze + test）"
+	@echo "  截图:  make shots    无头渲染 shell + 画廊全类 → test/dev/out/*.png"
 
 # setup — 拉前端依赖（首次或改 pubspec 后）。
 setup:
@@ -59,4 +60,18 @@ gallery:
 app:
 	@LANG=en_US.UTF-8 $(RUN) flutter run -d macos
 
-.PHONY: help setup gen analyze test verify demo gallery app
+# shots — 无头渲染截图(Skia toImage,免 Xcode)→ test/dev/out/*.png 供肉眼/AI 对照 demo 审。
+# capture_*.dart 把 toImage/toByteData 包进 tester.runAsync:它们是引擎线程真异步,在 testWidgets 的
+# fake-async zone 里 Future 永不解析→hang(flutter#49317/#50783)。一次截一类(同隔离多 toImage 卡 teardown)。
+# 类目数变了就同步下面的列表(同 S22「状态即重述」)。
+shots:
+	@$(RUN) flutter test test/dev/capture_shell.dart
+	@for i in 0 1 2 3; do $(RUN) flutter test test/dev/capture_gallery.dart --dart-define=CAT=$$i; done
+	@echo "" && echo "✓ 截图落 test/dev/out/(shell.png + gallery_0..3.png)"
+
+# shot-app — 真跑终检截图:构建+启动 gallery .app、截运行中窗口 → test/dev/out/app.png(Impeller 真渲染
+# + 红绿灯,headless 还原不了)。BUILD=0 复用已构建 app 跳过重构。详见 test/dev/shot_app.sh。
+shot-app:
+	@bash test/dev/shot_app.sh
+
+.PHONY: help setup gen analyze test verify demo gallery app shots shot-app

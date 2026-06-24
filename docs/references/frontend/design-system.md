@@ -83,7 +83,7 @@ audience: [human, ai]
 
 ## 5. 验收（套件每组 + 整体）
 
-- **gallery**(`make gallery`,G1 立起):双栏目录复刻 demo `reference.html`,每组件**全态**做成 specimen;截图 harness `capture_gallery.dart` 逐类(`--dart-define=CAT=<i>`)出 `gallery_<i>.png` 对照 demo 保真(非 `_test.dart`、不进自动门禁;强制 reduced 出确定性静帧)。**动画件另真机 `flutter run -d macos`(Impeller)截图核对**(无头=Skia,渲染差异见会话 Impeller 调研)。
+- **gallery**(`make gallery`,G1 立起):双栏目录复刻 demo `reference.html`,每组件**全态**做成 specimen。两条截图路(均非 `_test.dart`、不进自动门禁):**① 无头(`make shots`)**——`capture_{shell,gallery}.dart` 经 Skia `toImage` 逐类出 `test/dev/out/{shell,gallery_0..3}.png` 对照 demo 保真(强制 reduced 出确定性静帧;秒级,免 Xcode)。`toImage`/`toByteData` 是引擎线程真异步,在 `testWidgets` 的 fake-async zone 里 Future 永不解析→hang(flutter#49317/#50783),故包进 `tester.runAsync()`。**② 真跑(`make shot-app`,脚本 `test/dev/shot_app.sh`)**——构建+启动 gallery .app、osascript 读窗口 rect、`screencapture -R` 截运行中窗口 → `test/dev/out/app.png`,核对 **Impeller 真渲染 + OS chrome(红绿灯/真阴影)**(无头=Skia,渲染差异见会话 Impeller 调研;`BUILD=0` 复用已构建 app)。
 - **matrix widget-test**(进 `fe-verify`):复刻 demo `matrix.mjs` —— 能 build / 受限栅格内不溢出 / 富文本转义安全 / 渲染存在 / disabled 键盘穿透 / **reduced-motion 轴**(每 specimen 在 `disableAnimations` 下 `pumpAndSettle` 须收敛——忘门控的循环卡死=FAIL);**+ 压力床**五电池(空/超长/海量/极值/注入)specimen。
 - **工程纪律**:tokens 不硬编码(grep 门禁)· i18n 无硬编码中英文 · 层依赖 · S11 注释 · 本篇 1:1 同步。
 

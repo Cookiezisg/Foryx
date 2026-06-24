@@ -49,6 +49,8 @@ Run these from `frontend/`. The toolchain is provided through `mise`.
 | `make demo` | Run the desktop app on macOS. |
 | `make gallery` | Run the component gallery entrypoint. |
 | `make app` | Run the desktop app path intended for sidecar integration. |
+| `make shots` | Headless Skia render of the shell + every gallery category → `test/dev/out/*.png` (fast, no Xcode). |
+| `make shot-app` | Real-run capture: build + launch the gallery app, screenshot its live window → `test/dev/out/app.png` (Impeller render + OS chrome). |
 
 ## Architecture
 

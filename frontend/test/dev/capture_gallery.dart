@@ -58,11 +58,19 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 60));
 
-    final boundary = tester.renderObject<RenderRepaintBoundary>(find.byKey(key));
-    final image = await boundary.toImage(pixelRatio: 1.0);
-    final png = await image.toByteData(format: ui.ImageByteFormat.png);
+    // toImage()/toByteData() are REAL engine-thread async — their futures never resolve inside the
+    // test's fake-async zone (flutter/flutter#49317, #50783), so the capture must run in runAsync().
+    // 引擎线程真异步,fake-async zone 不解析其 Future,故截图须在 runAsync 内跑。
+    late final Uint8List bytes;
+    await tester.runAsync(() async {
+      final boundary = tester.renderObject<RenderRepaintBoundary>(find.byKey(key));
+      final image = await boundary.toImage(pixelRatio: 1.0);
+      final png = await image.toByteData(format: ui.ImageByteFormat.png);
+      bytes = png!.buffer.asUint8List();
+      image.dispose();
+    });
     final dir = Directory('test/dev/out')..createSync(recursive: true);
-    File('${dir.path}/gallery_$cat.png').writeAsBytesSync(png!.buffer.asUint8List());
-    if (cat == 0) File('${dir.path}/gallery.png').writeAsBytesSync(png.buffer.asUint8List());
+    File('${dir.path}/gallery_$cat.png').writeAsBytesSync(bytes);
+    if (cat == 0) File('${dir.path}/gallery.png').writeAsBytesSync(bytes);
   });
 }
