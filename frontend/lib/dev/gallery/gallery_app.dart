@@ -170,11 +170,20 @@ class _GalleryAppState extends State<GalleryApp> {
         final width = constraints.maxWidth - AnSpace.s24 * 2;
         return SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(AnSpace.s24, AnSpace.s8, AnSpace.s24, AnSpace.s48),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              for (final item in category.items) _itemBlock(context, item, width),
-            ],
+          // ExcludeFocus: the catalog is a passive display — a specimen that opens in its EDIT state
+          // (AnInlineEdit/AnEditableValue with startEditing) mounts a seamless field whose `autofocus`
+          // would otherwise (a) steal app focus and (b) make EditableText.showOnScreen scroll this page
+          // down to the field on launch (it opened ~73% down). descendantsAreFocusable:false skips the
+          // autofocus so the page opens at the top; pointer taps on interactive specimens still work
+          // (overlays/dialogs they push live outside this subtree). 目录是被动展示:编辑态 specimen 的
+          // autofocus 会抢焦点 + 把页面滚到字段处(开机停在 73% 处);ExcludeFocus 让 autofocus 不触发→开机即顶部。
+          child: ExcludeFocus(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final item in category.items) _itemBlock(context, item, width),
+              ],
+            ),
           ),
         );
       },
