@@ -106,6 +106,7 @@
 - **视觉灵魂**：明亮、通透、轻盈。`Tokens.rowHeight = 32` 紧凑；`tool_call` 与 `reasoning` 默认折叠。颜色/度量走 design token，禁内联硬编码。
 - **i18n**：严禁在 Dart 硬编码中英文；文案走 slang `context.t.<key>`、登记在 `lib/i18n/<locale>.i18n.json`。
 - **门禁**：`make fe-verify`（codegen + `flutter analyze` 净 + `flutter test` 绿）。codegen 产物入库（源等价、deterministic，fresh checkout 直接 analyze）。层依赖暂用目录约定 + review 守（custom_lint 待生态跟上 SDK 再接）。桌面真跑 `flutter run -d <平台>` 需完整 Xcode/CocoaPods 等机器层面工具，不入门禁。
+- **🔁 迭代流程铁律（Phase 4 起,每个 feature/任务强制)**：① **对接后端前先吃透后端**——凡涉及后端契约的任务,**开工前先多 agent 扇出详读相关后端代码 + `references/backend/`**,产出精确"集成契约"(端点/帧/DTO/错误码/SSE 语义)再动手,**绝不照猜后端**。② **必要时改后端**——前端需要而后端缺的(如 loopback 鉴权、新端点、契约缺口),**允许给后端加端点/中间件**,但须同提交守后端纪律(N/D/E/S/T 系列 + `make verify` + 文档 1:1 同步 #9)。③ **每步执行前大规模扇出调研**——按既有每组节奏:联网/读码调研 workflow → working 规范 → **用户拍板** → 单一作者建 → 对抗复审 → 真机截图验 → landed-into docs。④ **超强覆盖测试**——feature 落地配 widget-test 矩阵(空/超长/海量/极值/注入五电池)入 `make fe-verify`;涉后端改动配 `testend` 黑盒(llmmock 零 token);两端门禁各自全绿才算完。
 
 ---
 
