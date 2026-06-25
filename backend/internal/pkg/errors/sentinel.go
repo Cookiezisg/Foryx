@@ -15,6 +15,23 @@ var (
 	// 前端据此清除当前 workspace 并重新选择。
 	ErrUnauthorizedNoWorkspace = New(KindUnauthorized, "UNAUTH_NO_WORKSPACE", "unauthorized: no valid workspace id")
 
+	// ErrUnauthorizedBadToken: a request to the loopback server carried a missing/wrong
+	// per-launch bearer token (ANSELM_AUTH_TOKEN; loopback hardening). The sidecar is
+	// misconfigured, NOT a workspace problem — the desktop client shows a restart-backend
+	// banner, never clears the workspace. Enforced only when the server has a token set.
+	//
+	// ErrUnauthorizedBadToken：到 loopback server 的请求缺/错每次启动的 bearer token
+	// （ANSELM_AUTH_TOKEN；loopback 加固）。是 sidecar 配置问题、非 workspace 问题——客户端显示
+	// 重启后端横幅、绝不清 workspace。仅当 server 设了 token 时强制。
+	ErrUnauthorizedBadToken = New(KindUnauthorized, "UNAUTH_BAD_TOKEN", "unauthorized: invalid or missing bearer token")
+
+	// ErrForbiddenBadHost: a request reached the loopback server with a non-loopback Host header
+	// (DNS-rebinding defense; loopback hardening). 403 — the request is understood but refused.
+	//
+	// ErrForbiddenBadHost：到 loopback server 的请求带了非 loopback 的 Host 头（防 DNS rebinding；
+	// loopback 加固）。403——请求可解但拒绝。
+	ErrForbiddenBadHost = New(KindForbidden, "FORBIDDEN_BAD_HOST", "forbidden: request host is not loopback")
+
 	// ErrNotFound: a route / sub-action / resource the router or a handler's :action
 	// dispatcher can't resolve. Every unmatched dispatch + unknown :action lands here
 	// (404) — transport never hand-codes a 404 (S20).

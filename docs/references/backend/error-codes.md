@@ -33,6 +33,7 @@ audience: [human, ai]
 | Unauthorized | 401 | UnsupportedMedia | 415 | ClientClosed | 499 |
 | NotFound | 404 | RateLimited | 429 | Gone | 410 |
 | Conflict | 409 | BadGateway | 502 | Unavailable | 503 |
+| Forbidden | 403 | | | | |
 
 ## 命名规约 + 守卫
 
@@ -42,9 +43,9 @@ audience: [human, ai]
 
 ---
 
-## 全量登记（298 码，按域）
+## 全量登记（300 码，按域）
 
-> `errorspkg.New` 机械抽取（282，不含 `*_test.go` 测试 sentinel 如 DUP/THING_NOT_FOUND）+ `pkg/errors` 自身 bare `New` 的跨域 sentinel（5）。每条：code · HTTP（Kind 映射）· message。`(dynamic)` = 消息含运行时格式化。
+> `errorspkg.New` 机械抽取（282，不含 `*_test.go` 测试 sentinel 如 DUP/THING_NOT_FOUND）+ `pkg/errors` 自身 bare `New` 的跨域 sentinel（7）。每条：code · HTTP（Kind 映射）· message。`(dynamic)` = 消息含运行时格式化。
 
 ### `pkg/errors`（跨域 sentinel）
 
@@ -52,6 +53,8 @@ audience: [human, ai]
 |---|---|---|
 | `INVALID_REQUEST` | 400 | invalid request（domain 逻辑前的格式/语义无效） |
 | `UNAUTH_NO_WORKSPACE` | 401 | unauthorized: no valid workspace id（隔离路由缺 ws；中间件 `RequireWorkspace` 兜、前端清 workspace 重选） |
+| `UNAUTH_BAD_TOKEN` | 401 | unauthorized: invalid or missing bearer token（loopback 加固：缺/错 `ANSELM_AUTH_TOKEN`；中间件 `RequireBearerToken`，仅 server 设 token 时强制；前端显示重启后端横幅、不清 workspace） |
+| `FORBIDDEN_BAD_HOST` | 403 | forbidden: request host is not loopback（防 DNS rebinding；中间件 `RequireLoopbackHost`，常开，仅放行 127.0.0.1/::1/localhost） |
 | `NOT_FOUND` | 404 | not found（路由 / 未知 :action / handler 派发未命中的统一兜底，S6） |
 | `INTERNAL_ERROR` | 500 | internal error（recover 的 panic；原始细节记日志、不上线缆） |
 | `STREAMING_UNSUPPORTED` | 500 | streaming not supported（SSE 端点遇非流式 ResponseWriter；`response/sse.go` 经 `FromDomainError` 发此 sentinel） |

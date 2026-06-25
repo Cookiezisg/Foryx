@@ -29,14 +29,18 @@ import (
 	routerhttpapi "github.com/sunweilin/anselm/backend/internal/transport/httpapi/router"
 )
 
-// Config parameterizes Build. DataDir empty → in-memory DB (tests). Addr defaults to :8080.
+// Config parameterizes Build. DataDir empty → in-memory DB (tests). Addr defaults to 127.0.0.1:8080
+// (loopback-only — the client overrides with 127.0.0.1:<free-port>). AuthToken is the per-launch
+// loopback bearer secret (ANSELM_AUTH_TOKEN); "" disables bearer enforcement (dev / testend).
 // Fingerprint is the machine-stable seed for the at-rest encryption key (api-key & mcp secrets).
 //
-// Config 参数化 Build。DataDir 空 → 内存 DB（测试）。Addr 默认 :8080。Fingerprint 是落盘加密密钥
-// （api-key & mcp 密文）的机器稳定种子。
+// Config 参数化 Build。DataDir 空 → 内存 DB（测试）。Addr 默认 127.0.0.1:8080（仅 loopback;客户端用
+// 127.0.0.1:<空闲端口> 覆盖）。AuthToken 是每次启动的 loopback bearer 密钥（ANSELM_AUTH_TOKEN），""
+// 关闭 bearer 强制（dev/testend）。Fingerprint 是落盘加密密钥的机器稳定种子。
 type Config struct {
 	DataDir     string
 	Addr        string
+	AuthToken   string
 	Fingerprint string
 	Dev         bool
 }
@@ -108,10 +112,10 @@ func Build(cfg Config) (*App, error) {
 
 	addr := cfg.Addr
 	if addr == "" {
-		addr = ":8080"
+		addr = "127.0.0.1:8080" // loopback-only default (was :8080/all-interfaces) — loopback hardening
 	}
 	return &App{
-		Handler: routerhttpapi.Chain(mux, log, svc.workspace),
+		Handler: routerhttpapi.Chain(mux, log, svc.workspace, cfg.AuthToken),
 		Addr:    addr,
 		log:     log,
 		svc:     svc,

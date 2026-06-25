@@ -12,20 +12,28 @@ import (
 
 // Chain wraps h with the standard middleware stack, outermost first:
 //
-//	Recover → RequestLogger → CORS → InjectLocale → IdentifyWorkspace → RequireWorkspace(exempt)
+//	Recover → RequestLogger → RequireLoopbackHost → RequireBearerToken → CORS → InjectLocale →
+//	IdentifyWorkspace → RequireWorkspace(exempt)
 //
-// resolver may be nil (validation skipped) before the workspace module is wired. bootstrap
-// builds the mux, registers every handler, then passes the result through Chain.
+// resolver may be nil (validation skipped) before the workspace module is wired. authToken is the
+// per-launch loopback bearer secret (ANSELM_AUTH_TOKEN); "" disables bearer enforcement (dev /
+// testend). The two loopback-hardening gates sit right after logging (so attacks are recorded) and
+// before CORS/business: Host validation defeats DNS rebinding, the bearer token closes the
+// localhost-server attack surface. bootstrap builds the mux, registers every handler, then Chains it.
 //
-// Chain 用标准中间件栈包裹 h（最外层在前）：Recover → RequestLogger → CORS → InjectLocale →
-// IdentifyWorkspace → RequireWorkspace(豁免)。resolver 在 workspace 模块接线前可为 nil（跳过校验）。
-// bootstrap 构造 mux、注册所有 handler 后把结果过 Chain。
-func Chain(h http.Handler, log *zap.Logger, resolver middlewarehttpapi.WorkspaceResolver) http.Handler {
+// Chain 用标准中间件栈包裹 h（最外层在前）：Recover → RequestLogger → RequireLoopbackHost →
+// RequireBearerToken → CORS → InjectLocale → IdentifyWorkspace → RequireWorkspace(豁免)。resolver
+// 接线前可 nil；authToken 是每次启动的 loopback bearer 密钥（ANSELM_AUTH_TOKEN），"" 关闭 bearer 强制
+// （dev/testend）。两道 loopback 加固门在日志之后（记录攻击）、CORS/业务之前:Host 校验防 DNS rebinding，
+// bearer token 封住本地服务攻击面。
+func Chain(h http.Handler, log *zap.Logger, resolver middlewarehttpapi.WorkspaceResolver, authToken string) http.Handler {
 	h = envelopeMuxErrors(h) // innermost: rewrite the mux's plain-text 404/405 into the N1 envelope
 	h = requireWorkspaceExempt(h)
 	h = middlewarehttpapi.IdentifyWorkspace(resolver)(h)
 	h = middlewarehttpapi.InjectLocale(h)
 	h = middlewarehttpapi.CORS(middlewarehttpapi.DefaultCORSConfig())(h)
+	h = middlewarehttpapi.RequireBearerToken(authToken)(h) // loopback hardening: per-launch token
+	h = middlewarehttpapi.RequireLoopbackHost(h)           // loopback hardening: anti-DNS-rebinding
 	h = middlewarehttpapi.RequestLogger(log)(h)
 	h = middlewarehttpapi.Recover(log)(h)
 	return h

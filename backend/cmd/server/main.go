@@ -20,9 +20,10 @@ import (
 
 func main() {
 	app, err := bootstrappkg.Build(bootstrappkg.Config{
-		DataDir: dataDir(),
-		Addr:    os.Getenv("ANSELM_ADDR"), // "" → :8080
-		Dev:     os.Getenv("ANSELM_DEV") != "",
+		DataDir:   dataDir(),
+		Addr:      os.Getenv("ANSELM_ADDR"),       // "" → 127.0.0.1:8080 (loopback-only)
+		AuthToken: os.Getenv("ANSELM_AUTH_TOKEN"), // "" → bearer enforcement off (dev / testend)
+		Dev:       os.Getenv("ANSELM_DEV") != "",
 	})
 	if err != nil {
 		log.Fatalf("bootstrap: %v", err)

@@ -34,4 +34,5 @@ const (
 	KindAccepted                     // 202 Accepted (async; e.g. approval required)
 	KindClientClosed                 // 499 Client Closed Request
 	KindGone                         // 410 Gone (resource existed but was evicted; e.g. SSE replay seq too old)
+	KindForbidden                    // 403 Forbidden (request understood but refused; e.g. non-loopback Host)
 )

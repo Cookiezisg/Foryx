@@ -48,6 +48,8 @@ func statusForKind(k errorspkg.Kind) int {
 		return 499
 	case errorspkg.KindGone:
 		return http.StatusGone
+	case errorspkg.KindForbidden:
+		return http.StatusForbidden
 	default: // KindInternal + zero value → safest outcome
 		return http.StatusInternalServerError
 	}
