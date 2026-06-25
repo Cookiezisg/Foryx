@@ -13,7 +13,7 @@
 - **本地优先 Agentic Workflow Platform**，目标 **Flutter 桌面 app**（macOS/Linux/Windows，Go 后端作 sidecar）、**单进程单用户**、SQLite 落盘（**不做 SaaS**）。
 - **核心心智**：**Quadrinity（四项全能）** 实体（Function/Handler/Agent/Workflow）+ **Durable Execution**（节点结果记忆化 + 解释器幂等重走）。
 - **架构**：4 层 Clean Architecture，依赖单向 `transport → app → (domain ∪ infra/store) → infra/db`。地基自研：`pkg/orm`（去 GORM）+ `glebarez/go-sqlite`（纯 Go、无 CGO）。
-- **当前状态**：后端 `backend/` 全实体 + durable 引擎，编译/装配/启动/服务全通（单一后端）；前端**分两条线**——`main` 持**运行时地基**（契约 DTO / `net` HTTP / `sse` gateway 四件套 / sidecar，commit `f50d5318`）+ 旧 UI，`frontend-rebuild`（**当前活跃线**）持**新设计系统 + UI kit G0–G6（49 原语 + gallery）+ 三岛 shell 骨架 + 窗口/缩放/i18n/浮层**（analyze+test 绿，见 ADR 0004），但**运行时管道尚未并入**（rebuild 无 `core/{contract,net,sse}`、`dio`/`go_router`/`freezed` 依赖未加，三岛仍占位）。**下一步（Phase 4）**：把运行时地基港进 rebuild（按 app 级复审 + 对齐当前后端契约）+ Riverpod 装配（workspace/baseUrl override、401/410、3 SSE 流），再按海洋顺序铺 features（Entities 起）。
+- **当前状态**：后端 `backend/` 全实体 + durable 引擎，编译/装配/启动/服务全通；**+ loopback 加固**（默认绑 `127.0.0.1` + `RequireBearerToken`[`ANSELM_AUTH_TOKEN`,空=关] + `RequireLoopbackHost`[防 DNS rebinding]）。前端 `frontend-rebuild`（**当前活跃线**）= 新设计系统 + **UI kit G0–G6（49 原语 + gallery）** + 三岛 shell + 窗口/缩放/i18n/浮层 + **Phase 4.0 运行时骨干**（`core/{contract,net,sse,process,perf,error}` + `runtime.dart` Riverpod 装配 + `app_startup_gate` 启动门控 + L0–L2 流式性能合并原语；从 `main` PORT + 加固，`make verify` 730 测绿）。建造规范 [`WRK-045`](docs/working/platform-foundation/phase-4.0-runtime-backbone.md)；平台地基总账 [`WRK-042`](docs/working/platform-foundation/README.md) + 发行 Playbook [`WRK-043`](docs/working/platform-foundation/release-distribution-playbook.md)。**下一步（Phase 4.1）**：按海洋顺序铺 features、**Entities 打头**（⚠ 注:`/api/v1/entities/stream` 当前后端基线返 500，4.1 前需单查——见 WRK-045 §0）。
 
 ## 文档地图
 

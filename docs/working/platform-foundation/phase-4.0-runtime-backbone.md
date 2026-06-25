@@ -7,9 +7,20 @@ created: 2026-06-26
 reviewed: 2026-06-26
 review-due: 2026-09-24
 audience: [human, ai]
+landed-into: references/frontend/architecture.md
 ---
 
-# WRK-045 — Phase 4.0 运行时骨干 建造规范(待拍板)
+> **✅ STEP 0–7 全部落地(2026-06-26,commit `0c1c0d69`..`5e519546`)**:契约/net/SSE 自 main PORT+加固 ·
+> sidecar 监督器(`core/process`)· 后端 loopback 三改(绑 127.0.0.1 + bearer + host,`make verify` 绿)·
+> Riverpod 装配 + 错误边界 + 启动门控 MERGE 进 AnApp · L2 流式合并原语(`core/perf`,200 deltas→1 重建门禁)。
+> 每步过 floor gate、独立提交、超强测试覆盖(契约 12 / net 8 / SSE 14 / process 6 / bearer+host 16 /
+> 门控 3 / 错误边界 1 / 性能 3)。结论已提取进 [`architecture.md`](../../references/frontend/architecture.md) §2。
+> **⚠ 遗留(非本篇引入,基线即存在,4.1 前需查)**:`/api/v1/entities/stream` 后端返 500(git stash 干净对照
+> 确认与 STEP 5 无关),会卡 4.1 Entities 实时通道。**实施纠正 vs 规范**:`StateProvider` 是 Riverpod 3.x
+> legacy → activeWorkspace 改用现代 `Notifier`;`explicit_to_json` 须开(嵌套 ModelRef 往返);SSE 续传需
+> full-jitter(规范已记);`KindForbidden`→403 须新增(S6 元测试禁硬编 response.Error)。本篇留作建造存档。
+
+# WRK-045 — Phase 4.0 运行时骨干 建造规范(✅ 已落地)
 
 > **一句话**:把 Flutter 客户端的"承重水电"建起来——契约/net/SSE/进程托管/Riverpod 装配 + loopback 安全 + 错误边界,让 features(Entities 起)能安全对接后端。三轮调研合并:**(a) 后端契约理解** `w8q011l67` + **(b) 解决方案 best-practice** `wm42o1h1d` + **(c) 流式渲染性能** `wlup4cbx4`(回应用户"SSE 会不会每帧重渲染整页"的担忧)。落地后结论提取进 `references/frontend/architecture.md` + 填 `landed-into`。
 

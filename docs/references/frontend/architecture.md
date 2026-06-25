@@ -18,23 +18,32 @@ audience: [human, ai]
 
 Go 后端作 **sidecar**,Flutter 桌面端是其纯客户端。**3-tier feature-first**:`core`(跨切共享)→ `features`(各域)→ `app`(装配根 + shell)。**无 use-case/domain 层**——Go 二进制即用例,DTO 都是后端投影。
 
-## 2. 物理结构（`frontend/lib/`，当前已落地 = 骨架）
+## 2. 物理结构（`frontend/lib/`，当前 = 视觉地基 + 运行时骨干 [Phase 4.0 STEP 0–7 已落]）
 
 ```
-main.dart                  # 入口:scaled binding(应内缩放)→ initWindow → 恢复缩放档 → runApp(ProviderScope(AnApp))
+main.dart                  # 入口:runZonedGuarded(binding 在内)→ scaled binding → installErrorHandlers → initWindow → 恢复缩放档 → runApp(ProviderScope(AnApp))
 app/                       # 装配根
-  app.dart                 # 根 widget(MaterialApp + 主题 + home=AnShell + builder=AnOverlayHost[浮层宿主、持 navigatorKey];绑 Cmd +/-/0 缩放)
-  window_setup.dart        # 桌面窗口:window_manager(尺寸/最小/居中 + hidden-at-launch:原生 order 钩子隐藏、几何就绪后 show() 一次性显示、无启动重定位闪烁)+ macos_window_utils(无边框 + 加高标题栏红绿灯)
+  app.dart                 # 根 widget(MaterialApp + 主题 + home=AppStartupGate(壳) + builder=AnOverlayHost[持 navigatorKey];绑 Cmd +/-/0)
+  app_startup_gate.dart    # 据 backend 单一 phase 门控:连接中 / 崩溃可重试 / 就绪显壳(整 app 单点门控)
+  window_setup.dart        # 桌面窗口:window_manager(尺寸/最小/居中 + hidden-at-launch:原生 order 钩子隐藏、show() 一次性显示、无启动闪烁)+ macos_window_utils(无边框 + 加高标题栏红绿灯)
 core/                      # 跨切共享层(不依赖上层)
+  runtime.dart             # DI 装配:activeWorkspace + backendController/Startup(BackendState phase 桥) + dio/apiClient + sseGateway(就绪前 null)
+  contract/                # 后端投影 DTO(freezed/json,1:1 镜像后端):api_error(N1 信封 + AnselmErr 码) · page(N4 keyset/聚合) · workspace(+ModelRef)
+  net/                     # api_client:唯一 HTTP 边界,标准契约只编码一次 + workspace/bearer(ANSELM_AUTH_TOKEN)拦截器
+  sse/                     # 3 流地基:frame(线缆 + seq 派生 durable) · sse_parser · sse_connection(重连 + 410 续传 + full-jitter + bearer) · sse_gateway(per-scope/per-kind demux,Riverpod 之下)
+  process/                 # backend_controller:sidecar 监督(抢端口 / health 门控 / 有界崩溃重启 / SIGTERM→kill 优雅关停 / 铸 ANSELM_AUTH_TOKEN)
+  perf/                    # coalescing_notifier(L2:值同步无损、监听者每帧≤1 通知 —— 流式 firehose 防整页重建)
+  error/                   # error_boundary:installErrorHandlers(全局错误汇)+ 可恢复 ErrorWidget(构建抛错不灰屏)
   design/                  # tokens · colors · typography · theme —— 唯一值源,禁内联 px/hex/ms
-  platform/                # OS 缝:host_platform(dart:io 收口)· window_zoom(应内 Cmd +/- 缩放)
+  platform/                # OS 缝:host_platform(dart:io 收口) · window_zoom(应内 Cmd +/- 缩放)
   model/                   # 框架无关纯模型(无 Flutter import):status_state(状态折叠单源)
-  ui/                      # An* 套件:G0 地基(icons/brand/interactive/tone)+ G1 控件(status_dot/badge/button/input/dropdown/popover…)+ 三岛壳 + G6 浮层叶子(dialog/toast);桶=ui.dart（随组扩充,见 design-system.md）
-  overlay/                 # 命令式浮层派发(G6):AnOverlayController(NotifierProvider)+ overlayProvider + AnOverlayHost(toast 栈 + dialog 路由宿主);依赖 core/ui 不被其依赖
+  ui/                      # An* 套件 G0–G6(49 原语:控件/行卡/导航壳/代码数据/浮层)+ 三岛壳;桶=ui.dart(见 design-system.md)
+  overlay/                 # 命令式浮层派发(G6):AnOverlayController(NotifierProvider) + overlayProvider + AnOverlayHost
 i18n/                      # slang:en/zh_CN 双语 + 生成 strings.g.dart（dart run slang,入库）
 dev/                       # dev 工具:gallery/（make gallery 组件画廊,双栏目录看每个 An* 全态）
-features/                  # ★中间层:每域 data+state+ui+model（随 feature 落地）
+features/                  # ★中间层:每域 data+state+ui+model（随 feature 落地,Entities 起）
 ```
+**运行时骨干(Phase 4.0)**:sidecar 进程托管(`core/process`)+ 契约/net/SSE(`core/{contract,net,sse}`,PORT 自 main + 加固)+ Riverpod 装配(`core/runtime.dart`)+ 错误边界(`core/error`)+ 启动门控(`app/app_startup_gate.dart`)+ L0–L2 流式性能原语(`core/sse` demux + `core/perf` coalescer)。loopback 安全在后端(绑 127.0.0.1 + bearer + Host 校验,见 `references/backend/api.md`)。建造规范见 [`WRK-045`](../../working/platform-foundation/phase-4.0-runtime-backbone.md)。
 **dev 工具**:截图夹具 `test/dev/capture_shell.dart`(无头渲染 PNG 看效果);产物 `test/dev/out/` **gitignore**。
 
 ## 3. 依赖规则（三层，单向）
