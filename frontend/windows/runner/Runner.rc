@@ -89,11 +89,11 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "host.anselm" "\0"
+            VALUE "CompanyName", "Anselm" "\0"
             VALUE "FileDescription", "anselm" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "anselm" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 host.anselm. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 Anselm. All rights reserved." "\0"
             VALUE "OriginalFilename", "anselm.exe" "\0"
             VALUE "ProductName", "anselm" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"

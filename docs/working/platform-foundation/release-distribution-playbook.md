@@ -20,11 +20,9 @@ audience: [human, ai]
 - **托管抗封**:旧 `anselm.host` 被封 → 更新源/下载**首选 GitHub Releases**(不绑单一域名)。
 - **provider Key 归 Go 后端**(非发行范畴)。
 
-## 1. ⛔ 阻断项:先改 bundle 标识(挡住所有签名,必须第一步做)
-仓库当前三处都是 **`host.anselm.anselm`**(`macos/Runner/Configs/AppInfo.xcconfig`、`linux/CMakeLists.txt`、`windows/runner/Runner.rc` 的 CompanyName=`host.anselm`):
-- **双重口吃**(`anselm.anselm`)且 **反向 DNS 含被封域名 `anselm.host`**——bundle ID 进每一道签名/公证/AUMID,定了就难改。
-- **必须先选一个干净的反向 DNS 标识**(如 `app.anselm.desktop` / `com.<你的新域>.anselm` / `io.github.<org>.anselm`——挑一个你真正掌控、没被封的命名空间),统一改三处 + 测试 target。
-- 这是**纯机械重命名**,你定了新 ID 我可以一次性改掉(含 macOS test target、Linux app-id、Windows CompanyName/版权、`anselm://` scheme 归属)。
+## 1. ✅ bundle 标识已改(2026-06-26 完成)
+原 `host.anselm.anselm`(双重口吃 + 反向 DNS 含被封域名 `anselm.host`)**已统一改为 `website.anselm.app`**(反向 DNS 取用户在用、可掌控的域名 `anselm.website`,与 GitHub Releases 托管无关、抗封)。改动落点:`macos/Runner/Configs/AppInfo.xcconfig`(bundle id + 版权→Anselm)· `macos/Runner.xcodeproj/project.pbxproj`(RunnerTests target ×3)· `linux/CMakeLists.txt`(`APPLICATION_ID`)· `windows/runner/Runner.rc`(CompanyName/版权→Anselm)。`flutter build macos` 验证通过。
+> 备注:免费档网关已早搬至 `api.anselm.website`(`backend/internal/infra/llm/anselm.go`),旧 `anselm.host` 仅曾用于免费 key 端点、现无活引用。`anselm://` URL scheme 注册属深链 P0(尚未落地),届时归到此 bundle id。
 
 ## 2. 成本与时间(year-1)
 | 项 | 成本 | 说明 |
