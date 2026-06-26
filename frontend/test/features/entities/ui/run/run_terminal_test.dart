@@ -8,7 +8,6 @@ import 'package:anselm/core/ui/an_button.dart';
 import 'package:anselm/features/entities/data/entity_fixtures.dart';
 import 'package:anselm/features/entities/data/entity_kind.dart';
 import 'package:anselm/features/entities/data/entity_providers.dart';
-import 'package:anselm/features/entities/state/run/run_terminal_controller.dart';
 import 'package:anselm/features/entities/state/selected_entity.dart';
 import 'package:anselm/features/entities/ui/run/block_tree_view.dart';
 import 'package:anselm/features/entities/ui/run/run_terminal.dart';
@@ -17,11 +16,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-// STEP 5 gate (widget) — the run terminal: idle shows the typed input form + idle state; pressing the verb
-// runs and renders the streamed output + result; the agent trace renders reasoning collapsed-by-default and
-// a danger badge on a dangerous tool_call.
+// STEP 5.5 gate (widget) — the run terminal is bound to the SELECTED entity: idle shows the typed input
+// form + idle state; pressing the verb runs and renders the streamed output + result; the agent trace
+// renders reasoning collapsed-by-default + a danger badge.
 
 final _t0 = DateTime.utc(2026, 6, 27);
+
+class _Pre extends SelectedEntity {
+  _Pre(this._r);
+  final EntityRef _r;
+  @override
+  EntityRef? build() => _r;
+}
 
 FixtureEntityRepository _fix() => FixtureEntityRepository(
       runDelay: Duration.zero,
@@ -61,8 +67,12 @@ FixtureEntityRepository _fix() => FixtureEntityRepository(
       ],
     );
 
-Widget _host(FixtureEntityRepository repo, {Widget child = const RunTerminal()}) => ProviderScope(
-      overrides: [entityRepositoryProvider.overrideWithValue(repo)],
+Widget _host(FixtureEntityRepository repo, {EntityRef? sel, Widget child = const RunTerminal()}) =>
+    ProviderScope(
+      overrides: [
+        entityRepositoryProvider.overrideWithValue(repo),
+        if (sel != null) selectedEntityProvider.overrideWith(() => _Pre(sel)),
+      ],
       child: TranslationProvider(
         child: MaterialApp(
           debugShowCheckedModeBanner: false,
@@ -72,18 +82,11 @@ Widget _host(FixtureEntityRepository repo, {Widget child = const RunTerminal()})
       ),
     );
 
-void _open(WidgetTester tester, EntityRef ref) {
-  final ctx = tester.element(find.byType(RunTerminal));
-  ProviderScope.containerOf(ctx, listen: false).read(runTerminalProvider.notifier).openFor(ref);
-}
-
 void main() {
   final r = t.entities.run;
 
   testWidgets('function idle → typed input field + idle state', (tester) async {
-    await tester.pumpWidget(_host(_fix()));
-    _open(tester, const EntityRef(EntityKind.function, 'fn_1'));
-    await tester.pump(); // ref set → rebuild
+    await tester.pumpWidget(_host(_fix(), sel: const EntityRef(EntityKind.function, 'fn_1')));
     await tester.pump(const Duration(milliseconds: 50)); // detail load
     expect(find.text('text'), findsOneWidget); // the declared input's label
     expect(find.text(r.idleTitle), findsOneWidget);
@@ -91,9 +94,7 @@ void main() {
   });
 
   testWidgets('run function → ok, streamed output + result', (tester) async {
-    await tester.pumpWidget(_host(_fix()));
-    _open(tester, const EntityRef(EntityKind.function, 'fn_1'));
-    await tester.pump();
+    await tester.pumpWidget(_host(_fix(), sel: const EntityRef(EntityKind.function, 'fn_1')));
     await tester.pump(const Duration(milliseconds: 50));
     await tester.tap(find.widgetWithText(AnButton, t.entities.detail.verb.run));
     await tester.pumpAndSettle();
@@ -103,9 +104,7 @@ void main() {
   });
 
   testWidgets('agent invoke → ReAct trace with the tool name', (tester) async {
-    await tester.pumpWidget(_host(_fix()));
-    _open(tester, const EntityRef(EntityKind.agent, 'ag_1'));
-    await tester.pump();
+    await tester.pumpWidget(_host(_fix(), sel: const EntityRef(EntityKind.agent, 'ag_1')));
     await tester.pump(const Duration(milliseconds: 50));
     await tester.tap(find.widgetWithText(AnButton, t.entities.detail.verb.invoke));
     await tester.pumpAndSettle();

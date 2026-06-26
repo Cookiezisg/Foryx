@@ -72,7 +72,7 @@ features/                  # ★中间层:每域 data+state+ui+model（随 featu
 
 ## 5. 三岛 shell 骨架（`core/ui/an_shell.dart`）
 
-无边框**不透明白窗**:左岛(`AnIsland` 卡,**弹性 240–400 默认 320、可拖**)· 敞开海洋(窗体白面、无卡,内容列**弹性 480–720**)· 右岛(`AnIsland` 卡,**固定 320**);四周 8px + 岛间 8px(左岛 grip 兼间距、右岛纯间距)。**左岛 + 海洋恒在;右岛按需揭示**——`inspectorOpen` 驱动 `_RightReveal`(宽 + 间距 0↔320 滑入/滑走,内容满宽不重排,reduced-motion 即时,收起态彻底惰化)。Entities feature 把 run 终端(`features/entities/ui/run`)放右岛:动词 CTA 打开、关闭按钮收起。
+无边框**不透明白窗**:左岛(`AnIsland` 卡,**弹性 240–400 默认 320、可拖**)· 敞开海洋(窗体白面、无卡,内容列**弹性 480–720**)· 右岛(`AnIsland` 卡,**固定 320**);四周 8px + 岛间 8px(左岛 grip 兼间距、右岛纯间距)。**左岛 + 海洋恒在;右岛按需揭示**——`inspectorOpen` 驱动 `_RightReveal`(宽 + 间距 0↔320 滑入/滑走,内容满宽不重排,reduced-motion 即时,收起态彻底惰化)。Entities feature 把 run 终端(`features/entities/ui/run`)放右岛、**强链选中实体**——`RunTerminal` 自读 `selectedEntityProvider`,有选中即揭示、随选区重绑(`runTerminalProvider` family by EntityRef);动词 CTA 直接执行、close 钮 sticky 收起(`rightPanelCollapsedProvider`);运行切走时 `keepAlive` 后台续流、切回看进度。
 - **尺寸(逻辑点,`window_manager` 管 → scale 正确、resize 不炸)**:**最小** = 保证即便左岛拖到 max、海洋仍有最小内容列 `内距 + 左岛max(400) + 间距 + 海洋min(480) + 间距 + 右岛(320) + 内距` = **1232×761**(黄金比例高)。**默认** ≈ 1280×791(居中、1512 屏上留余量)。海洋是弹性区,内容列在 480–720 间随窗伸缩(更宽则 720 居中)。
 - **红绿灯**:macOS 由 `macos_window_utils`(成熟包)**加高标题栏**(`addToolbar` + unified 风格)→ OS 把灯纵向居中到更低位、**仍在可点击的标题栏层**(Apple 旗舰做法)。**绝不**把原生按钮挪进内容区(会被全尺寸内容视图吃掉点击)、**绝不手搓**(见设计原则 #8)。Windows/Linux 此位放产品标 + 名(`AnWindowControls`)。
 - **缩放(两种,别混)**:① **系统显示档**(设置→显示器)——全用**逻辑点**即自动适配,无需特殊处理;② **应内 Cmd +/-/0**(`core/platform/window_zoom.dart`)——用 `scaled_app`(`ScaledWidgetsFlutterBinding` 重写视图配置)**整体重排式**缩放(非 Transform/textScaler),默认 100%、离散档持久化,变更时窗口最小值同步 ×zoom。**zoom-in 受屏幕容量管控**(`maxFactor` = 屏可容 / 设计min,逐轴取小):到顶即停、**绝不撑破布局**;持久化档恢复时也按当前屏可容上限收敛。**不手搓**(原则 #8)。

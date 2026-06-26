@@ -14,10 +14,10 @@ T _$identity<T>(T value) => value;
 /// @nodoc
 mixin _$RunTerminalState {
 
- bool get open; EntityRef? get ref; RunPhase get phase; String get method;// handler only: the selected method 仅 handler:选中方法
- Map<String, Object?> get request;// the args/input/payload sent 发出的入参
+ RunPhase get phase; String get method;// handler: the selected method (drives which fields render) 选中方法
  Object? get output;// fn/hd/ag result output 结果输出
- String? get errorCode; String? get errorMsg; int get elapsedMs; String? get logs;// fn captured logs 函数日志
+ String? get errorCode; String? get errorMsg; String? get inputError;// form validation (bad JSON in an object/array field) 入参校验错
+ int get elapsedMs; String? get logs;// fn captured logs 函数日志
  int get steps;// agent 步数
  int get tokensIn; int get tokensOut; String? get flowrunId;// workflow 触发的 flowrun id
  List<FlowrunNode> get flowNodes;// workflow durable node list 工作流节点(真相)
@@ -32,16 +32,16 @@ $RunTerminalStateCopyWith<RunTerminalState> get copyWith => _$RunTerminalStateCo
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is RunTerminalState&&(identical(other.open, open) || other.open == open)&&(identical(other.ref, ref) || other.ref == ref)&&(identical(other.phase, phase) || other.phase == phase)&&(identical(other.method, method) || other.method == method)&&const DeepCollectionEquality().equals(other.request, request)&&const DeepCollectionEquality().equals(other.output, output)&&(identical(other.errorCode, errorCode) || other.errorCode == errorCode)&&(identical(other.errorMsg, errorMsg) || other.errorMsg == errorMsg)&&(identical(other.elapsedMs, elapsedMs) || other.elapsedMs == elapsedMs)&&(identical(other.logs, logs) || other.logs == logs)&&(identical(other.steps, steps) || other.steps == steps)&&(identical(other.tokensIn, tokensIn) || other.tokensIn == tokensIn)&&(identical(other.tokensOut, tokensOut) || other.tokensOut == tokensOut)&&(identical(other.flowrunId, flowrunId) || other.flowrunId == flowrunId)&&const DeepCollectionEquality().equals(other.flowNodes, flowNodes)&&(identical(other.runSeq, runSeq) || other.runSeq == runSeq));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is RunTerminalState&&(identical(other.phase, phase) || other.phase == phase)&&(identical(other.method, method) || other.method == method)&&const DeepCollectionEquality().equals(other.output, output)&&(identical(other.errorCode, errorCode) || other.errorCode == errorCode)&&(identical(other.errorMsg, errorMsg) || other.errorMsg == errorMsg)&&(identical(other.inputError, inputError) || other.inputError == inputError)&&(identical(other.elapsedMs, elapsedMs) || other.elapsedMs == elapsedMs)&&(identical(other.logs, logs) || other.logs == logs)&&(identical(other.steps, steps) || other.steps == steps)&&(identical(other.tokensIn, tokensIn) || other.tokensIn == tokensIn)&&(identical(other.tokensOut, tokensOut) || other.tokensOut == tokensOut)&&(identical(other.flowrunId, flowrunId) || other.flowrunId == flowrunId)&&const DeepCollectionEquality().equals(other.flowNodes, flowNodes)&&(identical(other.runSeq, runSeq) || other.runSeq == runSeq));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,open,ref,phase,method,const DeepCollectionEquality().hash(request),const DeepCollectionEquality().hash(output),errorCode,errorMsg,elapsedMs,logs,steps,tokensIn,tokensOut,flowrunId,const DeepCollectionEquality().hash(flowNodes),runSeq);
+int get hashCode => Object.hash(runtimeType,phase,method,const DeepCollectionEquality().hash(output),errorCode,errorMsg,inputError,elapsedMs,logs,steps,tokensIn,tokensOut,flowrunId,const DeepCollectionEquality().hash(flowNodes),runSeq);
 
 @override
 String toString() {
-  return 'RunTerminalState(open: $open, ref: $ref, phase: $phase, method: $method, request: $request, output: $output, errorCode: $errorCode, errorMsg: $errorMsg, elapsedMs: $elapsedMs, logs: $logs, steps: $steps, tokensIn: $tokensIn, tokensOut: $tokensOut, flowrunId: $flowrunId, flowNodes: $flowNodes, runSeq: $runSeq)';
+  return 'RunTerminalState(phase: $phase, method: $method, output: $output, errorCode: $errorCode, errorMsg: $errorMsg, inputError: $inputError, elapsedMs: $elapsedMs, logs: $logs, steps: $steps, tokensIn: $tokensIn, tokensOut: $tokensOut, flowrunId: $flowrunId, flowNodes: $flowNodes, runSeq: $runSeq)';
 }
 
 
@@ -52,7 +52,7 @@ abstract mixin class $RunTerminalStateCopyWith<$Res>  {
   factory $RunTerminalStateCopyWith(RunTerminalState value, $Res Function(RunTerminalState) _then) = _$RunTerminalStateCopyWithImpl;
 @useResult
 $Res call({
- bool open, EntityRef? ref, RunPhase phase, String method, Map<String, Object?> request, Object? output, String? errorCode, String? errorMsg, int elapsedMs, String? logs, int steps, int tokensIn, int tokensOut, String? flowrunId, List<FlowrunNode> flowNodes, int runSeq
+ RunPhase phase, String method, Object? output, String? errorCode, String? errorMsg, String? inputError, int elapsedMs, String? logs, int steps, int tokensIn, int tokensOut, String? flowrunId, List<FlowrunNode> flowNodes, int runSeq
 });
 
 
@@ -69,15 +69,13 @@ class _$RunTerminalStateCopyWithImpl<$Res>
 
 /// Create a copy of RunTerminalState
 /// with the given fields replaced by the non-null parameter values.
-@pragma('vm:prefer-inline') @override $Res call({Object? open = null,Object? ref = freezed,Object? phase = null,Object? method = null,Object? request = null,Object? output = freezed,Object? errorCode = freezed,Object? errorMsg = freezed,Object? elapsedMs = null,Object? logs = freezed,Object? steps = null,Object? tokensIn = null,Object? tokensOut = null,Object? flowrunId = freezed,Object? flowNodes = null,Object? runSeq = null,}) {
+@pragma('vm:prefer-inline') @override $Res call({Object? phase = null,Object? method = null,Object? output = freezed,Object? errorCode = freezed,Object? errorMsg = freezed,Object? inputError = freezed,Object? elapsedMs = null,Object? logs = freezed,Object? steps = null,Object? tokensIn = null,Object? tokensOut = null,Object? flowrunId = freezed,Object? flowNodes = null,Object? runSeq = null,}) {
   return _then(_self.copyWith(
-open: null == open ? _self.open : open // ignore: cast_nullable_to_non_nullable
-as bool,ref: freezed == ref ? _self.ref : ref // ignore: cast_nullable_to_non_nullable
-as EntityRef?,phase: null == phase ? _self.phase : phase // ignore: cast_nullable_to_non_nullable
+phase: null == phase ? _self.phase : phase // ignore: cast_nullable_to_non_nullable
 as RunPhase,method: null == method ? _self.method : method // ignore: cast_nullable_to_non_nullable
-as String,request: null == request ? _self.request : request // ignore: cast_nullable_to_non_nullable
-as Map<String, Object?>,output: freezed == output ? _self.output : output ,errorCode: freezed == errorCode ? _self.errorCode : errorCode // ignore: cast_nullable_to_non_nullable
+as String,output: freezed == output ? _self.output : output ,errorCode: freezed == errorCode ? _self.errorCode : errorCode // ignore: cast_nullable_to_non_nullable
 as String?,errorMsg: freezed == errorMsg ? _self.errorMsg : errorMsg // ignore: cast_nullable_to_non_nullable
+as String?,inputError: freezed == inputError ? _self.inputError : inputError // ignore: cast_nullable_to_non_nullable
 as String?,elapsedMs: null == elapsedMs ? _self.elapsedMs : elapsedMs // ignore: cast_nullable_to_non_nullable
 as int,logs: freezed == logs ? _self.logs : logs // ignore: cast_nullable_to_non_nullable
 as String?,steps: null == steps ? _self.steps : steps // ignore: cast_nullable_to_non_nullable
@@ -171,10 +169,10 @@ return $default(_that);case _:
 /// }
 /// ```
 
-@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( bool open,  EntityRef? ref,  RunPhase phase,  String method,  Map<String, Object?> request,  Object? output,  String? errorCode,  String? errorMsg,  int elapsedMs,  String? logs,  int steps,  int tokensIn,  int tokensOut,  String? flowrunId,  List<FlowrunNode> flowNodes,  int runSeq)?  $default,{required TResult orElse(),}) {final _that = this;
+@optionalTypeArgs TResult maybeWhen<TResult extends Object?>(TResult Function( RunPhase phase,  String method,  Object? output,  String? errorCode,  String? errorMsg,  String? inputError,  int elapsedMs,  String? logs,  int steps,  int tokensIn,  int tokensOut,  String? flowrunId,  List<FlowrunNode> flowNodes,  int runSeq)?  $default,{required TResult orElse(),}) {final _that = this;
 switch (_that) {
 case _RunTerminalState() when $default != null:
-return $default(_that.open,_that.ref,_that.phase,_that.method,_that.request,_that.output,_that.errorCode,_that.errorMsg,_that.elapsedMs,_that.logs,_that.steps,_that.tokensIn,_that.tokensOut,_that.flowrunId,_that.flowNodes,_that.runSeq);case _:
+return $default(_that.phase,_that.method,_that.output,_that.errorCode,_that.errorMsg,_that.inputError,_that.elapsedMs,_that.logs,_that.steps,_that.tokensIn,_that.tokensOut,_that.flowrunId,_that.flowNodes,_that.runSeq);case _:
   return orElse();
 
 }
@@ -192,10 +190,10 @@ return $default(_that.open,_that.ref,_that.phase,_that.method,_that.request,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( bool open,  EntityRef? ref,  RunPhase phase,  String method,  Map<String, Object?> request,  Object? output,  String? errorCode,  String? errorMsg,  int elapsedMs,  String? logs,  int steps,  int tokensIn,  int tokensOut,  String? flowrunId,  List<FlowrunNode> flowNodes,  int runSeq)  $default,) {final _that = this;
+@optionalTypeArgs TResult when<TResult extends Object?>(TResult Function( RunPhase phase,  String method,  Object? output,  String? errorCode,  String? errorMsg,  String? inputError,  int elapsedMs,  String? logs,  int steps,  int tokensIn,  int tokensOut,  String? flowrunId,  List<FlowrunNode> flowNodes,  int runSeq)  $default,) {final _that = this;
 switch (_that) {
 case _RunTerminalState():
-return $default(_that.open,_that.ref,_that.phase,_that.method,_that.request,_that.output,_that.errorCode,_that.errorMsg,_that.elapsedMs,_that.logs,_that.steps,_that.tokensIn,_that.tokensOut,_that.flowrunId,_that.flowNodes,_that.runSeq);case _:
+return $default(_that.phase,_that.method,_that.output,_that.errorCode,_that.errorMsg,_that.inputError,_that.elapsedMs,_that.logs,_that.steps,_that.tokensIn,_that.tokensOut,_that.flowrunId,_that.flowNodes,_that.runSeq);case _:
   throw StateError('Unexpected subclass');
 
 }
@@ -212,10 +210,10 @@ return $default(_that.open,_that.ref,_that.phase,_that.method,_that.request,_tha
 /// }
 /// ```
 
-@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( bool open,  EntityRef? ref,  RunPhase phase,  String method,  Map<String, Object?> request,  Object? output,  String? errorCode,  String? errorMsg,  int elapsedMs,  String? logs,  int steps,  int tokensIn,  int tokensOut,  String? flowrunId,  List<FlowrunNode> flowNodes,  int runSeq)?  $default,) {final _that = this;
+@optionalTypeArgs TResult? whenOrNull<TResult extends Object?>(TResult? Function( RunPhase phase,  String method,  Object? output,  String? errorCode,  String? errorMsg,  String? inputError,  int elapsedMs,  String? logs,  int steps,  int tokensIn,  int tokensOut,  String? flowrunId,  List<FlowrunNode> flowNodes,  int runSeq)?  $default,) {final _that = this;
 switch (_that) {
 case _RunTerminalState() when $default != null:
-return $default(_that.open,_that.ref,_that.phase,_that.method,_that.request,_that.output,_that.errorCode,_that.errorMsg,_that.elapsedMs,_that.logs,_that.steps,_that.tokensIn,_that.tokensOut,_that.flowrunId,_that.flowNodes,_that.runSeq);case _:
+return $default(_that.phase,_that.method,_that.output,_that.errorCode,_that.errorMsg,_that.inputError,_that.elapsedMs,_that.logs,_that.steps,_that.tokensIn,_that.tokensOut,_that.flowrunId,_that.flowNodes,_that.runSeq);case _:
   return null;
 
 }
@@ -227,27 +225,18 @@ return $default(_that.open,_that.ref,_that.phase,_that.method,_that.request,_tha
 
 
 class _RunTerminalState extends RunTerminalState {
-  const _RunTerminalState({this.open = false, this.ref, this.phase = RunPhase.idle, this.method = '', final  Map<String, Object?> request = const <String, Object?>{}, this.output, this.errorCode, this.errorMsg, this.elapsedMs = 0, this.logs, this.steps = 0, this.tokensIn = 0, this.tokensOut = 0, this.flowrunId, final  List<FlowrunNode> flowNodes = const <FlowrunNode>[], this.runSeq = 0}): _request = request,_flowNodes = flowNodes,super._();
+  const _RunTerminalState({this.phase = RunPhase.idle, this.method = '', this.output, this.errorCode, this.errorMsg, this.inputError, this.elapsedMs = 0, this.logs, this.steps = 0, this.tokensIn = 0, this.tokensOut = 0, this.flowrunId, final  List<FlowrunNode> flowNodes = const <FlowrunNode>[], this.runSeq = 0}): _flowNodes = flowNodes,super._();
   
 
-@override@JsonKey() final  bool open;
-@override final  EntityRef? ref;
 @override@JsonKey() final  RunPhase phase;
 @override@JsonKey() final  String method;
-// handler only: the selected method 仅 handler:选中方法
- final  Map<String, Object?> _request;
-// handler only: the selected method 仅 handler:选中方法
-@override@JsonKey() Map<String, Object?> get request {
-  if (_request is EqualUnmodifiableMapView) return _request;
-  // ignore: implicit_dynamic_type
-  return EqualUnmodifiableMapView(_request);
-}
-
-// the args/input/payload sent 发出的入参
+// handler: the selected method (drives which fields render) 选中方法
 @override final  Object? output;
 // fn/hd/ag result output 结果输出
 @override final  String? errorCode;
 @override final  String? errorMsg;
+@override final  String? inputError;
+// form validation (bad JSON in an object/array field) 入参校验错
 @override@JsonKey() final  int elapsedMs;
 @override final  String? logs;
 // fn captured logs 函数日志
@@ -278,16 +267,16 @@ _$RunTerminalStateCopyWith<_RunTerminalState> get copyWith => __$RunTerminalStat
 
 @override
 bool operator ==(Object other) {
-  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RunTerminalState&&(identical(other.open, open) || other.open == open)&&(identical(other.ref, ref) || other.ref == ref)&&(identical(other.phase, phase) || other.phase == phase)&&(identical(other.method, method) || other.method == method)&&const DeepCollectionEquality().equals(other._request, _request)&&const DeepCollectionEquality().equals(other.output, output)&&(identical(other.errorCode, errorCode) || other.errorCode == errorCode)&&(identical(other.errorMsg, errorMsg) || other.errorMsg == errorMsg)&&(identical(other.elapsedMs, elapsedMs) || other.elapsedMs == elapsedMs)&&(identical(other.logs, logs) || other.logs == logs)&&(identical(other.steps, steps) || other.steps == steps)&&(identical(other.tokensIn, tokensIn) || other.tokensIn == tokensIn)&&(identical(other.tokensOut, tokensOut) || other.tokensOut == tokensOut)&&(identical(other.flowrunId, flowrunId) || other.flowrunId == flowrunId)&&const DeepCollectionEquality().equals(other._flowNodes, _flowNodes)&&(identical(other.runSeq, runSeq) || other.runSeq == runSeq));
+  return identical(this, other) || (other.runtimeType == runtimeType&&other is _RunTerminalState&&(identical(other.phase, phase) || other.phase == phase)&&(identical(other.method, method) || other.method == method)&&const DeepCollectionEquality().equals(other.output, output)&&(identical(other.errorCode, errorCode) || other.errorCode == errorCode)&&(identical(other.errorMsg, errorMsg) || other.errorMsg == errorMsg)&&(identical(other.inputError, inputError) || other.inputError == inputError)&&(identical(other.elapsedMs, elapsedMs) || other.elapsedMs == elapsedMs)&&(identical(other.logs, logs) || other.logs == logs)&&(identical(other.steps, steps) || other.steps == steps)&&(identical(other.tokensIn, tokensIn) || other.tokensIn == tokensIn)&&(identical(other.tokensOut, tokensOut) || other.tokensOut == tokensOut)&&(identical(other.flowrunId, flowrunId) || other.flowrunId == flowrunId)&&const DeepCollectionEquality().equals(other._flowNodes, _flowNodes)&&(identical(other.runSeq, runSeq) || other.runSeq == runSeq));
 }
 
 
 @override
-int get hashCode => Object.hash(runtimeType,open,ref,phase,method,const DeepCollectionEquality().hash(_request),const DeepCollectionEquality().hash(output),errorCode,errorMsg,elapsedMs,logs,steps,tokensIn,tokensOut,flowrunId,const DeepCollectionEquality().hash(_flowNodes),runSeq);
+int get hashCode => Object.hash(runtimeType,phase,method,const DeepCollectionEquality().hash(output),errorCode,errorMsg,inputError,elapsedMs,logs,steps,tokensIn,tokensOut,flowrunId,const DeepCollectionEquality().hash(_flowNodes),runSeq);
 
 @override
 String toString() {
-  return 'RunTerminalState(open: $open, ref: $ref, phase: $phase, method: $method, request: $request, output: $output, errorCode: $errorCode, errorMsg: $errorMsg, elapsedMs: $elapsedMs, logs: $logs, steps: $steps, tokensIn: $tokensIn, tokensOut: $tokensOut, flowrunId: $flowrunId, flowNodes: $flowNodes, runSeq: $runSeq)';
+  return 'RunTerminalState(phase: $phase, method: $method, output: $output, errorCode: $errorCode, errorMsg: $errorMsg, inputError: $inputError, elapsedMs: $elapsedMs, logs: $logs, steps: $steps, tokensIn: $tokensIn, tokensOut: $tokensOut, flowrunId: $flowrunId, flowNodes: $flowNodes, runSeq: $runSeq)';
 }
 
 
@@ -298,7 +287,7 @@ abstract mixin class _$RunTerminalStateCopyWith<$Res> implements $RunTerminalSta
   factory _$RunTerminalStateCopyWith(_RunTerminalState value, $Res Function(_RunTerminalState) _then) = __$RunTerminalStateCopyWithImpl;
 @override @useResult
 $Res call({
- bool open, EntityRef? ref, RunPhase phase, String method, Map<String, Object?> request, Object? output, String? errorCode, String? errorMsg, int elapsedMs, String? logs, int steps, int tokensIn, int tokensOut, String? flowrunId, List<FlowrunNode> flowNodes, int runSeq
+ RunPhase phase, String method, Object? output, String? errorCode, String? errorMsg, String? inputError, int elapsedMs, String? logs, int steps, int tokensIn, int tokensOut, String? flowrunId, List<FlowrunNode> flowNodes, int runSeq
 });
 
 
@@ -315,15 +304,13 @@ class __$RunTerminalStateCopyWithImpl<$Res>
 
 /// Create a copy of RunTerminalState
 /// with the given fields replaced by the non-null parameter values.
-@override @pragma('vm:prefer-inline') $Res call({Object? open = null,Object? ref = freezed,Object? phase = null,Object? method = null,Object? request = null,Object? output = freezed,Object? errorCode = freezed,Object? errorMsg = freezed,Object? elapsedMs = null,Object? logs = freezed,Object? steps = null,Object? tokensIn = null,Object? tokensOut = null,Object? flowrunId = freezed,Object? flowNodes = null,Object? runSeq = null,}) {
+@override @pragma('vm:prefer-inline') $Res call({Object? phase = null,Object? method = null,Object? output = freezed,Object? errorCode = freezed,Object? errorMsg = freezed,Object? inputError = freezed,Object? elapsedMs = null,Object? logs = freezed,Object? steps = null,Object? tokensIn = null,Object? tokensOut = null,Object? flowrunId = freezed,Object? flowNodes = null,Object? runSeq = null,}) {
   return _then(_RunTerminalState(
-open: null == open ? _self.open : open // ignore: cast_nullable_to_non_nullable
-as bool,ref: freezed == ref ? _self.ref : ref // ignore: cast_nullable_to_non_nullable
-as EntityRef?,phase: null == phase ? _self.phase : phase // ignore: cast_nullable_to_non_nullable
+phase: null == phase ? _self.phase : phase // ignore: cast_nullable_to_non_nullable
 as RunPhase,method: null == method ? _self.method : method // ignore: cast_nullable_to_non_nullable
-as String,request: null == request ? _self._request : request // ignore: cast_nullable_to_non_nullable
-as Map<String, Object?>,output: freezed == output ? _self.output : output ,errorCode: freezed == errorCode ? _self.errorCode : errorCode // ignore: cast_nullable_to_non_nullable
+as String,output: freezed == output ? _self.output : output ,errorCode: freezed == errorCode ? _self.errorCode : errorCode // ignore: cast_nullable_to_non_nullable
 as String?,errorMsg: freezed == errorMsg ? _self.errorMsg : errorMsg // ignore: cast_nullable_to_non_nullable
+as String?,inputError: freezed == inputError ? _self.inputError : inputError // ignore: cast_nullable_to_non_nullable
 as String?,elapsedMs: null == elapsedMs ? _self.elapsedMs : elapsedMs // ignore: cast_nullable_to_non_nullable
 as int,logs: freezed == logs ? _self.logs : logs // ignore: cast_nullable_to_non_nullable
 as String?,steps: null == steps ? _self.steps : steps // ignore: cast_nullable_to_non_nullable

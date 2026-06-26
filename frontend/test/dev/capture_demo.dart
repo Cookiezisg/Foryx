@@ -103,13 +103,9 @@ void main() {
         EntityKind.agent: verb.invoke,
         EntityKind.workflow: verb.trigger,
       }[sel.kind]!;
-      // open the run terminal (the header CTA is the only such button before it opens)…
+      // The right island is already revealed (strong-linked to the selection); the header verb CTA both
+      // ensures it's open and fires the run. 右岛已随选区揭示;头部动词 CTA 展开 + 执行。
       await tester.tap(find.widgetWithText(AnButton, label).first);
-      for (var i = 0; i < 6; i++) {
-        await tester.pump(const Duration(milliseconds: 40)); // slide-in
-      }
-      // …then execute via the form's run button (now the last button with that label).
-      await tester.tap(find.widgetWithText(AnButton, label).last);
       for (var i = 0; i < 24; i++) {
         await tester.pump(const Duration(milliseconds: 40)); // scripted stream frames
       }

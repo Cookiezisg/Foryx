@@ -12,6 +12,7 @@ import '../../../i18n/strings.g.dart';
 import '../data/entity_kind.dart';
 import '../state/detail/entity_detail.dart';
 import '../state/detail/entity_detail_provider.dart';
+import '../state/run/right_panel.dart';
 import '../state/run/run_terminal_controller.dart';
 import '../state/selected_entity.dart';
 import 'detail/log_tab.dart';
@@ -88,7 +89,12 @@ class _EntityOceanState extends ConsumerState<EntityOcean> {
           children: [
             EntityOceanHeader(
               detail: detail,
-              onVerb: () => ref.read(runTerminalProvider.notifier).openFor(detail.ref),
+              // The right island is already bound to the selection; the verb CTA ensures it's revealed
+              // then fires the run (header CTA = trigger run, demo-aligned). 头部动词钮:展开右岛 + 直接执行。
+              onVerb: () {
+                ref.read(rightPanelCollapsedProvider.notifier).set(false);
+                ref.read(runTerminalProvider(detail.ref).notifier).run();
+              },
             ),
             AnTabs(
               flow: true,
