@@ -44,7 +44,9 @@ class LogTab extends ConsumerWidget {
           return AnState(
               kind: AnStateKind.empty, size: AnStateSize.inset, title: d.state.noLogs, hint: d.state.noLogsHint);
         }
-        return ListView(
+        // Column (not ListView): the surrounding AnPage owns the single document scroll (flow tabs). 文档单滚,用 Column。
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (st.hasAggregate) _aggHeader(context, st),
             for (final row in st.rows)

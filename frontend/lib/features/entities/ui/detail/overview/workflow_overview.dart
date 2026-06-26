@@ -2,19 +2,17 @@ import 'package:flutter/widgets.dart';
 
 import '../../../../../core/contract/entities/workflow.dart';
 import '../../../../../core/model/status_state.dart';
-import '../../../../../core/ui/an_button.dart';
 import '../../../../../core/ui/an_field.dart';
 import '../../../../../core/ui/an_info_card.dart';
 import '../../../../../core/ui/an_row.dart';
 import '../../../../../core/ui/an_section.dart';
-import '../../../../../core/ui/an_thin_table.dart';
 import '../../../../../core/ui/icons.dart';
 import '../../../../../i18n/strings.g.dart';
 import '../../../data/entity_format.dart';
 import '../detail_sections.dart';
 
-/// Workflow 概览:说明 + KV → 运行治理(生命周期/并发)→ 告警 → 编排图(只读 stub:节点/边表 + 禁用「进入图编辑器」)。
-/// 图为只读表(WRK-046 锁定,无交互画布)。
+/// Workflow 概览:说明 + KV(含节点/边计数)→ 运行治理(生命周期/并发)→ 告警。**编排图可视化 + 进入图编辑器
+/// 推迟到图编辑器阶段**(本步不渲图,只在 KV 里给节点/边数量)。
 class WorkflowOverview extends StatelessWidget {
   const WorkflowOverview({required this.wf, super.key});
 
@@ -63,33 +61,7 @@ class WorkflowOverview extends StatelessWidget {
             passive: true,
           ),
         ]),
-        AnSection(label: d.sec.graph, variant: AnSectionVariant.plain, children: [
-          if (g == null)
-            insetEmpty(d.state.errorTitle)
-          else ...[
-            AnThinTable(
-              columns: [
-                AnTableColumn('id', label: d.graph.nodes),
-                AnTableColumn('kind'),
-                AnTableColumn('ref'),
-              ],
-              rows: [
-                for (final n in g.nodes) {'id': n.id, 'kind': n.kind.name, 'ref': n.ref},
-              ],
-            ),
-            AnThinTable(
-              columns: [
-                AnTableColumn('id', label: d.graph.edges),
-                AnTableColumn('path', label: d.graph.path),
-              ],
-              rows: [
-                for (final e in g.edges)
-                  {'id': e.id, 'path': '${e.from}→${e.to}${e.fromPort != null ? ' [${e.fromPort}]' : ''}'},
-              ],
-            ),
-          ],
-          AnButton(label: d.graph.openEditor, onPressed: null), // STEP: graph editor (coming soon)
-        ]),
+        // 编排图可视化 + 进入图编辑器 → 图编辑器阶段(本步不渲)。
       ],
     );
   }

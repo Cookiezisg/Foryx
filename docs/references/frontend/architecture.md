@@ -47,7 +47,7 @@ features/                  # ★中间层:每域 data+state+ui+model（随 featu
   entities/state/          # Entities 列表 state[STEP 2]:entityListProvider(首页+loadMore+SSE patch) + railModelProvider + selectedEntityProvider + railSortProvider
   entities/state/detail/   # 详情 state[STEP 4]:entityDetail(双流订阅,durable 重取/ephemeral no-op) + versionList + logList(PageWithAggregate+workflow flowrun 懒取)
   entities/ui/             # Entities UI[STEP 3]:EntityRail over AnSidebarList(4 kind 段 + 状态点 + 四态)+ entity_rail_model(纯投影)+ entity_ocean[STEP 4 详情根]
-  entities/ui/detail/      # 详情 UI[STEP 4]:ocean_header(状态徽 + 动词 CTA)+ overview/{4 kind}(workflow 只读图 stub)+ version_tab(AnVersionDiff)+ log_tab + detail_sections(共享构件) + entity_ocean(详情海洋,STEP 3 占位/STEP 4 建)
+  entities/ui/detail/      # 详情 UI[STEP 4]:EntityOcean=单一 AnPage 文档(头+tab+内容居中 720 一起滚,AnTabs flow)+ ocean_header(状态徽 + 动词 CTA)+ overview/{4 kind}(workflow 图推迟图编辑器阶段)+ version_tab(AnVersionDiff)+ log_tab + detail_sections + entity_ocean(详情海洋,STEP 3 占位/STEP 4 建)
   entities/data/entity_demo_fixture.dart  # demoEntityRepository():make demo 的零后端种子(STEP 4/5 续加版本/日志/flowrun)
 ```
 **运行时骨干(Phase 4.0)**:sidecar 进程托管(`core/process`)+ 契约/net/SSE(`core/{contract,net,sse}`,PORT 自 main + 加固)+ Riverpod 装配(`core/runtime.dart`)+ 错误边界(`core/error`)+ 启动门控(`app/app_startup_gate.dart`)+ L0–L2 流式性能原语(`core/sse` demux + `core/perf` coalescer)。loopback 安全在后端(绑 127.0.0.1 + bearer + Host 校验,见 `references/backend/api.md`)。建造规范见 [`WRK-045`](../../working/platform-foundation/phase-4.0-runtime-backbone.md)。

@@ -32,6 +32,8 @@ Future<void> _load(String family, String path) async {
 // Optional `--dart-define=SEL=function:fn_normalize` pre-selects an entity so the detail sea is
 // captured (default: rail + empty ocean → demo.png; selected → demo_<id>.png). 可预选实体截详情。
 const _sel = String.fromEnvironment('SEL');
+// Optional `--dart-define=TAB=overview|versions|logs` taps that tab before capture. 预点某 tab。
+const _tab = String.fromEnvironment('TAB');
 
 /// A SelectedEntity override that starts on a fixed selection. 起始即选中的 override。
 class _PreSelected extends SelectedEntity {
@@ -79,6 +81,15 @@ void main() {
     ));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 80)); // let the 4 list futures resolve
+
+    if (_tab.isNotEmpty) {
+      final detail = LocaleSettings.instance.currentTranslations.entities.detail.tab;
+      final label = {'overview': detail.overview, 'versions': detail.versions, 'logs': detail.logs}[_tab]!;
+      await tester.tap(find.text(label));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80)); // the tab's data loads
+      outName = '${outName}_$_tab';
+    }
 
     late final Uint8List bytes;
     await tester.runAsync(() async {

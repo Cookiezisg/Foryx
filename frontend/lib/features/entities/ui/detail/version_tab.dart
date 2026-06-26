@@ -63,10 +63,11 @@ class VersionTab extends ConsumerWidget {
     );
   }
 
+  // Column (not ListView): the surrounding AnPage owns the single document scroll (flow tabs). 文档单滚,用 Column。
   Widget _list(BuildContext context, VersionListState st, VersionListNotifier notifier) {
     final d = context.t.entities.detail;
-    return ListView(
-      shrinkWrap: true,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         for (var i = 0; i < st.versions.length; i++)
           AnRow(

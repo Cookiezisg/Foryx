@@ -37,7 +37,13 @@ class AnTabsItem {
 /// viewport/body 在子树而崩;button+selected 安全)。键盘:Tab 遍历、Enter/Space 激活、←→Home/End 在 strip 内移焦不自动选
 /// (手动激活)。下划线在滚动内容内(随 tab 滚)。
 class AnTabs extends StatefulWidget {
-  const AnTabs({required this.items, required this.value, required this.onSelect, this.enabled = true, super.key});
+  const AnTabs(
+      {required this.items,
+      required this.value,
+      required this.onSelect,
+      this.enabled = true,
+      this.flow = false,
+      super.key});
 
   final List<AnTabsItem> items;
   final String value;
@@ -46,6 +52,14 @@ class AnTabs extends StatefulWidget {
   /// other controlled-selection primitives (AnRow / AnSidebarList). 用户点选才派(非程序改 value);与 AnRow/AnSidebarList 同名。
   final ValueChanged<String> onSelect;
   final bool enabled;
+
+  /// FLOW mode: the bar + ONLY the selected pane stack vertically and size to content, so the tabs read
+  /// as part of a surrounding document scroll (the demo `an-tabs` model — bar + tabs + sections all scroll
+  /// together inside one [AnPage]). Default (false) = FILL mode: an [Expanded] [IndexedStack] that fills a
+  /// bounded box and keeps every pane alive (for a bounded panel). Flow drops keep-alive — fine when pane
+  /// state lives in providers, not the widget. 流式:条 + 仅选中面顺排、随内容高,融入外层文档滚动(demo 模型);
+  /// 默认填充式(Expanded+IndexedStack,bounded 面板保活)。
+  final bool flow;
 
   @override
   State<AnTabs> createState() => _AnTabsState();
@@ -214,24 +228,28 @@ class _AnTabsState extends State<AnTabs> with WidgetsBindingObserver {
       ),
     );
 
-    return Opacity(
-      opacity: widget.enabled ? 1 : AnOpacity.disabled,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          wiredStrip,
-          // panes top pad (demo .panes padding-top sp-4). panes 顶留白。
-          Expanded(
+    // panes top pad (demo .panes padding-top sp-4). panes 顶留白。
+    final panesPad = const EdgeInsets.only(top: AnSpace.s16);
+    final Widget panes = widget.flow
+        // FLOW: only the selected pane, sized to content → flows in the outer document scroll. 仅选中面、随内容高。
+        ? Padding(padding: panesPad, child: widget.items[_index].pane)
+        // FILL: keep-alive IndexedStack filling a bounded box. 保活 IndexedStack 填满 bounded。
+        : Expanded(
             child: Padding(
-              padding: const EdgeInsets.only(top: AnSpace.s16),
+              padding: panesPad,
               child: IndexedStack(
                 index: _index,
                 sizing: StackFit.expand,
                 children: [for (final it in widget.items) it.pane],
               ),
             ),
-          ),
-        ],
+          );
+
+    return Opacity(
+      opacity: widget.enabled ? 1 : AnOpacity.disabled,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [wiredStrip, panes],
       ),
     );
   }

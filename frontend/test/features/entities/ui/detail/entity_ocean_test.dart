@@ -62,12 +62,13 @@ void main() {
     expect(find.text(d.mounts.unhealthy(count: 1)), findsWidgets); // 1 项异常
   });
 
-  testWidgets('workflow → read-only graph stub tables in overview', (tester) async {
+  testWidgets('workflow → governance + alerts (graph deferred to the editor phase)', (tester) async {
     await tester.pumpWidget(_host(sel: const EntityRef(EntityKind.workflow, 'wf_digest')));
     await tester.pump(const Duration(milliseconds: 50));
-    expect(find.text('daily-digest'), findsOneWidget);
-    expect(find.text(d.sec.graph), findsOneWidget); // 编排图 section
-    expect(find.text(d.graph.openEditor), findsOneWidget); // disabled "open graph editor" stub
+    expect(find.text('daily-digest'), findsWidgets);
+    expect(find.text(d.sec.governance), findsOneWidget); // 运行治理
+    expect(find.text(d.card.concurrency), findsWidgets); // 并发策略 (card title + kv label)
+    expect(find.text(d.sec.graph), findsNothing); // graph viz deferred
   });
 
   testWidgets('handler → init args shown but sensitive default MASKED', (tester) async {

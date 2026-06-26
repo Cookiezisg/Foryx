@@ -74,26 +74,26 @@ class _EntityOceanState extends ConsumerState<EntityOcean> {
           ),
         ),
       ),
-      data: (detail) => Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          EntityOceanHeader(detail: detail),
-          Expanded(
-            child: AnTabs(
+      // ONE document: header + tabs + content all live in a single AnPage (centered 720 reading column,
+      // one scroll) and scroll together — AnTabs in FLOW mode so the selected pane flows inline (the demo
+      // an-page/an-tabs model). 整个海洋一份文档:头+tab+内容同在一个 AnPage(居中 720 单滚)一起滚。
+      data: (detail) => AnPage(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            EntityOceanHeader(detail: detail),
+            AnTabs(
+              flow: true,
               value: _tab,
               onSelect: (k) => setState(() => _tab = k),
               items: [
-                AnTabsItem(
-                  key: 'overview',
-                  label: d.tab.overview,
-                  pane: AnPage(child: _overview(detail)),
-                ),
+                AnTabsItem(key: 'overview', label: d.tab.overview, pane: _overview(detail)),
                 AnTabsItem(key: 'versions', label: d.tab.versions, pane: VersionTab(detail.ref)),
                 AnTabsItem(key: 'logs', label: d.tab.logs, pane: LogTab(detail.ref)),
               ],
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
