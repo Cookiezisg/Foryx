@@ -72,6 +72,27 @@ func TestChain_MuxErrorsEnveloped(t *testing.T) {
 	}
 }
 
+// TestChain_SSEFlusherSurvives — every /api/v1 response is wrapped by muxErrorWriter (404/405 → N1
+// envelope). It MUST forward http.Flusher, else StreamSSE's `w.(http.Flusher)` check fails and all
+// three SSE streams 500 with STREAMING_UNSUPPORTED (the entities/stream regression). httptest's
+// recorder is itself a Flusher, so this asserts the wrapper chain preserves it.
+func TestChain_SSEFlusherSurvives(t *testing.T) {
+	var isFlusher bool
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/probe/stream", func(w http.ResponseWriter, _ *http.Request) {
+		_, isFlusher = w.(http.Flusher)
+		w.WriteHeader(http.StatusOK)
+	})
+	h := Chain(mux, zap.NewNop(), nil, "")
+	req := loopback("GET", "/api/v1/probe/stream")
+	// guarded route → needs a workspace to reach the handler; nil resolver skips validation but still stamps it.
+	req.Header.Set("X-Anselm-Workspace-ID", "ws_test")
+	h.ServeHTTP(httptest.NewRecorder(), req)
+	if !isFlusher {
+		t.Fatal("handler ResponseWriter must satisfy http.Flusher through the chain (SSE streaming survives)")
+	}
+}
+
 // loopback builds a request whose Host passes RequireLoopbackHost — httptest's default Host is
 // "example.com", which the loopback gate (correctly) 403s. 让请求带 loopback Host(否则被 host 门 403)。
 func loopback(method, target string) *http.Request {

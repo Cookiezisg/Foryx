@@ -118,3 +118,14 @@ func (e *muxErrorWriter) Write(b []byte) (int, error) {
 	}
 	return e.ResponseWriter.Write(b)
 }
+
+// Flush delegates to the underlying ResponseWriter so SSE streaming SURVIVES this wrapper. Without it,
+// muxErrorWriter — which wraps EVERY /api/v1 response (envelopeMuxErrors) — would not satisfy
+// http.Flusher, and StreamSSE's `w.(http.Flusher)` check would fail → all three SSE streams 500 with
+// STREAMING_UNSUPPORTED. (Embedding http.ResponseWriter does NOT promote Flush, since that interface
+// doesn't declare it.) 委托 Flush:本 wrapper 包了每个 /api/v1 响应,不转发则吃掉 Flusher → 三条 SSE 全 500。
+func (e *muxErrorWriter) Flush() {
+	if f, ok := e.ResponseWriter.(http.Flusher); ok {
+		f.Flush()
+	}
+}
