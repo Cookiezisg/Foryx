@@ -15,8 +15,11 @@ landed-into: references/frontend/architecture.md
 > Riverpod 装配 + 错误边界 + 启动门控 MERGE 进 AnApp · L2 流式合并原语(`core/perf`,200 deltas→1 重建门禁)。
 > 每步过 floor gate、独立提交、超强测试覆盖(契约 12 / net 8 / SSE 14 / process 6 / bearer+host 16 /
 > 门控 3 / 错误边界 1 / 性能 3)。结论已提取进 [`architecture.md`](../../references/frontend/architecture.md) §2。
-> **⚠ 遗留(非本篇引入,基线即存在,4.1 前需查)**:`/api/v1/entities/stream` 后端返 500(git stash 干净对照
-> 确认与 STEP 5 无关),会卡 4.1 Entities 实时通道。**实施纠正 vs 规范**:`StateProvider` 是 Riverpod 3.x
+> **✅ entities/stream 500 已修**(后续 commit `021566d5`):根因 = F172 的 `muxErrorWriter`(给每个 /api/v1
+> 响应套信封)没实现 `Flush()` → handler 的 w 不满足 `http.Flusher` → `StreamSSE` 报 STREAMING_UNSUPPORTED →
+> **三条 SSE 流全 500**;修=委托 Flush()。curl 现 200+text/event-stream,testend SSEProtocolFaces 转绿。
+> **另一独立既有 bug(待查,非 SSE)**:`GET /api/v1/workspaces/{id}` 单查路由未注册 → testend Cascade/
+> WorkspaceCascadeDelete 期望 WORKSPACE_NOT_FOUND 得 ROUTE_NOT_FOUND(+ free-tier 网关 429 环境限流)。**实施纠正 vs 规范**:`StateProvider` 是 Riverpod 3.x
 > legacy → activeWorkspace 改用现代 `Notifier`;`explicit_to_json` 须开(嵌套 ModelRef 往返);SSE 续传需
 > full-jitter(规范已记);`KindForbidden`→403 须新增(S6 元测试禁硬编 response.Error)。本篇留作建造存档。
 
