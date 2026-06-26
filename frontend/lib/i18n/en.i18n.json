@@ -78,6 +78,9 @@
     "errorHint": "The local engine didn't return the entity list.",
     "retry": "Try again",
     "selectTitle": "Select an entity",
-    "selectHint": "Choose a function, handler, agent, or workflow from the rail."
+    "selectHint": "Choose a function, handler, agent, or workflow from the rail.",
+    "sortLabel": "Sort",
+    "sortRecent": "Recently updated",
+    "sortName": "Name"
   }
 }

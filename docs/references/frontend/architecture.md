@@ -44,7 +44,7 @@ i18n/                      # slang:en/zh_CN 双语 + 生成 strings.g.dart（dar
 dev/                       # dev 工具:gallery_main（make gallery 组件画廊）· demo_main（make demo:真壳 AppShell + fixture override + 跳门控,零后端）
 features/                  # ★中间层:每域 data+state+ui+model（随 feature 落地,Entities 起）
   entities/data/           # Entities feature 数据缝[Phase 4.1 STEP 1]:单一 EntityRepository(Live 接 ApiClient+SseGateway / Fixture 内存可脚本 / entityRepositoryProvider 单点 override) + EntityKind/EntityRow/EntitySignal
-  entities/state/          # Entities 列表 state[Phase 4.1 STEP 2]:entityListProvider(AsyncNotifier.family:首页+loadMore+SSE 就地 patch) + railModelProvider(rail VM) + selectedEntityProvider
+  entities/state/          # Entities 列表 state[Phase 4.1 STEP 2]:entityListProvider(AsyncNotifier.family:首页+loadMore+SSE 就地 patch) + railModelProvider(rail VM) + selectedEntityProvider + railSortProvider(最近更新/名称)
   entities/ui/             # Entities UI[Phase 4.1 STEP 3]:EntityRail over AnSidebarList(4 kind 段 + 状态点 + 四态)+ entity_rail_model(纯投影) + entity_ocean(详情海洋,STEP 3 占位/STEP 4 建)
   entities/data/entity_demo_fixture.dart  # demoEntityRepository():make demo 的零后端种子(STEP 4/5 续加版本/日志/flowrun)
 ```

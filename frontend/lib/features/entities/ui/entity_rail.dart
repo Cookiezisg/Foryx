@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/design/tokens.dart';
 import '../../../core/ui/an_button.dart';
+import '../../../core/ui/an_menu.dart';
 import '../../../core/ui/an_sidebar_list.dart';
 import '../../../core/ui/an_skeleton.dart';
 import '../../../core/ui/an_state.dart';
@@ -10,6 +11,7 @@ import '../../../i18n/strings.g.dart';
 import '../data/entity_kind.dart';
 import '../state/entity_list_provider.dart';
 import '../state/rail_model.dart';
+import '../state/rail_sort.dart';
 import '../state/selected_entity.dart';
 import 'entity_rail_model.dart';
 
@@ -27,6 +29,7 @@ class EntityRail extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final groups = ref.watch(railModelProvider);
     final selected = ref.watch(selectedEntityProvider);
+    final sort = ref.watch(railSortProvider);
     final t = context.t;
 
     final anyData = groups.any((g) => g.state.hasValue);
@@ -66,12 +69,14 @@ class EntityRail extends ConsumerWidget {
         newLabel: t.entities.kNew,
         filter: t.entities.filter,
       ),
+      sort,
     );
 
     return AnSidebarList(
       model: model,
       selectedId: selected?.id,
       showNew: false, // entity creation is a later phase; the rail is read+select only in 4.1
+      menuEntries: _sortMenu(ref, t, sort),
       onSelect: (id) {
         final kind = kindForId(groups, id);
         if (kind != null) {
@@ -79,6 +84,24 @@ class EntityRail extends ConsumerWidget {
         }
       },
     );
+  }
+
+  /// The filter-row sliders menu (Sort) — checkable radio over [RailSort]. 排序 sliders 菜单(单选)。
+  List<AnMenuEntry> _sortMenu(WidgetRef ref, Translations t, RailSort current) {
+    void pick(RailSort s) => ref.read(railSortProvider.notifier).set(s);
+    return [
+      AnMenuSection(t.entities.sortLabel),
+      AnMenuItem(
+        label: t.entities.sortRecent,
+        checked: current == RailSort.recent,
+        onTap: () => pick(RailSort.recent),
+      ),
+      AnMenuItem(
+        label: t.entities.sortName,
+        checked: current == RailSort.name,
+        onTap: () => pick(RailSort.name),
+      ),
+    ];
   }
 
   void _retryAll(WidgetRef ref) {

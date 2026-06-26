@@ -192,6 +192,9 @@ class _Translations$entities$zh_CN extends Translations$entities$en {
 	@override String get retry => '重试';
 	@override String get selectTitle => '选择一个实体';
 	@override String get selectHint => '从左侧选择一个函数、处理器、智能体或工作流。';
+	@override String get sortLabel => '排序';
+	@override String get sortRecent => '最近更新';
+	@override String get sortName => '名称';
 }
 
 /// The flat map containing all translations for locale <zh-CN>.
@@ -265,6 +268,9 @@ extension on TranslationsZhCn {
 			'entities.retry' => '重试',
 			'entities.selectTitle' => '选择一个实体',
 			'entities.selectHint' => '从左侧选择一个函数、处理器、智能体或工作流。',
+			'entities.sortLabel' => '排序',
+			'entities.sortRecent' => '最近更新',
+			'entities.sortName' => '名称',
 			_ => null,
 		};
 	}

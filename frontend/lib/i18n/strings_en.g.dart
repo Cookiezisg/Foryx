@@ -320,6 +320,15 @@ class Translations$entities$en {
 
 	/// en: 'Choose a function, handler, agent, or workflow from the rail.'
 	String get selectHint => 'Choose a function, handler, agent, or workflow from the rail.';
+
+	/// en: 'Sort'
+	String get sortLabel => 'Sort';
+
+	/// en: 'Recently updated'
+	String get sortRecent => 'Recently updated';
+
+	/// en: 'Name'
+	String get sortName => 'Name';
 }
 
 /// The flat map containing all translations for locale <en>.
@@ -393,6 +402,9 @@ extension on Translations {
 			'entities.retry' => 'Try again',
 			'entities.selectTitle' => 'Select an entity',
 			'entities.selectHint' => 'Choose a function, handler, agent, or workflow from the rail.',
+			'entities.sortLabel' => 'Sort',
+			'entities.sortRecent' => 'Recently updated',
+			'entities.sortName' => 'Name',
 			_ => null,
 		};
 	}

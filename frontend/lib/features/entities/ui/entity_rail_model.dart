@@ -4,6 +4,7 @@ import '../../../core/ui/icons.dart';
 import '../data/entity_kind.dart';
 import '../data/entity_row.dart';
 import '../state/rail_model.dart';
+import '../state/rail_sort.dart';
 
 /// Pure projection: the rail's [RailGroup]s → an [AnSidebarList] [SidebarModel]. Kept widget/context-free
 /// so the mapping (4 kind sections, per-kind status dot, id→kind lookup) is unit-tested without pumping
@@ -31,8 +32,8 @@ AnStatus? railDot(EntityRow r) => switch (r.kind) {
     };
 
 /// Build the rail model: one flat group with four collapsible kind sections (icon + label + count),
-/// entities as depth-1 rows. 构建 rail 模型:单平铺组 + 四 kind 折叠段。
-SidebarModel buildRailModel(List<RailGroup> groups, RailLabels labels) => SidebarModel(
+/// entities as depth-1 rows ordered by [sort]. 构建 rail 模型:单平铺组 + 四 kind 折叠段(按 sort 排序)。
+SidebarModel buildRailModel(List<RailGroup> groups, RailLabels labels, RailSort sort) => SidebarModel(
       newLabel: labels.newLabel,
       filterPlaceholder: labels.filter,
       groups: [
@@ -44,7 +45,7 @@ SidebarModel buildRailModel(List<RailGroup> groups, RailLabels labels) => Sideba
                 icon: AnIcons.byKey(g.kind.scopeKind),
                 count: g.count,
                 rows: [
-                  for (final row in g.state.value?.rows ?? const <EntityRow>[])
+                  for (final row in sortRows(g.state.value?.rows ?? const <EntityRow>[], sort))
                     SidebarRow(id: row.id, label: row.name, dot: railDot(row)),
                 ],
               ),

@@ -78,6 +78,9 @@
     "errorHint": "本地引擎没有返回实体列表。",
     "retry": "重试",
     "selectTitle": "选择一个实体",
-    "selectHint": "从左侧选择一个函数、处理器、智能体或工作流。"
+    "selectHint": "从左侧选择一个函数、处理器、智能体或工作流。",
+    "sortLabel": "排序",
+    "sortRecent": "最近更新",
+    "sortName": "名称"
   }
 }

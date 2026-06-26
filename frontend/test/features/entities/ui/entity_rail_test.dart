@@ -6,6 +6,7 @@ import 'package:anselm/core/contract/page.dart';
 import 'package:anselm/core/design/theme.dart';
 import 'package:anselm/core/ui/an_sidebar_list.dart';
 import 'package:anselm/core/ui/an_skeleton.dart';
+import 'package:anselm/core/ui/icons.dart';
 import 'package:anselm/features/entities/data/entity_fixtures.dart';
 import 'package:anselm/features/entities/data/entity_kind.dart';
 import 'package:anselm/features/entities/data/entity_providers.dart';
@@ -105,5 +106,19 @@ void main() {
 
     expect(find.byType(AnSkeleton), findsWidgets);
     expect(find.byType(AnSidebarList), findsNothing);
+  });
+
+  testWidgets('sort sliders menu opens with the sort options', (tester) async {
+    await tester.pumpWidget(_host(FixtureEntityRepository(functions: [_fn('fn_1', 'a')])));
+    await tester.pump(const Duration(milliseconds: 50));
+
+    // The sliders anchor renders (menuEntries wired); opening it reveals the Sort options.
+    await tester.tap(find.byIcon(AnIcons.sliders));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 50));
+
+    expect(find.text(t.entities.sortLabel), findsOneWidget);
+    expect(find.text(t.entities.sortRecent), findsOneWidget);
+    expect(find.text(t.entities.sortName), findsOneWidget);
   });
 }
