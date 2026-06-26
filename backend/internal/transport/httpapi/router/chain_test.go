@@ -93,6 +93,28 @@ func TestChain_SSEFlusherSurvives(t *testing.T) {
 	}
 }
 
+// TestChain_MatchedHandler404NotClobbered — a MATCHED handler that returns its own 404 envelope
+// (FUNCTION_NOT_FOUND / WORKSPACE_NOT_FOUND / …) must pass through UNTOUCHED. The old envelopeMuxErrors
+// wrapped every /api/v1 response and clobbered every handler 404 into ROUTE_NOT_FOUND; this guards the
+// fix (wrap only when the mux matched no route).
+func TestChain_MatchedHandler404NotClobbered(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/v1/things/{id}", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":{"code":"THING_NOT_FOUND","message":"thing not found"}}`))
+	})
+	h := Chain(mux, zap.NewNop(), nil, "")
+	w := httptest.NewRecorder()
+	req := loopback("GET", "/api/v1/things/x")
+	req.Header.Set("X-Anselm-Workspace-ID", "ws_test") // guarded route → needs a workspace to reach the handler
+	h.ServeHTTP(w, req)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("want 404, got %d", w.Code)
+	}
+	assertErrorEnvelope(t, w.Body.Bytes(), "THING_NOT_FOUND") // NOT clobbered to ROUTE_NOT_FOUND
+}
+
 // loopback builds a request whose Host passes RequireLoopbackHost — httptest's default Host is
 // "example.com", which the loopback gate (correctly) 403s. 让请求带 loopback Host(否则被 host 门 403)。
 func loopback(method, target string) *http.Request {

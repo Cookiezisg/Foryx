@@ -80,15 +80,23 @@ func requireWorkspaceExempt(next http.Handler) http.Handler {
 //
 // envelopeMuxErrors 把标准库 ServeMux 的纯 text/plain 404（无路由匹配）/405（方法不允许）在 /api/v1/* 上改写成
 // N1 错误 envelope。否则它们绕过 N1 契约（失败须 `{"error":{code,message,details}}` JSON）——总解析错误 envelope
-// 的客户端会在每个未知路由/错误方法上 JSON 解析失败（F172）。仅拦 /api/v1/* 上的 404/405 状态；其余响应（含大 body）
-// 原样透传、不缓冲。mux 设的 405 Allow header 保留（response.Error 不动它）。
+// 的客户端会在每个未知路由/错误方法上 JSON 解析失败（F172）。**仅当 mux 未匹配任何路由时**才套 muxErrorWriter：
+// 用 `mux.Handler(r)`（pattern=="" ⟺ 无匹配，404 与 405 皆然）判定。匹配到的 handler——它自己返的 404
+// （FUNCTION_NOT_FOUND/WORKSPACE_NOT_FOUND…）或 SSE 流——拿到**裸 w 原样透传**。
+//
+// （原实现包裹**每个** /api/v1 响应：把所有 handler 的 404 clobber 成 ROUTE_NOT_FOUND，并因 muxErrorWriter
+// 不转发 Flusher 而让三条 SSE 流全 500——本修复用"仅未匹配才包"消除两者。）mux 的 405 Allow header 保留。
 func envelopeMuxErrors(next http.Handler) http.Handler {
+	mux, isMux := next.(*http.ServeMux)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !strings.HasPrefix(r.URL.Path, "/api/v1/") {
-			next.ServeHTTP(w, r)
-			return
+		if isMux && strings.HasPrefix(r.URL.Path, "/api/v1/") {
+			if _, pattern := mux.Handler(r); pattern == "" {
+				// no route matched → only the mux's own plaintext 404/405 will be written; rewrite it.
+				next.ServeHTTP(&muxErrorWriter{ResponseWriter: w}, r)
+				return
+			}
 		}
-		next.ServeHTTP(&muxErrorWriter{ResponseWriter: w}, r)
+		next.ServeHTTP(w, r)
 	})
 }
 
