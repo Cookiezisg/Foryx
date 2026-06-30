@@ -17,7 +17,31 @@ final List<GalleryCategory> galleryCatalog = [
   _g4NavShell,
   _g5CodeData,
   _g6Overlays,
+  _chatRail,
 ];
+
+// ── Chat — the conversation rail's row, in every state ──
+// The row is an AnRow composition (no new primitive): a lead status dot + single-line title + a
+// trailing relative-time meta that swaps to a ⋯ menu on hover. The dot encodes the live signal —
+// generating (blue, breathing) / awaiting-input (amber) / unread (green) / archived (gray marker) /
+// none — via conversationDot() in the feature; here each state is shown explicitly for visual review,
+// at rail width so truncation reads true. (Plain dev strings, i18n-exempt like the rest of the catalog.)
+// Chat——会话 rail 的行,每态一格。行是 AnRow 组合(非新原语):前导状态点 + 单行标题 + 尾部相对时间(hover 换 ⋯ 菜单)。
+// 点编码活态(生成蓝呼吸/等你琥珀/未读绿/归档灰/无),feature 里走 conversationDot();此处显式列每态供视觉审,按 rail 宽显以真截断。
+const double _railW = 260;
+final GalleryCategory _chatRail = GalleryCategory('对话 Chat', AnIcons.chat, [
+  GalleryItem('会话行 Conversation row', '状态点 · 标题 · 时间/⋯;rail 列表的一行', [
+    GallerySpecimen('普通 (无点)', (_) => const AnRow(label: '周报初稿整理', meta: '1 小时前'), span: true, maxWidth: _railW),
+    GallerySpecimen('生成中 (蓝呼吸)', (_) => const AnRow(dot: AnStatus.run, label: '竞品日报流程', meta: '刚刚'), span: true, maxWidth: _railW),
+    GallerySpecimen('等你输入 (琥珀)', (_) => const AnRow(dot: AnStatus.wait, label: '诊断 · flowrun frn_8a1c 失败', meta: '25 分前'), span: true, maxWidth: _railW),
+    GallerySpecimen('答完未读 (绿)', (_) => const AnRow(dot: AnStatus.done, label: 'AI 编辑 · sync_inventory 加重试', meta: '10 分前'), span: true, maxWidth: _railW),
+    GallerySpecimen('已归档 (灰标记)', (_) => const AnRow(dot: AnStatus.idle, label: '旧版迁移笔记', meta: '上月'), span: true, maxWidth: _railW),
+    GallerySpecimen('选中', (_) => const AnRow(selected: true, dot: AnStatus.done, label: '周会纪要整理', meta: '昨天'), span: true, maxWidth: _railW),
+    GallerySpecimen('带 ⋯ 菜单 (hover 显)', (_) => AnRow(label: 'API key 轮换排查', meta: '3 小时前', actions: [AnButton.iconOnly(AnIcons.more, semanticLabel: 'More', onPressed: () {})]), span: true, maxWidth: _railW),
+    GallerySpecimen('超长截断', (_) => const AnRow(label: '一个非常非常长的对话标题，应当省略号截断而不撑破侧栏宽度无限延伸下去', meta: '3 天前'), stress: true, span: true, maxWidth: _railW),
+    GallerySpecimen('注入转义', (_) => const AnRow(label: '<b>not</b> & <i>html</i> 注入标题', meta: '上周'), stress: true, span: true, maxWidth: _railW),
+  ]),
+]);
 
 // ── G1 — Foundational controls ──
 final GalleryCategory _g1Controls = GalleryCategory('基础控件 Controls', AnIcons.sliders, [
