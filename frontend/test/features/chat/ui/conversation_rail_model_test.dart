@@ -113,14 +113,17 @@ void main() {
       _cAt('cv_old', DateTime(2026, 6, 1, 9)),
     ];
 
-    test('grouped → one collapsible group per non-empty bucket, in ConvBucket order', () {
+    test('grouped → one group, one collapsible type per non-empty bucket (entities head style)', () {
       final m = buildConversationRailModel(rows, now: _now, groupByTime: true, labels: _labels);
-      expect(m.groups.map((g) => g.label), ['PINNED', 'TODAY', 'YEST', 'WK', 'OLD']);
-      // each bucket carries its conversation; the pinned thread is in PINNED, not its time bucket.
-      expect(m.groups.first.types.single.rows.single.id, 'cv_pin');
-      expect(m.groups[1].types.single.rows.single.id, 'cv_today');
-      // rows carry a relative-time meta + (for cv_old) the dot is null (plain), meta is a date.
-      expect(m.groups.last.types.single.rows.single.meta, '2026/6/1');
+      // ONE group holding N typed sections — mirrors the entities rail (count is the type's far-right meta).
+      final types = m.groups.single.types;
+      expect(types.map((t) => t.label), ['PINNED', 'TODAY', 'YEST', 'WK', 'OLD']);
+      expect(types.map((t) => t.count), [1, 1, 1, 1, 1]);
+      // the pinned thread is in PINNED, not its time bucket.
+      expect(types.first.rows.single.id, 'cv_pin');
+      expect(types[1].rows.single.id, 'cv_today');
+      // rows carry a relative-time meta (>7 days → a numeric date).
+      expect(types.last.rows.single.meta, '2026/6/1');
     });
 
     test('flat → one headless group (label null), all rows, server order preserved', () {

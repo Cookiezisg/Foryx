@@ -100,15 +100,19 @@ class ConvRailLabels {
 }
 
 /// Project the loaded conversations onto a [SidebarModel] for [AnSidebarList]. Each row = {id, title,
-/// relative-time meta, lead dot}. When [groupByTime] is on → ONE collapsible [SidebarGroup] per non-empty
-/// bucket in [ConvBucket] order (置顶 / 今天 / 昨天 / 过去7天 / 更早), the group head showing the bucket
-/// label + auto row-count + chevron (the chat-style big-group head AnSidebarList renders for a labelled
-/// group). When off → one flat headless group, server order preserved. Single-domain: NO per-kind section,
-/// NO client-side sort (the server orders via ConvSort → ?sort=); rows are partitioned in arrival order.
+/// relative-time meta, lead dot}. When [groupByTime] is on → ONE [SidebarGroup] holding one collapsible
+/// [SidebarType] PER non-empty bucket in [ConvBucket] order (置顶 / 今天 / 昨天 / 过去7天 / 更早) — the SAME
+/// section-head treatment the entities rail uses (an AnRow collapsible head: label + count right-aligned
+/// at the far edge + a lead disclosure chevron), NOT a bespoke big-group head, so the two rails read
+/// identically and the count sits where the row timestamps do. `count` is set explicitly so a future
+/// "show counts" toggle is just `count: null`. When off → one flat headless type, server order preserved.
+/// Single-domain: NO per-kind section beyond the time buckets, NO client-side sort (the server orders via
+/// ConvSort → ?sort=); rows are partitioned in arrival order.
 ///
-/// 把已加载对话投影成 SidebarModel 喂 AnSidebarList。每行={id, 标题, 相对时间 meta, 前导点}。groupByTime 开 → 每个非空桶
-/// 一个可折叠 SidebarGroup(按 ConvBucket 序 置顶/今天/昨天/过去7天/更早),组头显桶名 + 自动行数 + chevron(AnSidebarList 给
-/// 带 label 的 group 渲的 chat 式大组头)。关 → 单个扁平 headless 组,保服务端序。单域:无 per-kind 分节、无客户端排序。
+/// 把已加载对话投影成 SidebarModel 喂 AnSidebarList。每行={id, 标题, 相对时间 meta, 前导点}。groupByTime 开 → 一个
+/// SidebarGroup 内每个非空桶一个可折叠 SidebarType(按 ConvBucket 序 置顶/今天/昨天/过去7天/更早)——与 entities rail **同款**
+/// 分节头(AnRow 可折叠头:label + 计数右对齐到最右缘 + 前导 chevron),非自造大组头,故两 rail 一致、计数与行时间戳同列。
+/// count 显式设,使未来「显示计数」开关只需 count:null。关 → 单个扁平 headless type,保服务端序。单域:除时间桶无 per-kind 分节、无客户端排序。
 SidebarModel buildConversationRailModel(
   List<Conversation> rows, {
   required DateTime now,
@@ -137,16 +141,21 @@ SidebarModel buildConversationRailModel(
   for (final c in rows) {
     (byBucket[conversationBucket(c, now)] ??= []).add(c);
   }
+  // ONE group (label null → flattens) holding one collapsible TYPE per bucket — mirrors the entities rail
+  // (one group, N typed sections). 一个组(label 空→扁平)持每桶一个可折叠 type——镜像 entities rail。
   return SidebarModel(
     newLabel: labels.newLabel,
     filterPlaceholder: labels.filter,
     groups: [
-      for (final b in ConvBucket.values)
-        if ((byBucket[b] ?? const []).isNotEmpty)
-          SidebarGroup(
-            label: labels.bucketLabel(b),
-            types: [SidebarType(rows: [for (final c in byBucket[b]!) toRow(c)])],
-          ),
+      SidebarGroup(types: [
+        for (final b in ConvBucket.values)
+          if ((byBucket[b] ?? const []).isNotEmpty)
+            SidebarType(
+              label: labels.bucketLabel(b),
+              count: byBucket[b]!.length,
+              rows: [for (final c in byBucket[b]!) toRow(c)],
+            ),
+      ]),
     ],
   );
 }
